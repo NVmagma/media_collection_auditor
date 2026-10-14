@@ -8,18 +8,34 @@ services:
       - /mnt/user/media_storage:/media
       - ./app:/app
     environment:
+      # General configuration
       - MEDIA_PATH=/media
-      - TRANSIENT_PATH=/media/Movies
-      - HOLDING_PATH=/media/Movies_hold
-      - ARCHIVE_PATH=/media/Movies_keep
-      - REMOVAL_PATH=/media/Movies_removal
-      - JELLYFIN_HOST_URL=http://your_url_here:8096
-      - JELLYFIN_API_TOKEN= api_token_here
+      - DRY_RUN=true
+      # Radarr configuration
       - RADARR_URL=http://your_radarr_url:7878
       - RADARR_API_KEY=api_token_here
-      - RADARR_KEEP_ROOT=/media/Movies_keep
-      - RADARR_REMOVAL_ROOT=/media/Movies_removal
-      - DRY_RUN=true
+      - RADARR_TRANSIENT_PATH=/media/Movies
+      - RADARR_HOLDING_PATH=/media/Movies_hold
+      - RADARR_KEEP_PATH=/media/Movies_keep
+      - RADARR_REMOVAL_PATH=/media/Movies_removal
+      
+      # JELLYFIN configuration
+      - JELLYFIN_HOST_URL=http://your_url_here:8096
+      - JELLYFIN_API_TOKEN= api_token_here
+      - RUN_INTERVAL_HOURS=24
+      
+      # Sonarr configuration
+      - SONARR_URL=http://YOUR_SONARR_IP:8989
+      - SONARR_API_KEY=api_token_here
+      - SONARR_TRANSIENT_PATH=/media/TV
+      - SONARR_HOLDING_PATH=/media/TV_hold
+      - SONARR_KEEP_PATH=/media/TV_keep
+      - SONARR_REMOVAL_PATH=/media/TV_removal
+      
+      # Enable different parts of the collection auditor. If you want to run all parts, set all to true.
+      - ENABLE_MOVIES=true
+      - ENABLE_TV=true
+      - ENABLE_SEASON_PRUNING=false
     command: ["python", "collection_auditor.py"]
   
   
