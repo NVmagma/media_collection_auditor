@@ -6,7 +6,6 @@ services:
     restart: unless-stopped
     volumes:
       - /mnt/user/media_storage:/media
-      - /mnt/user/media_storage/auditor_logs:/app/logs
       - ./app:/app
     environment:
       - MEDIA_PATH=/media
@@ -22,3 +21,15 @@ services:
       - RADARR_REMOVAL_ROOT=/media/Movies_removal
       - DRY_RUN=true
     command: ["python", "collection_auditor.py"]
+  
+  # The new service exposes the brain's data to the world
+  api_monitor:
+    build: . # Assuming api_service.py is also in the context
+    container_name: collection_auditor_api
+    restart: unless-stopped
+    volumes:
+      # IMPORTANT: Map the state file so both scripts can read/write to it.
+      - ./app:/app 
+    ports:
+      # Expose the API to your local network/browser
+      - "8090:8000"
