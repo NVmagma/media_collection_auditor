@@ -1,0 +1,24 @@
+services:
+  auditor_service:
+    build:
+      context: .
+    container_name: media_collection_auditor
+    restart: unless-stopped
+    volumes:
+      - /mnt/user/media_storage:/media
+      - /mnt/user/media_storage/auditor_logs:/app/logs
+      - ./app:/app
+    environment:
+      - MEDIA_PATH=/media
+      - TRANSIENT_PATH=/media/Movies
+      - HOLDING_PATH=/media/Movies_hold
+      - ARCHIVE_PATH=/media/Movies_keep
+      - REMOVAL_PATH=/media/Movies_removal
+      - JELLYFIN_HOST_URL=http://your_url_here:8096
+      - JELLYFIN_API_TOKEN= api_token_here
+      - RADARR_URL=http://your_radarr_url:7878
+      - RADARR_API_KEY=api_token_here
+      - RADARR_KEEP_ROOT=/media/Movies_keep
+      - RADARR_REMOVAL_ROOT=/media/Movies_removal
+      - DRY_RUN=true
+    command: ["python", "collection_auditor.py"]
