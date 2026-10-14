@@ -65,8 +65,8 @@ Every time something moves to Holding or Removal, Radarr/Sonarr are told the new
 ### 1. Clone and configure
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git
-cd YOUR_REPO
+git clone https://github.com/NVmagma/media_archiver.git
+cd media_archiver
 cp .env.example .env
 ```
 
