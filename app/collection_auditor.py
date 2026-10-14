@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import shutil
 import posixpath
 import datetime
@@ -37,6 +38,7 @@ RADARR_KEEP_ROOT = os.environ.get("RADARR_KEEP_ROOT", MOVIES_KEEP)
 RADARR_REMOVAL_ROOT = os.environ.get("RADARR_REMOVAL_ROOT", MOVIES_REMOVAL_QUEUE)
 
 STATE_FILE = os.environ.get("STATE_FILE", "/app/logs/auditor_state.json")
+ACTION_LOG_FILE = os.environ.get("ACTION_LOG_FILE", "/app/logs/auditor_actions.jsonl")
 
 # Policy timers
 MOVIE_WAIT_DAYS = 30        # Time in the normal Movies folder before entering Leaving Soon
@@ -53,10 +55,28 @@ def log(msg: str):
     print(("[DRY RUN] " if DRY_RUN else "") + msg)
 
 
+def record_action(action: str, folder: str, detail: str = ""):
+    """Append one line (JSON) to the permanent action log. Dry-run entries are flagged dry_run=true."""
+    entry = {
+        "time": datetime.datetime.now().isoformat(timespec="seconds"),
+        "dry_run": DRY_RUN,
+        "action": action,
+        "folder": folder,
+        "detail": detail,
+    }
+    try:
+        os.makedirs(os.path.dirname(ACTION_LOG_FILE), exist_ok=True)
+        with open(ACTION_LOG_FILE, "a") as f:
+            f.write(json.dumps(entry) + "\n")
+    except Exception as e:
+        print(f"[LOG ERROR] Could not write action log {ACTION_LOG_FILE}: {e}")
+
+
 def action_allowed(description: str) -> bool:
     global _actions_taken
     if _actions_taken >= MAX_ACTIONS_PER_RUN:
         print(f"[CAP REACHED] Skipping '{description}' (limit {MAX_ACTIONS_PER_RUN} queue/delete actions per run).")
+        record_action("cap_skipped", description, f"limit {MAX_ACTIONS_PER_RUN} per run")
         return False
     _actions_taken += 1
     return True
@@ -79,9 +99,16 @@ def load_state() -> Dict[str, Dict[str, str]]:
 
 def save_state(state: Dict[str, Dict[str, str]]):
     # Saved even in dry run: it only holds our own bookkeeping, never touches your media.
-    os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
-    with open(STATE_FILE, "w") as f:
-        json.dump(state, f, indent=2)
+    try:
+        os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
+        tmp_path = STATE_FILE + ".tmp"
+        with open(tmp_path, "w") as f:
+            json.dump(state, f, indent=2)
+        os.replace(tmp_path, STATE_FILE)  # atomic: readers never see a half-written file
+        print(f"\n[STATE] Saved {len(state['first_seen'])} tracked folders and "
+              f"{len(state['queued'])} queued items to {os.path.abspath(STATE_FILE)}")
+    except Exception as e:
+        print(f"\n[STATE ERROR] Could not save {STATE_FILE}: {e}")
 
 
 def days_since(iso_timestamp: str) -> int:
@@ -222,7 +249,7 @@ def remove_movie(folder_name: str, folder_path: str):
 # --- THE BRAIN: MOVIE LIFECYCLE ---
 # ==============================================
 
-def queue_for_removal(folder: str, path: str, state: dict):
+def queue_for_removal(folder: str, path: str, state: dict, reason: str):
     """Move into Leaving Soon and tell Radarr to stop monitoring so it won't re-download."""
     if not action_allowed(f"queue {folder}"):
         return
@@ -230,6 +257,7 @@ def queue_for_removal(folder: str, path: str, state: dict):
         if not DRY_RUN:
             state["queued"][folder] = datetime.datetime.now().isoformat()
         notify_radarr_moved(folder, RADARR_REMOVAL_ROOT, monitored=False)
+        record_action("queue", folder, reason)
 
 
 def audit_removal_queue(signals: dict, state: dict):
@@ -248,6 +276,7 @@ def audit_removal_queue(signals: dict, state: dict):
                 if not DRY_RUN:
                     state["queued"].pop(folder, None)
                 notify_radarr_moved(folder, RADARR_KEEP_ROOT, monitored=True)
+                record_action("rescue", folder, "favorited while in Leaving Soon")
             continue
 
         queued_at = state["queued"].get(folder)
@@ -261,6 +290,7 @@ def audit_removal_queue(signals: dict, state: dict):
             print(f"\n[{folder}] In Leaving Soon {age}d: deleting.")
             if action_allowed(f"delete {folder}"):
                 remove_movie(folder, path)
+                record_action("delete", folder, f"in Leaving Soon {age} days")
                 if not DRY_RUN:
                     state["queued"].pop(folder, None)
         else:
@@ -294,14 +324,15 @@ def audit_transient_movies(signals: dict, state: dict):
             print("-> Favorited: move to Keep.")
             if safe_move_directory(path, MOVIES_KEEP):
                 notify_radarr_moved(folder, RADARR_KEEP_ROOT)
+                record_action("keep", folder, "favorited")
         # Priority 2: tagged not-at-all -> Leaving Soon right away
         elif sig["disliked"]:
             print("-> Tagged not-at-all: move to Leaving Soon.")
-            queue_for_removal(folder, path, state)
+            queue_for_removal(folder, path, state, f"tagged {DISLIKE_TAG}")
         # Priority 3: still no decision after the waiting period -> Leaving Soon
         elif age >= MOVIE_WAIT_DAYS:
             print(f"-> No favorite after {MOVIE_WAIT_DAYS}+ days: move to Leaving Soon.")
-            queue_for_removal(folder, path, state)
+            queue_for_removal(folder, path, state, f"no favorite after {age} days")
         else:
             print(f"-> Waiting ({MOVIE_WAIT_DAYS - age} days left to favorite it).")
 
@@ -314,8 +345,18 @@ def audit_transient_movies(signals: dict, state: dict):
 # --- MAIN ---
 # ==============================================
 
-if __name__ == "__main__":
-    print("=== Media Collection Auditor (MOVIES) ===")
+# 0 = run once and exit (use with an external scheduler). Any positive number = stay running
+# and repeat every N hours, so the container never exits and never restarts.
+RUN_INTERVAL_HOURS = float(os.environ.get("RUN_INTERVAL_HOURS", "0"))
+
+
+def run_once():
+    global _actions_taken, _radarr_cache
+    _actions_taken = 0      # the action cap applies per run
+    _radarr_cache = None    # re-read Radarr's movie list every run
+
+    print("\n=== Media Collection Auditor (MOVIES) ===")
+    print(f"Run started {datetime.datetime.now().isoformat(timespec='seconds')}")
     print("DRY RUN: no changes will be made to your media." if DRY_RUN else "LIVE MODE: changes WILL be made.")
 
     if not JELLYFIN_TOKEN:
@@ -326,3 +367,21 @@ if __name__ == "__main__":
     audit_removal_queue(movie_signals, state)
     audit_transient_movies(movie_signals, state)
     save_state(state)
+    record_action("run_complete", "-", f"{_actions_taken} queue/delete actions this run")
+
+
+if __name__ == "__main__":
+    if RUN_INTERVAL_HOURS <= 0:
+        run_once()
+    else:
+        print(f"Loop mode: running every {RUN_INTERVAL_HOURS} hours.")
+        while True:
+            try:
+                run_once()
+            except (Exception, SystemExit) as e:
+                # In loop mode an error (Jellyfin down, bad token, etc.) must not kill the
+                # container, or Docker would restart it and hit the APIs again right away.
+                print(f"[RUN FAILED] {e}")
+                record_action("run_failed", "-", str(e)[:200])
+            print(f"Sleeping {RUN_INTERVAL_HOURS} hours until the next run.")
+            time.sleep(RUN_INTERVAL_HOURS * 3600)
