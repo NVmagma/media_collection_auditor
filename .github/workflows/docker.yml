@@ -35,7 +35,9 @@ jobs:
           pip install pytest
 
       - name: Run tests
-        run: pytest -v
+        env:
+          PYTHONPATH: ${{ github.workspace }}/app
+        run: pytest -c /dev/null test-suite-and-ci/tests -v
 
   build-and-push:
     name: Build and publish image
