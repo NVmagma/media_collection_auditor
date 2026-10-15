@@ -185,6 +185,7 @@ def test_a_failed_run_sends_an_alert_and_still_raises(make_auditor, posts):
     def explode(jellyfin_type):
         raise RuntimeError("Jellyfin is down")
     a.ca.get_signals = explode
+    a.make_folders()
 
     with pytest.raises(RuntimeError):
         a.ca.run_with_alerts()
@@ -198,6 +199,7 @@ def test_a_failed_run_sends_an_alert_and_still_raises(make_auditor, posts):
 def test_failed_runs_are_silent_during_dry_runs(make_auditor, posts):
     a = make_auditor(DRY_RUN="true", NOTIFY_DISCORD_WEBHOOK_URL=DISCORD)
     a.ca.get_signals = lambda jellyfin_type: (_ for _ in ()).throw(RuntimeError("Jellyfin is down"))
+    a.make_folders()
 
     with pytest.raises(RuntimeError):
         a.ca.run_with_alerts()

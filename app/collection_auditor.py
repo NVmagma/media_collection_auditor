@@ -5,7 +5,7 @@ import time
 import shutil
 import posixpath
 import datetime
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 
 import requests
 from dotenv import load_dotenv
@@ -15,13 +15,49 @@ from dotenv import load_dotenv
 # ==============================================
 load_dotenv()
 
+_TRUE = {"true", "1", "yes", "on"}
+_FALSE = {"false", "0", "no", "off"}
+
 
 def env_flag(name: str, default: bool) -> bool:
-    return os.environ.get(name, str(default)).strip().lower() == "true"
+    raw = os.environ.get(name, "").strip().lower()
+    if not raw:
+        return default
+    if raw in _TRUE:
+        return True
+    if raw in _FALSE:
+        return False
+    raise SystemExit(f"[CONFIG ERROR] {name} must be true or false, got '{raw}'.")
+
+
+def env_int(name: str, default: int, minimum: int = 0) -> int:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        raise SystemExit(f"[CONFIG ERROR] {name} must be a whole number, got '{raw}'.")
+    if value < minimum:
+        raise SystemExit(f"[CONFIG ERROR] {name} must be at least {minimum}, got {value}.")
+    return value
+
+
+def env_float(name: str, default: float, minimum: float = 0.0) -> float:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        raise SystemExit(f"[CONFIG ERROR] {name} must be a number, got '{raw}'.")
+    if value < minimum:
+        raise SystemExit(f"[CONFIG ERROR] {name} must be at least {minimum}, got {value}.")
+    return value
 
 
 # Safety first: nothing is moved, deleted, or sent to Radarr/Sonarr unless DRY_RUN=false.
-DRY_RUN = os.environ.get("DRY_RUN", "true").strip().lower() != "false"
+DRY_RUN = env_flag("DRY_RUN", True)
 
 # Jellyfin (decides favorited / tags)
 JELLYFIN_URL = os.environ.get("JELLYFIN_HOST_URL", "http://localhost:8096").rstrip("/")
@@ -47,10 +83,10 @@ STATE_FILE = os.environ.get("STATE_FILE", "/app/logs/auditor_state.json")
 ACTION_LOG_FILE = os.environ.get("ACTION_LOG_FILE", "/app/logs/auditor_actions.jsonl")
 
 # Lifecycle timers (days)
-MOVIE_WAIT_DAYS = int(os.environ.get("MOVIE_WAIT_DAYS", "30"))   # Movies: time in Transient before Holding
-TV_WAIT_DAYS = int(os.environ.get("TV_WAIT_DAYS", "60"))         # Shows: same, but longer
-HOLDING_DAYS = int(os.environ.get("HOLDING_DAYS", "7"))          # Time in Holding ("Leaving Soon") before Removal
-REMOVAL_DAYS = int(os.environ.get("REMOVAL_DAYS", "7"))          # Time in Removal before permanent deletion
+MOVIE_WAIT_DAYS = env_int("MOVIE_WAIT_DAYS", 30)                 # Movies: time in Transient before Holding
+TV_WAIT_DAYS = env_int("TV_WAIT_DAYS", 60)                       # Shows: same, but longer
+HOLDING_DAYS = env_int("HOLDING_DAYS", 7, minimum=1)             # Time in Holding ("Leaving Soon") before Removal
+REMOVAL_DAYS = env_int("REMOVAL_DAYS", 7, minimum=1)             # Time in Removal before permanent deletion
 
 # TV only: a show that keeps getting new episodes restarts its waiting clock, so airing shows
 # are not cleaned up while they're still being delivered. Set to false for a strict clock.
@@ -62,19 +98,28 @@ ENABLE_SEASON_PRUNING = env_flag("ENABLE_SEASON_PRUNING", False)
 KEEP_ALL_SEASONS_TAG = os.environ.get("KEEP_ALL_SEASONS_TAG", "keep-all-seasons")
 # Safety delay 1: a show must have been seen in Keep this long before anything is pruned,
 # which gives you time to add the keep-all tag to your existing favorites.
-SEASON_PRUNE_GRACE_DAYS = int(os.environ.get("SEASON_PRUNE_GRACE_DAYS", "30"))
+SEASON_PRUNE_GRACE_DAYS = env_int("SEASON_PRUNE_GRACE_DAYS", 30)
 # Safety delay 2: older seasons are only pruned once the newest season has been around this long,
 # so a brand-new season premiere doesn't instantly wipe the season you wanted to rewatch.
-SEASON_PRUNE_AFTER_NEW_SEASON_DAYS = int(os.environ.get("SEASON_PRUNE_AFTER_NEW_SEASON_DAYS", "7"))
+SEASON_PRUNE_AFTER_NEW_SEASON_DAYS = env_int("SEASON_PRUNE_AFTER_NEW_SEASON_DAYS", 7)
 
-# Safety cap: max number of "move into Holding" + "permanently delete" actions per run
-# (movies and TV combined). Everything else is unlimited. Leftovers are picked up on the next run.
-MAX_ACTIONS_PER_RUN = int(os.environ.get("MAX_ACTIONS_PER_RUN", "10"))
+# Safety cap: max number of SUCCESSFUL "move into Holding" + "permanently delete" + "season prune"
+# actions per run (movies and TV combined). Everything else is unlimited. Leftovers wait for the next run.
+MAX_ACTIONS_PER_RUN = env_int("MAX_ACTIONS_PER_RUN", 10)
 _actions_taken = 0
+
+# Deletion policy. Permanent deletion normally goes through Radarr/Sonarr, which know how to remove
+# a title properly. If a title is NOT known to them (or they aren't configured), the script refuses
+# to delete it itself unless you opt in here. Skipped titles are reported so you can handle them.
+ALLOW_FILESYSTEM_DELETE = env_flag("ALLOW_FILESYSTEM_DELETE", False)
+
+# All of a library's folders should live on ONE mount, so moves are instant renames. If they don't,
+# a move becomes a slow copy-then-delete that can be interrupted half way, so this is an error unless allowed.
+ALLOW_CROSS_FILESYSTEM_MOVES = env_flag("ALLOW_CROSS_FILESYSTEM_MOVES", False)
 
 # 0 = run once and exit (use with an external scheduler). Any positive number = stay running
 # and repeat every N hours, so the container never exits and never restarts.
-RUN_INTERVAL_HOURS = float(os.environ.get("RUN_INTERVAL_HOURS", "0"))
+RUN_INTERVAL_HOURS = env_float("RUN_INTERVAL_HOURS", 0.0)
 
 # Notifications (all optional; set any of the three). Webhook URLs are secrets: keep them in .env.
 NOTIFY_DISCORD_WEBHOOK_URL = os.environ.get("NOTIFY_DISCORD_WEBHOOK_URL", "").strip()
@@ -85,25 +130,43 @@ NOTIFY_ON_DRY_RUN = env_flag("NOTIFY_ON_DRY_RUN", False)                 # send 
 NOTIFY_LEAVING_SOON_DIGEST = env_flag("NOTIFY_LEAVING_SOON_DIGEST", True)  # list what is still in Holding
 NOTIFY_MAX_CHARS = 1800                                                  # Discord's limit is 2000
 
-# Collected during each run and used to build the notification.
+# Collected during each run and used for the run summary and the notification.
 _events: List[dict] = []
 _holding_status: List[dict] = []
+_stats: Dict[str, int] = {"waiting": 0, "in_removal": 0}
 
 
 def log(msg: str):
     print(("[DRY RUN] " if DRY_RUN else "") + msg)
 
 
-def record_action(action: str, folder: str, detail: str = "", library: str = "Movies"):
-    """Append one line (JSON) to the permanent action log. Dry-run entries are flagged dry_run=true."""
+def human_size(num_bytes: int) -> str:
+    size = float(num_bytes)
+    for unit in ("B", "KB", "MB", "GB"):
+        if size < 1024:
+            return f"{size:.0f} {unit}" if unit == "B" else f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} TB"
+
+
+def record_action(action: str, folder: str, detail: str = "", library: str = "Movies",
+                  status: str = "done", size_bytes: Optional[int] = None):
+    """
+    Append one line (JSON) to the permanent action log.
+    status: "done" (it happened), "planned" (dry run: it WOULD happen), "failed" (it was attempted and
+    did not work), or "skipped" (deliberately not done, e.g. blocked by a safety rule).
+    """
     entry = {
         "time": datetime.datetime.now().isoformat(timespec="seconds"),
         "dry_run": DRY_RUN,
         "library": library,
         "action": action,
+        "status": "planned" if (DRY_RUN and status == "done") else status,
         "folder": folder,
         "detail": detail,
     }
+    if size_bytes is not None:
+        entry["size_bytes"] = size_bytes
     _events.append(entry)
     try:
         os.makedirs(os.path.dirname(ACTION_LOG_FILE), exist_ok=True)
@@ -114,13 +177,17 @@ def record_action(action: str, folder: str, detail: str = "", library: str = "Mo
 
 
 def action_allowed(description: str, library: str) -> bool:
-    global _actions_taken
+    """True while the per-run cap has room. Call action_done() once the action has actually succeeded."""
     if _actions_taken >= MAX_ACTIONS_PER_RUN:
-        print(f"[CAP REACHED] Skipping '{description}' (limit {MAX_ACTIONS_PER_RUN} hold/delete actions per run).")
-        record_action("cap_skipped", description, f"limit {MAX_ACTIONS_PER_RUN} per run", library)
+        print(f"[CAP REACHED] Skipping '{description}' (limit {MAX_ACTIONS_PER_RUN} hold/delete/prune actions per run).")
+        record_action("cap_skipped", description, f"limit {MAX_ACTIONS_PER_RUN} per run", library, status="skipped")
         return False
-    _actions_taken += 1
     return True
+
+
+def action_done():
+    global _actions_taken
+    _actions_taken += 1
 
 
 # ==============================================
@@ -192,9 +259,9 @@ def jellyfin_get(path: str, params: Optional[dict] = None):
 
 def get_signals(jellyfin_type: str) -> Dict[str, Dict[str, Any]]:
     """
-    Returns {folder_name: {played, favorite, disliked, keep_all, protected}} combined across ALL Jellyfin users and libraries.
-    jellyfin_type is "Movie" or "Series". For a Series, favorite/tags must be set on the SHOW itself
-    (not on a season or episode). Matching is by folder name, e.g. 'Pretty Woman (1990)'.
+    Returns {folder_name: {played, favorite, disliked, keep_all, protected}} combined across ALL Jellyfin users
+    and libraries. jellyfin_type is "Movie" or "Series". For a Series, favorite/tags must be set on the SHOW
+    itself (not on a season or episode). Matching is by folder name, e.g. 'Pretty Woman (1990)'.
     """
     signals: Dict[str, Dict[str, Any]] = {}
     for user in jellyfin_get("/Users"):
@@ -231,6 +298,10 @@ def get_signals(jellyfin_type: str) -> Dict[str, Dict[str, Any]]:
 # --- RADARR / SONARR: notify about moves and removals ---
 # ==============================================
 
+class AmbiguousMatchError(Exception):
+    """More than one Radarr/Sonarr entry uses the same folder name, so we can't tell which one is meant."""
+
+
 class ArrClient:
     """Talks to Radarr (resource='movie') or Sonarr (resource='series') using the same v3 API shape."""
 
@@ -248,37 +319,55 @@ class ArrClient:
     def _headers(self):
         return {"X-Api-Key": self.key}
 
+    def check(self):
+        """Raises if the service is unreachable or rejects the API key."""
+        r = requests.get(f"{self.url}/api/v3/system/status", headers=self._headers(), timeout=15)
+        r.raise_for_status()
+
     def find(self, folder_name: str) -> Optional[dict]:
+        """The entry whose folder is named folder_name. Raises AmbiguousMatchError if several match."""
         if self._cache is None:
             r = requests.get(f"{self.url}/api/v3/{self.resource}", headers=self._headers(), timeout=60)
             r.raise_for_status()
             self._cache = r.json()
-        for item in self._cache:
-            if os.path.basename(item.get("path", "").rstrip("/")) == folder_name:
-                return item
-        return None
+        matches = [item for item in self._cache
+                   if os.path.basename(item.get("path", "").rstrip("/")) == folder_name]
+        if len(matches) > 1:
+            raise AmbiguousMatchError(f"{len(matches)} {self.name} entries use the folder name '{folder_name}'")
+        return matches[0] if matches else None
 
-    def notify_moved(self, folder_name: str, root: str, monitored: Optional[bool] = None):
-        """Tell it the new location. If monitored is True/False, also set its monitoring."""
+    def notify_moved(self, folder_name: str, root: str, monitored: Optional[bool] = None) -> bool:
+        """
+        Tell it the new location (and optionally set monitoring).
+        Returns False only if the update was attempted and FAILED; the caller records that.
+        """
         if not self.enabled:
             print(f"[WARN] {self.name} URL/API key not set; skipping {self.name} notification.")
-            return
-        item = self.find(folder_name)
-        if not item:
-            print(f"[WARN] {self.name} has no entry with folder '{folder_name}'; skipping notification.")
-            return
-        new_path = posixpath.join(root, folder_name)
-        extra = "" if monitored is None else f", monitored={monitored}"
-        log(f"{self.name}: update '{folder_name}' path -> {new_path}{extra}")
-        if DRY_RUN:
-            return
-        item["path"] = new_path
-        if monitored is not None:
-            item["monitored"] = monitored
-        r = requests.put(f"{self.url}/api/v3/{self.resource}/{item['id']}",
-                         headers=self._headers(), params={"moveFiles": "false"},
-                         json=item, timeout=60)
-        r.raise_for_status()
+            return True
+        try:
+            item = self.find(folder_name)
+            if not item:
+                print(f"[WARN] {self.name} has no entry with folder '{folder_name}'; skipping notification.")
+                return True
+            new_path = posixpath.join(root, folder_name)
+            extra = "" if monitored is None else f", monitored={monitored}"
+            log(f"{self.name}: update '{folder_name}' path -> {new_path}{extra}")
+            if DRY_RUN:
+                return True
+            payload = dict(item)
+            payload["path"] = new_path
+            if monitored is not None:
+                payload["monitored"] = monitored
+            r = requests.put(f"{self.url}/api/v3/{self.resource}/{item['id']}",
+                             headers=self._headers(), params={"moveFiles": "false"},
+                             json=payload, timeout=60)
+            r.raise_for_status()
+            item.update(payload)
+            return True
+        except (requests.RequestException, AmbiguousMatchError) as e:
+            self._cache = None
+            print(f"[WARN] {self.name} update failed for '{folder_name}' ({type(e).__name__}).")
+            return False
 
     def delete(self, item: dict):
         """Delete the entry AND its files (so it also cleans its own records)."""
@@ -303,13 +392,14 @@ class ArrClient:
             f"of '{os.path.basename(item.get('path', '').rstrip('/'))}'")
         if DRY_RUN:
             return
-        for season in item.get("seasons", []):
-            if season.get("seasonNumber") in season_numbers:
-                season["monitored"] = False
+        payload = dict(item)
+        payload["seasons"] = [dict(s, monitored=False) if s.get("seasonNumber") in season_numbers else s
+                              for s in item.get("seasons", [])]
         r = requests.put(f"{self.url}/api/v3/{self.resource}/{item['id']}",
                          headers=self._headers(), params={"moveFiles": "false"},
-                         json=item, timeout=60)
+                         json=payload, timeout=60)
         r.raise_for_status()
+        item.update(payload)
         for f in files:
             d = requests.delete(f"{self.url}/api/v3/episodefile/{f['id']}",
                                 headers=self._headers(), timeout=60)
@@ -331,9 +421,12 @@ sonarr = ArrClient("Sonarr", SONARR_URL, SONARR_KEY, "series")
 # Only if Radarr/Sonarr see these folders at DIFFERENT paths than this container does, also set:
 #   <PREFIX>_APP_HOLDING_PATH / <PREFIX>_APP_KEEP_PATH / <PREFIX>_APP_REMOVAL_PATH
 
+FOLDER_KINDS = ("transient", "holding", "keep", "removal")
+
+
 def library_paths(prefix: str, default_folders: Dict[str, str]) -> Dict[str, str]:
     paths = {}
-    for kind in ("transient", "holding", "keep", "removal"):
+    for kind in FOLDER_KINDS:
         value = (os.environ.get(f"{prefix}_{kind.upper()}_PATH") or "").strip()
         paths[kind] = value or os.path.join(BASE_MEDIA_PATH, default_folders[kind])
     for kind in ("holding", "keep", "removal"):
@@ -372,40 +465,223 @@ def build_libraries() -> List[dict]:
 
 
 # ==============================================
+# --- PREFLIGHT: refuse to run if the setup looks unsafe ---
+# ==============================================
+
+def filesystem_id(path: str) -> int:
+    return os.stat(path).st_dev
+
+
+def is_within(path: str, root: str) -> bool:
+    """True if path is strictly inside root (symlinks resolved)."""
+    real_path, real_root = os.path.realpath(path), os.path.realpath(root)
+    try:
+        return os.path.commonpath([real_path, real_root]) == real_root and real_path != real_root
+    except ValueError:
+        return False
+
+
+def check_paths(libs: List[dict]) -> Tuple[List[str], List[str]]:
+    """Folder checks. Nothing here touches the network. Returns (errors, warnings)."""
+    errors: List[str] = []
+    warnings: List[str] = []
+    all_paths: List[Tuple[str, str, str]] = []   # (library, kind, real path)
+
+    for lib in libs:
+        name = lib["name"]
+        folders = {kind: lib[kind] for kind in FOLDER_KINDS}
+
+        for kind, path in folders.items():
+            if not os.path.isdir(path):
+                errors.append(f"{name}: the {kind} folder does not exist: {path} "
+                              "(create it and check your volume mapping; the script never creates it for you)")
+            elif not os.access(path, os.R_OK | os.W_OK | os.X_OK):
+                errors.append(f"{name}: the {kind} folder is not writable: {path}")
+            all_paths.append((name, kind, os.path.realpath(path)))
+
+        kinds = list(folders)
+        for i, first in enumerate(kinds):
+            for second in kinds[i + 1:]:
+                if (os.path.realpath(folders[first]) == os.path.realpath(folders[second])
+                        or is_within(folders[first], folders[second])
+                        or is_within(folders[second], folders[first])):
+                    errors.append(f"{name}: the {first} and {second} folders are the same or overlap "
+                                  f"({folders[first]} / {folders[second]})")
+
+        existing = [p for p in folders.values() if os.path.isdir(p)]
+        if len({filesystem_id(p) for p in existing}) > 1:
+            message = (f"{name}: the folders are on different filesystems/mounts, so moves would be slow "
+                       "copy-then-delete operations that can be interrupted half way. Map one parent folder "
+                       "into the container instead of several separate ones.")
+            if ALLOW_CROSS_FILESYSTEM_MOVES:
+                warnings.append(message)
+            else:
+                errors.append(message + " (Set ALLOW_CROSS_FILESYSTEM_MOVES=true to accept this.)")
+
+    # No two libraries may share a folder
+    seen: Dict[str, str] = {}
+    for library, kind, real in all_paths:
+        label = f"{library} {kind}"
+        if real in seen and seen[real].split(" ")[0] != library:
+            errors.append(f"{label} folder is the same as the {seen[real]} folder: {real}")
+        seen.setdefault(real, label)
+
+    return errors, warnings
+
+
+def check_services(libs: List[dict]) -> Tuple[List[str], List[str]]:
+    """Network checks: Jellyfin and each enabled library's Radarr/Sonarr. Returns (errors, warnings)."""
+    errors: List[str] = []
+    warnings: List[str] = []
+    try:
+        jellyfin_get("/Users")
+    except SystemExit as e:
+        errors.append(str(e).replace("[ERROR] ", ""))
+    except Exception as e:
+        errors.append(f"Cannot reach Jellyfin ({type(e).__name__}). Check JELLYFIN_HOST_URL.")
+
+    for lib in libs:
+        arr = lib["arr"]
+        if not arr.enabled:
+            warnings.append(f"{lib['name']}: {arr.name} is not configured, so it will not be told about moves "
+                            f"(it may re-download titles) and deletions need ALLOW_FILESYSTEM_DELETE=true.")
+            continue
+        try:
+            arr.check()
+        except Exception as e:
+            errors.append(f"Cannot reach {arr.name} ({type(e).__name__}). "
+                          f"Check {arr.name.upper()}_URL and {arr.name.upper()}_API_KEY.")
+    return errors, warnings
+
+
+def preflight(libs: List[dict]) -> Tuple[List[str], List[str]]:
+    """Everything that must be true before the script is allowed to touch anything."""
+    if not libs:
+        return ["No libraries are enabled (set ENABLE_MOVIES and/or ENABLE_TV)."], []
+    errors, warnings = check_paths(libs)
+    if not errors:                       # don't bother the APIs if the folders are already wrong
+        service_errors, service_warnings = check_services(libs)
+        errors += service_errors
+        warnings += service_warnings
+    return errors, warnings
+
+
+# ==============================================
 # --- DISK ACTIONS ---
 # ==============================================
 
-def safe_move_directory(source_dir: str, destination_parent_dir: str) -> bool:
+def safe_move_directory(source_dir: str, destination_parent_dir: str) -> Optional[str]:
+    """
+    Move a folder into destination_parent_dir. Returns None on success, or a short error message.
+    The destination folder must already exist (it is never created, so a missing mount can't
+    silently turn into a local folder), and the move is verified afterwards.
+    """
     package_name = os.path.basename(os.path.normpath(source_dir))
     destination_path = os.path.join(destination_parent_dir, package_name)
 
     log(f"MOVE '{os.path.abspath(source_dir)}' -> '{os.path.abspath(destination_path)}'")
     if DRY_RUN:
-        return True
+        return None
     try:
-        os.makedirs(destination_parent_dir, exist_ok=True)
+        if not os.path.isdir(destination_parent_dir):
+            return f"destination folder is missing: {destination_parent_dir}"
         if os.path.exists(destination_path):
-            print(f"[SKIPPED] Destination already exists: {destination_path}")
-            return False
+            return f"destination already exists: {destination_path}"
         shutil.move(source_dir, destination_path)
-        print(f"[SUCCESS] '{package_name}' moved to {destination_path}")
-        return True
     except Exception as e:
-        print(f"[FATAL ERROR] Failed to move {package_name}: {e}")
+        return f"{type(e).__name__}: {e}"
+    if os.path.exists(source_dir) or not os.path.isdir(destination_path):
+        return "move did not complete (source still present or destination missing)"
+    print(f"[SUCCESS] '{package_name}' moved to {destination_path}")
+    return None
+
+
+def move_or_report(lib: dict, folder: str, source: str, destination_parent: str) -> bool:
+    """Move a folder; on failure, say so loudly and record it. Nothing else should happen if this is False."""
+    error = safe_move_directory(source, destination_parent)
+    if error:
+        print(f"[MOVE FAILED] {folder}: {error}")
+        record_action("move_failed", folder, error, lib["name"], status="failed")
+        return False
+    return True
+
+
+def sync_arr(lib: dict, folder: str, root: str, monitored: Optional[bool] = None):
+    """Tell Radarr/Sonarr about a completed move. A failure is recorded and reported, but never stops the run."""
+    arr = lib["arr"]
+    if not arr.notify_moved(folder, root, monitored):
+        record_action("arr_sync_failed", folder,
+                      f"{arr.name} was NOT updated after the move; fix its path/monitoring by hand",
+                      lib["name"], status="failed")
+
+
+def remove_media(lib: dict, folder_name: str, folder_path: str) -> bool:
+    """
+    Permanently delete a title from the Removal folder. Returns True only if it was (or, in a dry run,
+    would be) deleted. Every refusal is recorded. The rules, in order:
+      1. Never delete anything that isn't strictly inside this library's Removal folder.
+      2. If Radarr/Sonarr are configured, they must know the title (exactly one entry), and the
+         folder must really be gone afterwards.
+      3. If they don't know it, or aren't configured, delete it ourselves ONLY with ALLOW_FILESYSTEM_DELETE=true.
+    """
+    arr = lib["arr"]
+    name = lib["name"]
+
+    if os.path.islink(folder_path) or not is_within(folder_path, lib["removal"]):
+        message = "refusing to delete: path is not strictly inside the Removal folder"
+        print(f"[DELETE REFUSED] {folder_name}: {message}")
+        record_action("delete_skipped", folder_name, message, name, status="skipped")
         return False
 
+    if arr.enabled:
+        try:
+            item = arr.find(folder_name)
+        except AmbiguousMatchError as e:
+            print(f"[DELETE REFUSED] {folder_name}: {e}")
+            record_action("delete_skipped", folder_name, str(e), name, status="skipped")
+            return False
+        except requests.RequestException as e:
+            print(f"[DELETE FAILED] {folder_name}: could not ask {arr.name} ({type(e).__name__})")
+            record_action("delete_failed", folder_name, f"could not ask {arr.name} ({type(e).__name__})",
+                          name, status="failed")
+            return False
 
-def remove_media(arr: ArrClient, folder_name: str, folder_path: str):
-    """Delete via Radarr/Sonarr when possible (it removes the files and its own record); else delete the folder."""
-    item = arr.find(folder_name) if arr.enabled else None
-    if item:
-        log(f"{arr.name}: DELETE '{folder_name}' (with files)")
-        if not DRY_RUN:
-            arr.delete(item)
-    else:
-        log(f"No {arr.name} entry; deleting folder directly: {folder_path}")
-        if not DRY_RUN:
-            shutil.rmtree(folder_path)
+        if item:
+            log(f"{arr.name}: DELETE '{folder_name}' (with files)")
+            if DRY_RUN:
+                return True
+            try:
+                arr.delete(item)
+            except requests.RequestException as e:
+                print(f"[DELETE FAILED] {folder_name}: {arr.name} refused ({type(e).__name__})")
+                record_action("delete_failed", folder_name, f"{arr.name} refused the delete ({type(e).__name__})",
+                              name, status="failed")
+                return False
+            if os.path.exists(folder_path):
+                message = (f"{arr.name} reported success but the folder is still there; "
+                           f"check that its path settings (e.g. {arr.name.upper()}_APP_REMOVAL_PATH) are right")
+                print(f"[DELETE INCOMPLETE] {folder_name}: {message}")
+                record_action("delete_failed", folder_name, message, name, status="failed")
+                return False
+            return True
+
+    if not ALLOW_FILESYSTEM_DELETE:
+        reason = f"not found in {arr.name}" if arr.enabled else f"{arr.name} is not configured"
+        message = f"{reason}; delete it by hand, or set ALLOW_FILESYSTEM_DELETE=true to let the script do it"
+        print(f"[DELETE SKIPPED] {folder_name}: {message}")
+        record_action("delete_skipped", folder_name, message, name, status="skipped")
+        return False
+
+    log(f"No {arr.name} entry; deleting folder directly: {folder_path}")
+    if DRY_RUN:
+        return True
+    try:
+        shutil.rmtree(folder_path)
+    except OSError as e:
+        print(f"[DELETE FAILED] {folder_name}: {e}")
+        record_action("delete_failed", folder_name, f"{type(e).__name__}: {e}", name, status="failed")
+        return False
+    return True
 
 
 def newest_mtime(path: str) -> Optional[datetime.datetime]:
@@ -418,6 +694,17 @@ def newest_mtime(path: str) -> Optional[datetime.datetime]:
             except OSError:
                 continue
     return datetime.datetime.fromtimestamp(newest) if newest else None
+
+
+def folder_size(path: str) -> int:
+    total = 0
+    for root, _dirs, files in os.walk(path):
+        for name in files:
+            try:
+                total += os.path.getsize(os.path.join(root, name))
+            except OSError:
+                continue
+    return total
 
 
 def list_folders(directory: str) -> List[str]:
@@ -438,11 +725,12 @@ def move_to_holding(lib: dict, folder: str, path: str, state: dict, reason: str)
     """Move into Holding (Leaving Soon) and tell Radarr/Sonarr to stop monitoring so it isn't re-downloaded."""
     if not action_allowed(f"hold {folder}", lib["name"]):
         return
-    if safe_move_directory(path, lib["holding"]):
+    if move_or_report(lib, folder, path, lib["holding"]):
+        action_done()
         if not DRY_RUN:
             state["queued"][state_key(lib, folder)] = datetime.datetime.now().isoformat()
-        lib["arr"].notify_moved(folder, lib["app_holding"], monitored=False)
         record_action("hold", folder, reason, lib["name"])
+        sync_arr(lib, folder, lib["app_holding"], monitored=False)
 
 
 def audit_removal(lib: dict, state: dict):
@@ -461,11 +749,15 @@ def audit_removal(lib: dict, state: dict):
         if age >= REMOVAL_DAYS:
             print(f"\n[{lib['name']}: {folder}] In Removal {age}d: deleting permanently.")
             if action_allowed(f"delete {folder}", lib["name"]):
-                remove_media(lib["arr"], folder, path)
-                record_action("delete", folder, f"in Removal {age} days", lib["name"])
-                if not DRY_RUN:
-                    state["in_removal"].pop(key, None)
+                size = folder_size(path)
+                if remove_media(lib, folder, path):
+                    action_done()
+                    record_action("delete", folder, f"in Removal {age} days ({human_size(size)})",
+                                  lib["name"], size_bytes=size)
+                    if not DRY_RUN:
+                        state["in_removal"].pop(key, None)
         else:
+            _stats["in_removal"] += 1
             print(f"\n[{lib['name']}: {folder}] In Removal {age}d ({REMOVAL_DAYS - age} days until deletion).")
 
 
@@ -478,11 +770,11 @@ def audit_holding(lib: dict, signals: dict, state: dict):
         sig = signals.get(folder)
         if sig and sig["favorite"]:
             print(f"\n[{lib['name']}: {folder}] In Holding but favorited: rescue to Keep.")
-            if safe_move_directory(path, lib["keep"]):
+            if move_or_report(lib, folder, path, lib["keep"]):
                 if not DRY_RUN:
                     state["queued"].pop(key, None)
-                lib["arr"].notify_moved(folder, lib["app_keep"], monitored=True)
                 record_action("rescue", folder, "favorited while in Holding", lib["name"])
+                sync_arr(lib, folder, lib["app_keep"], monitored=True)
             continue
 
         queued_at = state["queued"].get(key)
@@ -494,27 +786,22 @@ def audit_holding(lib: dict, signals: dict, state: dict):
 
         if age >= HOLDING_DAYS:
             print(f"\n[{lib['name']}: {folder}] In Holding {age}d, no favorite: move to Removal.")
-            if safe_move_directory(path, lib["removal"]):
+            if move_or_report(lib, folder, path, lib["removal"]):
                 if not DRY_RUN:
                     state["queued"].pop(key, None)
                     state["in_removal"][key] = datetime.datetime.now().isoformat()
-                lib["arr"].notify_moved(folder, lib["app_removal"], monitored=False)
                 record_action("to_removal", folder, f"in Holding {age} days", lib["name"])
+                sync_arr(lib, folder, lib["app_removal"], monitored=False)
         else:
             print(f"\n[{lib['name']}: {folder}] In Holding {age}d ({HOLDING_DAYS - age} days left to favorite it).")
             _holding_status.append({"library": lib["name"], "folder": folder, "days_left": HOLDING_DAYS - age})
 
 
 def audit_transient(lib: dict, signals: dict, state: dict):
-    transient = lib["transient"]
-    if not os.path.isdir(transient):
-        print(f"[ERROR] {lib['name']} folder not found: {transient}")
-        return
-
-    folders = list_folders(transient)
+    folders = list_folders(lib["transient"])
 
     for folder in folders:
-        path = os.path.join(transient, folder)
+        path = os.path.join(lib["transient"], folder)
 
         sig = signals.get(folder)
         if sig is None:
@@ -542,9 +829,9 @@ def audit_transient(lib: dict, signals: dict, state: dict):
         # Priority 1: favorited (watched or not) -> keep
         if sig["favorite"]:
             print("-> Favorited (or protected): move to Keep.")
-            if safe_move_directory(path, lib["keep"]):
-                lib["arr"].notify_moved(folder, lib["app_keep"])
+            if move_or_report(lib, folder, path, lib["keep"]):
                 record_action("keep", folder, "favorited", lib["name"])
+                sync_arr(lib, folder, lib["app_keep"])
         # Priority 2: tagged not-at-all -> Holding right away
         elif sig["disliked"]:
             print("-> Tagged not-at-all: move to Holding.")
@@ -554,6 +841,7 @@ def audit_transient(lib: dict, signals: dict, state: dict):
             print(f"-> No favorite after {wait}+ days: move to Holding.")
             move_to_holding(lib, folder, path, state, f"no favorite after {age} days")
         else:
+            _stats["waiting"] += 1
             print(f"-> Waiting ({wait - age} days left to favorite it).")
 
     # Forget folders that have left this library's transient folder
@@ -582,15 +870,12 @@ def audit_keep_seasons(lib: dict, signals: dict, state: dict):
     unless the show carries the keep-all tag in Jellyfin. Specials (season 0) are never touched.
     Needs Sonarr, because Sonarr is what deletes the episode files and stops re-downloads.
     """
-    keep_dir = lib["keep"]
-    if not os.path.isdir(keep_dir):
-        return
     arr = lib["arr"]
     if not arr.enabled:
         print("[WARN] Season pruning needs Sonarr (SONARR_URL / SONARR_API_KEY); skipping.")
         return
 
-    folders = list_folders(keep_dir)
+    folders = list_folders(lib["keep"])
     print(f"\n--- Season pruning ({len(folders)} shows in Keep) ---")
 
     for folder in folders:
@@ -611,13 +896,18 @@ def audit_keep_seasons(lib: dict, signals: dict, state: dict):
                   f"{SEASON_PRUNE_GRACE_DAYS - days_in_keep} days (time to add the keep-all tag).")
             continue
 
-        item = arr.find(folder)
-        if not item:
-            print(f"{label} Not found in Sonarr; skipping.")
+        try:
+            item = arr.find(folder)
+            if not item:
+                print(f"{label} Not found in Sonarr; skipping.")
+                continue
+            files = arr.episode_files(item)
+        except (AmbiguousMatchError, requests.RequestException) as e:
+            print(f"{label} Could not look it up in Sonarr ({type(e).__name__}); skipping.")
             continue
 
         by_season: Dict[int, List[dict]] = {}
-        for f in arr.episode_files(item):
+        for f in files:
             season = f.get("seasonNumber", 0)
             if season >= 1:                      # ignore specials
                 by_season.setdefault(season, []).append(f)
@@ -640,7 +930,14 @@ def audit_keep_seasons(lib: dict, signals: dict, state: dict):
         print(f"{label} Pruning seasons {old_seasons} ({len(old_files)} files); keeping season {latest}.")
         if not action_allowed(f"prune seasons {folder}", lib["name"]):
             continue
-        arr.prune_seasons(item, old_seasons, old_files)
+        try:
+            arr.prune_seasons(item, old_seasons, old_files)
+        except requests.RequestException as e:
+            print(f"{label} Pruning failed ({type(e).__name__}).")
+            record_action("prune_failed", folder, f"{arr.name} request failed ({type(e).__name__})",
+                          lib["name"], status="failed")
+            continue
+        action_done()
         record_action("prune_seasons", folder,
                       f"deleted seasons {old_seasons} ({len(old_files)} files); kept season {latest}",
                       lib["name"])
@@ -652,11 +949,48 @@ def audit_keep_seasons(lib: dict, signals: dict, state: dict):
 
 
 # ==============================================
+# --- RUN SUMMARY ---
+# ==============================================
+
+def print_run_summary():
+    def count(action: str) -> int:
+        return sum(1 for e in _events if e["action"] == action and e["status"] in ("done", "planned"))
+
+    deleted = [e for e in _events if e["action"] == "delete" and e["status"] in ("done", "planned")]
+    freed = sum(e.get("size_bytes", 0) for e in deleted)
+    problems = sum(1 for e in _events if e["status"] in ("failed", "skipped"))
+
+    header = "Run summary [DRY RUN - nothing was changed]" if DRY_RUN else "Run summary"
+    rows = [
+        ("Waiting in Transient", _stats["waiting"]),
+        ("Favorites sent to Keep", count("keep")),
+        ("Sent to Holding", count("hold")),
+        ("Rescued from Holding", count("rescue")),
+        ("Still in Holding", len(_holding_status)),
+        ("Sent to Removal", count("to_removal")),
+        ("Still in Removal", _stats["in_removal"]),
+        ("Deleted" + (" (space freed)" if deleted else ""),
+         f"{len(deleted)} ({human_size(freed)})" if deleted else 0),
+        ("Seasons pruned", count("prune_seasons")),
+    ]
+    if problems:
+        rows.append(("Problems (see the action log)", problems))
+    print(f"\n=== {header} ===")
+    for label, value in rows:
+        print(f"  {label + ':':<34}{value}")
+
+
+# ==============================================
 # --- NOTIFICATIONS (optional) ---
 # ==============================================
 
 NOTIFY_HEADINGS = {
     "run_failed": "Run failed",
+    "move_failed": "Could not move",
+    "arr_sync_failed": "Radarr/Sonarr was not updated (fix by hand)",
+    "delete_failed": "Delete failed",
+    "delete_skipped": "Not deleted (needs your attention)",
+    "prune_failed": "Season pruning failed",
     "hold": "Moved to Leaving Soon",
     "rescue": "Rescued to Keep",
     "to_removal": "Moved to Removal (last stop before deletion)",
@@ -682,7 +1016,9 @@ def build_notification() -> Optional[Dict[str, Any]]:
         group = [e for e in events if e["action"] == action]
         if not group:
             continue
-        lines.append(f"{heading} ({len(group)}):")
+        total = sum(e.get("size_bytes", 0) for e in group)
+        suffix = f", {human_size(total)}" if total else ""
+        lines.append(f"{heading} ({len(group)}{suffix}):")
         for e in group:
             if action == "run_failed":
                 lines.append(f"  - {e['detail']}")
@@ -757,6 +1093,7 @@ def run_once():
     _actions_taken = 0      # the action cap applies per run
     _events.clear()
     _holding_status.clear()
+    _stats.update(waiting=0, in_removal=0)
     radarr.reset()          # re-read Radarr's / Sonarr's lists every run
     sonarr.reset()
 
@@ -767,17 +1104,30 @@ def run_once():
     if not JELLYFIN_TOKEN:
         raise SystemExit("[ERROR] JELLYFIN_API_TOKEN is not set.")
 
+    libs = build_libraries()
+    errors, warnings = preflight(libs)
+    for warning in warnings:
+        print(f"[PREFLIGHT WARNING] {warning}")
+    if errors:
+        for error in errors:
+            print(f"[PREFLIGHT ERROR] {error}")
+        raise SystemExit("[PREFLIGHT FAILED] Nothing was touched. " + " | ".join(errors))
+
     state = load_state()
-    for lib in build_libraries():
-        print(f"\n----- {lib['name']} -----")
-        signals = get_signals(lib["jellyfin_type"])
-        audit_removal(lib, state)               # delete what has served its time in Removal
-        audit_holding(lib, signals, state)      # rescue favorites / move expired items to Removal
-        audit_transient(lib, signals, state)    # keep favorites / move undecided items to Holding
-        if lib.get("prune_seasons"):
-            audit_keep_seasons(lib, signals, state)
-    save_state(state)
-    record_action("run_complete", "-", f"{_actions_taken} hold/delete actions this run", "All")
+    try:
+        for lib in libs:
+            print(f"\n----- {lib['name']} -----")
+            signals = get_signals(lib["jellyfin_type"])
+            audit_removal(lib, state)               # delete what has served its time in Removal
+            audit_holding(lib, signals, state)      # rescue favorites / move expired items to Removal
+            audit_transient(lib, signals, state)    # keep favorites / move undecided items to Holding
+            if lib.get("prune_seasons"):
+                audit_keep_seasons(lib, signals, state)
+    finally:
+        save_state(state)   # even if the run stops half way, what already moved is remembered
+
+    record_action("run_complete", "-", f"{_actions_taken} hold/delete/prune actions this run", "All")
+    print_run_summary()
     send_run_notification()
 
 
@@ -787,7 +1137,7 @@ def run_with_alerts():
         run_once()
     except (Exception, SystemExit) as e:
         print(f"[RUN FAILED] {e}")
-        record_action("run_failed", "-", str(e)[:200], "All")
+        record_action("run_failed", "-", str(e)[:200], "All", status="failed")
         send_run_notification()
         raise
 

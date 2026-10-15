@@ -41,11 +41,16 @@ Every time something moves to Holding or Removal, Radarr/Sonarr are told the new
 
 - **Dry-run by default.** `DRY_RUN=true` until you explicitly set `false`.
 - **Grace period.** The waiting clock starts the first time the script *sees* a folder, no matter how old it is on disk, so an existing backlog isn't wiped on day one.
-- **Action cap.** At most `MAX_ACTIONS_PER_RUN` (default 10) moves into Holding or permanent deletions per run.
+- **Action cap.** At most `MAX_ACTIONS_PER_RUN` (default 10) *successful* moves into Holding, permanent deletions, and season prunes per run.
+- **Preflight checks.** Before touching anything, every run verifies that all folders exist and are writable, don't overlap, and sit on one filesystem, and that Jellyfin and Radarr/Sonarr are reachable. If anything is wrong the run **stops with nothing changed**. The script never creates a missing folder, so an unmounted share can't quietly turn into a local folder full of your media.
+- **Deletion fails closed.** Permanent deletion goes through Radarr/Sonarr. If they don't know a title (or aren't configured), the script **won't** delete it itself unless you set `ALLOW_FILESYSTEM_DELETE=true`. It also refuses to delete anything that isn't strictly inside a Removal folder (symlinks included), anything with ambiguous Radarr/Sonarr matches, and it checks that the folder is really gone afterwards.
+- **Moves are verified.** A move only counts once the folder has arrived. A failed move is recorded as a failure, and the title's clock doesn't advance.
+- **Radarr/Sonarr errors don't abort a run.** If an update fails after a move, it's recorded (and notified) so you can fix it by hand, and the rest of the run carries on. Progress is saved even if a run stops half way.
+- **Settings are validated.** A typo like `HOLDING_DAYS=abc` or `ENABLE_TV=maybe` stops the script with a clear message instead of silently doing something else.
 - **Unverifiable items are skipped.** Anything not found in Jellyfin is left alone.
 - **Rescue window.** Two stages (Holding, then Removal) before anything is deleted.
 - **Season-pruning delays.** A show must sit in Keep for 30 days before pruning, and older seasons are only pruned 7 days after a newer season arrives.
-- **Action log.** Every move, rescue, deletion, and skipped action is written to a JSON-lines file.
+- **Honest action log.** Every move, rescue, deletion, failure, and skipped action is written to a JSON-lines file, marked `planned` (dry run), `done`, `failed`, or `skipped`.
 - **Atomic state file.** Written to a temp file and renamed, so it's never half-written.
 
 ---
@@ -56,7 +61,7 @@ Every time something moves to Holding or Removal, Radarr/Sonarr are told the new
 - [Jellyfin](https://jellyfin.org) with an API key
 - [Radarr](https://radarr.video) (movies) and/or [Sonarr](https://sonarr.tv) (TV) with API keys
 - Movie and show folders named the same way in Jellyfin and on disk, for example `Pretty Woman (1990)` (the usual Radarr/Sonarr naming). Items are matched **by folder name**.
-- All the folders (transient, holding, keep, removal) on the **same filesystem/mount**, so moves are instant renames instead of slow copy-then-delete operations.
+- All the folders (transient, holding, keep, removal) on the **same filesystem/mount**, so moves are instant renames instead of slow copy-then-delete operations. The preflight check enforces this (override with `ALLOW_CROSS_FILESYSTEM_MOVES=true` if you really must).
 
 ---
 
@@ -74,7 +79,7 @@ Edit `.env` and fill in your URLs, API keys, and host folder paths. **Never comm
 
 ### 2. Create the folders
 
-Inside your media storage, create the folders (names are configurable):
+Inside your media storage, create the folders (names are configurable). **The script never creates them**, and it refuses to run if any are missing:
 
 ```
 media_storage/
@@ -171,7 +176,7 @@ Leaving Soon - favorite in Jellyfin to keep (3):
   - ...
 ```
 
-It also reports rescues, moves to Removal, season pruning, actions skipped by the per-run cap, and **failed runs** (for example Jellyfin being unreachable).
+It also reports rescues, moves to Removal, season pruning, space freed by deletions, actions skipped by the per-run cap, **problems that need your attention** (failed moves, Radarr/Sonarr updates that didn't go through, titles that were not deleted), and **failed runs** (for example a preflight check failing or Jellyfin being unreachable).
 
 - **Dry runs are silent** unless `NOTIFY_ON_DRY_RUN=true`. Those messages are labelled `[DRY RUN]`.
 - **Turn off the "still in Leaving Soon" list** with `NOTIFY_LEAVING_SOON_DIGEST=false`.
@@ -211,6 +216,10 @@ All settings are environment variables (usually in `.env`). Only the first group
 | `ENABLE_TV` | `false` | Manage TV through Sonarr |
 | `ENABLE_SEASON_PRUNING` | `false` | Delete old seasons of favorited shows (needs `ENABLE_TV`) |
 | `RUN_INTERVAL_HOURS` | `0` | `0` = run once and exit; otherwise repeat every N hours |
+| `ALLOW_FILESYSTEM_DELETE` | `false` | Let the script delete a title itself when Radarr/Sonarr don't know it (or aren't configured). Off by default: such titles are skipped and reported. |
+| `ALLOW_CROSS_FILESYSTEM_MOVES` | `false` | Accept folders on different mounts (moves become slow copy-then-delete). Off by default. |
+
+Yes/no settings accept `true`/`false` (also `yes`/`no`, `1`/`0`, `on`/`off`). Anything else stops the script with an error. Numeric settings are validated too.
 
 ### Timers and limits
 
@@ -218,9 +227,9 @@ All settings are environment variables (usually in `.env`). Only the first group
 |---|---|---|
 | `MOVIE_WAIT_DAYS` | `30` | Movies wait this long in Transient before Holding |
 | `TV_WAIT_DAYS` | `60` | Shows wait this long in Transient before Holding |
-| `HOLDING_DAYS` | `7` | Time in Holding before moving to Removal |
-| `REMOVAL_DAYS` | `7` | Time in Removal before permanent deletion |
-| `MAX_ACTIONS_PER_RUN` | `10` | Max moves into Holding plus permanent deletions per run |
+| `HOLDING_DAYS` | `7` | Time in Holding before moving to Removal (minimum 1) |
+| `REMOVAL_DAYS` | `7` | Time in Removal before permanent deletion (minimum 1) |
+| `MAX_ACTIONS_PER_RUN` | `10` | Max successful moves into Holding, deletions, and season prunes per run |
 | `TV_NEW_EPISODES_RESET_CLOCK` | `true` | New episodes restart a show's waiting clock |
 | `SEASON_PRUNE_GRACE_DAYS` | `30` | Days a show must be in Keep before pruning is allowed |
 | `SEASON_PRUNE_AFTER_NEW_SEASON_DAYS` | `7` | Wait this long after a new season arrives before pruning older ones |
@@ -274,15 +283,33 @@ If Radarr/Sonarr mount your media at **different paths** than this container, al
 - **Action log** (`auditor_actions.jsonl`): one JSON line per action:
 
   ```json
-  {"time": "2026-10-20T03:00:12", "dry_run": false, "library": "Movies", "action": "hold", "folder": "Example Movie (2022)", "detail": "no favorite after 31 days"}
+  {"time": "2026-10-20T03:00:12", "dry_run": false, "library": "Movies", "action": "hold", "status": "done", "folder": "Example Movie (2022)", "detail": "no favorite after 31 days"}
   ```
 
-  Actions: `keep`, `hold`, `rescue`, `to_removal`, `delete`, `prune_seasons`, `cap_skipped`, `run_complete`, `run_failed`. Dry-run entries have `"dry_run": true`.
+  **Status** says what really happened: `planned` (dry run: it *would* happen), `done`, `failed` (attempted, didn't work), or `skipped` (deliberately not done by a safety rule).
+
+  **Actions:** `keep`, `hold`, `rescue`, `to_removal`, `delete` (with `size_bytes`), `prune_seasons`, `run_complete`, plus the problems `move_failed`, `arr_sync_failed`, `delete_skipped`, `delete_failed`, `prune_failed`, `cap_skipped`, and `run_failed`.
 
   ```bash
   tail -20 auditor_actions.jsonl
   grep '"delete"' auditor_actions.jsonl
   grep '"library": "TV"' auditor_actions.jsonl
+  grep -E '"status": "(failed|skipped)"' auditor_actions.jsonl     # everything that needs your attention
+  ```
+
+- **Run summary:** every run ends with a short summary in the container log, most useful as a **dry-run preview** before you go live:
+
+  ```
+  === Run summary [DRY RUN - nothing was changed] ===
+    Waiting in Transient:             142
+    Favorites sent to Keep:           12
+    Sent to Holding:                  18
+    Rescued from Holding:             0
+    Still in Holding:                 7
+    Sent to Removal:                  3
+    Still in Removal:                 2
+    Deleted (space freed):            3 (41.2 GB)
+    Seasons pruned:                   0
   ```
 
 ---
@@ -292,7 +319,11 @@ If Radarr/Sonarr mount your media at **different paths** than this container, al
 | Problem | Likely cause |
 |---|---|
 | `401 Unauthorized` from Jellyfin | The token is wrong, has quotes or spaces, or is not an *API key*. Create one under Dashboard → API Keys. Recreate the container after editing (`docker compose up -d --force-recreate`). |
-| `Folder not found` | The volume mapping doesn't match the folder paths. Check inside the container: `docker exec media_collection_auditor ls /media`. |
+| `PREFLIGHT FAILED` | The run stopped on purpose, with nothing touched. The message says why: a folder is missing, not writable, overlapping, or on a different filesystem, or Jellyfin/Radarr/Sonarr can't be reached. Fix it and the next run proceeds. |
+| `Folder does not exist` | The volume mapping doesn't match the folder paths, or you haven't created the folder. Check inside the container: `docker exec media_collection_auditor ls /media`. |
+| `DELETE SKIPPED` / `delete_skipped` in the log | Radarr/Sonarr don't know the title (or are ambiguous about it), so the script refused to delete it. Remove the folder by hand, or set `ALLOW_FILESYSTEM_DELETE=true` if you want the script to. |
+| `arr_sync_failed` in the log | The folder moved but Radarr/Sonarr couldn't be updated. Fix its path/monitoring by hand in Radarr/Sonarr (the log says which title). |
+| `CONFIG ERROR` at startup | A setting has an invalid value (see the message). |
 | `Not found in Jellyfin yet` | Jellyfin hasn't scanned the folder, or the folder name differs from what Jellyfin sees. |
 | Container keeps restarting | The script exits after one run. Set `RUN_INTERVAL_HOURS` (for example `24`), or use `restart: "no"` with an external schedule. |
 | No state file appears | The logs volume isn't mapped correctly. The script prints the exact save path at the end of every run. |
@@ -310,7 +341,7 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-It covers the whole lifecycle (including the exact boundary days), favorites and tags, the dry-run guarantee, the per-run action cap, grace periods, TV clock rules, season pruning, legacy state files, and every notification target. GitHub Actions runs it on every push and pull request, on Python 3.10 and 3.12 (`.github/workflows/tests.yml`).
+It covers the whole lifecycle (including the exact boundary days), favorites and tags, the dry-run guarantee, the per-run action cap, grace periods, TV clock rules, season pruning (including the exact requests sent to Sonarr), legacy state files, every notification target, and the safety net: preflight checks, fail-closed deletion, verified moves, Radarr/Sonarr failures, and config validation. GitHub Actions runs it on every push and pull request, on Python 3.10 and 3.12 (`.github/workflows/tests.yml`).
 
 If you change the rules, change or add a test with it. These are the tests that keep a tool that deletes files honest.
 
@@ -325,6 +356,7 @@ If you change the rules, change or add a test with it. These are the tests that 
 ├── tests/
 │   ├── conftest.py
 │   ├── test_lifecycle.py
+│   ├── test_safety.py
 │   ├── test_season_pruning.py
 │   ├── test_signals.py
 │   └── test_notifications.py

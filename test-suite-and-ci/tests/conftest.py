@@ -24,7 +24,7 @@ SETTINGS = [
     "ENABLE_MOVIES", "ENABLE_TV", "ENABLE_SEASON_PRUNING", "MEDIA_PATH", "STATE_FILE", "ACTION_LOG_FILE",
     "MOVIE_WAIT_DAYS", "TV_WAIT_DAYS", "HOLDING_DAYS", "REMOVAL_DAYS", "TV_NEW_EPISODES_RESET_CLOCK",
     "KEEP_ALL_SEASONS_TAG", "SEASON_PRUNE_GRACE_DAYS", "SEASON_PRUNE_AFTER_NEW_SEASON_DAYS",
-    "MAX_ACTIONS_PER_RUN", "RUN_INTERVAL_HOURS",
+    "MAX_ACTIONS_PER_RUN", "RUN_INTERVAL_HOURS", "ALLOW_FILESYSTEM_DELETE", "ALLOW_CROSS_FILESYSTEM_MOVES",
     "NOTIFY_DISCORD_WEBHOOK_URL", "NOTIFY_NTFY_URL", "NOTIFY_NTFY_TOKEN", "NOTIFY_WEBHOOK_URL",
     "NOTIFY_ON_DRY_RUN", "NOTIFY_LEAVING_SOON_DIGEST",
 ] + [f"{p}_{k}_PATH" for p in ("RADARR", "SONARR") for k in ("TRANSIENT", "HOLDING", "KEEP", "REMOVAL")] \
@@ -82,6 +82,10 @@ class Auditor:
         self.media.mkdir(exist_ok=True)
         self.signals = {"Movie": {}, "Series": {}}
         ca.get_signals = lambda jellyfin_type: self.signals[jellyfin_type]
+        # The network half of the preflight is replaced by a "everything is reachable" stub so ordinary tests
+        # need no fake servers; the real one is kept so the safety tests can exercise it.
+        self.real_check_services = ca.check_services
+        ca.check_services = lambda libs: ([], [])
 
     # --- building the library ---
     def add(self, library_folder, name, age_days=None):
@@ -107,7 +111,14 @@ class Auditor:
         self.signals["Series"][name] = signal_flags(**flags)
 
     # --- running and inspecting ---
+    def make_folders(self):
+        """Create every folder the preflight requires (the script itself never creates them)."""
+        for lib in self.ca.build_libraries():
+            for kind in self.ca.FOLDER_KINDS:
+                os.makedirs(lib[kind], exist_ok=True)
+
     def run(self):
+        self.make_folders()
         self.ca.run_once()
 
     def where(self, name):
@@ -145,6 +156,9 @@ def make_auditor(tmp_path, monkeypatch):
             "DRY_RUN": "false",
             "JELLYFIN_API_TOKEN": "test-token",
             "MEDIA_PATH": str(tmp_path / "media"),
+            # Most tests are about timers and decisions with no Radarr/Sonarr involved, so the script
+            # may delete folders itself. The safety tests switch this off to check the real default.
+            "ALLOW_FILESYSTEM_DELETE": "true",
             "STATE_FILE": str(tmp_path / "logs" / "auditor_state.json"),
             "ACTION_LOG_FILE": str(tmp_path / "logs" / "auditor_actions.jsonl"),
         }

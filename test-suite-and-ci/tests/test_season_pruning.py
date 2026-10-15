@@ -156,3 +156,98 @@ def test_sonarr_dates_parse_with_and_without_fractions(make_auditor):
     assert ca.parse_arr_date("2026-10-01T12:34:56.789Z") == datetime.datetime(2026, 10, 1, 12, 34, 56)
     assert ca.parse_arr_date(None) is None
     assert ca.parse_arr_date("not a date") is None
+
+
+# ---------------- the real requests sent to Sonarr (nothing stubbed except the network) ----------------
+
+class Reply:
+    status_code = 200
+
+    def __init__(self, body=None):
+        self._body = body
+
+    def json(self):
+        return self._body
+
+    def raise_for_status(self):
+        pass
+
+
+class SonarrServer:
+    """A pretend Sonarr that records, in order, every change the script asks for."""
+
+    def __init__(self, monkeypatch, series, files, fail_delete=False):
+        import requests
+        self.series, self.files, self.fail_delete = series, files, fail_delete
+        self.changes = []
+        monkeypatch.setattr(requests, "get", self.get)
+        monkeypatch.setattr(requests, "put", self.put)
+        monkeypatch.setattr(requests, "delete", self.delete)
+
+    def get(self, url, **kwargs):
+        if url.endswith("/api/v3/series"):
+            return Reply(self.series)
+        if url.endswith("/api/v3/episodefile"):
+            return Reply(self.files)
+        return Reply({})
+
+    def put(self, url, **kwargs):
+        self.changes.append(("PUT", url, kwargs["json"]))
+        return Reply(kwargs["json"])
+
+    def delete(self, url, **kwargs):
+        import requests
+        if self.fail_delete:
+            raise requests.ConnectionError("sonarr is down")
+        self.changes.append(("DELETE", url))
+        return Reply()
+
+
+SONARR_ENV = {"ENABLE_TV": "true", "ENABLE_SEASON_PRUNING": "true",
+              "SONARR_URL": "http://sonarr.test", "SONARR_API_KEY": "key"}
+
+
+def prunable_show(a, monkeypatch, **server_options):
+    a.add("TV_keep", "FROM (2022)")
+    a.show("FROM (2022)", favorite=True)
+    a.logs.mkdir(exist_ok=True)
+    (a.logs / "auditor_state.json").write_text("{}")
+    a.set_state("keep_seen", "TV/FROM (2022)", 45)
+    series = [{"id": 9, "path": "/tv/FROM (2022)",
+               "seasons": [{"seasonNumber": 0, "monitored": False}, {"seasonNumber": 1, "monitored": True},
+                           {"seasonNumber": 2, "monitored": True}, {"seasonNumber": 3, "monitored": True}]}]
+    return SonarrServer(monkeypatch, series, episode_files({1: 400, 2: 300, 3: 200}), **server_options)
+
+
+def test_old_seasons_are_unmonitored_first_and_then_their_files_deleted(make_auditor, monkeypatch):
+    a = make_auditor(**SONARR_ENV)
+    sonarr = prunable_show(a, monkeypatch)
+    a.run()
+
+    kinds = [change[0] for change in sonarr.changes]
+    assert kinds == ["PUT", "DELETE", "DELETE", "DELETE", "DELETE"]       # unmonitor BEFORE any file is removed
+    sent = sonarr.changes[0][2]["seasons"]
+    assert {s["seasonNumber"]: s["monitored"] for s in sent} == {0: False, 1: False, 2: False, 3: True}
+    deleted_ids = {int(change[1].rsplit("/", 1)[1]) for change in sonarr.changes[1:]}
+    assert deleted_ids == {1, 2, 3, 4}                                     # seasons 1 and 2 only
+    assert a.actions("prune_seasons")[0]["status"] == "done"
+
+
+def test_dry_run_sends_sonarr_nothing(make_auditor, monkeypatch):
+    a = make_auditor(DRY_RUN="true", **SONARR_ENV)
+    sonarr = prunable_show(a, monkeypatch)
+    a.run()
+
+    assert sonarr.changes == []
+    assert a.actions("prune_seasons")[0]["status"] == "planned"
+
+
+def test_a_sonarr_failure_while_pruning_is_recorded_not_fatal(make_auditor, monkeypatch):
+    a = make_auditor(**SONARR_ENV)
+    prunable_show(a, monkeypatch, fail_delete=True)
+    a.run()
+
+    failed = a.actions("prune_failed")
+    assert len(failed) == 1 and failed[0]["status"] == "failed"
+    assert a.actions("prune_seasons") == []
+    assert a.actions("run_complete")
