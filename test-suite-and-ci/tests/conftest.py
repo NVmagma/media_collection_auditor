@@ -14,7 +14,10 @@ import time
 import pytest
 import requests
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))
+# Tests live under test-suite-and-ci/, while the application lives in the repo-level app/ directory.
+# Add the repository app directory explicitly so tests work from a clean checkout.
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(REPO_ROOT, "app"))
 
 # Every setting the script reads. Cleared before each test so a developer's real environment
 # (or .env file) can never leak in and cause a test to talk to a real server.
