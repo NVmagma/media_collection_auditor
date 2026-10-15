@@ -2,16 +2,46 @@
 <Container version="2">
   <Name>media_collection_auditor</Name>
   <Repository>ghcr.io/nvmagma/media_archiver:latest</Repository>
-  <Registry>https://ghcr.io/</Registry>
+  <Registry>https://ghcr.io/nvmagma/media_archiver</Registry>
   <Project>https://github.com/NVmagma/media_archiver</Project>
-  <Overview>Media Collection Auditor automatically moves unneeded movies and TV shows through a safe Transient → Holding → Removal lifecycle using Jellyfin favorites/tags and optional Radarr/Sonarr integration. Start with DRY_RUN enabled and review the logs before enabling live changes.</Overview>
+  <Overview>Media Collection Auditor automatically moves unneeded movies and TV shows through a safe Transient -&gt; Holding -&gt; Removal lifecycle using Jellyfin favorites/tags and optional Radarr/Sonarr integration. Start with DRY_RUN enabled and review the logs before enabling live changes.</Overview>
   <Category>MediaServer:Tools</Category>
   <WebUI></WebUI>
   <Support>https://github.com/NVmagma/media_archiver/issues</Support>
   <Privileged>false</Privileged>
   <Network>bridge</Network>
   <Shell>bash</Shell>
-  <Icon>https://raw.githubusercontent.com/NVmagma/media_archiver/main/unraid/template/media_collection_auditor.png</Icon>
+
+  <Environment>
+    <Variable>
+      <Value>/media</Value>
+      <Name>MEDIA_PATH</Name>
+      <Mode/>
+    </Variable>
+    <Variable>
+      <Value>/app/logs/auditor_state.json</Value>
+      <Name>STATE_FILE</Name>
+      <Mode/>
+    </Variable>
+    <Variable>
+      <Value>/app/logs/auditor_actions.jsonl</Value>
+      <Name>ACTION_LOG_FILE</Name>
+      <Mode/>
+    </Variable>
+  </Environment>
+
+  <Data>
+    <Volume>
+      <HostDir>/mnt/user/appdata/media_collection_auditor</HostDir>
+      <ContainerDir>/app/logs</ContainerDir>
+      <Mode>rw</Mode>
+    </Volume>
+    <Volume>
+      <HostDir>/mnt/user/media_storage</HostDir>
+      <ContainerDir>/media</ContainerDir>
+      <Mode>rw</Mode>
+    </Volume>
+  </Data>
 
   <!-- Persistent application state and action logs -->
   <Config Name="Auditor Logs" Target="/app/logs" Default="/mnt/user/appdata/media_collection_auditor" Mode="rw" Description="Unraid folder where the auditor stores its state file and JSONL action log." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/media_collection_auditor</Config>
@@ -65,12 +95,5 @@
   <Config Name="Notify On Dry Run" Target="NOTIFY_ON_DRY_RUN" Default="false" Mode="" Description="Send notifications even when DRY_RUN=true." Type="Variable" Display="advanced-hide" Required="true" Mask="false">false</Config>
   <Config Name="Leaving Soon Digest" Target="NOTIFY_LEAVING_SOON_DIGEST" Default="true" Mode="" Description="Include titles still in Holding in notifications." Type="Variable" Display="advanced-hide" Required="true" Mask="false">true</Config>
 
-  <!-- Internal defaults are intentionally not exposed as GUI fields. -->
-  <Environment Name="MEDIA_PATH" Value="/media" />
-  <Environment Name="STATE_FILE" Value="/app/logs/auditor_state.json" />
-  <Environment Name="ACTION_LOG_FILE" Value="/app/logs/auditor_actions.jsonl" />
-
-  <Labels>
-    <Label>Media Collection Auditor</Label>
-  </Labels>
+  <Labels/>
 </Container>
