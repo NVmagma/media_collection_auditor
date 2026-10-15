@@ -2,9 +2,9 @@
 <Container version="2">
   <Name>media_collection_auditor</Name>
   <Repository>ghcr.io/nvmagma/media_archiver:feature-unraid</Repository>
-  <Registry>https://ghcr.io/nvmagma/media_archiver</Registry>
+  <Registry>https://ghcr.io/</Registry>
   <Project>https://github.com/NVmagma/media_archiver</Project>
-  <Overview>Media Collection Auditor automatically moves unneeded movies and TV shows through a safe Transient -&gt; Holding -&gt; Removal lifecycle using Jellyfin favorites/tags and optional Radarr/Sonarr integration. Start with DRY_RUN enabled and review the logs before enabling live changes.</Overview>
+  <Overview>Media Collection Auditor moves unneeded movies and TV shows through a Transient -&gt; Holding -&gt; Removal lifecycle using Jellyfin favorites/tags and optional Radarr/Sonarr integration. Start with DRY_RUN enabled and review logs before enabling live changes.</Overview>
   <Category>MediaServer:Tools</Category>
   <WebUI></WebUI>
   <Support>https://github.com/NVmagma/media_archiver/issues</Support>
@@ -12,77 +12,62 @@
   <Network>bridge</Network>
   <Shell>bash</Shell>
 
-  <Environment>
-    <Variable>
-      <Value>/media</Value>
-      <Name>MEDIA_PATH</Name>
-      <Mode/>
-    </Variable>
-    <Variable>
-      <Value>/app/logs/auditor_state.json</Value>
-      <Name>STATE_FILE</Name>
-      <Mode/>
-    </Variable>
-    <Variable>
-      <Value>/app/logs/auditor_actions.jsonl</Value>
-      <Name>ACTION_LOG_FILE</Name>
-      <Mode/>
-    </Variable>
-  </Environment>
+  <!-- Persistent state and action logs -->
+  <Config Name="Auditor Logs" Target="/app/logs" Default="/mnt/user/appdata/media_collection_auditor" Mode="rw" Description="Unraid folder for the auditor state file and JSONL action log." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/media_collection_auditor</Config>
 
-  <Data>
-    <Volume>
-      <HostDir>/mnt/user/appdata/media_collection_auditor</HostDir>
-      <ContainerDir>/app/logs</ContainerDir>
-      <Mode>rw</Mode>
-    </Volume>
-    <Volume>
-      <HostDir>/mnt/user/media_storage</HostDir>
-      <ContainerDir>/media</ContainerDir>
-      <Mode>rw</Mode>
-    </Volume>
-  </Data>
+  <!-- Mount the parent folder containing your configured Movies/TV lifecycle folders. -->
+  <Config Name="Media Library Root" Target="/media" Default="/mnt/user/media_storage" Mode="rw" Description="Host folder containing the lifecycle folders. Keep each library's Transient, Holding, Keep, and Removal folders on the same filesystem." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media_storage</Config>
 
-  <Config Name="Auditor Logs" Target="/app/logs" Default="/mnt/user/appdata/media_collection_auditor" Mode="rw" Description="Unraid folder where the auditor stores its state file and JSONL action log." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/media_collection_auditor</Config>
-  <Config Name="Media Library" Target="/media" Default="/mnt/user/media_storage" Mode="rw" Description="Host folder containing the Movies, Movies_hold, Movies_keep, Movies_removal, TV, TV_hold, TV_keep, and TV_removal folders used by the auditor. Keep all lifecycle folders on the same filesystem." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media_storage</Config>
+  <!-- Fixed internal paths -->
+  <Config Name="Internal Media Path" Target="MEDIA_PATH" Default="/media" Mode="" Description="Internal container path; normally do not change." Type="Variable" Display="advanced-hide" Required="true" Mask="false">/media</Config>
+  <Config Name="State File" Target="STATE_FILE" Default="/app/logs/auditor_state.json" Mode="" Description="Internal persistent state file path." Type="Variable" Display="advanced-hide" Required="true" Mask="false">/app/logs/auditor_state.json</Config>
+  <Config Name="Action Log File" Target="ACTION_LOG_FILE" Default="/app/logs/auditor_actions.jsonl" Mode="" Description="Internal persistent action log path." Type="Variable" Display="advanced-hide" Required="true" Mask="false">/app/logs/auditor_actions.jsonl</Config>
 
+  <!-- Jellyfin -->
   <Config Name="Jellyfin URL" Target="JELLYFIN_HOST_URL" Default="http://YOUR_JELLYFIN_IP:8096" Mode="" Description="Jellyfin server URL, including protocol and port." Type="Variable" Display="always" Required="true" Mask="false">http://YOUR_JELLYFIN_IP:8096</Config>
   <Config Name="Jellyfin API Token" Target="JELLYFIN_API_TOKEN" Default="" Mode="" Description="Jellyfin API key used to read favorites and tags." Type="Variable" Display="always" Required="true" Mask="true"></Config>
 
+  <!-- Radarr / movies -->
   <Config Name="Enable Movies" Target="ENABLE_MOVIES" Default="true" Mode="" Description="Enable movie lifecycle processing." Type="Variable" Display="always" Required="true" Mask="false">true</Config>
-  <Config Name="Radarr URL" Target="RADARR_URL" Default="http://YOUR_RADARR_IP:7878" Mode="" Description="Radarr URL. Leave as-is only if movie processing is disabled." Type="Variable" Display="advanced-hide" Required="false" Mask="false">http://YOUR_RADARR_IP:7878</Config>
-  <Config Name="Radarr API Key" Target="RADARR_API_KEY" Default="" Mode="" Description="Radarr API key. Required when using Radarr for movie actions." Type="Variable" Display="advanced-hide" Required="false" Mask="true"></Config>
+  <Config Name="Radarr URL" Target="RADARR_URL" Default="http://YOUR_RADARR_IP:7878" Mode="" Description="Radarr URL. Configure when movie processing is enabled." Type="Variable" Display="advanced" Required="false" Mask="false">http://YOUR_RADARR_IP:7878</Config>
+  <Config Name="Radarr API Key" Target="RADARR_API_KEY" Default="" Mode="" Description="Radarr API key. Configure when movie processing is enabled." Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
 
+  <!-- Sonarr / TV -->
   <Config Name="Enable TV" Target="ENABLE_TV" Default="false" Mode="" Description="Enable TV lifecycle processing." Type="Variable" Display="always" Required="true" Mask="false">false</Config>
-  <Config Name="Sonarr URL" Target="SONARR_URL" Default="http://YOUR_SONARR_IP:8989" Mode="" Description="Sonarr URL. Leave as-is if TV processing is disabled." Type="Variable" Display="advanced-hide" Required="false" Mask="false">http://YOUR_SONARR_IP:8989</Config>
-  <Config Name="Sonarr API Key" Target="SONARR_API_KEY" Default="" Mode="" Description="Sonarr API key. Required when using Sonarr for TV actions." Type="Variable" Display="advanced-hide" Required="false" Mask="true"></Config>
+  <Config Name="Sonarr URL" Target="SONARR_URL" Default="http://YOUR_SONARR_IP:8989" Mode="" Description="Sonarr URL. Configure when TV processing is enabled." Type="Variable" Display="advanced" Required="false" Mask="false">http://YOUR_SONARR_IP:8989</Config>
+  <Config Name="Sonarr API Key" Target="SONARR_API_KEY" Default="" Mode="" Description="Sonarr API key. Configure when TV processing is enabled." Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
 
-  <Config Name="Dry Run" Target="DRY_RUN" Default="true" Mode="" Description="Safety switch. true only reports what would happen. Set false only after reviewing dry-run logs." Type="Variable" Display="always" Required="true" Mask="false">true</Config>
-  <Config Name="Allow Filesystem Delete" Target="ALLOW_FILESYSTEM_DELETE" Default="false" Mode="" Description="Permit direct filesystem deletion when a title is not known to Radarr/Sonarr. Leave false unless you intentionally want this fallback." Type="Variable" Display="advanced-hide" Required="true" Mask="false">false</Config>
-  <Config Name="Allow Cross Filesystem Moves" Target="ALLOW_CROSS_FILESYSTEM_MOVES" Default="false" Mode="" Description="Allow copy-then-delete moves when lifecycle folders are on different filesystems. Keeping this false is safer and preserves atomic same-filesystem moves." Type="Variable" Display="advanced-hide" Required="true" Mask="false">false</Config>
-  <Config Name="Maximum Actions Per Run" Target="MAX_ACTIONS_PER_RUN" Default="10" Mode="" Description="Maximum successful hold/delete/season-prune actions allowed in one run." Type="Variable" Display="advanced" Required="true" Mask="false">10</Config>
+  <!-- Safety: keep these conservative for initial installation -->
+  <Config Name="Dry Run" Target="DRY_RUN" Default="true" Mode="" Description="Safety switch. true reports planned actions without moving or deleting media." Type="Variable" Display="always" Required="true" Mask="false">true</Config>
+  <Config Name="Allow Filesystem Delete" Target="ALLOW_FILESYSTEM_DELETE" Default="false" Mode="" Description="Allow direct filesystem deletion when a title is not known to Radarr/Sonarr. Leave false unless intentionally enabling this fallback." Type="Variable" Display="advanced" Required="true" Mask="false">false</Config>
+  <Config Name="Allow Cross Filesystem Moves" Target="ALLOW_CROSS_FILESYSTEM_MOVES" Default="false" Mode="" Description="Allow copy-then-delete moves across filesystems. Prefer keeping this false and placing each library's lifecycle folders on one filesystem." Type="Variable" Display="advanced" Required="true" Mask="false">false</Config>
+  <Config Name="Maximum Actions Per Run" Target="MAX_ACTIONS_PER_RUN" Default="10" Mode="" Description="Maximum successful hold/delete/season-prune actions allowed per run." Type="Variable" Display="advanced" Required="true" Mask="false">10</Config>
 
-  <Config Name="Run Interval (Hours)" Target="RUN_INTERVAL_HOURS" Default="24" Mode="" Description="How often the container repeats. 0 runs once and exits; 24 runs once per day." Type="Variable" Display="always" Required="true" Mask="false">24</Config>
-
-  <Config Name="Movie Wait Days" Target="MOVIE_WAIT_DAYS" Default="30" Mode="" Description="Days a movie remains in the normal library before entering Holding when it is not protected." Type="Variable" Display="advanced" Required="true" Mask="false">30</Config>
-  <Config Name="TV Wait Days" Target="TV_WAIT_DAYS" Default="60" Mode="" Description="Days a TV show remains in the normal library before entering Holding." Type="Variable" Display="advanced" Required="true" Mask="false">60</Config>
+  <!-- Scheduling and lifecycle -->
+  <Config Name="Run Interval (Hours)" Target="RUN_INTERVAL_HOURS" Default="24" Mode="" Description="How often the container repeats. 0 runs once and exits; a positive value keeps it running between runs." Type="Variable" Display="always" Required="true" Mask="false">24</Config>
+  <Config Name="Movie Wait Days" Target="MOVIE_WAIT_DAYS" Default="30" Mode="" Description="Days a movie remains in Transient before entering Holding." Type="Variable" Display="advanced" Required="true" Mask="false">30</Config>
+  <Config Name="TV Wait Days" Target="TV_WAIT_DAYS" Default="60" Mode="" Description="Days a TV show remains in Transient before entering Holding." Type="Variable" Display="advanced" Required="true" Mask="false">60</Config>
   <Config Name="Holding Days" Target="HOLDING_DAYS" Default="7" Mode="" Description="Days an item remains in Holding before moving to Removal." Type="Variable" Display="advanced" Required="true" Mask="false">7</Config>
   <Config Name="Removal Days" Target="REMOVAL_DAYS" Default="7" Mode="" Description="Days an item remains in Removal before permanent deletion." Type="Variable" Display="advanced" Required="true" Mask="false">7</Config>
-  <Config Name="Reset TV Clock For New Episodes" Target="TV_NEW_EPISODES_RESET_CLOCK" Default="true" Mode="" Description="When enabled, a recently airing TV show gets its waiting clock reset by new episodes." Type="Variable" Display="advanced" Required="true" Mask="false">true</Config>
+  <Config Name="Reset TV Clock For New Episodes" Target="TV_NEW_EPISODES_RESET_CLOCK" Default="true" Mode="" Description="Reset the waiting clock when a show receives new episodes." Type="Variable" Display="advanced" Required="true" Mask="false">true</Config>
 
-  <Config Name="Dislike Tag" Target="DISLIKE_TAG" Default="not-at-all" Mode="" Description="Jellyfin tag that immediately qualifies a title for Holding." Type="Variable" Display="advanced-hide" Required="true" Mask="false">not-at-all</Config>
-  <Config Name="Protect Tag" Target="PROTECT_TAG" Default="keep-forever" Mode="" Description="Jellyfin tag that permanently protects a title from lifecycle cleanup." Type="Variable" Display="advanced-hide" Required="true" Mask="false">keep-forever</Config>
-  <Config Name="Enable Season Pruning" Target="ENABLE_SEASON_PRUNING" Default="false" Mode="" Description="TV only. When enabled, older seasons of eligible kept shows can be pruned after the configured safety delays." Type="Variable" Display="advanced-hide" Required="true" Mask="false">false</Config>
-  <Config Name="Keep All Seasons Tag" Target="KEEP_ALL_SEASONS_TAG" Default="keep-all-seasons" Mode="" Description="Jellyfin tag that prevents TV season pruning." Type="Variable" Display="advanced-hide" Required="true" Mask="false">keep-all-seasons</Config>
-  <Config Name="Season Prune Grace Days" Target="SEASON_PRUNE_GRACE_DAYS" Default="30" Mode="" Description="Days a show must be in Keep before season pruning is eligible." Type="Variable" Display="advanced-hide" Required="true" Mask="false">30</Config>
-  <Config Name="Season Prune New Season Delay" Target="SEASON_PRUNE_AFTER_NEW_SEASON_DAYS" Default="7" Mode="" Description="Days a newest season must exist before older seasons can be pruned." Type="Variable" Display="advanced-hide" Required="true" Mask="false">7</Config>
+  <!-- Jellyfin tags and optional TV season pruning -->
+  <Config Name="Dislike Tag" Target="DISLIKE_TAG" Default="not-at-all" Mode="" Description="Jellyfin tag that immediately qualifies a title for Holding." Type="Variable" Display="advanced" Required="true" Mask="false">not-at-all</Config>
+  <Config Name="Protect Tag" Target="PROTECT_TAG" Default="keep-forever" Mode="" Description="Jellyfin tag that protects a title from lifecycle cleanup." Type="Variable" Display="advanced" Required="true" Mask="false">keep-forever</Config>
+  <Config Name="Enable Season Pruning" Target="ENABLE_SEASON_PRUNING" Default="false" Mode="" Description="TV only. Allow eligible older seasons to be pruned after configured safety delays." Type="Variable" Display="advanced" Required="true" Mask="false">false</Config>
+  <Config Name="Keep All Seasons Tag" Target="KEEP_ALL_SEASONS_TAG" Default="keep-all-seasons" Mode="" Description="Jellyfin tag that prevents TV season pruning." Type="Variable" Display="advanced" Required="true" Mask="false">keep-all-seasons</Config>
+  <Config Name="Season Prune Grace Days" Target="SEASON_PRUNE_GRACE_DAYS" Default="30" Mode="" Description="Days a show must be in Keep before season pruning is eligible." Type="Variable" Display="advanced" Required="true" Mask="false">30</Config>
+  <Config Name="Season Prune New Season Delay" Target="SEASON_PRUNE_AFTER_NEW_SEASON_DAYS" Default="7" Mode="" Description="Days the newest season must exist before older seasons can be pruned." Type="Variable" Display="advanced" Required="true" Mask="false">7</Config>
 
-  <Config Name="Discord Webhook URL" Target="NOTIFY_DISCORD_WEBHOOK_URL" Default="" Mode="" Description="Optional Discord webhook URL for run notifications." Type="Variable" Display="advanced-hide" Required="false" Mask="true"></Config>
-  <Config Name="ntfy URL" Target="NOTIFY_NTFY_URL" Default="" Mode="" Description="Optional ntfy topic URL for notifications." Type="Variable" Display="advanced-hide" Required="false" Mask="false"></Config>
-  <Config Name="ntfy Token" Target="NOTIFY_NTFY_TOKEN" Default="" Mode="" Description="Optional ntfy access token for protected topics." Type="Variable" Display="advanced-hide" Required="false" Mask="true"></Config>
-  <Config Name="Generic Webhook URL" Target="NOTIFY_WEBHOOK_URL" Default="" Mode="" Description="Optional generic webhook receiving JSON POST notifications." Type="Variable" Display="advanced-hide" Required="false" Mask="true"></Config>
-  <Config Name="Notify On Dry Run" Target="NOTIFY_ON_DRY_RUN" Default="false" Mode="" Description="Send notifications even when DRY_RUN=true." Type="Variable" Display="advanced-hide" Required="true" Mask="false">false</Config>
-  <Config Name="Leaving Soon Digest" Target="NOTIFY_LEAVING_SOON_DIGEST" Default="true" Mode="" Description="Include titles still in Holding in notifications." Type="Variable" Display="advanced-hide" Required="true" Mask="false">true</Config>
+  <!-- Optional notifications -->
+  <Config Name="Discord Webhook URL" Target="NOTIFY_DISCORD_WEBHOOK_URL" Default="" Mode="" Description="Optional Discord webhook URL. Treat it as a secret." Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
+  <Config Name="ntfy URL" Target="NOTIFY_NTFY_URL" Default="" Mode="" Description="Optional ntfy topic URL for notifications." Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
+  <Config Name="ntfy Token" Target="NOTIFY_NTFY_TOKEN" Default="" Mode="" Description="Optional ntfy access token for protected topics." Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
+  <Config Name="Generic Webhook URL" Target="NOTIFY_WEBHOOK_URL" Default="" Mode="" Description="Optional generic webhook receiving JSON POST notifications. Treat it as a secret." Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
+  <Config Name="Notify On Dry Run" Target="NOTIFY_ON_DRY_RUN" Default="false" Mode="" Description="Send notifications while DRY_RUN=true." Type="Variable" Display="advanced" Required="true" Mask="false">false</Config>
+  <Config Name="Leaving Soon Digest" Target="NOTIFY_LEAVING_SOON_DIGEST" Default="true" Mode="" Description="Include items still in Holding in notifications." Type="Variable" Display="advanced" Required="true" Mask="false">true</Config>
 
-  <Labels/>
+  <Labels>
+    <Label>Media Collection Auditor</Label>
+  </Labels>
 </Container>
