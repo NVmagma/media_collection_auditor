@@ -1,0 +1,4 @@
+# Everything needed to run the test suite (CI uses this file)
+requests
+python-dotenv
+pytest
