@@ -26,7 +26,7 @@ flowchart LR
 | **Removal** (`*_removal`) | Not visible in Jellyfin. After **7 days** → permanently deleted through Radarr/Sonarr. |
 | **Keep** (`*_keep`) | Favorites live here. Optionally, old seasons of TV shows are pruned (see below). |
 
-Decisions come from Jellyfin: a title counts as **favorited** if *any* Jellyfin user has favorited it. Priority is always: **favorite (or `keep-forever` tag) → not-at-all tag → waiting period**.
+Decisions come from Jellyfin: a title counts as **favorited** if *any* Jellyfin user has favorited it. Priority is always: **favorite → not-at-all tag → waiting period**.
 
 Every time something moves to Holding or Removal, Radarr/Sonarr are told the new path and set to **unmonitored**, so they won't download it again. If it's rescued, monitoring is turned back on.
 
@@ -65,8 +65,8 @@ Every time something moves to Holding or Removal, Radarr/Sonarr are told the new
 ### 1. Clone and configure
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git
-cd YOUR_REPO
+git clone https://github.com/NVmagma/media_archiver.git
+cd media_archiver
 cp .env.example .env
 ```
 
@@ -95,7 +95,6 @@ media_storage/
 3. **Tags (optional):** on any title, open ⋮ → *Edit Metadata* → *Tags* and add:
    - `not-at-all`: the family hated it; skip the wait and send it to Holding.
    - `keep-all-seasons` (TV only): never prune old seasons of this show.
-   - `keep-forever`: never touch this title. It's treated like a favorite (moved to Keep, or rescued from Holding) and is never season-pruned. Unlike a favorite, it applies to the whole family at once, so it's the admin's override.
 
    Favorites and tags on TV must be set on the **show itself**, not on a season or episode.
 
@@ -144,50 +143,6 @@ With `RUN_INTERVAL_HOURS=24` the script stays running and audits once a day. If 
 
 ---
 
-## Notifications (optional)
-
-Get a message when something enters Leaving Soon, so the family actually knows to favorite what they want to keep. Configure any of these in `.env`:
-
-| Target | Setting |
-|---|---|
-| **Discord** | `NOTIFY_DISCORD_WEBHOOK_URL`: Server Settings → Integrations → Webhooks → New Webhook → Copy URL |
-| **ntfy** | `NOTIFY_NTFY_URL` (e.g. `https://ntfy.sh/your-topic`), plus `NOTIFY_NTFY_TOKEN` only for protected topics |
-| **Any other service** | `NOTIFY_WEBHOOK_URL`: receives a JSON `POST` (`title`, `message`, `dry_run`, `events`, `leaving_soon`), handy for Home Assistant, n8n, Slack bridges, etc. |
-
-A message is sent at the end of a run **only if there is something to say**:
-
-```
-Media Auditor
-
-Moved to Leaving Soon (2):
-  - Movies: Example Movie (2022) - no favorite after 31 days
-  - TV: Example Show (2015) - tagged not-at-all
-
-Permanently deleted (1):
-  - Movies: Another Movie (1998) - in Removal 8 days
-
-Leaving Soon - favorite in Jellyfin to keep (3):
-  - Movies: Third Movie (2001) (2 days left)
-  - ...
-```
-
-It also reports rescues, moves to Removal, season pruning, actions skipped by the per-run cap, and **failed runs** (for example Jellyfin being unreachable).
-
-- **Dry runs are silent** unless `NOTIFY_ON_DRY_RUN=true`. Those messages are labelled `[DRY RUN]`.
-- **Turn off the "still in Leaving Soon" list** with `NOTIFY_LEAVING_SOON_DIGEST=false`.
-- **A failed notification never stops a run**, and webhook URLs are never printed to the logs.
-- **Test your setup:**
-
-  ```bash
-  docker compose run --rm auditor_service python collection_auditor.py --test-notify
-  ```
-
-  It sends a test message to every configured target and exits with an error if any of them failed.
-
-> **Keep webhook URLs in `.env`, never in the repo.** Anyone who has one can post to your channel.
-
----
-
 ## Configuration
 
 All settings are environment variables (usually in `.env`). Only the first group is required.
@@ -231,18 +186,6 @@ All settings are environment variables (usually in `.env`). Only the first group
 |---|---|
 | `DISLIKE_TAG` | `not-at-all` |
 | `KEEP_ALL_SEASONS_TAG` | `keep-all-seasons` |
-| `PROTECT_TAG` | `keep-forever` |
-
-### Notifications
-
-| Variable | Default | Description |
-|---|---|---|
-| `NOTIFY_DISCORD_WEBHOOK_URL` | *(empty)* | Discord webhook URL |
-| `NOTIFY_NTFY_URL` | *(empty)* | ntfy topic URL |
-| `NOTIFY_NTFY_TOKEN` | *(empty)* | ntfy access token (protected topics only) |
-| `NOTIFY_WEBHOOK_URL` | *(empty)* | Generic webhook that receives a JSON `POST` |
-| `NOTIFY_ON_DRY_RUN` | `false` | Also send messages during dry runs |
-| `NOTIFY_LEAVING_SOON_DIGEST` | `true` | Include the list of titles still in Leaving Soon |
 
 ### Folders (inside the container)
 
@@ -297,22 +240,6 @@ If Radarr/Sonarr mount your media at **different paths** than this container, al
 | Container keeps restarting | The script exits after one run. Set `RUN_INTERVAL_HOURS` (for example `24`), or use `restart: "no"` with an external schedule. |
 | No state file appears | The logs volume isn't mapped correctly. The script prints the exact save path at the end of every run. |
 | Radarr/Sonarr "no entry" warnings | The folder name doesn't match the movie or show path in Radarr/Sonarr. |
-| No notifications arrive | Run `--test-notify` (see Notifications). Remember that dry runs are silent, and that a run with nothing to report sends nothing. |
-
----
-
-## Development and tests
-
-The project has an automated test suite (`pytest`) that runs against a throwaway fake library. It never touches your real media, your state file, or any server, and it fails if anything tries to use the network.
-
-```bash
-pip install -r requirements-dev.txt
-pytest
-```
-
-It covers the whole lifecycle (including the exact boundary days), favorites and tags, the dry-run guarantee, the per-run action cap, grace periods, TV clock rules, season pruning, legacy state files, and every notification target. GitHub Actions runs it on every push and pull request, on Python 3.10 and 3.12 (`.github/workflows/tests.yml`).
-
-If you change the rules, change or add a test with it. These are the tests that keep a tool that deletes files honest.
 
 ---
 
@@ -322,18 +249,9 @@ If you change the rules, change or add a test with it. These are the tests that 
 .
 ├── app/
 │   └── collection_auditor.py
-├── tests/
-│   ├── conftest.py
-│   ├── test_lifecycle.py
-│   ├── test_season_pruning.py
-│   ├── test_signals.py
-│   └── test_notifications.py
-├── .github/workflows/tests.yml
 ├── Dockerfile
 ├── docker-compose.yaml
 ├── requirements.txt        # requests, python-dotenv
-├── requirements-dev.txt    # adds pytest
-├── pytest.ini
 ├── .env.example            # placeholders, safe to commit
 ├── .env                    # your real settings, NEVER commit
 ├── .gitignore
@@ -344,4 +262,4 @@ If you change the rules, change or add a test with it. These are the tests that 
 
 ## License
 
-Add a license of your choice (for example MIT) before sharing this publicly.
+GNU GENERAL PUBLIC LICENSE

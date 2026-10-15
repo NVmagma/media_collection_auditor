@@ -1,5 +1,4 @@
 import os
-import sys
 import json
 import time
 import shutil
@@ -27,9 +26,6 @@ DRY_RUN = os.environ.get("DRY_RUN", "true").strip().lower() != "false"
 JELLYFIN_URL = os.environ.get("JELLYFIN_HOST_URL", "http://localhost:8096").rstrip("/")
 JELLYFIN_TOKEN = (os.environ.get("JELLYFIN_API_TOKEN") or "").strip().strip("'\"")
 DISLIKE_TAG = os.environ.get("DISLIKE_TAG", "not-at-all")  # Jellyfin tag meaning "family hated it"
-# Jellyfin tag meaning "never touch this": treated like a favorite (kept / rescued) and never season-pruned.
-# Unlike a favorite, it is one global switch set by an admin, not per family member.
-PROTECT_TAG = os.environ.get("PROTECT_TAG", "keep-forever")
 
 # Radarr (movies) and Sonarr (TV)
 RADARR_URL = os.environ.get("RADARR_URL", "").rstrip("/")
@@ -76,19 +72,6 @@ _actions_taken = 0
 # and repeat every N hours, so the container never exits and never restarts.
 RUN_INTERVAL_HOURS = float(os.environ.get("RUN_INTERVAL_HOURS", "0"))
 
-# Notifications (all optional; set any of the three). Webhook URLs are secrets: keep them in .env.
-NOTIFY_DISCORD_WEBHOOK_URL = os.environ.get("NOTIFY_DISCORD_WEBHOOK_URL", "").strip()
-NOTIFY_NTFY_URL = os.environ.get("NOTIFY_NTFY_URL", "").strip()          # e.g. https://ntfy.sh/your-topic
-NOTIFY_NTFY_TOKEN = os.environ.get("NOTIFY_NTFY_TOKEN", "").strip()      # only for protected ntfy topics
-NOTIFY_WEBHOOK_URL = os.environ.get("NOTIFY_WEBHOOK_URL", "").strip()    # generic: receives a JSON POST
-NOTIFY_ON_DRY_RUN = env_flag("NOTIFY_ON_DRY_RUN", False)                 # send messages during dry runs too
-NOTIFY_LEAVING_SOON_DIGEST = env_flag("NOTIFY_LEAVING_SOON_DIGEST", True)  # list what is still in Holding
-NOTIFY_MAX_CHARS = 1800                                                  # Discord's limit is 2000
-
-# Collected during each run and used to build the notification.
-_events: List[dict] = []
-_holding_status: List[dict] = []
-
 
 def log(msg: str):
     print(("[DRY RUN] " if DRY_RUN else "") + msg)
@@ -104,7 +87,6 @@ def record_action(action: str, folder: str, detail: str = "", library: str = "Mo
         "folder": folder,
         "detail": detail,
     }
-    _events.append(entry)
     try:
         os.makedirs(os.path.dirname(ACTION_LOG_FILE), exist_ok=True)
         with open(ACTION_LOG_FILE, "a") as f:
@@ -192,7 +174,7 @@ def jellyfin_get(path: str, params: Optional[dict] = None):
 
 def get_signals(jellyfin_type: str) -> Dict[str, Dict[str, Any]]:
     """
-    Returns {folder_name: {played, favorite, disliked, keep_all, protected}} combined across ALL Jellyfin users and libraries.
+    Returns {folder_name: {played, favorite, disliked, keep_all}} combined across ALL Jellyfin users and libraries.
     jellyfin_type is "Movie" or "Series". For a Series, favorite/tags must be set on the SHOW itself
     (not on a season or episode). Matching is by folder name, e.g. 'Pretty Woman (1990)'.
     """
@@ -212,8 +194,8 @@ def get_signals(jellyfin_type: str) -> Dict[str, Dict[str, Any]]:
             if not folder:
                 continue
             user_data = item.get("UserData", {})
-            sig = signals.setdefault(folder, {"played": False, "favorite": False, "disliked": False,
-                                              "keep_all": False, "protected": False})
+            sig = signals.setdefault(folder, {"played": False, "favorite": False,
+                                              "disliked": False, "keep_all": False})
             sig["played"] = sig["played"] or bool(user_data.get("Played")) or user_data.get("PlayCount", 0) > 0
             sig["favorite"] = sig["favorite"] or bool(user_data.get("IsFavorite"))
             tags = [t.lower() for t in item.get("Tags", [])]
@@ -221,9 +203,6 @@ def get_signals(jellyfin_type: str) -> Dict[str, Dict[str, Any]]:
                 sig["disliked"] = True
             if KEEP_ALL_SEASONS_TAG.lower() in tags:
                 sig["keep_all"] = True
-            if PROTECT_TAG.lower() in tags:
-                # Protected = treated as a favorite (kept / rescued) and never season-pruned.
-                sig["protected"] = sig["favorite"] = sig["keep_all"] = True
     return signals
 
 
@@ -502,7 +481,6 @@ def audit_holding(lib: dict, signals: dict, state: dict):
                 record_action("to_removal", folder, f"in Holding {age} days", lib["name"])
         else:
             print(f"\n[{lib['name']}: {folder}] In Holding {age}d ({HOLDING_DAYS - age} days left to favorite it).")
-            _holding_status.append({"library": lib["name"], "folder": folder, "days_left": HOLDING_DAYS - age})
 
 
 def audit_transient(lib: dict, signals: dict, state: dict):
@@ -534,14 +512,12 @@ def audit_transient(lib: dict, signals: dict, state: dict):
                 note = " (new episodes restarted the clock)"
         age = days_between(clock_start)
         wait = lib["wait_days"]
-        if sig.get("protected"):
-            note += f" (tagged {PROTECT_TAG})"
         print(f"\n[{lib['name']}: {folder}] age={age}d{note} played={sig['played']} "
               f"favorite={sig['favorite']} disliked={sig['disliked']}")
 
         # Priority 1: favorited (watched or not) -> keep
         if sig["favorite"]:
-            print("-> Favorited (or protected): move to Keep.")
+            print("-> Favorited: move to Keep.")
             if safe_move_directory(path, lib["keep"]):
                 lib["arr"].notify_moved(folder, lib["app_keep"])
                 record_action("keep", folder, "favorited", lib["name"])
@@ -652,111 +628,12 @@ def audit_keep_seasons(lib: dict, signals: dict, state: dict):
 
 
 # ==============================================
-# --- NOTIFICATIONS (optional) ---
-# ==============================================
-
-NOTIFY_HEADINGS = {
-    "run_failed": "Run failed",
-    "hold": "Moved to Leaving Soon",
-    "rescue": "Rescued to Keep",
-    "to_removal": "Moved to Removal (last stop before deletion)",
-    "delete": "Permanently deleted",
-    "prune_seasons": "Old seasons removed",
-    "cap_skipped": "Skipped (per-run action limit reached)",
-}
-
-
-def notifications_configured() -> bool:
-    return bool(NOTIFY_DISCORD_WEBHOOK_URL or NOTIFY_NTFY_URL or NOTIFY_WEBHOOK_URL)
-
-
-def build_notification() -> Optional[Dict[str, Any]]:
-    """Summarize this run. Returns None when there is nothing worth a message."""
-    events = [e for e in _events if e["action"] in NOTIFY_HEADINGS]
-    leaving = list(_holding_status) if NOTIFY_LEAVING_SOON_DIGEST else []
-    if not events and not leaving:
-        return None
-
-    lines: List[str] = []
-    for action, heading in NOTIFY_HEADINGS.items():
-        group = [e for e in events if e["action"] == action]
-        if not group:
-            continue
-        lines.append(f"{heading} ({len(group)}):")
-        for e in group:
-            if action == "run_failed":
-                lines.append(f"  - {e['detail']}")
-            else:
-                text = f"{e['library']}: {e['folder']}"
-                lines.append(f"  - {text} - {e['detail']}" if e["detail"] else f"  - {text}")
-        lines.append("")
-    if leaving:
-        lines.append(f"Leaving Soon - favorite in Jellyfin to keep ({len(leaving)}):")
-        for item in sorted(leaving, key=lambda i: (i["days_left"], i["library"], i["folder"])):
-            lines.append(f"  - {item['library']}: {item['folder']} ({max(item['days_left'], 0)} days left)")
-
-    message = "\n".join(lines).strip()
-    if len(message) > NOTIFY_MAX_CHARS:
-        message = message[:NOTIFY_MAX_CHARS].rsplit("\n", 1)[0] + "\n...and more (see the action log)."
-    return {
-        "title": "Media Auditor" + (" [DRY RUN]" if DRY_RUN else ""),
-        "message": message,
-        "dry_run": DRY_RUN,
-        "events": events,
-        "leaving_soon": leaving,
-    }
-
-
-def _post(label: str, url: str, **kwargs) -> bool:
-    """Send one notification. Never raises, and never prints the URL (webhook URLs are secrets)."""
-    try:
-        r = requests.post(url, timeout=15, **kwargs)
-        r.raise_for_status()
-        print(f"[NOTIFY] Sent via {label}.")
-        return True
-    except Exception as e:
-        status = getattr(getattr(e, "response", None), "status_code", None)
-        detail = f"{type(e).__name__}" + (f", HTTP {status}" if status else "")
-        print(f"[NOTIFY ERROR] {label} failed ({detail}).")
-        return False
-
-
-def send_notification(note: Dict[str, Any]) -> bool:
-    """Send to every configured target. Returns True only if all of them succeeded."""
-    results = []
-    if NOTIFY_DISCORD_WEBHOOK_URL:
-        results.append(_post("Discord", NOTIFY_DISCORD_WEBHOOK_URL,
-                             json={"content": f"**{note['title']}**\n{note['message']}"}))
-    if NOTIFY_NTFY_URL:
-        headers = {"Title": note["title"]}
-        if NOTIFY_NTFY_TOKEN:
-            headers["Authorization"] = f"Bearer {NOTIFY_NTFY_TOKEN}"
-        results.append(_post("ntfy", NOTIFY_NTFY_URL, data=note["message"].encode("utf-8"), headers=headers))
-    if NOTIFY_WEBHOOK_URL:
-        results.append(_post("webhook", NOTIFY_WEBHOOK_URL, json=note))
-    return bool(results) and all(results)
-
-
-def send_run_notification():
-    """Called at the end of a run (and when a run fails). Quiet during dry runs unless NOTIFY_ON_DRY_RUN."""
-    if not notifications_configured():
-        return
-    if DRY_RUN and not NOTIFY_ON_DRY_RUN:
-        return
-    note = build_notification()
-    if note:
-        send_notification(note)
-
-
-# ==============================================
 # --- MAIN ---
 # ==============================================
 
 def run_once():
     global _actions_taken
     _actions_taken = 0      # the action cap applies per run
-    _events.clear()
-    _holding_status.clear()
     radarr.reset()          # re-read Radarr's / Sonarr's lists every run
     sonarr.reset()
 
@@ -778,40 +655,20 @@ def run_once():
             audit_keep_seasons(lib, signals, state)
     save_state(state)
     record_action("run_complete", "-", f"{_actions_taken} hold/delete actions this run", "All")
-    send_run_notification()
-
-
-def run_with_alerts():
-    """run_once(), but a failed run is recorded and reported before the error is passed on."""
-    try:
-        run_once()
-    except (Exception, SystemExit) as e:
-        print(f"[RUN FAILED] {e}")
-        record_action("run_failed", "-", str(e)[:200], "All")
-        send_run_notification()
-        raise
 
 
 if __name__ == "__main__":
-    if "--test-notify" in sys.argv:
-        if not notifications_configured():
-            raise SystemExit("No notification target set. Set NOTIFY_DISCORD_WEBHOOK_URL, NOTIFY_NTFY_URL "
-                             "or NOTIFY_WEBHOOK_URL in your .env file.")
-        ok = send_notification({"title": "Media Auditor test",
-                                "message": "If you can read this, notifications are working.",
-                                "dry_run": DRY_RUN, "events": [], "leaving_soon": []})
-        raise SystemExit(0 if ok else 1)   # non-zero when any target failed, so a broken setup is obvious
-
     if RUN_INTERVAL_HOURS <= 0:
-        run_with_alerts()
+        run_once()
     else:
         print(f"Loop mode: running every {RUN_INTERVAL_HOURS} hours.")
         while True:
             try:
-                run_with_alerts()
-            except (Exception, SystemExit):
+                run_once()
+            except (Exception, SystemExit) as e:
                 # In loop mode an error (Jellyfin down, bad token, etc.) must not kill the
                 # container, or Docker would restart it and hit the APIs again right away.
-                pass
+                print(f"[RUN FAILED] {e}")
+                record_action("run_failed", "-", str(e)[:200], "All")
             print(f"Sleeping {RUN_INTERVAL_HOURS} hours until the next run.")
             time.sleep(RUN_INTERVAL_HOURS * 3600)
