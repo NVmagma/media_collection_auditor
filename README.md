@@ -426,3 +426,5 @@ If you change the rules, change or add a test with it. These are the tests that 
 ## License
 
 Add a license of your choice (for example MIT) before sharing this publicly.
+
+<!-- Build refresh: 2026-10-16. Documentation-only change to trigger feature/unraid CI and GHCR publication; no application behavior changes. -->
