@@ -47,7 +47,7 @@ def test_tags_are_read_case_insensitively(make_auditor):
     assert signals["Hated (2001)"]["favorite"] is False
 
 
-def test_protect_tag_acts_as_favorite_and_blocks_pruning(make_auditor):
+def test_protect_tag_keeps_without_faking_favorite_and_blocks_pruning(make_auditor):
     ca = real_module(make_auditor)
     ca.jellyfin_get = fake_jellyfin({"Movie": {"alice": [
         movie("/m/Protected (2005)/Protected (2005).mkv", tags=["keep-forever"]),
@@ -56,7 +56,7 @@ def test_protect_tag_acts_as_favorite_and_blocks_pruning(make_auditor):
     signals = ca.get_signals("Movie")
 
     assert signals["Protected (2005)"]["protected"] is True
-    assert signals["Protected (2005)"]["favorite"] is True       # so it is kept / rescued like a favorite
+    assert signals["Protected (2005)"]["favorite"] is False      # tags and user favorites remain distinct
     assert signals["Protected (2005)"]["keep_all"] is True       # and never season-pruned
     assert signals["Plain (2006)"]["protected"] is False
     assert signals["Plain (2006)"]["favorite"] is False
@@ -90,7 +90,7 @@ def test_series_are_matched_by_show_folder(make_auditor):
 def test_protected_movie_is_kept_even_without_a_family_favorite(make_auditor):
     a = make_auditor()
     a.add("Movies", "Protected (2005)")
-    a.movie("Protected (2005)", protected=True, favorite=True, keep_all=True)
+    a.movie("Protected (2005)", protected=True, favorite=False, keep_all=True)
     a.run()
 
     assert a.where("Protected (2005)") == "Movies_keep"
