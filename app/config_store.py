@@ -55,3 +55,130 @@ def save_config(values):
         os.fsync(handle.fileno())
     os.chmod(temp, 0o600)
     os.replace(temp, CONFIG_FILE)
+
+FIELD_HELP = {
+  "JELLYFIN_HOST_URL": [
+    "Jellyfin Server URL",
+    "Address of your Jellyfin server, including its port."
+  ),
+  "JELLYFIN_API_TOKEN": [
+    "Jellyfin API Key",
+    "API key used to read favorites, tags and viewing activity."
+  ),
+  "RADARR_URL": [
+    "Radarr Server URL",
+    "Address of Radarr for managing movie entries."
+  ),
+  "RADARR_API_KEY": [
+    "Radarr API Key",
+    "API key from Radarr Settings → General."
+  ),
+  "SONARR_URL": [
+    "Sonarr Server URL",
+    "Address of Sonarr for managing TV series."
+  ),
+  "SONARR_API_KEY": [
+    "Sonarr API Key",
+    "API key from Sonarr Settings → General."
+  ),
+  "ENABLE_MOVIES": [
+    "Manage Movies",
+    "Include movies in audit runs."
+  ),
+  "ENABLE_TV": [
+    "Manage TV Shows",
+    "Include television series in audit runs."
+  ),
+  "MEDIA_PATH": [
+    "Media Root Path",
+    "Path inside the container, not the Unraid host path."
+  ),
+  "DISLIKE_TAG": [
+    "Disliked Title Tag",
+    "Jellyfin tag that makes a title eligible for holding."
+  ),
+  "PROTECT_TAG": [
+    "Protected Title Tag",
+    "Jellyfin tag that prevents removal of a title."
+  ),
+  "TV_NEW_EPISODES_RESET_CLOCK": [
+    "Reset Timer for New Episodes",
+    "Restart a show's waiting period when new episodes appear."
+  ),
+  "ENABLE_SEASON_PRUNING": [
+    "Prune Older TV Seasons",
+    "Potentially deletes older seasons of eligible kept shows."
+  ),
+  "KEEP_ALL_SEASONS_TAG": [
+    "Keep All Seasons Tag",
+    "Jellyfin tag that protects every season of a show."
+  ),
+  "SEASON_PRUNE_GRACE_DAYS": [
+    "Season Pruning Grace Period",
+    "Days a show must be in Keep before pruning is considered."
+  ),
+  "SEASON_PRUNE_AFTER_NEW_SEASON_DAYS": [
+    "New Season Delay",
+    "Wait this many days after a new season arrives before pruning."
+  ),
+  "MOVIE_WAIT_DAYS": [
+    "Movie Waiting Period",
+    "Days a new movie remains in the transient folder."
+  ),
+  "TV_WAIT_DAYS": [
+    "TV Waiting Period",
+    "Days a show remains in the transient folder."
+  ),
+  "HOLDING_DAYS": [
+    "Holding Period",
+    "Days in Holding before moving to Removal."
+  ),
+  "REMOVAL_DAYS": [
+    "Removal Grace Period",
+    "Days in Removal before permanent deletion is eligible."
+  ),
+  "RUN_INTERVAL_HOURS": [
+    "Audit Interval (Hours)",
+    "Hours between automatic audits. Set 0 for manual runs only after the initial startup audit."
+  ),
+  "DRY_RUN": [
+    "Dry Run (Safe Mode)",
+    "Preview planned changes without moving or deleting media."
+  ),
+  "MAX_ACTIONS_PER_RUN": [
+    "Maximum Destructive Actions",
+    "Limit hold, delete and season-prune operations per audit."
+  ),
+  "ALLOW_FILESYSTEM_DELETE": [
+    "Allow Direct File Deletion",
+    "Permit deletion without Radarr or Sonarr; use with extreme care."
+  ),
+  "ALLOW_CROSS_FILESYSTEM_MOVES": [
+    "Allow Cross-Filesystem Moves",
+    "Permit slower copy-and-delete moves between mounts."
+  ),
+  "NOTIFY_DISCORD_WEBHOOK_URL": [
+    "Discord Webhook",
+    "Discord channel webhook for audit notifications."
+  ),
+  "NOTIFY_NTFY_URL": [
+    "ntfy Topic URL",
+    "Full URL of the ntfy topic that receives notifications."
+  ),
+  "NOTIFY_NTFY_TOKEN": [
+    "ntfy Access Token",
+    "Optional authentication token for a protected ntfy topic."
+  ),
+  "NOTIFY_WEBHOOK_URL": [
+    "Custom Webhook URL",
+    "Optional endpoint receiving audit event notifications."
+  ),
+  "NOTIFY_ON_DRY_RUN": [
+    "Notify During Dry Runs",
+    "Send notifications for previews as well as real audits."
+  ),
+  "NOTIFY_LEAVING_SOON_DIGEST": [
+    "Include Leaving Soon Titles",
+    "Include the list of titles currently in Holding in notifications."
+  )
+}
