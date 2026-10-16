@@ -61,3 +61,5 @@
 .media-poster-info label{display:flex;flex-direction:column;align-items:flex-start;gap:7px;font-size:13px;margin-top:14px}
 .media-poster-info select{max-width:260px;background:#1c3147;color:#fff;border:1px solid #47627d;border-radius:7px;padding:9px}
 @media(max-width:600px){.media-poster-row{gap:12px;padding:10px}.media-poster-placeholder{flex-basis:72px;width:72px;height:108px}.dashboard-view-switch{justify-content:flex-start}}
+
+.media-poster-placeholder{position:relative;overflow:hidden}.media-poster-placeholder img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
