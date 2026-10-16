@@ -22,7 +22,7 @@
 <p class="section-description">{% if group == 'Connections' %}Connect to your media services. Leave password fields empty to keep existing credentials.{% elif group == 'Libraries' %}Choose which libraries are managed and how titles are protected.{% elif group == 'Lifecycle' %}Set how long media stays in each stage before progressing.{% elif group == 'Safety' %}Control dry-run mode and destructive operations. Keep dry-run enabled while testing.{% else %}Configure where audit notifications are sent.{% endif %}</p>
 {% for key in keys %}
 <div class="setting-row">
-<div class="setting-description"><label for="field-{{ key }}">{{ key.replace('_', ' ').title() }}</label><small>{{ key }}</small></div>
+<div class="setting-description"><label for="field-{{ key }}">{{ help_text[key][0] }}</label><small>{{ help_text[key][1] }}</small><span class="source-indicator">{{ sources[key] }}</span></div>
 <div class="setting-control">
 {% if key in bools %}
 <select id="field-{{ key }}" name="{{ key }}"><option value="true" {% if values[key]|lower == 'true' %}selected{% endif %}>Enabled</option><option value="false" {% if values[key]|lower == 'false' %}selected{% endif %}>Disabled</option></select>
