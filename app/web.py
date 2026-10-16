@@ -70,6 +70,7 @@ def logout():
     origin = request.headers.get("Origin") or request.headers.get("Referer")
     if not origin or urlsplit(origin).netloc != request.host:
         return Response("Invalid request origin.", 403)
+    discard_token(session.get("jf_handle"))
     session.clear()
     return redirect(url_for("login"))
 
