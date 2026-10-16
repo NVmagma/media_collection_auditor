@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Settings · Media Collection Auditor</title><link rel="stylesheet" href="/static/style.css"></head>
+<body>
+<header class="topbar"><div class="brand"><img class="brand-icon" src="/static/auditor-badge.png" alt="Auditor logo"><div><h1>Media Collection Auditor</h1><p>Configuration · saved to persistent appdata</p></div></div>
+<nav><a href="/">Dashboard</a><a href="/logs">Logs</a><a href="/settings">Settings</a></nav></header>
+<main><section class="hero"><strong>Changes take effect at the start of the next audit run. Blank non-secret fields use the Unraid environment fallback. Blank secret fields preserve their current value.</strong>
+<p>Do not expose this web interface directly to the internet. Settings access requires WEB_ADMIN_PASSWORD.</p></section>
+{% if error %}<section class="alert error">{{ error }}</section>{% endif %}
+{% if success %}<section class="alert">Settings saved. They will be used on the next audit run.</section>{% endif %}
+<form method="post" action="/settings">
+{% for group, keys in groups.items() %}
+<section class="panel settings-panel"><h2>{{ group }}</h2><div class="settings-grid">
+{% for key in keys %}
+<label class="setting"><span>{{ key.replace('_', ' ').title() }}</span>
+{% if key in bools %}
+<select name="{{ key }}"><option value="true" {% if values[key]|lower == 'true' %}selected{% endif %}>Enabled / true</option><option value="false" {% if values[key]|lower == 'false' %}selected{% endif %}>Disabled / false</option></select>
+{% else %}
+<input name="{{ key }}" type="{{ 'password' if key in secrets else 'text' }}" value="{{ values[key] }}" autocomplete="off" placeholder="{{ 'Leave blank to keep existing secret' if key in secrets else 'Use Unraid default if blank' }}">
+{% endif %}
+<small>{{ key }}</small></label>
+{% endfor %}
+</div></section>
+{% endfor %}
+<section class="panel settings-panel"><h2>Save configuration</h2><p class="muted">For potentially destructive settings, type <strong>I UNDERSTAND</strong> to confirm. Keep Dry Run enabled while testing.</p>
+<label class="setting"><span>Safety confirmation</span><input name="safety_confirmation" autocomplete="off" placeholder="I UNDERSTAND (when required)"></label>
+<p><button type="submit">Save settings</button></p></section>
+</form></main></body></html>
