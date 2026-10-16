@@ -42,10 +42,10 @@
     {% for stage in ['Waiting','Holding','Removal','Keep'] %}
     <section class="panel dashboard-section hidden-section" data-panel="{{ stage }}">
       <div class="panel-heading"><h2>{{ stage }} <span class="stage-count">({{ stages[stage]|length }})</span></h2></div>
-      {% if stage == 'Removal' %}<p class="muted">Titles here may become eligible for deletion. Rescue controls will be added after safe move and state synchronization are implemented.</p>{% endif %}
+      {% if stage == 'Removal' %}<p class="muted">Select a rescue action. Dry Run only previews the move.</p>{% endif %}
       {% if stages[stage] %}
-      <div class="table-wrap"><table><thead><tr><th>Title</th><th>Library</th><th>Tracked since</th></tr></thead><tbody>
-      {% for item in stages[stage] %}<tr><td>{{ item.title }}</td><td>{{ item.library }}</td><td>{{ item.since }}</td></tr>{% endfor %}
+      <div class="table-wrap"><table><thead><tr><th>Title</th><th>Library</th><th>Tracked since</th>{% if stage == "Removal" %}<th>Days left</th><th>Rescue</th>{% endif %}</tr></thead><tbody>
+      {% for item in stages[stage] %}<tr><td>{{ item.title }}</td><td>{{ item.library }}</td><td>{{ item.since }}</td>{% if stage == "Removal" %}<td>{{ item.days_left if item.days_left is not none else "Unknown" }}</td><td><select class="rescue-choice" data-library="{{ item.library }}" data-title="{{ item.title }}"><option value="">Choose action…</option><option value="keep">Move to Keep</option><option value="holding">Return to Holding</option></select></td>{% endif %}</tr>{% endfor %}
       </tbody></table></div>
       {% else %}<p class="empty">No tracked titles in {{ stage }}.</p>{% endif %}
     </section>
@@ -84,6 +84,23 @@ const panels = document.querySelectorAll('[data-panel]');
 tabs.forEach(tab => tab.addEventListener('click', () => {
   tabs.forEach(t => t.classList.toggle('selected', t === tab));
   panels.forEach(p => p.classList.toggle('hidden-section', p.dataset.panel !== tab.dataset.tab));
+}));
+document.querySelectorAll('.rescue-choice').forEach(choice => choice.addEventListener('change', async () => {
+  const destination = choice.value;
+  if (!destination) return;
+  const title = choice.dataset.title;
+  const library = choice.dataset.library;
+  if (!confirm('Rescue ' + title + ' (' + library + ') to ' + destination + '? Live mode moves media.')) { choice.value = ''; return; }
+  choice.disabled = true;
+  try {
+    const response = await fetch('/api/rescue', {method:'POST', credentials:'same-origin',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({title, library, destination})});
+    const data = await response.json();
+    alert(data.message || 'Request failed.');
+    if (data.ok) location.reload();
+  } catch (error) { alert('Unable to request rescue.'); }
+  finally { choice.disabled = false; choice.value = ''; }
 }));
 const button = document.getElementById('run-now');
 button.addEventListener('click', async () => {
