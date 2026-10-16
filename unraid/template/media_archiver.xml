@@ -13,7 +13,7 @@
   <Network>bridge</Network>
   <Shell>bash</Shell>
 
-  <Config Name="Web UI Port" Target="8080" Default="8080" Mode="tcp" Description="Host port for the Media Collection Auditor web dashboard." Type="Port" Display="always" Required="true" Mask="false">8080</Config>
+  <Config Name="Web Admin Password" Target="WEB_ADMIN_PASSWORD" Default="" Mode="" Description="Required to unlock browser settings editing. Choose a strong password." Type="Variable" Display="always" Required="false" Mask="true"></Config>\n\n  <Config Name="Web UI Port" Target="8080" Default="8080" Mode="tcp" Description="Host port for the Media Collection Auditor web dashboard." Type="Port" Display="always" Required="true" Mask="false">8080</Config>
 
   <!-- Persistent state and action logs -->
   <Config Name="Auditor Logs" Target="/app/logs" Default="/mnt/user/appdata/media_collection_auditor" Mode="rw" Description="Unraid folder for the auditor state file and JSONL action log." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/media_collection_auditor</Config>
