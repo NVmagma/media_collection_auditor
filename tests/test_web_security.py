@@ -33,6 +33,25 @@ class WebSecurityTests(unittest.TestCase):
     def test_anonymous_api_cannot_run_audit(self):
         self.assertEqual(self.client.post("/api/run-now").status_code, 401)
 
+    def test_poster_folder_matching_movie_and_tv(self):
+        movie = {"Path": "/media/movies/Interstellar (2014)/Interstellar.mkv"}
+        series = {"Path": "/media/tv/The Expanse (2015)"}
+        self.assertEqual(web._poster_folder(movie, "Movie"), "interstellar (2014)")
+        self.assertEqual(web._poster_folder(series, "Series"), "the expanse (2015)")
+
+    def test_poster_endpoint_uses_folder_match(self):
+        from unittest.mock import Mock
+        response = Mock(status_code=200, content=b"fake-image",
+                        headers={"Content-Type": "image/jpeg"})
+        with patch.object(web, "current_user", return_value={"name": "Viewer", "admin": False}), \
+             patch.object(web, "load_config", return_value={"JELLYFIN_HOST_URL": "http://jellyfin:8096", "JELLYFIN_API_TOKEN": "test-token"}), \
+             patch.object(web, "_poster_index", return_value={"interstellar (2014)": "item-id"}), \
+             patch.object(web.requests, "get", return_value=response) as get:
+            result = self.client.get("/api/poster?library=Movies&title=Interstellar%20(2014)")
+            self.assertEqual(result.status_code, 200)
+            self.assertEqual(result.data, b"fake-image")
+            self.assertIn("/Items/item-id/Images/Primary", get.call_args.args[0])
+
     def test_anonymous_cannot_request_poster(self):
         self.assertEqual(self.client.get("/api/poster?library=Movies&title=Example").status_code, 401)
 
