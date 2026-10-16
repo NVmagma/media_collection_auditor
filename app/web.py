@@ -149,6 +149,11 @@ _POSTER_LOCK = threading.Lock()
 _POSTER_TTL = 300
 
 
+def _poster_headers(token):
+    """Use the same Jellyfin authorization headers as connection_tests."""
+    return {"X-Emby-Token": token, "Authorization": f'MediaBrowser Token="{token}"'}
+
+
 def _poster_folder(item, media_type):
     path = (item.get("Path") or "").replace("\\", "/").rstrip("/")
     if not path:
@@ -165,7 +170,7 @@ def _poster_index(base, token, media_type):
         cached = _POSTER_INDEX.get(key)
         if cached and time.monotonic() - cached[0] < _POSTER_TTL:
             return cached[1]
-    headers = {"X-Emby-Token": token}
+    headers = _poster_headers(token)
     # Jellyfin API keys can enumerate users; use the same per-user items
     # endpoint as collection_auditor.get_signals().
     users_response = requests.get(base + "/Users", headers=headers, timeout=(3, 10),
@@ -223,7 +228,7 @@ def poster():
             return Response(status=404)
         image = requests.get(base + "/Items/" + item_id + "/Images/Primary",
                              params={"maxWidth": 200, "quality": 75},
-                             headers={"X-Emby-Token": token}, timeout=(3, 8),
+                             headers=_poster_headers(token), timeout=(3, 8),
                              allow_redirects=False)
         if image.status_code != 200 or not image.headers.get("Content-Type", "").lower().startswith("image/"):
             return Response(status=404)
