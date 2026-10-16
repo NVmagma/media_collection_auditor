@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Media Collection Auditor</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>Media Collection Auditor</h1>
+      <p>Keep your library clean, organized &amp; complete.</p>
+    </div>
+    <nav><a href="/">Dashboard</a><a href="/logs">Logs</a></nav>
+  </header>
+  <main>
+    <section class="hero">
+      <div><span class="status-dot"></span> Auditor is running</div>
+      <strong>Dry-run safety remains controlled by the container configuration.</strong>
+    </section>
+    <section class="cards">
+      <article><span>Recent actions</span><strong>{{ actions|length }}</strong></article>
+      <article><span>Transient records</span><strong>{{ state.get('first_seen', {})|length }}</strong></article>
+      <article><span>Holding records</span><strong>{{ state.get('queued', {})|length }}</strong></article>
+      <article><span>Removal records</span><strong>{{ state.get('in_removal', {})|length }}</strong></article>
+    </section>
+    <section class="panel">
+      <div class="panel-heading"><h2>Recent activity</h2><a href="/logs">View all logs →</a></div>
+      {% if actions %}
+      <div class="table-wrap"><table><thead><tr><th>Time</th><th>Library</th><th>Action</th><th>Status</th><th>Folder</th><th>Detail</th></tr></thead><tbody>
+      {% for item in actions[:25] %}<tr><td>{{ item.get('time','') }}</td><td>{{ item.get('library','') }}</td><td>{{ item.get('action','') }}</td><td><span class="badge {{ item.get('status','') }}">{{ item.get('status','') }}</span></td><td>{{ item.get('folder','') }}</td><td>{{ item.get('detail','') }}</td></tr>{% endfor %}
+      </tbody></table></div>
+      {% else %}<p class="empty">No action log entries yet.</p>{% endif %}
+    </section>
+  </main>
+</body>
+</html>
