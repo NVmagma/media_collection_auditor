@@ -6,6 +6,7 @@ from pathlib import Path
 from flask import Flask, render_template, request, Response, redirect, url_for
 
 from connection_tests import check_connection, SERVICES
+from audit_history import read_history
 from run_control import snapshot, request_run
 from config_store import FIELDS, KEYS, SECRETS, BOOLS, DEFAULTS, FIELD_HELP, load_config, save_config, validate
 
@@ -53,7 +54,7 @@ def dashboard():
         stages[label] = [{"title": key[3:] if key.startswith("TV/") else key,
                           "library": "TV" if key.startswith("TV/") else "Movies",
                           "since": since} for key, since in records.items()]
-    return render_template("dashboard.html", actions=actions, state=state, stages=stages, run=snapshot(),\n                           dry_run=load_config().get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "true")
+    return render_template("dashboard.html", actions=actions, state=state, stages=stages, run=snapshot(), history=read_history(100),\n                           dry_run=load_config().get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "true")
 
 
 @app.get("/logs")
