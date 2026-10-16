@@ -5,7 +5,7 @@ from datetime import timedelta
 from datetime import datetime
 from urllib.parse import urlsplit
 from pathlib import Path
-from flask import Flask, render_template, request, Response, redirect, url_for, session, g
+from flask import Flask, render_template, request, Response, redirect, url_for, session, g, render_template_string
 
 from connection_tests import check_connection, SERVICES
 from audit_history import read_history
@@ -14,6 +14,7 @@ from auth import session_key, jellyfin_login, current_user
 from run_control import snapshot, request_run
 from config_store import FIELDS, KEYS, SECRETS, BOOLS, DEFAULTS, FIELD_HELP, load_config, save_config, validate
 
+LOGIN_PAGE = "<html><head><title>Media Auditor Sign In</title></head><body><h1>Media Collection Auditor</h1><p>Sign in with Jellyfin or emergency admin.</p>{% if error %}<p>{{ error }}</p>{% endif %}<form method=\"post\" action=\"/login\"><label>Username <input name=\"username\" required></label><label>Password <input name=\"password\" type=\"password\" required></label><button>Sign in</button></form></body></html>"
 app = Flask(__name__)
 app.secret_key = session_key()
 app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
@@ -43,14 +44,14 @@ def login():
     if request.method == "GET":
         if current_user():
             return redirect(url_for("dashboard"))
-        return render_template("login.html", error=None)
+        return render_template_string(LOGIN_PAGE, error=None)
     origin = request.headers.get("Origin") or request.headers.get("Referer")
     if not origin or urlsplit(origin).netloc != request.host:
         return Response("Invalid request origin.", 403)
     username = request.form.get("username", "")[:128]
     password = request.form.get("password", "")
     if not username or not password:
-        return render_template("login.html", error="Enter a username and password."), 400
+        return render_template_string(LOGIN_PAGE, error="Enter a username and password."), 400
     user = jellyfin_login(username, password)
     session.clear()
     if user:
@@ -60,7 +61,7 @@ def login():
           and hmac.compare_digest(password, os.environ["WEB_ADMIN_PASSWORD"])):
         session["provider"] = "local"
     else:
-        return render_template("login.html", error="Invalid credentials or Jellyfin unavailable."), 401
+        return render_template_string(LOGIN_PAGE, error="Invalid credentials or Jellyfin unavailable."), 401
     session.permanent = True
     return redirect(url_for("dashboard"))
 
