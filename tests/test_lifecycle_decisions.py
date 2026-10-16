@@ -31,6 +31,21 @@ class LifecycleDecisionTests(unittest.TestCase):
     def test_holding_deadline(self):
         self.assertEqual(decide("Holding", 7, 7, {})[0], "to_removal")
 
+    def test_keep_tag_moves_waiting_to_keep(self):
+        self.assertEqual(decide("Waiting", 0, 30, {"keep": True})[0], "keep")
+
+    def test_keep_tag_rescues_holding(self):
+        self.assertEqual(decide("Holding", 0, 7, {"keep": True})[0], "rescue")
+
+    def test_legacy_favorite_can_be_disabled(self):
+        self.assertEqual(decide("Waiting", 0, 30, {"favorite": True}, False)[0], "wait")
+
+    def test_protected_wins_when_legacy_favorites_disabled(self):
+        self.assertEqual(decide("Waiting", 100, 30, {"protected": True, "disliked": True}, False)[0], "keep")
+
+    def test_keep_wins_over_dislike(self):
+        self.assertEqual(decide("Waiting", 0, 30, {"keep": True, "disliked": True}, False)[0], "keep")
+
     def test_removal_deadline_is_only_candidate(self):
         self.assertEqual(decide("Removal", 7, 7)[0], "delete_candidate")
 
