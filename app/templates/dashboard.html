@@ -40,7 +40,7 @@
       <button type="button" class="view-switch-button" data-view="posters" aria-pressed="false">Posters</button>
     </div>
     <nav class="settings-tabs" aria-label="Dashboard sections">
-      {% for tab in ['Overview','Movies','TV Shows','Activity','History'] %}
+      {% for tab in ['Overview','Movies','TV Shows','Audit Preview','Activity','History'] %}
       <button type="button" class="tab-button{% if loop.first %} selected{% endif %}" data-tab="{{ tab }}" aria-selected="{{ 'true' if loop.first else 'false' }}">{{ tab }}</button>
       {% endfor %}
     </nav>
@@ -74,7 +74,7 @@
         {% if items %}
         <div class="table-wrap"><table><thead><tr><th>Title</th><th>Tracked since</th>{% if stage == 'Removal' %}<th>Days left</th>{% if viewer.admin %}<th>Rescue</th>{% endif %}{% endif %}</tr></thead><tbody>
           {% for item in items %}
-          <tr><td>{{ item.title }}</td><td>{{ item.since|friendly_date }}</td>
+          <tr><td><strong>{{ item.title }}</strong><details><summary>Why this stage?</summary><p>{{ item.reason }}</p><p>Tracked: {{ item.elapsed_days if item.elapsed_days is not none else "Unknown" }} days{% if item.deadline_days is not none %} · {{ item.deadline_days }} days until stage deadline{% endif %}</p></details></td><td>{{ item.since|friendly_date }}</td>
             {% if stage == 'Removal' %}<td>{{ item.days_left if item.days_left is not none else 'Unknown' }}</td>
             {% if viewer.admin %}<td><select class="rescue-choice" data-library="{{ item.library }}" data-title="{{ item.title }}"><option value="">Choose action…</option><option value="keep">Move to Keep</option><option value="holding">Return to Holding</option></select></td>{% endif %}{% endif %}
           </tr>
@@ -86,7 +86,7 @@
             <a class="media-poster-placeholder media-poster-link" href="{{ url_for('jellyfin_link', library=item.library, title=item.title) }}" target="_blank" rel="noopener noreferrer" title="Open {{ item.title }} in Jellyfin"><span>{{ 'TV' if item.library == 'TV' else 'MOVIE' }}</span><img loading="lazy" alt="" src="{{ url_for('poster', library=item.library, title=item.title) }}" onerror="this.remove()"></a>
             <div class="media-poster-info">
               <h4>{{ item.title }}</h4>
-              <span class="media-stage-label">{{ stage }}</span>
+              <span class="media-stage-label">{{ stage }}</span><details><summary>Why this stage?</summary><p>{{ item.reason }}</p><p>Tracked: {{ item.elapsed_days if item.elapsed_days is not none else "Unknown" }} days{% if item.deadline_days is not none %} · {{ item.deadline_days }} days until stage deadline{% endif %}</p></details>
               <p>Tracked since: {{ item.since|friendly_date }}</p>
               {% if stage == 'Removal' %}
               <p>Days left: {{ item.days_left if item.days_left is not none else 'Unknown' }}</p>
@@ -103,6 +103,16 @@
       {% endfor %}
     </section>
     {% endfor %}
+    <section class="panel dashboard-section hidden-section" data-panel="Audit Preview">
+      <h2>Audit preview · deadline candidates</h2>
+      <p class="muted">Read-only estimate from saved lifecycle dates, not a simulation of the auditor. These are titles whose stage timers have expired. Jellyfin playback, favorites, protection tags, filesystem checks, action limits, and service availability are NOT checked here. Nothing on this page moves or deletes files.</p>
+      {% if preview %}
+      <p><strong>{{ preview|length }} candidates</strong> for review on a future audit. These actions are not guaranteed.</p>
+      <div class="table-wrap"><table><thead><tr><th>Library</th><th>Title</th><th>Current stage</th><th>Potential next step</th></tr></thead><tbody>
+      {% for item in preview %}<tr><td>{{ item.library }}</td><td>{{ item.title }}</td><td>{{ item.stage }}</td><td>{{ item.action }}</td></tr>{% endfor %}
+      </tbody></table></div>
+      {% else %}<p class="empty">No tracked stage deadlines have expired. This does not guarantee the next audit will take no action.</p>{% endif %}
+    </section>
     <section class="panel dashboard-section hidden-section" data-panel="Activity">
       <div class="panel-heading"><h2>Recent activity</h2><a href="/logs">View all logs →</a></div>
       {% if actions %}
