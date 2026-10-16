@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <header class="topbar"><div><h1><img class="brand-icon" src="/static/auditor-badge.png" alt="Auditor logo"> Auditor Logs</h1><p>Persistent activity from the Media Collection Auditor.</p></div><nav><a href="/">Dashboard</a><a href="/logs">Logs</a><a href="/settings">Settings</a></nav></header>
+  <header class="topbar"><div><h1><img class="brand-icon" src="/static/auditor-badge.png" alt="Auditor logo"> Auditor Logs</h1><p>Persistent activity from the Media Collection Auditor.</p></div><nav><a href="/">Dashboard</a><a href="/logs">Logs</a>{% if viewer.admin %}<a href="/settings">Settings</a>{% endif %} <form method="post" action="/logout" style="display:inline"><button type="submit">Sign out</button></form></nav></header>
   <main><section class="panel"><div class="panel-heading"><h2>Activity</h2><span>{{ actions|length }} entries</span></div>
   {% if actions %}<div class="table-wrap"><table><thead><tr><th>Time</th><th>Library</th><th>Action</th><th>Status</th><th>Folder</th><th>Detail</th></tr></thead><tbody>
   {% for item in actions %}<tr><td>{{ item.get('time','') }}</td><td>{{ item.get('library','') }}</td><td>{{ item.get('action','') }}</td><td><span class="badge {{ item.get('status','') }}">{{ item.get('status','') }}</span></td><td>{{ item.get('folder','') }}</td><td>{{ item.get('detail','') }}</td></tr>{% endfor %}
