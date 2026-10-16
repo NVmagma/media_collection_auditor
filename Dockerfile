@@ -15,6 +15,7 @@ COPY app/static ./static
 COPY unraid/assets/Media_Collection_Auditor_Badge.png ./static/auditor-badge.png
 COPY app/config_store.py .
 COPY app/connection_tests.py .
+COPY app/run_control.py .
 
 EXPOSE 8080
 
