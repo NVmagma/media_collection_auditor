@@ -1,5 +1,6 @@
 """Single-run coordinator shared by Flask and the audit worker."""
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from audit_history import read_history
 
@@ -31,10 +32,15 @@ def request_run():
     return True
 
 def begin_run(dry_run):
-    with _lock:
-        trigger = "manual" if _status["queued"] else "scheduled"
-        _status.update(running=True, queued=False, last_started=datetime.now(timezone.utc).isoformat(),
-                       last_result=None, next_run=None, dry_run=dry_run)
+    # Claim the run only after any manual rescue has finished.
+    while True:
+        with _lock:
+            if not _status["rescuing"]:
+                trigger = "manual" if _status["queued"] else "scheduled"
+                _status.update(running=True, queued=False, last_started=datetime.now(timezone.utc).isoformat(),
+                               last_result=None, next_run=None, dry_run=dry_run)
+                break
+        time.sleep(0.1)
     _wake.clear()
     return trigger
 
