@@ -83,7 +83,7 @@
         <div class="media-poster-list hidden-section" aria-label="{{ label }} {{ stage }} poster view">
           {% for item in items %}
           <article class="media-poster-row">
-            <div class="media-poster-placeholder" aria-hidden="true"><span>{{ 'TV' if item.library == 'TV' else 'MOVIE' }}</span></div>
+            <div class="media-poster-placeholder" aria-hidden="true"><span>{{ 'TV' if item.library == 'TV' else 'MOVIE' }}</span><img loading="lazy" alt="" src="{{ url_for('poster', library=item.library, title=item.title) }}" onerror="this.remove()"></div>
             <div class="media-poster-info">
               <h4>{{ item.title }}</h4>
               <span class="media-stage-label">{{ stage }}</span>
