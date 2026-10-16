@@ -35,7 +35,7 @@
       <article><span>Removal records</span><strong>{{ state.get('in_removal', {})|length }}</strong></article>
     </section>
     <nav class="settings-tabs" aria-label="Dashboard sections">
-      {% for tab in ['Overview','Waiting','Holding','Removal','Keep','Activity'] %}
+      {% for tab in ['Overview','Waiting','Holding','Removal','Keep','Activity','History'] %}
       <button type="button" class="tab-button{% if loop.first %} selected{% endif %}" data-tab="{{ tab }}">{{ tab }}</button>
       {% endfor %}
     </nav>
@@ -58,6 +58,24 @@
       {% for item in actions[:25] %}<tr><td>{{ item.get('time','') }}</td><td>{{ item.get('library','') }}</td><td>{{ item.get('action','') }}</td><td><span class="badge {{ item.get('status','') }}">{{ item.get('status','') }}</span></td><td>{{ item.get('folder','') }}</td><td>{{ item.get('detail','') }}</td></tr>{% endfor %}
       </tbody></table></div>
       {% else %}<p class="empty">No action log entries yet.</p>{% endif %}
+    </section>
+    <section class="panel dashboard-section hidden-section" data-panel="History">
+      <div class="panel-heading"><h2>Audit history</h2><span class="muted">Last {{ history|length }} runs · stored in appdata</span></div>
+      <p class="muted">Movie and TV counts reflect titles appearing in action logs, not every title scanned. Times are UTC.</p>
+      {% if history %}
+      <div class="table-wrap"><table><thead><tr><th>Started (UTC)</th><th>Duration</th><th>Trigger</th><th>Mode</th><th>Result</th><th>Movies</th><th>TV</th><th>Details</th></tr></thead><tbody>
+      {% for entry in history %}
+      <tr><td>{{ entry.get('started_at','') }}</td><td>{{ entry.get('duration_seconds','—') }}s</td><td>{{ entry.get('trigger','') }}</td><td>{{ 'Dry run' if entry.get('dry_run') else 'Live' }}</td><td>{{ entry.get('result','') }}</td><td>{{ entry.get('movies_processed',0) }}</td><td>{{ entry.get('tv_processed',0) }}</td><td>
+        <details><summary>View</summary>
+        {% if entry.get('error') %}<p class="history-error">Error: {{ entry.error }}</p>{% endif %}
+        <p>Actions: {% for action, count in entry.get('action_counts',{}).items() %}{{ action }} ({{ count }}){% if not loop.last %}, {% endif %}{% else %}None logged{% endfor %}</p>
+        <p>Statuses: {% for status, count in entry.get('status_counts',{}).items() %}{{ status }} ({{ count }}){% if not loop.last %}, {% endif %}{% else %}None logged{% endfor %}</p>
+        {% if entry.get('actions') %}
+        <div class="history-actions">{% for action in entry.actions %}<div>{{ action.get('library','') }} · {{ action.get('folder','') }} — {{ action.get('action','') }} ({{ action.get('status','') }})</div>{% endfor %}</div>
+        {% endif %}</details>
+      </td></tr>
+      {% endfor %}</tbody></table></div>
+      {% else %}<p class="empty">No recorded audits yet. New runs will appear here after completion.</p>{% endif %}
     </section>
   </main>
 <script>
