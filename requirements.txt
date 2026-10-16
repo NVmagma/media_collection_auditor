@@ -1,4 +1,5 @@
 # dependencies.txt
 requests>=2.31.0
 python-dotenv
+Flask>=3.0,<4
 # Include any other libraries needed for advanced logging/logging filters
