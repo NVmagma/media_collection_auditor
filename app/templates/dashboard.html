@@ -35,22 +35,51 @@
       <article><span>Removal records</span><strong>{{ state.get('in_removal', {})|length }}</strong></article>
     </section>
     <nav class="settings-tabs" aria-label="Dashboard sections">
-      {% for tab in ['Overview','Waiting','Holding','Removal','Keep','Activity','History'] %}
-      <button type="button" class="tab-button{% if loop.first %} selected{% endif %}" data-tab="{{ tab }}">{{ tab }}</button>
+      {% for tab in ['Overview','Movies','TV Shows','Activity','History'] %}
+      <button type="button" class="tab-button{% if loop.first %} selected{% endif %}" data-tab="{{ tab }}" aria-selected="{{ 'true' if loop.first else 'false' }}">{{ tab }}</button>
       {% endfor %}
     </nav>
-    {% for stage in ['Waiting','Holding','Removal','Keep'] %}
-    <section class="panel dashboard-section hidden-section" data-panel="{{ stage }}">
-      <div class="panel-heading"><h2>{{ stage }} <span class="stage-count">({{ stages[stage]|length }})</span></h2></div>
-      {% if stage == 'Removal' %}<p class="muted">Select a rescue action. Dry Run only previews the move.</p>{% endif %}
-      {% if stages[stage] %}
-      <div class="table-wrap"><table><thead><tr><th>Title</th><th>Library</th><th>Tracked since</th>{% if stage == "Removal" %}<th>Days left</th>{% if viewer.admin %}<th>Rescue</th>{% endif %}{% endif %}</tr></thead><tbody>
-      {% for item in stages[stage] %}<tr><td>{{ item.title }}</td><td>{{ item.library }}</td><td>{{ item.since }}</td>{% if stage == "Removal" %}<td>{{ item.days_left if item.days_left is not none else "Unknown" }}</td>{% if viewer.admin %}<td><select class="rescue-choice" data-library="{{ item.library }}" data-title="{{ item.title }}"><option value="">Choose action…</option><option value="keep">Move to Keep</option><option value="holding">Return to Holding</option></select></td>{% endif %}{% endif %}</tr>{% endfor %}
-      </tbody></table></div>
-      {% else %}<p class="empty">No tracked titles in {{ stage }}.</p>{% endif %}
+    <section class="panel dashboard-section" data-panel="Overview">
+      <h2>Library overview</h2>
+      <p class="muted">Choose Movies or TV Shows to see their individual lifecycle stages. Activity and History cover both libraries.</p>
+      <div class="library-overview">
+        {% for library, label in [('Movies', 'Movies'), ('TV', 'TV Shows')] %}
+        <button type="button" class="library-overview-card" data-open-library="{{ label }}">
+          <strong>{{ label }}</strong>
+          <span>{{ stages['Waiting']|selectattr('library','equalto',library)|list|length }} waiting · {{ stages['Holding']|selectattr('library','equalto',library)|list|length }} holding · {{ stages['Removal']|selectattr('library','equalto',library)|list|length }} removal · {{ stages['Keep']|selectattr('library','equalto',library)|list|length }} keep</span>
+          <span class="library-card-link">View {{ label }} →</span>
+        </button>
+        {% endfor %}
+      </div>
+    </section>
+    {% for library, label in [('Movies','Movies'), ('TV','TV Shows')] %}
+    <section class="panel dashboard-section hidden-section" data-panel="{{ label }}">
+      <div class="panel-heading"><h2>{{ label }} lifecycle</h2></div>
+      <nav class="lifecycle-tabs" aria-label="{{ label }} lifecycle stages">
+        {% for stage in ['Waiting','Holding','Removal','Keep'] %}
+        {% set count = stages[stage]|selectattr('library','equalto',library)|list|length %}
+        <button type="button" class="lifecycle-tab{% if loop.first %} selected{% endif %}" data-stage-tab="{{ library }}:{{ stage }}" aria-selected="{{ 'true' if loop.first else 'false' }}">{{ stage }} <span class="stage-count">{{ count }}</span></button>
+        {% endfor %}
+      </nav>
+      {% for stage in ['Waiting','Holding','Removal','Keep'] %}
+      {% set items = stages[stage]|selectattr('library','equalto',library)|list %}
+      <div class="lifecycle-panel{% if not loop.first %} hidden-section{% endif %}" data-stage-panel="{{ library }}:{{ stage }}">
+        <h3>{{ stage }} <span class="stage-count">({{ items|length }})</span></h3>
+        {% if stage == 'Removal' and viewer.admin %}<p class="muted">Choose an action to rescue a title. Dry Run previews the move.</p>{% endif %}
+        {% if items %}
+        <div class="table-wrap"><table><thead><tr><th>Title</th><th>Tracked since</th>{% if stage == 'Removal' %}<th>Days left</th>{% if viewer.admin %}<th>Rescue</th>{% endif %}{% endif %}</tr></thead><tbody>
+          {% for item in items %}
+          <tr><td>{{ item.title }}</td><td>{{ item.since }}</td>
+            {% if stage == 'Removal' %}<td>{{ item.days_left if item.days_left is not none else 'Unknown' }}</td>
+            {% if viewer.admin %}<td><select class="rescue-choice" data-library="{{ item.library }}" data-title="{{ item.title }}"><option value="">Choose action…</option><option value="keep">Move to Keep</option><option value="holding">Return to Holding</option></select></td>{% endif %}{% endif %}
+          </tr>
+          {% endfor %}
+        </tbody></table></div>
+        {% else %}<p class="empty">No {{ label|lower }} tracked in {{ stage|lower }}.</p>{% endif %}
+      </div>
+      {% endfor %}
     </section>
     {% endfor %}
-    <section class="panel dashboard-section" data-panel="Overview"><h2>Library overview</h2><p class="muted">Select a lifecycle tab to see individual titles. Activity shows recent actions.</p></section>
     <section class="panel dashboard-section hidden-section" data-panel="Activity">
       <div class="panel-heading"><h2>Recent activity</h2><a href="/logs">View all logs →</a></div>
       {% if actions %}
@@ -81,9 +110,26 @@
 <script>
 const tabs = document.querySelectorAll('[data-tab]');
 const panels = document.querySelectorAll('[data-panel]');
-tabs.forEach(tab => tab.addEventListener('click', () => {
-  tabs.forEach(t => t.classList.toggle('selected', t === tab));
-  panels.forEach(p => p.classList.toggle('hidden-section', p.dataset.panel !== tab.dataset.tab));
+function openSection(name) {
+  tabs.forEach(tab => {
+    const selected = tab.dataset.tab === name;
+    tab.classList.toggle('selected', selected);
+    tab.setAttribute('aria-selected', String(selected));
+  });
+  panels.forEach(panel => panel.classList.toggle('hidden-section', panel.dataset.panel !== name));
+}
+tabs.forEach(tab => tab.addEventListener('click', () => openSection(tab.dataset.tab)));
+document.querySelectorAll('[data-open-library]').forEach(button =>
+  button.addEventListener('click', () => openSection(button.dataset.openLibrary)));
+document.querySelectorAll('[data-stage-tab]').forEach(tab => tab.addEventListener('click', () => {
+  const section = tab.closest('[data-panel]');
+  section.querySelectorAll('[data-stage-tab]').forEach(item => {
+    const selected = item === tab;
+    item.classList.toggle('selected', selected);
+    item.setAttribute('aria-selected', String(selected));
+  });
+  section.querySelectorAll('[data-stage-panel]').forEach(panel =>
+    panel.classList.toggle('hidden-section', panel.dataset.stagePanel !== tab.dataset.stageTab));
 }));
 document.querySelectorAll('.rescue-choice').forEach(choice => choice.addEventListener('change', async () => {
   const destination = choice.value;
@@ -103,7 +149,7 @@ document.querySelectorAll('.rescue-choice').forEach(choice => choice.addEventLis
   finally { choice.disabled = false; choice.value = ''; }
 }));
 const button = document.getElementById('run-now');
-button.addEventListener('click', async () => {
+button?.addEventListener('click', async () => {
   if (!confirm('Start an audit using your saved configuration? In Live Mode this may move or delete media.')) return;
   button.disabled = true;
   const output = document.getElementById('run-result');
