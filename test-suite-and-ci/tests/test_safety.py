@@ -245,6 +245,7 @@ def overdue_in_removal(a, name="Overdue (1996)", extra_bytes=0):
     if extra_bytes:
         (folder / "big.mkv").write_bytes(b"0" * extra_bytes)
     seed(a, "in_removal", name, 30)
+    a.movie(name)  # Verified unprotected Jellyfin title; deletion policy is tested separately.
     return folder
 
 
@@ -347,6 +348,7 @@ def test_a_symlink_in_removal_cannot_be_used_to_delete_something_else(make_audit
     precious = a.add("Movies_keep", "Precious (2000)")
     os.symlink(precious, a.media / "Movies_removal" / "Precious (2000)")
     seed(a, "in_removal", "Precious (2000)", 30)
+    a.movie("Precious (2000)")
     a.run()
 
     assert (precious / "video.mkv").exists()
