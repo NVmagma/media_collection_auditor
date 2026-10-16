@@ -791,6 +791,7 @@ def audit_holding(lib: dict, signals: dict, state: dict):
             if move_or_report(lib, folder, path, lib["keep"]):
                 if not DRY_RUN:
                     state["queued"].pop(key, None)
+                    state["keep_seen"].setdefault(key, datetime.datetime.now().isoformat())
                 record_action("rescue", folder, decide("Holding", None, HOLDING_DAYS, sig, FAVORITES_TRIGGER_KEEP)[1], lib["name"])
                 sync_arr(lib, folder, lib["app_keep"], monitored=True)
             continue
@@ -848,6 +849,9 @@ def audit_transient(lib: dict, signals: dict, state: dict):
         if decide("Waiting", age, wait, sig, FAVORITES_TRIGGER_KEEP)[0] == "keep":
             print(f"-> {decide('Waiting', age, wait, sig, FAVORITES_TRIGGER_KEEP)[1]} Move to Keep.")
             if move_or_report(lib, folder, path, lib["keep"]):
+                if not DRY_RUN:
+                    state["first_seen"].pop(key, None)
+                    state["keep_seen"].setdefault(key, datetime.datetime.now().isoformat())
                 record_action("keep", folder, decide("Waiting", age, wait, sig, FAVORITES_TRIGGER_KEEP)[1], lib["name"])
                 sync_arr(lib, folder, lib["app_keep"])
         # Priority 2: tagged not-at-all -> Holding right away
@@ -1113,7 +1117,8 @@ def refresh_jellyfin_after_audit():
     try:
         response = requests.post(
             f"{JELLYFIN_URL}/Library/Refresh",
-            headers={"X-Emby-Token": JELLYFIN_TOKEN},
+            headers={"X-Emby-Token": JELLYFIN_TOKEN,
+                     "Authorization": f'MediaBrowser Token="{JELLYFIN_TOKEN}"'},
             timeout=10,
             allow_redirects=False,
         )
