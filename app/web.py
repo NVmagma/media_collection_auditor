@@ -7,7 +7,7 @@ from flask import Flask, render_template, request, Response, redirect, url_for
 
 from connection_tests import check_connection, SERVICES
 from run_control import snapshot, request_run
-from config_store import FIELDS, KEYS, SECRETS, BOOLS, DEFAULTS, load_config, save_config, validate
+from config_store import FIELDS, KEYS, SECRETS, BOOLS, DEFAULTS, FIELD_HELP, load_config, save_config, validate
 
 app = Flask(__name__)
 
@@ -104,7 +104,7 @@ def settings():
     for key in SECRETS:
         values[key] = ""  # Never send stored tokens to the browser.
     return render_template("settings.html", groups=FIELDS, values=values,
-                           secrets=SECRETS, bools=BOOLS, sources=sources, error=error,
+                           secrets=SECRETS, bools=BOOLS, sources=sources, help_text=FIELD_HELP, error=error,
                            success=success)
 
 
