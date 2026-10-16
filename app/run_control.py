@@ -1,6 +1,7 @@
 """Single-run coordinator shared by Flask and the audit worker."""
 import threading
 from datetime import datetime, timedelta, timezone
+from audit_history import read_history
 
 _lock = threading.Lock()
 _wake = threading.Event()
@@ -10,7 +11,16 @@ _status = {"running": False, "queued": False, "last_started": None, "last_finish
 
 def snapshot():
     with _lock:
-        return dict(_status)
+        current = dict(_status)
+    history = read_history(1)
+    if history and not current["running"]:
+        latest = history[0]
+        current["last_started"] = latest.get("started_at")
+        current["last_finished"] = latest.get("finished_at")
+        current["last_result"] = latest.get("result")
+        current["movies_processed"] = latest.get("movies_processed")
+        current["tv_processed"] = latest.get("tv_processed")
+    return current
 
 def request_run():
     with _lock:
@@ -22,9 +32,11 @@ def request_run():
 
 def begin_run(dry_run):
     with _lock:
+        trigger = "manual" if _status["queued"] else "scheduled"
         _status.update(running=True, queued=False, last_started=datetime.now(timezone.utc).isoformat(),
                        last_result=None, next_run=None, dry_run=dry_run)
     _wake.clear()
+    return trigger
 
 def finish_run(result, movies, tv, interval):
     now = datetime.now(timezone.utc)
