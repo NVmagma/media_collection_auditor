@@ -124,6 +124,77 @@ def load_state():
         return {}
 
 
+
+def _live_jellyfin_signals(config):
+    """Read-only, short-lived tag/favorite snapshot; never authorizes filesystem actions."""
+    base = config.get("JELLYFIN_HOST_URL", os.environ.get("JELLYFIN_HOST_URL", "")).rstrip("/")
+    token = config.get("JELLYFIN_API_TOKEN", os.environ.get("JELLYFIN_API_TOKEN", "")).strip()
+    if not base.startswith(("http://", "https://")) or not token:
+        return None
+    tag_names = {
+        "keep": config.get("KEEP_TAG", os.environ.get("KEEP_TAG", "keep")).casefold(),
+        "protected": config.get("PROTECT_TAG", os.environ.get("PROTECT_TAG", "keep-forever")).casefold(),
+        "disliked": config.get("DISLIKE_TAG", os.environ.get("DISLIKE_TAG", "not-at-all")).casefold(),
+        "keep_all": config.get("KEEP_ALL_SEASONS_TAG", os.environ.get("KEEP_ALL_SEASONS_TAG", "keep-all-seasons")).casefold(),
+    }
+    headers = _poster_headers(token)
+    signals = {"Movies": {}, "TV": {}}
+    users_response = requests.get(base + "/Users", headers=headers, timeout=(3, 8), allow_redirects=False)
+    users_response.raise_for_status()
+    users = users_response.json()
+    if not isinstance(users, list) or not users:
+        return None
+    for user in users:
+        user_id = user.get("Id")
+        if not user_id:
+            return None
+        for library, media_type in (("Movies", "Movie"), ("TV", "Series")):
+            response = requests.get(base + "/Users/" + quote(str(user_id), safe="") + "/Items",
+                                    params={"Recursive": "true", "IncludeItemTypes": media_type,
+                                            "Fields": "Path,Tags"},
+                                    headers=headers, timeout=(3, 12), allow_redirects=False)
+            response.raise_for_status()
+            payload = response.json()
+            if not isinstance(payload, dict) or not isinstance(payload.get("Items"), list):
+                return None
+            for media in payload["Items"]:
+                folder = _poster_folder(media, media_type)
+                if not folder:
+                    continue
+                sig = signals[library].setdefault(folder, {"favorite": False, "keep": False,
+                                                            "protected": False, "disliked": False,
+                                                            "keep_all": False})
+                sig["favorite"] |= bool((media.get("UserData") or {}).get("IsFavorite"))
+                tags = {str(t).casefold() for t in (media.get("Tags") or [])}
+                for key, tag in tag_names.items():
+                    sig[key] |= tag in tags
+                if sig["protected"]:
+                    sig["keep_all"] = True
+    return signals
+
+
+def _dashboard_signals(config):
+    """Cache for 60 seconds; errors show unknown rather than stale or unverified status."""
+    now = time.monotonic()
+    cache_key = tuple(sorted((key, config.get(key, os.environ.get(key, "")))
+                              for key in ("JELLYFIN_HOST_URL", "JELLYFIN_API_TOKEN", "KEEP_TAG",
+                                          "PROTECT_TAG", "DISLIKE_TAG", "KEEP_ALL_SEASONS_TAG")))
+    with _SIGNAL_LOCK:
+        if _SIGNAL_CACHE.get("key") == cache_key and now - _SIGNAL_CACHE.get("time", 0) < 60:
+            return _SIGNAL_CACHE["value"]
+    try:
+        value = _live_jellyfin_signals(config)
+    except (requests.RequestException, ValueError, TypeError, KeyError, AttributeError):
+        app.logger.warning("Dashboard Jellyfin signals unavailable", exc_info=True)
+        value = None
+    with _SIGNAL_LOCK:
+        _SIGNAL_CACHE.update(key=cache_key, time=time.monotonic(), value=value)
+    return value
+
+
+_SIGNAL_LOCK = threading.Lock()
+_SIGNAL_CACHE = {}
+
 @app.get("/")
 def dashboard():
     actions = load_actions()
@@ -159,6 +230,8 @@ def dashboard():
         "Removal": "In the final removal stage. Deletion requires a fresh audit and must pass all deletion safeguards.",
         "Keep": "Tracked in the Keep library. TV season pruning, if enabled, has separate safeguards."
     }
+    live_signals = _dashboard_signals(config)
+    favorites_trigger_keep = str(config.get("FAVORITES_TRIGGER_KEEP", os.environ.get("FAVORITES_TRIGGER_KEEP", "true"))).lower() == "true"
     preview = []
     for stage, items in stages.items():
         for item in items:
@@ -177,11 +250,16 @@ def dashboard():
                     item["due"] = elapsed >= limit
             except (ValueError, TypeError, OverflowError):
                 pass
+            sig = live_signals.get(item["library"], {}).get(item["title"].casefold()) if live_signals is not None else None
+            item["jellyfin_signals"] = sig
             decision, explanation = decide(stage, item["elapsed_days"],
-                                           deadlines.get(stage, {}).get(item["library"], 0))
+                                           deadlines.get(stage, {}).get(item["library"], 0), sig,
+                                           favorites_trigger_keep)
+            if stage == "Removal" and (sig is None or sig.get("protected") or sig.get("keep") or (favorites_trigger_keep and sig.get("favorite"))):
+                decision, explanation = "blocked", "Deletion blocked: Jellyfin status unknown or title protected. Manual rescue may be needed."
             item["decision"] = decision
             item["decision_reason"] = explanation
-            if item["due"]:
+            if item["due"] and decision not in ("blocked", "unknown", "keep", "rescue"):
                 action = {"Waiting": "Review for move to Holding",
                           "Holding": "Review for move to Removal",
                           "Removal": "Review for permanent deletion"}.get(stage)
