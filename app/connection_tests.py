@@ -5,7 +5,7 @@ import requests
 from config_store import load_config
 
 SERVICES = {
-    "jellyfin": ("JELLYFIN_HOST_URL", "JELLYFIN_API_TOKEN", "/System/Info", "X-Emby-Token"),
+    "jellyfin": ("JELLYFIN_HOST_URL", "JELLYFIN_API_TOKEN", "/Users", "X-Emby-Token"),
     "radarr": ("RADARR_URL", "RADARR_API_KEY", "/api/v3/system/status", "X-Api-Key"),
     "sonarr": ("SONARR_URL", "SONARR_API_KEY", "/api/v3/system/status", "X-Api-Key"),
 }
@@ -23,7 +23,12 @@ def check_connection(service):
     if parts.scheme not in ("http", "https") or not parts.hostname or parts.username or parts.password or parts.path not in ("", "/") or parts.query or parts.fragment:
         return {"ok": False, "message": "Invalid service URL. Use a base URL such as http://host:8096."}, 400
     try:
-        response = requests.get(base + endpoint, headers={header: token}, timeout=(3, 7), allow_redirects=False)
+        headers = {header: token}
+        if service == "jellyfin":
+            # Match collection_auditor.jellyfin_get(), which already uses
+            # these two headers for its regular /Users API requests.
+            headers["Authorization"] = f'MediaBrowser Token="{token}"'
+        response = requests.get(base + endpoint, headers=headers, timeout=(3, 7), allow_redirects=False)
         if response.status_code == 401 or response.status_code == 403:
             return {"ok": False, "message": "Authentication failed. Check the API key."}, 200
         if 300 <= response.status_code < 400:
@@ -34,7 +39,7 @@ def check_connection(service):
             info = response.json()
         except ValueError:
             return {"ok": False, "message": "Server did not return valid JSON."}, 200
-        if not isinstance(info, dict):
+        if not isinstance(info, list) if service == "jellyfin" else not isinstance(info, dict):
             return {"ok": False, "message": "Unexpected server response."}, 200
         return {"ok": True, "message": f"Connected to {service.capitalize()} successfully."}, 200
     except requests.exceptions.Timeout:
