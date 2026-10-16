@@ -33,6 +33,19 @@ class WebSecurityTests(unittest.TestCase):
     def test_anonymous_api_cannot_run_audit(self):
         self.assertEqual(self.client.post("/api/run-now").status_code, 401)
 
+    def test_anonymous_cannot_request_poster(self):
+        self.assertEqual(self.client.get("/api/poster?library=Movies&title=Example").status_code, 401)
+
+    def test_poster_missing_credentials_fails_closed(self):
+        with patch.object(web, "current_user", return_value={"name": "Viewer", "admin": False}), \
+             patch.object(web, "load_config", return_value={}), \
+             patch.dict(os.environ, {"JELLYFIN_API_TOKEN": "", "JELLYFIN_HOST_URL": ""}):
+            self.assertEqual(self.client.get("/api/poster?library=Movies&title=Example").status_code, 404)
+
+    def test_poster_rejects_invalid_library(self):
+        with patch.object(web, "current_user", return_value={"name": "Viewer", "admin": False}):
+            self.assertEqual(self.client.get("/api/poster?library=Other&title=Example").status_code, 400)
+
     def test_anonymous_api_cannot_rescue(self):
         self.assertEqual(self.client.post("/api/rescue", json={}).status_code, 401)
 
