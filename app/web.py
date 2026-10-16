@@ -1,6 +1,7 @@
 import json
 import os
 import hmac
+import requests
 from datetime import timedelta
 from datetime import datetime
 from urllib.parse import urlsplit
@@ -136,6 +137,42 @@ def dashboard():
             item["days_left"] = None
     return render_template("dashboard.html", actions=actions, state=state, stages=stages, run=snapshot(), history=read_history(100),
                            dry_run=load_config().get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "true")
+
+
+@app.get("/api/poster")
+def poster():
+    """Serve Jellyfin artwork without exposing the API token to browsers."""
+    title = request.args.get("title", "").strip()
+    library = request.args.get("library", "")
+    if not title or len(title) > 250 or library not in ("Movies", "TV"):
+        return Response(status=400)
+    config = load_config()
+    base = config.get("JELLYFIN_HOST_URL", os.environ.get("JELLYFIN_HOST_URL", "")).rstrip("/")
+    token = config.get("JELLYFIN_API_TOKEN", os.environ.get("JELLYFIN_API_TOKEN", ""))
+    if not base.startswith(("http://", "https://")) or not token:
+        return Response(status=404)
+    media_type = "Movie" if library == "Movies" else "Series"
+    try:
+        found = requests.get(base + "/Items", params={"searchTerm": title, "IncludeItemTypes": media_type,
+                             "Recursive": "true", "Limit": 20, "Fields": "PrimaryImageAspectRatio"},
+                             headers={"X-Emby-Token": token}, timeout=(3, 8), allow_redirects=False)
+        if found.status_code != 200:
+            return Response(status=404)
+        items = found.json().get("Items", [])
+        match = next((item for item in items if item.get("Name", "").casefold() == title.casefold()
+                      and item.get("Type") == media_type and item.get("ImageTags", {}).get("Primary")), None)
+        if not match:
+            return Response(status=404)
+        image = requests.get(base + "/Items/" + match["Id"] + "/Images/Primary",
+                             params={"maxWidth": 200, "quality": 75},
+                             headers={"X-Emby-Token": token}, timeout=(3, 8),
+                             allow_redirects=False)
+        if image.status_code != 200 or not image.headers.get("Content-Type", "").startswith("image/"):
+            return Response(status=404)
+        return Response(image.content, mimetype=image.headers["Content-Type"],
+                        headers={"Cache-Control": "private, max-age=3600"})
+    except (requests.RequestException, ValueError, TypeError, KeyError, AttributeError):
+        return Response(status=404)
 
 
 @app.get("/logs")
