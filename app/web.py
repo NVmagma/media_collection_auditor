@@ -2,6 +2,10 @@ import json
 import os
 import hmac
 import requests
+import posixpath
+import re
+import time
+import threading
 from datetime import timedelta
 from datetime import datetime
 from urllib.parse import urlsplit
@@ -139,39 +143,94 @@ def dashboard():
                            dry_run=load_config().get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "true")
 
 
+# Cache Jellyfin's folder-to-image mapping to avoid a library scan per poster.
+_POSTER_INDEX = {}
+_POSTER_LOCK = threading.Lock()
+_POSTER_TTL = 300
+
+
+def _poster_folder(item, media_type):
+    path = (item.get("Path") or "").replace("\\", "/").rstrip("/")
+    if not path:
+        return ""
+    if media_type == "Movie":
+        return posixpath.basename(posixpath.dirname(path)).casefold()
+    return posixpath.basename(path).casefold()
+
+
+def _poster_index(base, token, media_type):
+    """Match tracked folder names to Jellyfin IDs, like the auditor does."""
+    key = (base, token, media_type)
+    with _POSTER_LOCK:
+        cached = _POSTER_INDEX.get(key)
+        if cached and time.monotonic() - cached[0] < _POSTER_TTL:
+            return cached[1]
+    headers = {"X-Emby-Token": token}
+    # Jellyfin API keys can enumerate users; use the same per-user items
+    # endpoint as collection_auditor.get_signals().
+    users_response = requests.get(base + "/Users", headers=headers, timeout=(3, 10),
+                                  allow_redirects=False)
+    users_response.raise_for_status()
+    users = users_response.json()
+    if not isinstance(users, list) or not users:
+        return {}
+    index = {}
+    for user in users:
+        user_id = user.get("Id")
+        if not user_id:
+            continue
+        response = requests.get(base + "/Users/" + user_id + "/Items",
+                                params={"Recursive": "true", "IncludeItemTypes": media_type,
+                                        "Fields": "Path", "EnableImages": "true"},
+                                headers=headers, timeout=(3, 15), allow_redirects=False)
+        response.raise_for_status()
+        for item in response.json().get("Items", []):
+            if item.get("Type") != media_type or not item.get("Id"):
+                continue
+            # Do not require ImageTags here: some Jellyfin responses omit them.
+            folder = _poster_folder(item, media_type)
+            if folder:
+                index.setdefault(folder, item["Id"])
+            name = (item.get("Name") or "").strip().casefold()
+            if name:
+                index.setdefault("name:" + name, item["Id"])
+    with _POSTER_LOCK:
+        _POSTER_INDEX[key] = (time.monotonic(), index)
+    return index
+
+
 @app.get("/api/poster")
 def poster():
-    """Serve Jellyfin artwork without exposing the API token to browsers."""
+    """Serve matching Jellyfin artwork without exposing API credentials."""
     title = request.args.get("title", "").strip()
     library = request.args.get("library", "")
     if not title or len(title) > 250 or library not in ("Movies", "TV"):
         return Response(status=400)
     config = load_config()
     base = config.get("JELLYFIN_HOST_URL", os.environ.get("JELLYFIN_HOST_URL", "")).rstrip("/")
-    token = config.get("JELLYFIN_API_TOKEN", os.environ.get("JELLYFIN_API_TOKEN", ""))
+    token = config.get("JELLYFIN_API_TOKEN", os.environ.get("JELLYFIN_API_TOKEN", "")).strip()
     if not base.startswith(("http://", "https://")) or not token:
         return Response(status=404)
     media_type = "Movie" if library == "Movies" else "Series"
     try:
-        found = requests.get(base + "/Items", params={"searchTerm": title, "IncludeItemTypes": media_type,
-                             "Recursive": "true", "Limit": 20, "Fields": "PrimaryImageAspectRatio"},
-                             headers={"X-Emby-Token": token}, timeout=(3, 8), allow_redirects=False)
-        if found.status_code != 200:
+        index = _poster_index(base, token, media_type)
+        normalized = title.casefold()
+        # Folder is authoritative; only fall back to a display-title match.
+        display_name = re.sub(r"\\s*\\(\\d{4}\\)\\s*$", "", title).strip().casefold()
+        item_id = (index.get(normalized) or index.get("name:" + normalized)
+                   or index.get("name:" + display_name))
+        if not item_id:
             return Response(status=404)
-        items = found.json().get("Items", [])
-        match = next((item for item in items if item.get("Name", "").casefold() == title.casefold()
-                      and item.get("Type") == media_type and item.get("ImageTags", {}).get("Primary")), None)
-        if not match:
-            return Response(status=404)
-        image = requests.get(base + "/Items/" + match["Id"] + "/Images/Primary",
+        image = requests.get(base + "/Items/" + item_id + "/Images/Primary",
                              params={"maxWidth": 200, "quality": 75},
                              headers={"X-Emby-Token": token}, timeout=(3, 8),
                              allow_redirects=False)
-        if image.status_code != 200 or not image.headers.get("Content-Type", "").startswith("image/"):
+        if image.status_code != 200 or not image.headers.get("Content-Type", "").lower().startswith("image/"):
             return Response(status=404)
         return Response(image.content, mimetype=image.headers["Content-Type"],
                         headers={"Cache-Control": "private, max-age=3600"})
     except (requests.RequestException, ValueError, TypeError, KeyError, AttributeError):
+        app.logger.warning("Jellyfin poster lookup failed for %s", library, exc_info=True)
         return Response(status=404)
 
 
