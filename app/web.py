@@ -259,7 +259,7 @@ def dashboard():
                 decision, explanation = "blocked", "Deletion blocked: Jellyfin status unknown or title protected. Manual rescue may be needed."
             item["decision"] = decision
             item["decision_reason"] = explanation
-            if item["due"] and decision not in ("blocked", "unknown", "keep", "rescue"):
+            if item["due"] and decision not in ("blocked", "unknown", "keep", "rescue") and (stage != "Removal" or sig is not None):
                 action = {"Waiting": "Review for move to Holding",
                           "Holding": "Review for move to Removal",
                           "Removal": "Review for permanent deletion"}.get(stage)
