@@ -1,18 +1,77 @@
 import json
 import os
 import hmac
+from datetime import timedelta
 from datetime import datetime
 from urllib.parse import urlsplit
 from pathlib import Path
-from flask import Flask, render_template, request, Response, redirect, url_for
+from flask import Flask, render_template, request, Response, redirect, url_for, session, g
 
 from connection_tests import check_connection, SERVICES
 from audit_history import read_history
 from manual_rescue import rescue_title
+from auth import session_key, jellyfin_login, current_user
 from run_control import snapshot, request_run
 from config_store import FIELDS, KEYS, SECRETS, BOOLS, DEFAULTS, FIELD_HELP, load_config, save_config, validate
 
 app = Flask(__name__)
+app.secret_key = session_key()
+app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
+                  SESSION_COOKIE_SECURE=os.environ.get("WEB_SECURE_COOKIE", "false").lower() == "true",
+                  PERMANENT_SESSION_LIFETIME=timedelta(hours=12))
+
+@app.before_request
+def require_login():
+    if request.endpoint in ("login", "health", "static"):
+        return None
+    g.user = current_user()
+    if g.user is None:
+        if request.path.startswith("/api/"):
+            return {"ok": False, "message": "Please sign in."}, 401
+        return redirect(url_for("login"))
+    if request.endpoint in ("settings", "test_connection", "run_now", "rescue") and not g.user["admin"]:
+        if request.path.startswith("/api/"):
+            return {"ok": False, "message": "Administrator access required."}, 403
+        return Response("Administrator access required.", 403)
+
+@app.context_processor
+def user_context():
+    return {"viewer": getattr(g, "user", None)}
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "GET":
+        if current_user():
+            return redirect(url_for("dashboard"))
+        return render_template("login.html", error=None)
+    origin = request.headers.get("Origin") or request.headers.get("Referer")
+    if not origin or urlsplit(origin).netloc != request.host:
+        return Response("Invalid request origin.", 403)
+    username = request.form.get("username", "")[:128]
+    password = request.form.get("password", "")
+    if not username or not password:
+        return render_template("login.html", error="Enter a username and password."), 400
+    user = jellyfin_login(username, password)
+    session.clear()
+    if user:
+        session.update(provider="jellyfin", jf_id=user["id"], jf_token=user["token"])
+    elif (os.environ.get("WEB_ADMIN_PASSWORD")
+          and hmac.compare_digest(username, os.environ.get("WEB_ADMIN_USER", "admin"))
+          and hmac.compare_digest(password, os.environ["WEB_ADMIN_PASSWORD"])):
+        session["provider"] = "local"
+    else:
+        return render_template("login.html", error="Invalid credentials or Jellyfin unavailable."), 401
+    session.permanent = True
+    return redirect(url_for("dashboard"))
+
+@app.post("/logout")
+def logout():
+    origin = request.headers.get("Origin") or request.headers.get("Referer")
+    if not origin or urlsplit(origin).netloc != request.host:
+        return Response("Invalid request origin.", 403)
+    session.clear()
+    return redirect(url_for("login"))
+
 
 ACTION_LOG_FILE = os.environ.get("ACTION_LOG_FILE", "/app/logs/auditor_actions.jsonl")
 STATE_FILE = os.environ.get("STATE_FILE", "/app/logs/auditor_state.json")
@@ -73,12 +132,7 @@ def logs():
 
 
 def admin_authorized():
-    password = os.environ.get("WEB_ADMIN_PASSWORD", "")
-    username = os.environ.get("WEB_ADMIN_USER", "admin")
-    auth = request.authorization
-    return bool(password and auth and auth.type == "basic"
-                and hmac.compare_digest(auth.username or "", username)
-                and hmac.compare_digest(auth.password or "", password))
+    return bool(getattr(g, "user", None) and g.user["admin"])
 
 
 @app.route("/settings", methods=["GET", "POST"])
