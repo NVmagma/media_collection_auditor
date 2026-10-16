@@ -32,6 +32,7 @@ def test_refresh_posts_once_after_verified_move(make_auditor, posts):
     assert len(posts.calls) == 1
     assert posts.calls[0]["url"].endswith("/Library/Refresh")
     assert posts.calls[0]["allow_redirects"] is False
+    assert posts.calls[0]["headers"]["Authorization"].startswith('MediaBrowser Token="')
     assert a.actions("jellyfin_refresh")[0]["status"] == "done"
 
 
