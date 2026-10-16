@@ -43,3 +43,21 @@
 .lifecycle-tab .stage-count{margin-left:6px;color:#9fb9d1;font-size:12px}
 .lifecycle-panel h3{margin:0 0 16px;font-size:18px}
 @media(max-width:650px){.library-overview{grid-template-columns:1fr}}
+
+
+/* Dashboard-wide table/poster switch; poster artwork is aligned on the left. */
+.dashboard-view-switch{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin:4px 0 14px}
+.dashboard-view-switch .muted{font-size:13px;margin-right:8px}
+.view-switch-button{background:#162538;border:1px solid #2b415a;color:#b5c9dc;border-radius:8px;padding:9px 16px;font-size:13px}
+.view-switch-button.selected{background:#214568;border-color:#70acff;color:#fff}
+.media-poster-list{display:flex;flex-direction:column;gap:14px}
+.media-poster-list.hidden-section{display:none}
+.media-poster-row{display:flex;gap:20px;align-items:flex-start;padding:15px;background:#142235;border:1px solid #2c4058;border-radius:12px}
+.media-poster-placeholder{flex:0 0 94px;width:94px;height:140px;display:flex;align-items:center;justify-content:center;border:1px solid #39536c;border-radius:7px;background:linear-gradient(150deg,#2b4966,#111d2d);color:#9ab5d0;font-size:12px;letter-spacing:1px;font-weight:700}
+.media-poster-info{min-width:0;flex:1}
+.media-poster-info h4{font-size:18px;overflow-wrap:anywhere;margin:2px 0 10px}
+.media-poster-info p{font-size:13px;color:#a8bdd1;margin:8px 0}
+.media-stage-label{display:inline-block;border-radius:30px;background:#294663;padding:4px 10px;font-size:12px;color:#bce2ff}
+.media-poster-info label{display:flex;flex-direction:column;align-items:flex-start;gap:7px;font-size:13px;margin-top:14px}
+.media-poster-info select{max-width:260px;background:#1c3147;color:#fff;border:1px solid #47627d;border-radius:7px;padding:9px}
+@media(max-width:600px){.media-poster-row{gap:12px;padding:10px}.media-poster-placeholder{flex-basis:72px;width:72px;height:108px}.dashboard-view-switch{justify-content:flex-start}}
