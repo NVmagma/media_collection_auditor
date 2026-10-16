@@ -1,0 +1,57 @@
+"""Persisted web settings. Container environment remains the fallback."""
+import json
+import os
+from pathlib import Path
+
+CONFIG_FILE = Path(os.environ.get("WEB_CONFIG_FILE", "/app/logs/auditor_config.json"))
+FIELDS = {
+    "Connections": ["JELLYFIN_HOST_URL", "JELLYFIN_API_TOKEN", "RADARR_URL", "RADARR_API_KEY", "SONARR_URL", "SONARR_API_KEY"],
+    "Libraries": ["ENABLE_MOVIES", "ENABLE_TV", "MEDIA_PATH", "DISLIKE_TAG", "PROTECT_TAG", "TV_NEW_EPISODES_RESET_CLOCK", "ENABLE_SEASON_PRUNING", "KEEP_ALL_SEASONS_TAG", "SEASON_PRUNE_GRACE_DAYS", "SEASON_PRUNE_AFTER_NEW_SEASON_DAYS"],
+    "Lifecycle": ["MOVIE_WAIT_DAYS", "TV_WAIT_DAYS", "HOLDING_DAYS", "REMOVAL_DAYS", "RUN_INTERVAL_HOURS"],
+    "Safety": ["DRY_RUN", "MAX_ACTIONS_PER_RUN", "ALLOW_FILESYSTEM_DELETE", "ALLOW_CROSS_FILESYSTEM_MOVES"],
+    "Notifications": ["NOTIFY_DISCORD_WEBHOOK_URL", "NOTIFY_NTFY_URL", "NOTIFY_NTFY_TOKEN", "NOTIFY_WEBHOOK_URL", "NOTIFY_ON_DRY_RUN", "NOTIFY_LEAVING_SOON_DIGEST"],
+}
+KEYS = set(sum(FIELDS.values(), []))
+SECRETS = {"JELLYFIN_API_TOKEN", "RADARR_API_KEY", "SONARR_API_KEY", "NOTIFY_DISCORD_WEBHOOK_URL", "NOTIFY_NTFY_TOKEN", "NOTIFY_WEBHOOK_URL"}
+BOOLS = {"ENABLE_MOVIES", "ENABLE_TV", "TV_NEW_EPISODES_RESET_CLOCK", "ENABLE_SEASON_PRUNING", "DRY_RUN", "ALLOW_FILESYSTEM_DELETE", "ALLOW_CROSS_FILESYSTEM_MOVES", "NOTIFY_ON_DRY_RUN", "NOTIFY_LEAVING_SOON_DIGEST"}
+INTS = {"MOVIE_WAIT_DAYS", "TV_WAIT_DAYS", "HOLDING_DAYS", "REMOVAL_DAYS", "MAX_ACTIONS_PER_RUN", "SEASON_PRUNE_GRACE_DAYS", "SEASON_PRUNE_AFTER_NEW_SEASON_DAYS"}
+FLOATS = {"RUN_INTERVAL_HOURS"}
+MINIMUM_ONE = {"HOLDING_DAYS", "REMOVAL_DAYS"}
+DEFAULTS = {"DRY_RUN":"true","ENABLE_MOVIES":"true","ENABLE_TV":"false","MOVIE_WAIT_DAYS":"30","TV_WAIT_DAYS":"60","HOLDING_DAYS":"7","REMOVAL_DAYS":"7","RUN_INTERVAL_HOURS":"0","MAX_ACTIONS_PER_RUN":"10","DISLIKE_TAG":"not-at-all","PROTECT_TAG":"keep-forever","TV_NEW_EPISODES_RESET_CLOCK":"true","ENABLE_SEASON_PRUNING":"false","KEEP_ALL_SEASONS_TAG":"keep-all-seasons","SEASON_PRUNE_GRACE_DAYS":"30","SEASON_PRUNE_AFTER_NEW_SEASON_DAYS":"7","NOTIFY_ON_DRY_RUN":"false","NOTIFY_LEAVING_SOON_DIGEST":"true","ALLOW_FILESYSTEM_DELETE":"false","ALLOW_CROSS_FILESYSTEM_MOVES":"false","MEDIA_PATH":"/media"}
+
+def load_config():
+    try:
+        data = json.loads(CONFIG_FILE.read_text())
+        return {k: str(v) for k, v in data.items() if k in KEYS} if isinstance(data, dict) else {}
+    except (OSError, ValueError, TypeError):
+        return {}
+
+def validate(key, value):
+    value = value.strip()
+    if key in BOOLS and value.lower() not in ("true", "false"):
+        raise ValueError(f"{key}: select true or false")
+    if key in INTS or key in FLOATS:
+        try:
+            n = int(value) if key in INTS else float(value)
+        except ValueError:
+            raise ValueError(f"{key}: enter a valid number")
+        if not 0 <= n <= 100000 or (key in MINIMUM_ONE and n < 1):
+            raise ValueError(f"{key}: number is outside the allowed range")
+    if key.endswith("_URL") or key == "JELLYFIN_HOST_URL":
+        if value and not value.startswith(("http://", "https://")):
+            raise ValueError(f"{key}: URL must start with http:// or https://")
+    if key == "MEDIA_PATH" and not value.startswith("/"):
+        raise ValueError("MEDIA_PATH must be an absolute container path")
+    if len(value) > 2048:
+        raise ValueError(f"{key}: value is too long")
+    return value.lower() if key in BOOLS else value
+
+def save_config(values):
+    CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    temp = CONFIG_FILE.with_suffix(".tmp")
+    with temp.open("w") as handle:
+        json.dump(values, handle, indent=2)
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.chmod(temp, 0o600)
+    os.replace(temp, CONFIG_FILE)
