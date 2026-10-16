@@ -34,6 +34,11 @@
       <article><span>Holding records</span><strong>{{ state.get('queued', {})|length }}</strong></article>
       <article><span>Removal records</span><strong>{{ state.get('in_removal', {})|length }}</strong></article>
     </section>
+    <div class="dashboard-view-switch" role="group" aria-label="Media display style">
+      <span class="muted">Media display</span>
+      <button type="button" class="view-switch-button selected" data-view="table" aria-pressed="true">Table</button>
+      <button type="button" class="view-switch-button" data-view="posters" aria-pressed="false">Posters</button>
+    </div>
     <nav class="settings-tabs" aria-label="Dashboard sections">
       {% for tab in ['Overview','Movies','TV Shows','Activity','History'] %}
       <button type="button" class="tab-button{% if loop.first %} selected{% endif %}" data-tab="{{ tab }}" aria-selected="{{ 'true' if loop.first else 'false' }}">{{ tab }}</button>
@@ -75,6 +80,24 @@
           </tr>
           {% endfor %}
         </tbody></table></div>
+        <div class="media-poster-list hidden-section" aria-label="{{ label }} {{ stage }} poster view">
+          {% for item in items %}
+          <article class="media-poster-row">
+            <div class="media-poster-placeholder" aria-hidden="true"><span>{{ 'TV' if item.library == 'TV' else 'MOVIE' }}</span></div>
+            <div class="media-poster-info">
+              <h4>{{ item.title }}</h4>
+              <span class="media-stage-label">{{ stage }}</span>
+              <p>Tracked since: {{ item.since }}</p>
+              {% if stage == 'Removal' %}
+              <p>Days left: {{ item.days_left if item.days_left is not none else 'Unknown' }}</p>
+              {% if viewer.admin %}<label>Rescue
+                <select class="rescue-choice" data-library="{{ item.library }}" data-title="{{ item.title }}"><option value="">Choose action…</option><option value="keep">Move to Keep</option><option value="holding">Return to Holding</option></select>
+              </label>{% endif %}
+              {% endif %}
+            </div>
+          </article>
+          {% endfor %}
+        </div>
         {% else %}<p class="empty">No {{ label|lower }} tracked in {{ stage|lower }}.</p>{% endif %}
       </div>
       {% endfor %}
@@ -108,6 +131,23 @@
     </section>
   </main>
 <script>
+const mediaViewButtons = document.querySelectorAll('[data-view]');
+function setMediaView(view) {
+  const selectedView = view === 'posters' ? 'posters' : 'table';
+  document.querySelectorAll('.lifecycle-panel .table-wrap').forEach(table =>
+    table.classList.toggle('hidden-section', selectedView !== 'table'));
+  document.querySelectorAll('.media-poster-list').forEach(list =>
+    list.classList.toggle('hidden-section', selectedView !== 'posters'));
+  mediaViewButtons.forEach(button => {
+    const selected = button.dataset.view === selectedView;
+    button.classList.toggle('selected', selected);
+    button.setAttribute('aria-pressed', String(selected));
+  });
+  try { localStorage.setItem('auditor-media-view', selectedView); } catch (_) {}
+}
+mediaViewButtons.forEach(button => button.addEventListener('click', () => setMediaView(button.dataset.view)));
+try { setMediaView(localStorage.getItem('auditor-media-view') || 'table'); }
+catch (_) { setMediaView('table'); }
 const tabs = document.querySelectorAll('[data-tab]');
 const panels = document.querySelectorAll('[data-panel]');
 function openSection(name) {
