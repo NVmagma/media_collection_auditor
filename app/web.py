@@ -140,8 +140,52 @@ def dashboard():
             item["days_left"] = max(0, removal_days - age)
         except (ValueError, TypeError):
             item["days_left"] = None
+    config = load_config()
+    def setting_days(key, fallback):
+        try:
+            return max(1, int(config.get(key, os.environ.get(key, str(fallback)))))
+        except (ValueError, TypeError):
+            return fallback
+
+    deadlines = {"Waiting": {"Movies": setting_days("MOVIE_WAIT_DAYS", 30),
+                              "TV": setting_days("TV_WAIT_DAYS", 60)},
+                 "Holding": {"Movies": setting_days("HOLDING_DAYS", 7),
+                             "TV": setting_days("HOLDING_DAYS", 7)},
+                 "Removal": {"Movies": removal_days, "TV": removal_days}}
+    stage_explanations = {
+        "Waiting": "Tracked in the incoming library. Playback, favorites, and protection rules can change what happens next.",
+        "Holding": "In the holding period before removal. Jellyfin signals and safety rules may prevent the next move.",
+        "Removal": "In the final removal stage. Deletion requires a fresh audit and must pass all deletion safeguards.",
+        "Keep": "Tracked in the Keep library. TV season pruning, if enabled, has separate safeguards."
+    }
+    preview = []
+    for stage, items in stages.items():
+        for item in items:
+            item["reason"] = stage_explanations[stage]
+            item["elapsed_days"] = None
+            item["deadline_days"] = None
+            item["due"] = False
+            try:
+                start = datetime.fromisoformat(str(item["since"]))
+                now = datetime.now(start.tzinfo) if start.tzinfo else datetime.now()
+                elapsed = max(0, (now - start).days)
+                item["elapsed_days"] = elapsed
+                if stage in deadlines:
+                    limit = deadlines[stage][item["library"]]
+                    item["deadline_days"] = max(0, limit - elapsed)
+                    item["due"] = elapsed >= limit
+            except (ValueError, TypeError, OverflowError):
+                pass
+            if item["due"]:
+                action = {"Waiting": "Review for move to Holding",
+                          "Holding": "Review for move to Removal",
+                          "Removal": "Review for permanent deletion"}.get(stage)
+                if action:
+                    preview.append({"title": item["title"], "library": item["library"],
+                                    "stage": stage, "action": action})
+    preview.sort(key=lambda item: (item["library"], item["stage"], item["title"].casefold()))
     return render_template("dashboard.html", actions=actions, state=state, stages=stages, run=snapshot(), history=read_history(100),
-                           dry_run=load_config().get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "true")
+                           preview=preview, dry_run=load_config().get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "true")
 
 
 # Cache Jellyfin's folder-to-image mapping to avoid a library scan per poster.
