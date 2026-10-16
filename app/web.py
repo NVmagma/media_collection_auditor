@@ -1,12 +1,14 @@
 import json
 import os
 import hmac
+from datetime import datetime
 from urllib.parse import urlsplit
 from pathlib import Path
 from flask import Flask, render_template, request, Response, redirect, url_for
 
 from connection_tests import check_connection, SERVICES
 from audit_history import read_history
+from manual_rescue import rescue_title
 from run_control import snapshot, request_run
 from config_store import FIELDS, KEYS, SECRETS, BOOLS, DEFAULTS, FIELD_HELP, load_config, save_config, validate
 
@@ -54,6 +56,13 @@ def dashboard():
         stages[label] = [{"title": key[3:] if key.startswith("TV/") else key,
                           "library": "TV" if key.startswith("TV/") else "Movies",
                           "since": since} for key, since in records.items()]
+    removal_days = int(load_config().get("REMOVAL_DAYS", os.environ.get("REMOVAL_DAYS", "7")))
+    for item in stages["Removal"]:
+        try:
+            age = (datetime.now() - datetime.fromisoformat(item["since"])).days
+            item["days_left"] = max(0, removal_days - age)
+        except (ValueError, TypeError):
+            item["days_left"] = None
     return render_template("dashboard.html", actions=actions, state=state, stages=stages, run=snapshot(), history=read_history(100),
                            dry_run=load_config().get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "true")
 
@@ -138,6 +147,20 @@ def run_now():
     if request_run():
         return {"ok": True, "message": "Audit queued. Refresh the dashboard for results."}, 202
     return {"ok": False, "message": "An audit is already running or queued."}, 409
+
+
+@app.post("/api/rescue")
+def rescue():
+    if not admin_authorized():
+        return {"ok": False, "message": "Sign in through Settings first."}, 401
+    origin = request.headers.get("Origin") or request.headers.get("Referer")
+    if not origin or urlsplit(origin).netloc != request.host:
+        return {"ok": False, "message": "Invalid request origin."}, 403
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        return {"ok": False, "message": "Invalid request."}, 400
+    ok, message, status = rescue_title(data.get("library"), data.get("title"), data.get("destination"))
+    return {"ok": ok, "message": message}, status
 
 
 @app.get("/health")
