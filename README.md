@@ -31,7 +31,7 @@ The dashboard requires sign-in. Jellyfin-based sign-in and a local administrativ
 
 The production Dockerfile starts `python main.py`, which serves the dashboard on port **8080** by default (`WEB_PORT` overrides this) and coordinates scheduled or manually triggered audits. Publish the port in your Unraid container configuration, and persist **`/app/logs`** (for example under `/mnt/user/appdata/media_collection_auditor`). Mount your media at the paths specified by your auditor configuration, typically under `/media`.
 
-The branch's published image tag is `ghcr.io/nvmagma/media_archiver:feature-unraid`. Wait for validation of this branch before updating a live installation. For local development, the included `docker-compose.yaml` still runs the **CLI auditor**, mounts `./app:/app`, and is **not** the same deployment configuration as the production Unraid web image. Do not assume that `docker compose up` starts the dashboard.
+The branch's published image tag is `ghcr.io/nvmagma/media_collection_auditor:feature-unraid`. Wait for validation of this branch before updating a live installation. For local development, the included `docker-compose.yaml` still runs the **CLI auditor**, mounts `./app:/app`, and is **not** the same deployment configuration as the production Unraid web image. Do not assume that `docker compose up` starts the dashboard.
 
 **Back up** `/app/logs/auditor_state.json`, `auditor_actions.jsonl`, and `auditor_config.json` before changing images. The saved web configuration in `/app/logs/auditor_config.json` overrides matching container environment settings when an audit starts. Use the dashboard Settings page to review the effective configuration; confirm `DRY_RUN=true` before initial testing.
 
@@ -117,7 +117,7 @@ Every time something moves to Holding or Removal, Radarr/Sonarr are told the new
 ### 1. Clone and configure
 
 ```bash
-git clone https://github.com/NVmagma/media_archiver.git
+git clone https://github.com/NVmagma/media_collection_auditor.git
 cd media_archiver
 # To work on the Unraid dashboard branch:
 git switch feature/unraid
