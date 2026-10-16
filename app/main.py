@@ -5,6 +5,7 @@ import os
 import threading
 
 from config_store import KEYS, load_config
+from audit_history import new_record, finish_record, summarize_actions
 from run_control import begin_run, finish_run, wait_for_run
 from web import app
 
@@ -48,25 +49,37 @@ if __name__ == "__main__":
     threading.Thread(target=start_web, name="web-ui", daemon=True).start()
     auditor = None
     while True:
-        apply_settings()
+        interval = 0
+        record = None
+        started = False
+        log_path = os.environ.get("ACTION_LOG_FILE", "/app/logs/auditor_actions.jsonl")
+        offset = os.path.getsize(log_path) if os.path.exists(log_path) else 0
+        result = "completed"
+        error = None
         try:
+            apply_settings()
             auditor = importlib.import_module("collection_auditor") if auditor is None else importlib.reload(auditor)
             interval = auditor.RUN_INTERVAL_HOURS
             log_path = auditor.ACTION_LOG_FILE
             offset = os.path.getsize(log_path) if os.path.exists(log_path) else 0
-            begin_run(auditor.DRY_RUN)
-            result = "completed"
-            try:
-                auditor.run_with_alerts()
-            except (Exception, SystemExit) as exc:
-                result = "failed"
-                print(f"[AUDITOR ERROR] {exc}", flush=True)
-            movies, tv = audit_counts(log_path, offset)
-            finish_run(result, movies, tv, interval)
+            trigger = begin_run(auditor.DRY_RUN)
+            started = True
+            record = new_record(trigger, auditor.DRY_RUN)
+            auditor.run_with_alerts()
         except (Exception, SystemExit) as exc:
-            print(f"[CONFIG ERROR] {exc}", flush=True)
-            # Never start an audit using stale configuration after reload failure.
-            finish_run("failed", 0, 0, 0)
-            interval = 0
+            result = "failed"
+            error = f"{type(exc).__name__}: {str(exc)[:200]}"
+            print(f"[AUDITOR ERROR] {error}", flush=True)
+        finally:
+            summary = summarize_actions(log_path, offset)
+            if record is None:
+                # Configuration errors are recorded too, without assuming a run began.
+                trigger = begin_run(os.environ.get("DRY_RUN", "true").lower() == "true") if not started else "scheduled"
+                record = new_record(trigger, os.environ.get("DRY_RUN", "true").lower() == "true")
+            try:
+                finish_record(record, result, summary, error)
+            except OSError as exc:
+                print(f"[HISTORY ERROR] {exc}", flush=True)
+            finish_run(result, summary["movies_processed"], summary["tv_processed"], interval)
         print(f"[SCHEDULER] Waiting for next run ({interval} hours; manual runs available).", flush=True)
         wait_for_run(interval * 3600 if interval > 0 else None)
