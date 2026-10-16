@@ -69,6 +69,8 @@ DISLIKE_TAG = os.environ.get("DISLIKE_TAG", "not-at-all")  # Jellyfin tag meanin
 PROTECT_TAG = os.environ.get("PROTECT_TAG", "keep-forever")
 KEEP_TAG = os.environ.get("KEEP_TAG", "keep")
 FAVORITES_TRIGGER_KEEP = env_flag("FAVORITES_TRIGGER_KEEP", True)
+JELLYFIN_REFRESH_AFTER_AUDIT = env_flag("JELLYFIN_REFRESH_AFTER_AUDIT", False)
+_successful_media_moves = 0
 
 # Radarr (movies) and Sonarr (TV)
 RADARR_URL = os.environ.get("RADARR_URL", "").rstrip("/")
@@ -597,6 +599,8 @@ def safe_move_directory(source_dir: str, destination_parent_dir: str) -> Optiona
         return f"{type(e).__name__}: {e}"
     if os.path.exists(source_dir) or not os.path.isdir(destination_path):
         return "move did not complete (source still present or destination missing)"
+    global _successful_media_moves
+    _successful_media_moves += 1
     print(f"[SUCCESS] '{package_name}' moved to {destination_path}")
     return None
 
@@ -1102,7 +1106,31 @@ def send_run_notification():
 # --- MAIN ---
 # ==============================================
 
+def refresh_jellyfin_after_audit():
+    """Request an asynchronous Jellyfin scan after verified real media moves."""
+    if not JELLYFIN_REFRESH_AFTER_AUDIT or DRY_RUN or _successful_media_moves == 0:
+        return
+    try:
+        response = requests.post(
+            f"{JELLYFIN_URL}/Library/Refresh",
+            headers={"X-Emby-Token": JELLYFIN_TOKEN},
+            timeout=10,
+            allow_redirects=False,
+        )
+        response.raise_for_status()
+        if response.status_code >= 300:
+            raise requests.HTTPError(f"Unexpected Jellyfin refresh status: {response.status_code}")
+    except requests.RequestException as exc:
+        print(f"[JELLYFIN REFRESH FAILED] {exc}")
+        record_action("jellyfin_refresh_failed", "-", str(exc), "All", status="failed")
+        return
+    print(f"[JELLYFIN REFRESH] Requested library scan after {_successful_media_moves} successful media move(s).")
+    record_action("jellyfin_refresh", "-", f"Requested scan after {_successful_media_moves} successful media move(s)", "All")
+
+
 def run_once():
+    global _successful_media_moves
+    _successful_media_moves = 0
     global _actions_taken
     _actions_taken = 0      # the action cap applies per run
     _events.clear()
@@ -1140,6 +1168,7 @@ def run_once():
     finally:
         save_state(state)   # even if the run stops half way, what already moved is remembered
 
+    refresh_jellyfin_after_audit()
     record_action("run_complete", "-", f"{_actions_taken} hold/delete/prune actions this run", "All")
     print_run_summary()
     send_run_notification()
