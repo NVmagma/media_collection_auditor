@@ -5,7 +5,7 @@ from audit_history import read_history
 
 _lock = threading.Lock()
 _wake = threading.Event()
-_status = {"running": False, "queued": False, "last_started": None, "last_finished": None,
+_status = {"running": False, "rescuing": False, "queued": False, "last_started": None, "last_finished": None,
            "last_result": None, "next_run": None, "movies_processed": None,
            "tv_processed": None, "dry_run": None}
 
@@ -24,7 +24,7 @@ def snapshot():
 
 def request_run():
     with _lock:
-        if _status["running"] or _status["queued"]:
+        if _status["running"] or _status["rescuing"] or _status["queued"]:
             return False
         _status["queued"] = True
     _wake.set()
@@ -49,3 +49,14 @@ def wait_for_run(timeout):
     triggered = _wake.wait(timeout)
     _wake.clear()
     return triggered
+
+def begin_rescue():
+    with _lock:
+        if _status["running"] or _status["rescuing"] or _status["queued"]:
+            return False
+        _status["rescuing"] = True
+        return True
+
+def end_rescue():
+    with _lock:
+        _status["rescuing"] = False
