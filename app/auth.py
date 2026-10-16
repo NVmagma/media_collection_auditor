@@ -1,10 +1,27 @@
 """Jellyfin login and durable Flask session signing key."""
 import os
 import secrets
+import threading
 from pathlib import Path
 import requests
 from flask import session
 from config_store import load_config
+
+_TOKENS = {}
+_TOKEN_LOCK = threading.Lock()
+
+
+def store_token(token, user_id):
+    handle = secrets.token_urlsafe(32)
+    with _TOKEN_LOCK:
+        _TOKENS[handle] = (token, user_id)
+    return handle
+
+
+def discard_token(handle):
+    with _TOKEN_LOCK:
+        _TOKENS.pop(handle, None)
+
 
 KEY_FILE = Path(os.environ.get("WEB_SESSION_KEY_FILE", "/app/logs/web_session.key"))
 
@@ -54,8 +71,8 @@ def current_user():
         return {"name": "Local administrator", "admin": True}
     if session.get("provider") != "jellyfin":
         return None
-    token = session.get("jf_token")
-    user_id = session.get("jf_id")
+    with _TOKEN_LOCK:
+        token, user_id = _TOKENS.get(session.get("jf_handle"), (None, None))
     if not token or not user_id:
         return None
     try:
