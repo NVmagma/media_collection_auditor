@@ -10,7 +10,7 @@ from flask import Flask, render_template, request, Response, redirect, url_for, 
 from connection_tests import check_connection, SERVICES
 from audit_history import read_history
 from manual_rescue import rescue_title
-from auth import session_key, jellyfin_login, current_user, store_token, discard_token
+from auth import session_key, jellyfin_login, current_user, store_token, discard_token, verify_user
 from run_control import snapshot, request_run
 from config_store import FIELDS, KEYS, SECRETS, BOOLS, DEFAULTS, FIELD_HELP, load_config, save_config, validate
 
@@ -52,7 +52,11 @@ def login():
     password = request.form.get("password", "")
     if not username or not password:
         return render_template_string(LOGIN_PAGE, error="Enter a username and password."), 400
-    user = jellyfin_login(username, password)
+    user, login_error = jellyfin_login(username, password)
+    if user and not verify_user(user["token"], user["id"]):
+        user = None
+        login_error = "Jellyfin authenticated you, but the account could not be verified. Check Jellyfin permissions and the server URL."
+    discard_token(session.get("jf_handle"))
     session.clear()
     if user:
         session.update(provider="jellyfin", jf_handle=store_token(user["token"], user["id"]))
@@ -61,7 +65,7 @@ def login():
           and hmac.compare_digest(password, os.environ["WEB_ADMIN_PASSWORD"])):
         session["provider"] = "local"
     else:
-        return render_template_string(LOGIN_PAGE, error="Invalid credentials or Jellyfin unavailable."), 401
+        return render_template_string(LOGIN_PAGE, error=login_error or "Invalid credentials for the local administrator account."), 401
     session.permanent = True
     return redirect(url_for("dashboard"))
 
