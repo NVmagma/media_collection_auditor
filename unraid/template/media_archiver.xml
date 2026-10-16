@@ -4,18 +4,18 @@
   <Repository>ghcr.io/nvmagma/media_archiver:feature-unraid</Repository>
   <Registry>https://ghcr.io/</Registry>
   <Project>https://github.com/NVmagma/media_archiver</Project>
-  <Overview>Media Collection Auditor moves unneeded movies and TV shows through a Transient -&gt; Holding -&gt; Removal lifecycle using Jellyfin favorites/tags and optional Radarr/Sonarr integration. Start with DRY_RUN enabled and review logs before enabling live changes.</Overview>
+  <Overview>Media Collection Auditor moves unneeded movies and TV shows through a Transient -&gt; Holding -&gt; Removal lifecycle using Jellyfin favorites/tags and optional Radarr/Sonarr integration. The web dashboard provides a visual view of activity and logs.</Overview>
   <Category>MediaServer:Tools</Category>
-  <WebUI></WebUI>
+  <WebUI>http://[IP]:[PORT:8080]/</WebUI>
   <Support>https://github.com/NVmagma/media_archiver/issues</Support>
   <Privileged>false</Privileged>
   <Network>bridge</Network>
   <Shell>bash</Shell>
 
+  <Config Name="Web UI Port" Target="8080" Default="8080" Mode="tcp" Description="Host port for the Media Collection Auditor web dashboard." Type="Port" Display="always" Required="true" Mask="false">8080</Config>
+
   <!-- Persistent state and action logs -->
   <Config Name="Auditor Logs" Target="/app/logs" Default="/mnt/user/appdata/media_collection_auditor" Mode="rw" Description="Unraid folder for the auditor state file and JSONL action log." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/media_collection_auditor</Config>
-
-  <!-- Mount the parent folder containing your configured Movies/TV lifecycle folders. -->
   <Config Name="Media Library Root" Target="/media" Default="/mnt/user/media_storage" Mode="rw" Description="Host folder containing the lifecycle folders. Keep each library's Transient, Holding, Keep, and Removal folders on the same filesystem." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media_storage</Config>
 
   <!-- Fixed internal paths -->
@@ -37,7 +37,7 @@
   <Config Name="Sonarr URL" Target="SONARR_URL" Default="http://YOUR_SONARR_IP:8989" Mode="" Description="Sonarr URL. Configure when TV processing is enabled." Type="Variable" Display="advanced" Required="false" Mask="false">http://YOUR_SONARR_IP:8989</Config>
   <Config Name="Sonarr API Key" Target="SONARR_API_KEY" Default="" Mode="" Description="Sonarr API key. Configure when TV processing is enabled." Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
 
-  <!-- Safety: keep these conservative for initial installation -->
+  <!-- Safety -->
   <Config Name="Dry Run" Target="DRY_RUN" Default="true" Mode="" Description="Safety switch. true reports planned actions without moving or deleting media." Type="Variable" Display="always" Required="true" Mask="false">true</Config>
   <Config Name="Allow Filesystem Delete" Target="ALLOW_FILESYSTEM_DELETE" Default="false" Mode="" Description="Allow direct filesystem deletion when a title is not known to Radarr/Sonarr. Leave false unless intentionally enabling this fallback." Type="Variable" Display="advanced" Required="true" Mask="false">false</Config>
   <Config Name="Allow Cross Filesystem Moves" Target="ALLOW_CROSS_FILESYSTEM_MOVES" Default="false" Mode="" Description="Allow copy-then-delete moves across filesystems. Prefer keeping this false and placing each library's lifecycle folders on one filesystem." Type="Variable" Display="advanced" Required="true" Mask="false">false</Config>
