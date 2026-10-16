@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "app"))
 # Every setting the script reads. Cleared before each test so a developer's real environment
 # (or .env file) can never leak in and cause a test to talk to a real server.
 SETTINGS = [
-    "DRY_RUN", "JELLYFIN_HOST_URL", "JELLYFIN_API_TOKEN", "DISLIKE_TAG", "PROTECT_TAG",
+    "DRY_RUN", "JELLYFIN_HOST_URL", "JELLYFIN_API_TOKEN", "JELLYFIN_REFRESH_AFTER_AUDIT", "DISLIKE_TAG", "PROTECT_TAG",
     "RADARR_URL", "RADARR_API_KEY", "SONARR_URL", "SONARR_API_KEY",
     "ENABLE_MOVIES", "ENABLE_TV", "ENABLE_SEASON_PRUNING", "MEDIA_PATH", "STATE_FILE", "ACTION_LOG_FILE",
     "MOVIE_WAIT_DAYS", "TV_WAIT_DAYS", "HOLDING_DAYS", "REMOVAL_DAYS", "TV_NEW_EPISODES_RESET_CLOCK",
