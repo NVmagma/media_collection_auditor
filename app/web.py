@@ -47,7 +47,13 @@ def load_state():
 def dashboard():
     actions = load_actions()
     state = load_state()
-    return render_template("dashboard.html", actions=actions, state=state, run=snapshot(),\n                           dry_run=load_config().get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "true")
+    stages = {}
+    for label, section in (("Waiting", "first_seen"), ("Holding", "queued"), ("Removal", "in_removal"), ("Keep", "keep_seen")):
+        records = state.get(section, {})
+        stages[label] = [{"title": key[3:] if key.startswith("TV/") else key,
+                          "library": "TV" if key.startswith("TV/") else "Movies",
+                          "since": since} for key, since in records.items()]
+    return render_template("dashboard.html", actions=actions, state=state, stages=stages, run=snapshot(),\n                           dry_run=load_config().get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "true")
 
 
 @app.get("/logs")
