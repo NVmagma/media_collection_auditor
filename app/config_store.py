@@ -180,5 +180,5 @@ FIELD_HELP = {
   "NOTIFY_LEAVING_SOON_DIGEST": [
     "Include Leaving Soon Titles",
     "Include the list of titles currently in Holding in notifications."
-  )
+  ]
 }
