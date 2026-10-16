@@ -3,8 +3,6 @@ name: Docker Image
 on:
   push:
     branches:
-      - main
-      - features.v4
       - feature/unraid
   workflow_dispatch:
 
@@ -72,7 +70,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/nvmagma/media_archiver
+          images: ghcr.io/nvmagma/media_collection_auditor
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=branch
