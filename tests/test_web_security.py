@@ -52,6 +52,23 @@ class WebSecurityTests(unittest.TestCase):
             self.assertEqual(result.data, b"fake-image")
             self.assertIn("/Items/item-id/Images/Primary", get.call_args.args[0])
 
+    def test_friendly_dates(self):
+        self.assertEqual(web.friendly_date("2026-10-15T20:27:17.166650"), "Oct 15, 2026")
+        self.assertEqual(web.friendly_date("legacy"), "legacy")
+
+    def test_jellyfin_link_requires_login(self):
+        self.assertEqual(self.client.get("/api/jellyfin-link?library=Movies&title=Example").status_code, 401)
+
+    def test_jellyfin_link_redirects_to_item(self):
+        with patch.object(web, "current_user", return_value={"name": "Viewer", "admin": False}), patch.object(web, "_jellyfin_item_id", return_value=("http://jellyfin:8096", "abc123")):
+            response = self.client.get("/api/jellyfin-link?library=Movies&title=Example")
+            self.assertEqual(response.status_code, 302)
+            self.assertEqual(response.headers["Location"], "http://jellyfin:8096/web/index.html#!/details?id=abc123")
+
+    def test_jellyfin_link_missing_item(self):
+        with patch.object(web, "current_user", return_value={"name": "Viewer", "admin": False}), patch.object(web, "_jellyfin_item_id", return_value=("http://jellyfin:8096", None)):
+            self.assertEqual(self.client.get("/api/jellyfin-link?library=Movies&title=Missing").status_code, 404)
+
     def test_anonymous_cannot_request_poster(self):
         self.assertEqual(self.client.get("/api/poster?library=Movies&title=Example").status_code, 401)
 
