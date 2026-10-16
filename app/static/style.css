@@ -23,3 +23,9 @@
 .setting-description small{font-size:12px;line-height:1.45;color:#9aacc0;max-width:400px}.source-indicator{display:inline-block;margin-top:7px;padding:3px 8px;border:1px solid #32485f;border-radius:999px;color:#86b9ed;font-size:11px}.run-controls{display:flex;align-items:center;gap:14px;margin-top:16px}.run-controls button{background:#2c67c3;font-weight:650}.run-controls span{font-size:13px;color:#a8b9cc}.run-cards{grid-template-columns:repeat(3,minmax(0,1fr))}.run-cards strong.small-metric{font-size:15px;overflow-wrap:anywhere;line-height:1.5}@media(max-width:800px){.run-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.run-controls{flex-wrap:wrap}}@media(max-width:520px){.run-cards{grid-template-columns:1fr}}
 
 .history-actions{max-height:220px;overflow:auto;padding:8px 12px;border:1px solid #30415b;border-radius:6px;font-size:12px;line-height:1.8}.history-error{color:#ff9ca7}.dashboard-section details{min-width:100px}.dashboard-section summary{cursor:pointer;color:#89bfff}.dashboard-section details p{font-size:12px;line-height:1.5}.dashboard-section .table-wrap{overflow-x:auto}
+
+/* Signed-in account indicator shared by dashboard, logs, and settings. */
+.viewer-indicator{display:inline-flex;align-items:center;gap:8px;color:#dce9f8;font-size:13px;max-width:280px;overflow-wrap:anywhere}
+.viewer-role{display:inline-block;padding:3px 7px;border:1px solid #35526c;border-radius:999px;color:#9fb9d1;font-size:11px;white-space:nowrap}
+.topbar nav{align-items:center;flex-wrap:wrap}
+.sidebar-footer .viewer-indicator{display:flex;margin-bottom:12px;flex-wrap:wrap}
