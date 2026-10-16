@@ -67,6 +67,8 @@ DISLIKE_TAG = os.environ.get("DISLIKE_TAG", "not-at-all")  # Jellyfin tag meanin
 # Jellyfin tag meaning "never touch this": treated like a favorite (kept / rescued) and never season-pruned.
 # Unlike a favorite, it is one global switch set by an admin, not per family member.
 PROTECT_TAG = os.environ.get("PROTECT_TAG", "keep-forever")
+KEEP_TAG = os.environ.get("KEEP_TAG", "keep")
+FAVORITES_TRIGGER_KEEP = env_flag("FAVORITES_TRIGGER_KEEP", True)
 
 # Radarr (movies) and Sonarr (TV)
 RADARR_URL = os.environ.get("RADARR_URL", "").rstrip("/")
@@ -281,17 +283,19 @@ def get_signals(jellyfin_type: str) -> Dict[str, Dict[str, Any]]:
                 continue
             user_data = item.get("UserData", {})
             sig = signals.setdefault(folder, {"played": False, "favorite": False, "disliked": False,
-                                              "keep_all": False, "protected": False})
+                                              "keep_all": False, "protected": False, "keep": False})
             sig["played"] = sig["played"] or bool(user_data.get("Played")) or user_data.get("PlayCount", 0) > 0
             sig["favorite"] = sig["favorite"] or bool(user_data.get("IsFavorite"))
             tags = [t.lower() for t in item.get("Tags", [])]
+            if KEEP_TAG.lower() in tags:
+                sig["keep"] = True
             if DISLIKE_TAG.lower() in tags:
                 sig["disliked"] = True
             if KEEP_ALL_SEASONS_TAG.lower() in tags:
                 sig["keep_all"] = True
             if PROTECT_TAG.lower() in tags:
                 # Protected = treated as a favorite (kept / rescued) and never season-pruned.
-                sig["protected"] = sig["favorite"] = sig["keep_all"] = True
+                sig["protected"] = sig["keep_all"] = True
     return signals
 
 
@@ -769,12 +773,12 @@ def audit_holding(lib: dict, signals: dict, state: dict):
         key = state_key(lib, folder)
 
         sig = signals.get(folder)
-        if decide("Holding", None, HOLDING_DAYS, sig)[0] == "rescue":
-            print(f"\n[{lib['name']}: {folder}] In Holding but favorited: rescue to Keep.")
+        if decide("Holding", None, HOLDING_DAYS, sig, FAVORITES_TRIGGER_KEEP)[0] == "rescue":
+            print(f"\n[{lib['name']}: {folder}] {decide('Holding', None, HOLDING_DAYS, sig, FAVORITES_TRIGGER_KEEP)[1]} Rescue to Keep.")
             if move_or_report(lib, folder, path, lib["keep"]):
                 if not DRY_RUN:
                     state["queued"].pop(key, None)
-                record_action("rescue", folder, "favorited while in Holding", lib["name"])
+                record_action("rescue", folder, decide("Holding", None, HOLDING_DAYS, sig, FAVORITES_TRIGGER_KEEP)[1], lib["name"])
                 sync_arr(lib, folder, lib["app_keep"], monitored=True)
             continue
 
@@ -785,7 +789,7 @@ def audit_holding(lib: dict, signals: dict, state: dict):
                 state["queued"][key] = queued_at
         age = days_between(datetime.datetime.fromisoformat(queued_at))
 
-        if decide("Holding", age, HOLDING_DAYS, sig)[0] == "to_removal":
+        if decide("Holding", age, HOLDING_DAYS, sig, FAVORITES_TRIGGER_KEEP)[0] == "to_removal":
             print(f"\n[{lib['name']}: {folder}] In Holding {age}d, no favorite: move to Removal.")
             if move_or_report(lib, folder, path, lib["removal"]):
                 if not DRY_RUN:
@@ -828,17 +832,17 @@ def audit_transient(lib: dict, signals: dict, state: dict):
               f"favorite={sig['favorite']} disliked={sig['disliked']}")
 
         # Priority 1: favorited (watched or not) -> keep
-        if decide("Waiting", age, wait, sig)[0] == "keep":
-            print("-> Favorited (or protected): move to Keep.")
+        if decide("Waiting", age, wait, sig, FAVORITES_TRIGGER_KEEP)[0] == "keep":
+            print(f"-> {decide('Waiting', age, wait, sig, FAVORITES_TRIGGER_KEEP)[1]} Move to Keep.")
             if move_or_report(lib, folder, path, lib["keep"]):
-                record_action("keep", folder, "favorited", lib["name"])
+                record_action("keep", folder, decide("Waiting", age, wait, sig, FAVORITES_TRIGGER_KEEP)[1], lib["name"])
                 sync_arr(lib, folder, lib["app_keep"])
         # Priority 2: tagged not-at-all -> Holding right away
-        elif decide("Waiting", age, wait, sig)[0] == "hold" and sig["disliked"]:
+        elif decide("Waiting", age, wait, sig, FAVORITES_TRIGGER_KEEP)[0] == "hold" and sig["disliked"]:
             print("-> Tagged not-at-all: move to Holding.")
             move_to_holding(lib, folder, path, state, f"tagged {DISLIKE_TAG}")
         # Priority 3: still no decision after the waiting period -> Holding
-        elif decide("Waiting", age, wait, sig)[0] == "hold":
+        elif decide("Waiting", age, wait, sig, FAVORITES_TRIGGER_KEEP)[0] == "hold":
             print(f"-> No favorite after {wait}+ days: move to Holding.")
             move_to_holding(lib, folder, path, state, f"no favorite after {age} days")
         else:
@@ -890,7 +894,7 @@ def audit_keep_seasons(lib: dict, signals: dict, state: dict):
             print(f"{label} Not found in Jellyfin; can't check its tags, so leaving it alone.")
             continue
         if sig.get("keep_all"):
-            print(f"{label} Tagged '{KEEP_ALL_SEASONS_TAG}': keeping all seasons.")
+            print(f"{label} Protected by '{PROTECT_TAG}' or '{KEEP_ALL_SEASONS_TAG}': keeping all seasons.")
             continue
         if days_in_keep < SEASON_PRUNE_GRACE_DAYS:
             print(f"{label} In Keep {days_in_keep}d: no pruning for another "
