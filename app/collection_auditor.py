@@ -738,7 +738,7 @@ def move_to_holding(lib: dict, folder: str, path: str, state: dict, reason: str)
         sync_arr(lib, folder, lib["app_holding"], monitored=False)
 
 
-def audit_removal(lib: dict, state: dict):
+def audit_removal(lib: dict, state: dict, signals: dict):
     """Removal: after REMOVAL_DAYS the media is permanently deleted."""
     for folder in list_folders(lib["removal"]):
         path = os.path.join(lib["removal"], folder)
@@ -751,6 +751,15 @@ def audit_removal(lib: dict, state: dict):
                 state["in_removal"][key] = entered
         age = days_between(datetime.datetime.fromisoformat(entered))
 
+        sig = signals.get(folder)
+        if sig is None:
+            print(f"\n[{lib['name']}: {folder}] Removal paused: Jellyfin signals unavailable for this title.")
+            _stats["in_removal"] += 1
+            continue
+        if sig.get("protected") or sig.get("keep") or (FAVORITES_TRIGGER_KEEP and sig.get("favorite")):
+            print(f"\n[{lib['name']}: {folder}] Removal blocked: protected by Jellyfin keep tag or legacy favorite. Manual rescue required.")
+            _stats["in_removal"] += 1
+            continue
         if decide("Removal", age, REMOVAL_DAYS)[0] == "delete_candidate":
             print(f"\n[{lib['name']}: {folder}] In Removal {age}d: deleting permanently.")
             if action_allowed(f"delete {folder}", lib["name"]):
@@ -1123,7 +1132,7 @@ def run_once():
         for lib in libs:
             print(f"\n----- {lib['name']} -----")
             signals = get_signals(lib["jellyfin_type"])
-            audit_removal(lib, state)               # delete what has served its time in Removal
+            audit_removal(lib, state, signals)      # block deletion when Jellyfin protection is unknown or active
             audit_holding(lib, signals, state)      # rescue favorites / move expired items to Removal
             audit_transient(lib, signals, state)    # keep favorites / move undecided items to Holding
             if lib.get("prune_seasons"):
