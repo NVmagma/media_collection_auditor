@@ -5,7 +5,7 @@
 <aside class="sidebar">
 <a class="sidebar-brand" href="/"><img class="brand-icon" src="/static/auditor-badge.png" alt=""><span>Media<br>Auditor</span></a>
 <nav class="side-nav" aria-label="Main navigation"><a href="/">▦ <span>Dashboard</span></a><a href="/logs">☷ <span>Activity Logs</span></a><a class="active" href="/settings">⚙ <span>Settings</span></a></nav>
-<div class="sidebar-footer"><form method="post" action="/logout" style="display:inline"><button type="submit">Sign out</button></form></div>
+<div class="sidebar-footer"><span class="viewer-indicator" title="Signed in as {{ viewer.name }}">{{ viewer.name }} <span class="viewer-role">{{ "Administrator" if viewer.admin else "Read only" }}</span></span> <form method="post" action="/logout" style="display:inline"><button type="submit">Sign out</button></form></div>
 </aside>
 <div class="app-content">
 <header class="settings-header"><div><h1>Settings</h1><p>Manage your auditor without editing Docker environment variables.</p></div><span class="header-note">Changes apply next audit</span></header>
