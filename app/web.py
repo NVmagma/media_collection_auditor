@@ -10,7 +10,7 @@ from flask import Flask, render_template, request, Response, redirect, url_for, 
 from connection_tests import check_connection, SERVICES
 from audit_history import read_history
 from manual_rescue import rescue_title
-from auth import session_key, jellyfin_login, current_user
+from auth import session_key, jellyfin_login, current_user, store_token, discard_token
 from run_control import snapshot, request_run
 from config_store import FIELDS, KEYS, SECRETS, BOOLS, DEFAULTS, FIELD_HELP, load_config, save_config, validate
 
@@ -55,7 +55,7 @@ def login():
     user = jellyfin_login(username, password)
     session.clear()
     if user:
-        session.update(provider="jellyfin", jf_id=user["id"], jf_token=user["token"])
+        session.update(provider="jellyfin", jf_handle=store_token(user["token"], user["id"]))
     elif (os.environ.get("WEB_ADMIN_PASSWORD")
           and hmac.compare_digest(username, os.environ.get("WEB_ADMIN_USER", "admin"))
           and hmac.compare_digest(password, os.environ["WEB_ADMIN_PASSWORD"])):
