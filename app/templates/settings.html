@@ -1,28 +1,49 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Settings · Media Collection Auditor</title><link rel="stylesheet" href="/static/style.css"></head>
-<body>
-<header class="topbar"><div class="brand"><img class="brand-icon" src="/static/auditor-badge.png" alt="Auditor logo"><div><h1>Media Collection Auditor</h1><p>Configuration · saved to persistent appdata</p></div></div>
-<nav><a href="/">Dashboard</a><a href="/logs">Logs</a><a href="/settings">Settings</a></nav></header>
-<main><section class="hero"><strong>Changes take effect at the start of the next audit run. Blank non-secret fields use the Unraid environment fallback. Blank secret fields preserve their current value.</strong>
-<p>Do not expose this web interface directly to the internet. Settings access requires WEB_ADMIN_PASSWORD.</p></section>
-{% if error %}<section class="alert error">{{ error }}</section>{% endif %}
-{% if success %}<section class="alert">Settings saved. They will be used on the next audit run.</section>{% endif %}
-<form method="post" action="/settings">
+<body class="app-shell">
+<aside class="sidebar">
+<a class="sidebar-brand" href="/"><img class="brand-icon" src="/static/auditor-badge.png" alt=""><span>Media<br>Auditor</span></a>
+<nav class="side-nav" aria-label="Main navigation"><a href="/">▦ <span>Dashboard</span></a><a href="/logs">☷ <span>Activity Logs</span></a><a class="active" href="/settings">⚙ <span>Settings</span></a></nav>
+<div class="sidebar-footer">Media Collection Auditor</div>
+</aside>
+<div class="app-content">
+<header class="settings-header"><div><h1>Settings</h1><p>Manage your auditor without editing Docker environment variables.</p></div><span class="header-note">Changes apply next audit</span></header>
+<main class="settings-main">
+<nav class="settings-tabs" aria-label="Settings categories">
+{% for group in groups %}<button type="button" class="tab-button{% if loop.first %} selected{% endif %}" data-tab="{{ group }}" aria-selected="{{ 'true' if loop.first else 'false' }}">{{ group }}</button>{% endfor %}
+</nav>
+{% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
+{% if success %}<div class="alert" role="status">Settings saved. Changes will apply at the next audit run.</div>{% endif %}
+<form method="post" action="/settings" id="settings-form">
 {% for group, keys in groups.items() %}
-<section class="panel settings-panel"><h2>{{ group }}</h2><div class="settings-grid">
+<section class="settings-section{% if not loop.first %} hidden-section{% endif %}" data-panel="{{ group }}">
+<h2>{{ group }} Settings</h2>
+<p class="section-description">{% if group == 'Connections' %}Connect to your media services. Leave password fields empty to keep existing credentials.{% elif group == 'Libraries' %}Choose which libraries are managed and how titles are protected.{% elif group == 'Lifecycle' %}Set how long media stays in each stage before progressing.{% elif group == 'Safety' %}Control dry-run mode and destructive operations. Keep dry-run enabled while testing.{% else %}Configure where audit notifications are sent.{% endif %}</p>
 {% for key in keys %}
-<label class="setting"><span>{{ key.replace('_', ' ').title() }}</span>
+<div class="setting-row">
+<div class="setting-description"><label for="field-{{ key }}">{{ key.replace('_', ' ').title() }}</label><small>{{ key }}</small></div>
+<div class="setting-control">
 {% if key in bools %}
-<select name="{{ key }}"><option value="true" {% if values[key]|lower == 'true' %}selected{% endif %}>Enabled / true</option><option value="false" {% if values[key]|lower == 'false' %}selected{% endif %}>Disabled / false</option></select>
+<select id="field-{{ key }}" name="{{ key }}"><option value="true" {% if values[key]|lower == 'true' %}selected{% endif %}>Enabled</option><option value="false" {% if values[key]|lower == 'false' %}selected{% endif %}>Disabled</option></select>
 {% else %}
-<input name="{{ key }}" type="{{ 'password' if key in secrets else 'text' }}" value="{{ values[key] }}" autocomplete="off" placeholder="{{ 'Leave blank to keep existing secret' if key in secrets else 'Use Unraid default if blank' }}">
+<input id="field-{{ key }}" name="{{ key }}" type="{{ 'password' if key in secrets else 'text' }}" value="{{ values[key] }}" autocomplete="off" placeholder="{{ 'Leave blank to keep existing secret' if key in secrets else 'Unraid default if blank' }}">
 {% endif %}
-<small>{{ key }}</small></label>
+</div></div>
 {% endfor %}
-</div></section>
+</section>
 {% endfor %}
-<section class="panel settings-panel"><h2>Save configuration</h2><p class="muted">For potentially destructive settings, type <strong>I UNDERSTAND</strong> to confirm. Keep Dry Run enabled while testing.</p>
-<label class="setting"><span>Safety confirmation</span><input name="safety_confirmation" autocomplete="off" placeholder="I UNDERSTAND (when required)"></label>
-<p><button type="submit">Save settings</button></p></section>
-</form></main></body></html>
+<div class="save-panel"><div><strong>Save configuration</strong><p>Settings are stored in persistent appdata. Potentially destructive options require confirmation.</p>
+<label class="confirm-label" for="safety_confirmation">Safety confirmation (when required)</label>
+<input id="safety_confirmation" name="safety_confirmation" autocomplete="off" placeholder="Type I UNDERSTAND"></div>
+<button class="save-button" type="submit">Save Changes</button></div>
+</form></main></div>
+<script>
+const tabs = document.querySelectorAll('[data-tab]');
+const panels = document.querySelectorAll('[data-panel]');
+function showTab(name) {
+  tabs.forEach(tab => { const active = tab.dataset.tab === name; tab.classList.toggle('selected', active); tab.setAttribute('aria-selected', String(active)); });
+  panels.forEach(panel => panel.classList.toggle('hidden-section', panel.dataset.panel !== name));
+}
+tabs.forEach(tab => tab.addEventListener('click', () => showTab(tab.dataset.tab)));
+</script></body></html>
