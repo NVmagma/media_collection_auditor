@@ -17,7 +17,16 @@
   <main>
     <section class="hero">
       <div><span class="status-dot"></span> Auditor is running</div>
-      <strong>Dry-run safety remains controlled by the container configuration.</strong>
+      <strong>Current configuration: {{ 'Dry Run (preview only)' if dry_run else 'LIVE MODE — changes to media are enabled' }}</strong>
+      <div class="run-controls"><button id="run-now" type="button">Run Now</button><span id="run-result" role="status" aria-live="polite">Manual runs require your Settings login.</span></div>
+    </section>
+    <section class="cards run-cards">
+      <article><span>Audit status</span><strong>{{ 'Running' if run.running else 'Queued' if run.queued else run.last_result|capitalize if run.last_result else 'Waiting' }}</strong></article>
+      <article><span>Last audit</span><strong class="small-metric">{{ run.last_finished or 'Not yet recorded' }}</strong></article>
+      <article><span>Next scheduled audit</span><strong class="small-metric">{{ run.next_run or 'Manual only / pending' }}</strong></article>
+      <article><span>Mode</span><strong>{{ 'Dry Run' if dry_run else 'Live' }}</strong></article>
+      <article><span>Movies processed (last run)</span><strong>{{ run.movies_processed if run.movies_processed is not none else '—' }}</strong></article>
+      <article><span>TV folders processed (last run)</span><strong>{{ run.tv_processed if run.tv_processed is not none else '—' }}</strong></article>
     </section>
     <section class="cards">
       <article><span>Recent actions</span><strong>{{ actions|length }}</strong></article>
@@ -34,5 +43,20 @@
       {% else %}<p class="empty">No action log entries yet.</p>{% endif %}
     </section>
   </main>
-</body>
+<script>
+const button = document.getElementById('run-now');
+button.addEventListener('click', async () => {
+  if (!confirm('Start an audit using your saved configuration? In Live Mode this may move or delete media.')) return;
+  button.disabled = true;
+  const output = document.getElementById('run-result');
+  output.textContent = 'Requesting audit…';
+  try {
+    const response = await fetch('/api/run-now', {method:'POST', credentials:'same-origin'});
+    const data = await response.json();
+    output.textContent = data.message || 'Request failed.';
+    if (response.status === 401) output.textContent = 'Please open Settings to sign in, then try again.';
+  } catch (error) { output.textContent = 'Unable to request an audit.'; }
+  finally { button.disabled = false; }
+});
+</script></body>
 </html>
