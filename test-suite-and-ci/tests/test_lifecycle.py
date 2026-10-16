@@ -22,6 +22,8 @@ def build_library(a):
     a.movie("Rescued (1999)", favorite=True)
     a.movie("Expired (1998)")
     a.movie("Still Holding (1997)")
+    a.movie("Overdue (1996)")
+    a.movie("Recent (1995)")
 
 
 def seed_state(a):
@@ -271,6 +273,7 @@ def test_holding_time_boundary(make_auditor, days, expected):
 def test_removal_time_boundary(make_auditor, days, expected):
     a = make_auditor()
     a.add("Movies_removal", "Edge (2000)")
+    a.movie("Edge (2000)")
     a.logs.mkdir()
     (a.logs / "auditor_state.json").write_text(json.dumps({"in_removal": {}}))
     a.set_state("in_removal", "Edge (2000)", days)
