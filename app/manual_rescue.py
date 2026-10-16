@@ -2,6 +2,8 @@
 import datetime
 import importlib
 import os
+import json
+from audit_history import new_record, finish_record
 from run_control import begin_rescue, end_rescue
 
 def rescue_title(library, title, destination):
@@ -47,8 +49,25 @@ def rescue_title(library, title, destination):
             state["keep_seen"].pop(key, None)
         else:
             state["keep_seen"][key] = now
-        auditor.save_state(state)
+        # Save state atomically and surface failures rather than swallowing them.
+        state_file = auditor.STATE_FILE
+        tmp_file = state_file + ".rescue.tmp"
+        os.makedirs(os.path.dirname(state_file), exist_ok=True)
+        with open(tmp_file, "w", encoding="utf-8") as handle:
+            json.dump(state, handle, indent=2)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_file, state_file)
         auditor.record_action("manual_rescue", title, "Removal to " + destination, library)
+        history = new_record("manual_rescue", False)
+        finish_record(history, "completed", {
+            "movies_processed": 1 if library == "Movies" else 0,
+            "tv_processed": 1 if library == "TV" else 0,
+            "action_counts": {"manual_rescue": 1},
+            "status_counts": {"done": 1},
+            "actions": [{"library": library, "folder": title, "action": "manual_rescue",
+                         "status": "done", "time": history["started_at"]}]
+        })
         root = lib["app_keep"] if destination == "keep" else lib["app_holding"]
         if not lib["arr"].notify_moved(title, root, destination == "keep"):
             auditor.record_action("arr_sync_failed", title, "Manual rescue moved media but Arr update failed",
