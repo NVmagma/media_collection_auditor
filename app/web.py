@@ -221,7 +221,7 @@ def poster():
         index = _poster_index(base, token, media_type)
         normalized = title.casefold()
         # Folder is authoritative; only fall back to a display-title match.
-        display_name = re.sub(r"\\s*\\(\\d{4}\\)\\s*$", "", title).strip().casefold()
+        display_name = re.sub(r"\s*\(\d{4}\)\s*$", "", title).strip().casefold()
         item_id = (index.get(normalized) or index.get("name:" + normalized)
                    or index.get("name:" + display_name))
         if not item_id:
