@@ -5,6 +5,7 @@ from urllib.parse import urlsplit
 from pathlib import Path
 from flask import Flask, render_template, request, Response, redirect, url_for
 
+from connection_tests import check_connection, SERVICES
 from config_store import FIELDS, KEYS, SECRETS, BOOLS, DEFAULTS, load_config, save_config, validate
 
 app = Flask(__name__)
@@ -102,6 +103,18 @@ def settings():
     return render_template("settings.html", groups=FIELDS, values=values,
                            secrets=SECRETS, bools=BOOLS, error=error,
                            success=success)
+
+
+@app.post("/api/test-connection/<service>")
+def test_connection(service):
+    if not admin_authorized():
+        return {"ok": False, "message": "Authentication required."}, 401
+    origin = request.headers.get("Origin") or request.headers.get("Referer")
+    if not origin or urlsplit(origin).netloc != request.host:
+        return {"ok": False, "message": "Invalid request origin."}, 403
+    if service not in SERVICES:
+        return {"ok": False, "message": "Unknown service."}, 404
+    return check_connection(service)
 
 
 @app.get("/health")
