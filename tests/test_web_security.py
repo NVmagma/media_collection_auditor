@@ -104,6 +104,20 @@ class WebSecurityTests(unittest.TestCase):
             self.assertIn(b"TV Shows", response.data)
             self.assertIn(b"Movies", response.data)
 
+    def test_dashboard_preview_is_read_only_and_explains_stages(self):
+        with patch.object(web, "current_user", return_value={"name": "Viewer", "admin": False}), \
+             patch.object(web, "load_actions", return_value=[]), \
+             patch.object(web, "load_state", return_value={"first_seen": {"Example (2020)": "2020-01-01T00:00:00"}, "queued": {}, "in_removal": {}, "keep_seen": {}}), \
+             patch.object(web, "load_config", return_value={"DRY_RUN": "true"}), \
+             patch.object(web, "snapshot", return_value={"running": False, "queued": False, "last_result": None, "last_finished": None, "next_run": None, "movies_processed": None, "tv_processed": None}), \
+             patch.object(web, "read_history", return_value=[]):
+            response = self.client.get("/")
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(b"Audit Preview", response.data)
+            self.assertIn(b"Review for move to Holding", response.data)
+            self.assertIn(b"Why this stage?", response.data)
+            self.assertIn(b"not a simulation", response.data)
+
     def test_admin_requests_reject_missing_origin(self):
         with patch.object(web, "current_user", return_value={"name": "Admin", "admin": True}):
             self.assertEqual(self.client.post("/api/run-now").status_code, 403)
