@@ -12,6 +12,8 @@ COPY app/main.py .
 COPY app/web.py .
 COPY app/templates ./templates
 COPY app/static ./static
+COPY unraid/assets/Media_Collection_Auditor_Badge.png ./static/auditor-badge.png
+COPY app/config_store.py .
 
 EXPOSE 8080
 
