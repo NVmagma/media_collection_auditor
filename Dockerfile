@@ -18,6 +18,7 @@ COPY app/connection_tests.py .
 COPY app/run_control.py .
 COPY app/audit_history.py .
 COPY app/manual_rescue.py .
+COPY app/auth.py .
 
 EXPOSE 8080
 
