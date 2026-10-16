@@ -31,6 +31,14 @@
 {% endif %}
 </div></div>
 {% endfor %}
+{% if group == 'Connections' %}
+<div class="connection-tests">
+<h3>Test saved connections</h3><p class="section-description">Save your connection settings first. Tests use saved settings or Unraid defaults, and never change your media.</p>
+{% for service in ['jellyfin', 'radarr', 'sonarr'] %}
+<div class="connection-test-row"><span>{{ service|capitalize }}</span><button type="button" class="test-button" data-test-service="{{ service }}">Test Connection</button><span class="test-result" data-test-result="{{ service }}" role="status" aria-live="polite"></span></div>
+{% endfor %}
+</div>
+{% endif %}
 </section>
 {% endfor %}
 <div class="save-panel"><div><strong>Save configuration</strong><p>Settings are stored in persistent appdata. Potentially destructive options require confirmation.</p>
@@ -46,4 +54,28 @@ function showTab(name) {
   panels.forEach(panel => panel.classList.toggle('hidden-section', panel.dataset.panel !== name));
 }
 tabs.forEach(tab => tab.addEventListener('click', () => showTab(tab.dataset.tab)));
+document.querySelectorAll('[data-test-service]').forEach(button => {
+  button.addEventListener('click', async () => {
+    const service = button.dataset.testService;
+    const result = document.querySelector('[data-test-result="' + service + '"]');
+    button.disabled = true;
+    result.textContent = 'Testing…';
+    result.className = 'test-result';
+    try {
+      const response = await fetch('/api/test-connection/' + service, {
+        method: 'POST',
+        headers: {'Accept': 'application/json'},
+        credentials: 'same-origin'
+      });
+      const data = await response.json();
+      result.textContent = data.message || 'Unable to complete test.';
+      result.classList.add(data.ok ? 'test-success' : 'test-failure');
+    } catch (error) {
+      result.textContent = 'Request failed. Please try again.';
+      result.classList.add('test-failure');
+    } finally {
+      button.disabled = false;
+    }
+  });
+});
 </script></body></html>
