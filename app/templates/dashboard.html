@@ -34,7 +34,24 @@
       <article><span>Holding records</span><strong>{{ state.get('queued', {})|length }}</strong></article>
       <article><span>Removal records</span><strong>{{ state.get('in_removal', {})|length }}</strong></article>
     </section>
-    <section class="panel">
+    <nav class="settings-tabs" aria-label="Dashboard sections">
+      {% for tab in ['Overview','Waiting','Holding','Removal','Keep','Activity'] %}
+      <button type="button" class="tab-button{% if loop.first %} selected{% endif %}" data-tab="{{ tab }}">{{ tab }}</button>
+      {% endfor %}
+    </nav>
+    {% for stage in ['Waiting','Holding','Removal','Keep'] %}
+    <section class="panel dashboard-section hidden-section" data-panel="{{ stage }}">
+      <div class="panel-heading"><h2>{{ stage }} <span class="stage-count">({{ stages[stage]|length }})</span></h2></div>
+      {% if stage == 'Removal' %}<p class="muted">Titles here may become eligible for deletion. Rescue controls will be added after safe move and state synchronization are implemented.</p>{% endif %}
+      {% if stages[stage] %}
+      <div class="table-wrap"><table><thead><tr><th>Title</th><th>Library</th><th>Tracked since</th></tr></thead><tbody>
+      {% for item in stages[stage] %}<tr><td>{{ item.title }}</td><td>{{ item.library }}</td><td>{{ item.since }}</td></tr>{% endfor %}
+      </tbody></table></div>
+      {% else %}<p class="empty">No tracked titles in {{ stage }}.</p>{% endif %}
+    </section>
+    {% endfor %}
+    <section class="panel dashboard-section" data-panel="Overview"><h2>Library overview</h2><p class="muted">Select a lifecycle tab to see individual titles. Activity shows recent actions.</p></section>
+    <section class="panel dashboard-section hidden-section" data-panel="Activity">
       <div class="panel-heading"><h2>Recent activity</h2><a href="/logs">View all logs →</a></div>
       {% if actions %}
       <div class="table-wrap"><table><thead><tr><th>Time</th><th>Library</th><th>Action</th><th>Status</th><th>Folder</th><th>Detail</th></tr></thead><tbody>
@@ -44,6 +61,12 @@
     </section>
   </main>
 <script>
+const tabs = document.querySelectorAll('[data-tab]');
+const panels = document.querySelectorAll('[data-panel]');
+tabs.forEach(tab => tab.addEventListener('click', () => {
+  tabs.forEach(t => t.classList.toggle('selected', t === tab));
+  panels.forEach(p => p.classList.toggle('hidden-section', p.dataset.panel !== tab.dataset.tab));
+}));
 const button = document.getElementById('run-now');
 button.addEventListener('click', async () => {
   if (!confirm('Start an audit using your saved configuration? In Live Mode this may move or delete media.')) return;
