@@ -5,7 +5,7 @@ from datetime import timedelta
 from datetime import datetime
 from urllib.parse import urlsplit
 from pathlib import Path
-from flask import Flask, render_template, request, Response, redirect, url_for, session, g, render_template_string
+from flask import Flask, render_template, request, Response, redirect, url_for, session, g, render_template_string, send_file
 
 from connection_tests import check_connection, SERVICES
 from audit_history import read_history
@@ -14,7 +14,7 @@ from auth import session_key, jellyfin_login, current_user, store_token, discard
 from run_control import snapshot, request_run
 from config_store import FIELDS, KEYS, SECRETS, BOOLS, DEFAULTS, FIELD_HELP, load_config, save_config, validate
 
-LOGIN_PAGE = "<html><head><title>Media Auditor Sign In</title></head><body><h1>Media Collection Auditor</h1><p>Sign in with Jellyfin or emergency admin.</p>{% if error %}<p>{{ error }}</p>{% endif %}<form method=\"post\" action=\"/login\"><label>Username <input name=\"username\" required></label><label>Password <input name=\"password\" type=\"password\" required></label><button>Sign in</button></form></body></html>"
+LOGIN_PAGE = "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Sign In · Media Collection Auditor</title><style>\n*{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Inter,system-ui,-apple-system,sans-serif;color:#f2f6ff;background:#06101d}\n.login-scene{min-height:100dvh;background-image:linear-gradient(180deg,rgba(3,8,18,.04) 0%,rgba(3,8,18,.1) 45%,rgba(3,8,18,.6) 100%),url('/login-background');background-position:center center;background-size:cover;display:flex;align-items:flex-end;justify-content:center;padding:32px 20px 5vh}\n.login-panel{width:min(100%,530px);padding:24px 28px 26px;border:1px solid #48759e;border-radius:15px;background:rgba(5,14,27,.9);box-shadow:0 20px 70px #000a;backdrop-filter:blur(14px)}\nh1{text-align:center;font-size:23px;margin:0 0 8px}p.subtitle{text-align:center;font-size:13px;color:#b6c7da;margin:0 0 22px}\nlabel{display:block;font-size:13px;margin:14px 0 7px;color:#c5d6e9}input{display:block;width:100%;background:#0b1a2a;color:white;border:1px solid #536b85;border-radius:9px;padding:14px;font:inherit}input:focus{outline:2px solid #1b91f5;outline-offset:1px}button{display:block;width:100%;border:0;border-radius:9px;margin-top:20px;padding:14px;background:linear-gradient(#168eff,#0068d3);font-weight:700;color:white;font-size:16px;cursor:pointer}button:hover{filter:brightness(1.12)}.error{padding:12px;border:1px solid #c56a6a;background:#451b2a;border-radius:8px;font-size:13px}.note{font-size:12px;color:#9cb0c5;text-align:center;margin-top:15px}\n@media(max-width:650px){.login-scene{background-position:center top;padding:18px 12px 3vh}.login-panel{padding:20px 18px}h1{font-size:20px}}\n</style></head><body><main class=\"login-scene\"><section class=\"login-panel\"><h1>Sign in with Jellyfin</h1><p class=\"subtitle\">Use your Jellyfin account to access Media Collection Auditor.</p>{% if error %}<p class=\"error\" role=\"alert\">{{ error }}</p>{% endif %}<form method=\"post\" action=\"/login\"><label for=\"username\">Username</label><input id=\"username\" name=\"username\" autocomplete=\"username\" maxlength=\"128\" required autofocus><label for=\"password\">Password</label><input id=\"password\" name=\"password\" type=\"password\" autocomplete=\"current-password\" required><button type=\"submit\">Sign In</button></form><p class=\"note\">Jellyfin administrators can manage settings and rescue titles.</p></section></main></body></html>"
 app = Flask(__name__)
 app.secret_key = session_key()
 app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
@@ -23,7 +23,7 @@ app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
 
 @app.before_request
 def require_login():
-    if request.endpoint in ("login", "health", "static"):
+    if request.endpoint in ("login", "login_background", "health", "static"):
         return None
     g.user = current_user()
     if g.user is None:
@@ -38,6 +38,13 @@ def require_login():
 @app.context_processor
 def user_context():
     return {"viewer": getattr(g, "user", None)}
+
+@app.get("/login-background")
+def login_background():
+    path = Path(os.environ.get("WEB_LOGIN_IMAGE_FILE", "/app/logs/login-background.jpg"))
+    if path.is_file():
+        return send_file(path, mimetype="image/jpeg", max_age=3600)
+    return Response(status=404)
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
