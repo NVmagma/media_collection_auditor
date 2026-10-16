@@ -6,6 +6,7 @@ from pathlib import Path
 from flask import Flask, render_template, request, Response, redirect, url_for
 
 from connection_tests import check_connection, SERVICES
+from run_control import snapshot, request_run
 from config_store import FIELDS, KEYS, SECRETS, BOOLS, DEFAULTS, load_config, save_config, validate
 
 app = Flask(__name__)
@@ -46,7 +47,7 @@ def load_state():
 def dashboard():
     actions = load_actions()
     state = load_state()
-    return render_template("dashboard.html", actions=actions, state=state)
+    return render_template("dashboard.html", actions=actions, state=state, run=snapshot(),\n                           dry_run=load_config().get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "true")
 
 
 @app.get("/logs")
@@ -98,10 +99,12 @@ def settings():
             error = str(exc)
     values = {key: saved.get(key, os.environ.get(key, DEFAULTS.get(key, "")))
               for key in KEYS}
+    sources = {key: ("Web override" if key in saved else
+                     "Unraid" if key in os.environ else "Default") for key in KEYS}
     for key in SECRETS:
         values[key] = ""  # Never send stored tokens to the browser.
     return render_template("settings.html", groups=FIELDS, values=values,
-                           secrets=SECRETS, bools=BOOLS, error=error,
+                           secrets=SECRETS, bools=BOOLS, sources=sources, error=error,
                            success=success)
 
 
@@ -115,6 +118,18 @@ def test_connection(service):
     if service not in SERVICES:
         return {"ok": False, "message": "Unknown service."}, 404
     return check_connection(service)
+
+
+@app.post("/api/run-now")
+def run_now():
+    if not admin_authorized():
+        return {"ok": False, "message": "Authentication required."}, 401
+    origin = request.headers.get("Origin") or request.headers.get("Referer")
+    if not origin or urlsplit(origin).netloc != request.host:
+        return {"ok": False, "message": "Invalid request origin."}, 403
+    if request_run():
+        return {"ok": True, "message": "Audit queued. Refresh the dashboard for results."}, 202
+    return {"ok": False, "message": "An audit is already running or queued."}, 409
 
 
 @app.get("/health")
