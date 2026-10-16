@@ -12,7 +12,7 @@
       <h1><img class="brand-icon" src="/static/auditor-badge.png" alt="Auditor logo"> Media Collection Auditor</h1>
       <p>Keep your library clean, organized &amp; complete.</p>
     </div>
-    <nav><a href="/">Dashboard</a><a href="/logs">Logs</a>{% if viewer.admin %}<a href="/settings">Settings</a>{% endif %} <form method="post" action="/logout" style="display:inline"><button type="submit">Sign out</button></form></nav>
+    <nav><a href="/">Dashboard</a><a href="/logs">Logs</a>{% if viewer.admin %}<a href="/settings">Settings</a>{% endif %} <span class="viewer-indicator" title="Signed in as {{ viewer.name }}">{{ viewer.name }} <span class="viewer-role">{{ "Administrator" if viewer.admin else "Read only" }}</span></span> <form method="post" action="/logout" style="display:inline"><button type="submit">Sign out</button></form></nav>
   </header>
   <main>
     <section class="hero">
