@@ -94,3 +94,22 @@ def test_protected_movie_is_kept_even_without_a_family_favorite(make_auditor):
     a.run()
 
     assert a.where("Protected (2005)") == "Movies_keep"
+
+def test_keep_move_updates_dashboard_state(make_auditor):
+    a = make_auditor()
+    a.add("Movies", "Keep Me (2001)")
+    a.movie("Keep Me (2001)", keep=True)
+    a.run()
+    assert a.where("Keep Me (2001)") == "Movies_keep"
+    state = a.state()
+    assert "Keep Me (2001)" in state["keep_seen"]
+    assert "Keep Me (2001)" not in state["first_seen"]
+
+
+def test_dry_run_keep_does_not_claim_physical_move(make_auditor):
+    a = make_auditor(DRY_RUN="true")
+    a.add("Movies", "Keep Me (2001)")
+    a.movie("Keep Me (2001)", keep=True)
+    a.run()
+    assert a.where("Keep Me (2001)") == "Movies"
+    assert "Keep Me (2001)" not in a.state()["keep_seen"]
