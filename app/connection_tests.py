@@ -39,7 +39,7 @@ def check_connection(service):
             info = response.json()
         except ValueError:
             return {"ok": False, "message": "Server did not return valid JSON."}, 200
-        if not isinstance(info, list) if service == "jellyfin" else not isinstance(info, dict):
+        if not isinstance(info, list if service == "jellyfin" else dict):
             return {"ok": False, "message": "Unexpected server response."}, 200
         return {"ok": True, "message": f"Connected to {service.capitalize()} successfully."}, 200
     except requests.exceptions.Timeout:
