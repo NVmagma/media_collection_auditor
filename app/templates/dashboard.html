@@ -12,13 +12,13 @@
       <h1><img class="brand-icon" src="/static/auditor-badge.png" alt="Auditor logo"> Media Collection Auditor</h1>
       <p>Keep your library clean, organized &amp; complete.</p>
     </div>
-    <nav><a href="/">Dashboard</a><a href="/logs">Logs</a><a href="/settings">Settings</a></nav>
+    <nav><a href="/">Dashboard</a><a href="/logs">Logs</a>{% if viewer.admin %}<a href="/settings">Settings</a>{% endif %} <form method="post" action="/logout" style="display:inline"><button type="submit">Sign out</button></form></nav>
   </header>
   <main>
     <section class="hero">
       <div><span class="status-dot"></span> Auditor is running</div>
       <strong>Current configuration: {{ 'Dry Run (preview only)' if dry_run else 'LIVE MODE — changes to media are enabled' }}</strong>
-      <div class="run-controls"><button id="run-now" type="button">Run Now</button><span id="run-result" role="status" aria-live="polite">Manual runs require your Settings login.</span></div>
+      {% if viewer.admin %}<div class="run-controls"><button id="run-now" type="button">Run Now</button><span id="run-result" role="status" aria-live="polite">Administrator access required.</span></div>{% endif %}
     </section>
     <section class="cards run-cards">
       <article><span>Audit status</span><strong>{{ 'Running' if run.running else 'Queued' if run.queued else run.last_result|capitalize if run.last_result else 'Waiting' }}</strong></article>
@@ -44,8 +44,8 @@
       <div class="panel-heading"><h2>{{ stage }} <span class="stage-count">({{ stages[stage]|length }})</span></h2></div>
       {% if stage == 'Removal' %}<p class="muted">Select a rescue action. Dry Run only previews the move.</p>{% endif %}
       {% if stages[stage] %}
-      <div class="table-wrap"><table><thead><tr><th>Title</th><th>Library</th><th>Tracked since</th>{% if stage == "Removal" %}<th>Days left</th><th>Rescue</th>{% endif %}</tr></thead><tbody>
-      {% for item in stages[stage] %}<tr><td>{{ item.title }}</td><td>{{ item.library }}</td><td>{{ item.since }}</td>{% if stage == "Removal" %}<td>{{ item.days_left if item.days_left is not none else "Unknown" }}</td><td><select class="rescue-choice" data-library="{{ item.library }}" data-title="{{ item.title }}"><option value="">Choose action…</option><option value="keep">Move to Keep</option><option value="holding">Return to Holding</option></select></td>{% endif %}</tr>{% endfor %}
+      <div class="table-wrap"><table><thead><tr><th>Title</th><th>Library</th><th>Tracked since</th>{% if stage == "Removal" %}<th>Days left</th>{% if viewer.admin %}<th>Rescue</th>{% endif %}{% endif %}</tr></thead><tbody>
+      {% for item in stages[stage] %}<tr><td>{{ item.title }}</td><td>{{ item.library }}</td><td>{{ item.since }}</td>{% if stage == "Removal" %}<td>{{ item.days_left if item.days_left is not none else "Unknown" }}</td>{% if viewer.admin %}<td><select class="rescue-choice" data-library="{{ item.library }}" data-title="{{ item.title }}"><option value="">Choose action…</option><option value="keep">Move to Keep</option><option value="holding">Return to Holding</option></select></td>{% endif %}{% endif %}</tr>{% endfor %}
       </tbody></table></div>
       {% else %}<p class="empty">No tracked titles in {{ stage }}.</p>{% endif %}
     </section>
