@@ -29,3 +29,17 @@
 .viewer-role{display:inline-block;padding:3px 7px;border:1px solid #35526c;border-radius:999px;color:#9fb9d1;font-size:11px;white-space:nowrap}
 .topbar nav{align-items:center;flex-wrap:wrap}
 .sidebar-footer .viewer-indicator{display:flex;margin-bottom:12px;flex-wrap:wrap}
+
+/* Independent movie and TV lifecycle navigation. */
+.library-overview{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:20px}
+.library-overview-card{display:flex;flex-direction:column;align-items:flex-start;gap:12px;text-align:left;background:#172438;border:1px solid #334c68;border-radius:12px;padding:24px;min-height:160px}
+.library-overview-card:hover{background:#203450;border-color:#70acff}
+.library-overview-card strong{font-size:24px;color:#eef6ff}
+.library-overview-card span{font-size:13px;color:#a9bed5;line-height:1.6}
+.library-overview-card .library-card-link{color:#70acff;font-weight:700;margin-top:auto}
+.lifecycle-tabs{display:flex;gap:10px;flex-wrap:wrap;border-bottom:1px solid #293b50;padding:0 0 15px;margin:12px 0 22px}
+.lifecycle-tab{background:#172438;color:#b9cce0;border:1px solid #2b405a;border-radius:9px;padding:10px 16px;font-size:14px}
+.lifecycle-tab.selected{background:#1d4269;color:#fff;border-color:#70acff}
+.lifecycle-tab .stage-count{margin-left:6px;color:#9fb9d1;font-size:12px}
+.lifecycle-panel h3{margin:0 0 16px;font-size:18px}
+@media(max-width:650px){.library-overview{grid-template-columns:1fr}}
