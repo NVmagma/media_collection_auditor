@@ -8,6 +8,53 @@ New movies and TV shows land in a **transient** folder. Your family has a window
 
 ---
 
+## Unraid dashboard (feature/unraid)
+
+The `feature/unraid` branch includes a Flask web dashboard and an Unraid-oriented Docker image. **This branch is still undergoing validation; do not treat a successful image build alone as approval to deploy it with live deletion enabled.** The original command-line audit remains available for local development.
+
+### Dashboard features
+
+- **Overview:** current run status, last and next scheduled audits, dry-run/live mode, movie/TV counts, and lifecycle totals.
+- **Movies / TV Shows:** separate Waiting, Holding, Removal, and Keep views with tracking dates and stage explanations. A title's tracked age is not a guarantee that an action will happen.
+- **Table / Posters:** switch between a compact table and a poster-led layout. The browser remembers the view selection. Poster images are proxied through the authenticated application using Jellyfin's API, and poster links open the corresponding Jellyfin item in a new tab.
+- **Audit Preview:** a **read-only list of expired lifecycle timers**. It is **not** a complete simulation: Jellyfin signals, filesystem checks, per-run limits, and availability of other services are not evaluated in this list. An item shown as a deletion candidate is **not approved for deletion**.
+- **Activity and History:** recent per-title action records, run results, and historical summaries. Dry-run actions are labeled `planned`, not `done`.
+- **Run Now:** administrators can request an audit without waiting for the next scheduled run. The scheduler serializes runs.
+- **Manual Rescue:** administrators can choose a rescue action for an eligible Removal-stage title; dry-run mode previews the action.
+- **Settings:** administrators can edit validated settings and test connections to Jellyfin, Radarr, and Sonarr.
+
+### Authentication and access
+
+The dashboard requires sign-in. Jellyfin-based sign-in and a local administrative authentication option are supported by the application. Non-admin viewers have read-only access; administrator access is required for settings, connection tests, Run Now, and rescue actions. Sessions use HTTP-only cookies with a 12-hour lifetime; configure `WEB_SECURE_COOKIE=true` when serving over HTTPS. Keep API tokens, passwords, and webhook URLs out of version control. Do not expose the dashboard directly to the public internet.
+
+### Running the web image
+
+The production Dockerfile starts `python main.py`, which serves the dashboard on port **8080** by default (`WEB_PORT` overrides this) and coordinates scheduled or manually triggered audits. Publish the port in your Unraid container configuration, and persist **`/app/logs`** (for example under `/mnt/user/appdata/media_collection_auditor`). Mount your media at the paths specified by your auditor configuration, typically under `/media`.
+
+The branch's published image tag is `ghcr.io/nvmagma/media_archiver:feature-unraid`. Wait for validation of this branch before updating a live installation. For local development, the included `docker-compose.yaml` still runs the **CLI auditor**, mounts `./app:/app`, and is **not** the same deployment configuration as the production Unraid web image. Do not assume that `docker compose up` starts the dashboard.
+
+**Back up** `/app/logs/auditor_state.json`, `auditor_actions.jsonl`, and `auditor_config.json` before changing images. The saved web configuration in `/app/logs/auditor_config.json` overrides matching container environment settings when an audit starts. Use the dashboard Settings page to review the effective configuration; confirm `DRY_RUN=true` before initial testing.
+
+### Shared lifecycle decision rules (work in progress)
+
+The `app/lifecycle_decisions.py` module centralizes the **pure decision** portion of Waiting, Holding, and Removal transitions. The auditor calls it when evaluating those stages. Waiting favors Jellyfin favorites/protection first, then disliked tags, then the elapsed waiting period. Holding rescues favorites/protected items before considering the holding deadline. Removal returns a **deletion candidate**, not permission to bypass the existing deletion safeguards.
+
+If Jellyfin signals are missing, Waiting/Holding decisions return `unknown` instead of assuming the title is eligible to move. This is a safety-related behavioral change and must be regression-tested. The dashboard backend computes decision explanations, but **the current template does not yet show them**; its Audit Preview still uses timer-based candidates. New unit tests live in `tests/test_lifecycle_decisions.py`. The Dockerfile includes the shared module.
+
+### Unraid troubleshooting
+
+| Symptom | What to check |
+|---|---|
+| Image builds but app fails at startup with `ModuleNotFoundError: lifecycle_decisions` | Use an image built after the Dockerfile was updated to copy `app/lifecycle_decisions.py`. |
+| Poster returns 401/404 | Verify Jellyfin URL and API token, API access to `/Users` and per-user items, and that the tracked folder name matches Jellyfin's path. A connection test alone does not guarantee poster lookup. |
+| Poster missing but title visible | Some items have no Primary image, or folder matching differs; the text title remains available. |
+| Settings disappear after recreation | Persist `/app/logs`, including `auditor_config.json`. |
+| Preview lists a title you want to keep | Favorite/protect it in Jellyfin and confirm the next audit's actual decisions; the preview does not fetch those signals. |
+| Read-only user cannot run an audit | Expected: Run Now and other mutating operations require an administrator. |
+| Unraid container is running but web UI unreachable | Check the host-to-container port mapping (container port 8080 by default), logs, and login configuration. |
+
+---
+
 ## How it works
 
 ```mermaid
@@ -70,8 +117,10 @@ Every time something moves to Holding or Removal, Radarr/Sonarr are told the new
 ### 1. Clone and configure
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git
-cd YOUR_REPO
+git clone https://github.com/NVmagma/media_archiver.git
+cd media_archiver
+# To work on the Unraid dashboard branch:
+git switch feature/unraid
 cp .env.example .env
 ```
 
@@ -341,7 +390,7 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-It covers the whole lifecycle (including the exact boundary days), favorites and tags, the dry-run guarantee, the per-run action cap, grace periods, TV clock rules, season pruning (including the exact requests sent to Sonarr), legacy state files, every notification target, and the safety net: preflight checks, fail-closed deletion, verified moves, Radarr/Sonarr failures, and config validation. GitHub Actions runs it on every push and pull request, on Python 3.10 and 3.12 (`.github/workflows/tests.yml`).
+The Unraid branch also adds web authentication/rescue safety tests and pure decision tests (`tests/test_web_security.py`, `tests/test_rescue_safety.py`, `tests/test_lifecycle_decisions.py`). Verify the GitHub Actions results for the exact commit you intend to deploy; a successful Docker build does not prove the tests passed.\n\nIt covers the whole lifecycle (including the exact boundary days), favorites and tags, the dry-run guarantee, the per-run action cap, grace periods, TV clock rules, season pruning (including the exact requests sent to Sonarr), legacy state files, every notification target, and the safety net: preflight checks, fail-closed deletion, verified moves, Radarr/Sonarr failures, and config validation. GitHub Actions runs it on every push and pull request, on Python 3.10 and 3.12 (`.github/workflows/tests.yml`).
 
 If you change the rules, change or add a test with it. These are the tests that keep a tool that deletes files honest.
 
@@ -352,7 +401,7 @@ If you change the rules, change or add a test with it. These are the tests that 
 ```
 .
 ├── app/
-│   └── collection_auditor.py
+│   ├── collection_auditor.py\n│   ├── lifecycle_decisions.py\n│   ├── main.py, web.py, auth.py, config_store.py\n│   ├── audit_history.py, manual_rescue.py, run_control.py\n│   ├── connection_tests.py\n│   ├── templates/\n│   └── static/
 ├── tests/
 │   ├── conftest.py
 │   ├── test_lifecycle.py
