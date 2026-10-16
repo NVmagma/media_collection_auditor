@@ -6,6 +6,7 @@ import posixpath
 import re
 import time
 import threading
+from urllib.parse import quote
 from datetime import timedelta
 from datetime import datetime
 from urllib.parse import urlsplit
@@ -202,6 +203,51 @@ def _poster_index(base, token, media_type):
     with _POSTER_LOCK:
         _POSTER_INDEX[key] = (time.monotonic(), index)
     return index
+
+
+@app.template_filter("friendly_date")
+def friendly_date(value):
+    """Show readable dates while preserving unexpected legacy values."""
+    if not value:
+        return "Unknown"
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).strftime("%b %d, %Y")
+    except (ValueError, TypeError, OverflowError):
+        return str(value)
+
+
+def _jellyfin_item_id(title, library):
+    if not title or len(title) > 250 or library not in ("Movies", "TV"):
+        return None, None
+    config = load_config()
+    base = config.get("JELLYFIN_HOST_URL", os.environ.get("JELLYFIN_HOST_URL", "")).rstrip("/")
+    token = config.get("JELLYFIN_API_TOKEN", os.environ.get("JELLYFIN_API_TOKEN", "")).strip()
+    if not base.startswith(("http://", "https://")) or not token:
+        return None, None
+    media_type = "Movie" if library == "Movies" else "Series"
+    index = _poster_index(base, token, media_type)
+    normalized = title.casefold()
+    display_name = re.sub(r"\\s*\\(\\d{4}\\)\\s*$", "", title).strip().casefold()
+    item_id = (index.get(normalized) or index.get("name:" + normalized)
+               or index.get("name:" + display_name))
+    return base, item_id
+
+
+@app.get("/api/jellyfin-link")
+def jellyfin_link():
+    """Open an existing Jellyfin item without leaking API credentials."""
+    title = request.args.get("title", "").strip()
+    library = request.args.get("library", "")
+    if not title or len(title) > 250 or library not in ("Movies", "TV"):
+        return Response(status=400)
+    try:
+        base, item_id = _jellyfin_item_id(title, library)
+        if not item_id:
+            return Response("Title not found in Jellyfin.", status=404)
+        return redirect(base + "/web/index.html#!/details?id=" + quote(item_id, safe=""), code=302)
+    except (requests.RequestException, ValueError, TypeError, KeyError, AttributeError):
+        app.logger.warning("Jellyfin link lookup failed for %s", library, exc_info=True)
+        return Response("Unable to find title in Jellyfin.", status=404)
 
 
 @app.get("/api/poster")
