@@ -29,4 +29,4 @@ jobs:
       - name: Run isolated safety tests
         env:
           WEB_SESSION_SECRET: ci-only-session-secret
-        run: python -m unittest discover -s tests -p 'test_*safety.py' -v
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
