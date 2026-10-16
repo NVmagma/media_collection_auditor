@@ -8,6 +8,7 @@ import datetime
 from typing import Dict, Any, Optional, List, Tuple
 
 import requests
+from lifecycle_decisions import decide
 from dotenv import load_dotenv
 
 # ==============================================
@@ -746,7 +747,7 @@ def audit_removal(lib: dict, state: dict):
                 state["in_removal"][key] = entered
         age = days_between(datetime.datetime.fromisoformat(entered))
 
-        if age >= REMOVAL_DAYS:
+        if decide("Removal", age, REMOVAL_DAYS)[0] == "delete_candidate":
             print(f"\n[{lib['name']}: {folder}] In Removal {age}d: deleting permanently.")
             if action_allowed(f"delete {folder}", lib["name"]):
                 size = folder_size(path)
@@ -768,7 +769,7 @@ def audit_holding(lib: dict, signals: dict, state: dict):
         key = state_key(lib, folder)
 
         sig = signals.get(folder)
-        if sig and sig["favorite"]:
+        if decide("Holding", None, HOLDING_DAYS, sig)[0] == "rescue":
             print(f"\n[{lib['name']}: {folder}] In Holding but favorited: rescue to Keep.")
             if move_or_report(lib, folder, path, lib["keep"]):
                 if not DRY_RUN:
@@ -784,7 +785,7 @@ def audit_holding(lib: dict, signals: dict, state: dict):
                 state["queued"][key] = queued_at
         age = days_between(datetime.datetime.fromisoformat(queued_at))
 
-        if age >= HOLDING_DAYS:
+        if decide("Holding", age, HOLDING_DAYS, sig)[0] == "to_removal":
             print(f"\n[{lib['name']}: {folder}] In Holding {age}d, no favorite: move to Removal.")
             if move_or_report(lib, folder, path, lib["removal"]):
                 if not DRY_RUN:
@@ -827,17 +828,17 @@ def audit_transient(lib: dict, signals: dict, state: dict):
               f"favorite={sig['favorite']} disliked={sig['disliked']}")
 
         # Priority 1: favorited (watched or not) -> keep
-        if sig["favorite"]:
+        if decide("Waiting", age, wait, sig)[0] == "keep":
             print("-> Favorited (or protected): move to Keep.")
             if move_or_report(lib, folder, path, lib["keep"]):
                 record_action("keep", folder, "favorited", lib["name"])
                 sync_arr(lib, folder, lib["app_keep"])
         # Priority 2: tagged not-at-all -> Holding right away
-        elif sig["disliked"]:
+        elif decide("Waiting", age, wait, sig)[0] == "hold" and sig["disliked"]:
             print("-> Tagged not-at-all: move to Holding.")
             move_to_holding(lib, folder, path, state, f"tagged {DISLIKE_TAG}")
         # Priority 3: still no decision after the waiting period -> Holding
-        elif age >= wait:
+        elif decide("Waiting", age, wait, sig)[0] == "hold":
             print(f"-> No favorite after {wait}+ days: move to Holding.")
             move_to_holding(lib, folder, path, state, f"no favorite after {age} days")
         else:
