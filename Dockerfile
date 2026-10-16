@@ -8,5 +8,11 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/collection_auditor.py .
+COPY app/main.py .
+COPY app/web.py .
+COPY app/templates ./templates
+COPY app/static ./static
 
-ENTRYPOINT ["python", "collection_auditor.py"]
+EXPOSE 8080
+
+ENTRYPOINT ["python", "main.py"]
