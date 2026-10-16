@@ -13,6 +13,7 @@ from urllib.parse import urlsplit
 from pathlib import Path
 from flask import Flask, render_template, request, Response, redirect, url_for, session, g, send_file
 
+from lifecycle_decisions import decide
 from connection_tests import check_connection, SERVICES
 from audit_history import read_history
 from manual_rescue import rescue_title
@@ -176,6 +177,10 @@ def dashboard():
                     item["due"] = elapsed >= limit
             except (ValueError, TypeError, OverflowError):
                 pass
+            decision, explanation = decide(stage, item["elapsed_days"],
+                                           deadlines.get(stage, {}).get(item["library"], 0))
+            item["decision"] = decision
+            item["decision_reason"] = explanation
             if item["due"]:
                 action = {"Waiting": "Review for move to Holding",
                           "Holding": "Review for move to Removal",
