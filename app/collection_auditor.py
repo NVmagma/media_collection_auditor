@@ -206,13 +206,46 @@ def action_done():
 #   keep_seen  : when a show was first seen in Keep (season pruning grace period)
 
 def load_state() -> Dict[str, Dict[str, str]]:
+    """Load tracking history; refuse to audit when an existing file is damaged."""
     try:
         with open(STATE_FILE) as f:
             state = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        state = {}
-    for section in ("first_seen", "queued", "in_removal", "keep_seen"):
+    except FileNotFoundError:
+        state = {}  # A fresh installation has no tracking file yet.
+    except (json.JSONDecodeError, UnicodeError, OSError) as exc:
+        raise RuntimeError(
+            f"Cannot read auditor state at {STATE_FILE}; refusing to reset tracking history"
+        ) from exc
+    sections = ("first_seen", "queued", "in_removal", "keep_seen", "arr_sync_pending")
+    if not isinstance(state, dict) or any(
+        section in state and not isinstance(state[section], dict)
+        for section in sections
+    ):
+        raise RuntimeError(
+            f"Invalid auditor state at {STATE_FILE}; refusing to reset tracking history"
+        )
+    for section in sections:
         state.setdefault(section, {})
+    for section in ("first_seen", "queued", "in_removal", "keep_seen"):
+        for key, timestamp in state[section].items():
+            if not isinstance(key, str) or not key or not isinstance(timestamp, str):
+                raise RuntimeError(f"Invalid {section} entry in {STATE_FILE}; refusing to audit")
+            try:
+                parsed = datetime.datetime.fromisoformat(timestamp)
+            except ValueError as exc:
+                raise RuntimeError(f"Invalid {section} timestamp in {STATE_FILE}; refusing to audit") from exc
+            if parsed.tzinfo is not None:
+                raise RuntimeError(f"Timezone-aware {section} timestamp in {STATE_FILE}; refusing to audit")
+            if parsed > datetime.datetime.now():
+                raise RuntimeError(f"Future {section} timestamp in {STATE_FILE}; refusing to audit")
+    for key, entry in state["arr_sync_pending"].items():
+        if (not isinstance(key, str) or not key or not isinstance(entry, dict)
+                or entry.get("stage") not in ("holding", "keep", "removal")
+                or not isinstance(entry.get("root"), str)
+                or not entry["root"]
+                or (entry.get("monitored") is not None
+                    and type(entry["monitored"]) is not bool)):
+            raise RuntimeError(f"Invalid Arr retry entry in {STATE_FILE}; refusing to audit")
     return state
 
 
@@ -228,6 +261,7 @@ def save_state(state: Dict[str, Dict[str, str]]):
               f"{len(state['in_removal'])} in removal to {os.path.abspath(STATE_FILE)}")
     except Exception as e:
         print(f"\n[STATE ERROR] Could not save {STATE_FILE}: {e}")
+        raise RuntimeError(f"Failed to persist auditor state to {STATE_FILE}") from e
 
 
 def state_key(lib: dict, folder: str) -> str:
@@ -615,13 +649,50 @@ def move_or_report(lib: dict, folder: str, source: str, destination_parent: str)
     return True
 
 
-def sync_arr(lib: dict, folder: str, root: str, monitored: Optional[bool] = None):
-    """Tell Radarr/Sonarr about a completed move. A failure is recorded and reported, but never stops the run."""
+def sync_arr(lib: dict, folder: str, root: str, monitored: Optional[bool] = None,
+             state: Optional[dict] = None, stage: Optional[str] = None):
+    """Sync Arr; retain a retry request after a failed verified move."""
     arr = lib["arr"]
-    if not arr.notify_moved(folder, root, monitored):
-        record_action("arr_sync_failed", folder,
-                      f"{arr.name} was NOT updated after the move; fix its path/monitoring by hand",
-                      lib["name"], status="failed")
+    key = state_key(lib, folder) if state is not None else None
+    try:
+        succeeded = arr.notify_moved(folder, root, monitored)
+    except requests.RequestException:
+        succeeded = False
+    if succeeded:
+        if state is not None and not DRY_RUN:
+            state.setdefault("arr_sync_pending", {}).pop(key, None)
+        return
+    if state is not None and stage is not None and not DRY_RUN:
+        state.setdefault("arr_sync_pending", {})[key] = {
+            "stage": stage, "root": root, "monitored": monitored,
+        }
+    record_action("arr_sync_failed", folder,
+                  f"{arr.name} was NOT updated after the move; retry pending if tracked",
+                  lib["name"], status="failed")
+
+
+def retry_pending_arr_sync(lib: dict, state: dict):
+    """Retry only when the title exists in exactly its recorded destination."""
+    pending = state.setdefault("arr_sync_pending", {})
+    for key, entry in list(pending.items()):
+        if not key_belongs_to(lib, key):
+            continue
+        folder = key[len(lib["state_prefix"]):]
+        stage = entry.get("stage") if isinstance(entry, dict) else None
+        if stage not in ("holding", "keep", "removal"):
+            continue
+        present = [kind for kind in FOLDER_KINDS
+                   if os.path.isdir(os.path.join(lib[kind], folder))]
+        if present != [stage]:
+            record_action("arr_sync_retry_skipped", folder,
+                          "Media location is missing or ambiguous; no Arr update attempted",
+                          lib["name"], status="skipped")
+            continue
+        if DRY_RUN:
+            continue
+        # Use current configured Arr path, not an obsolete persisted root.
+        sync_arr(lib, folder, lib["app_" + stage], entry.get("monitored"),
+                 state=state, stage=stage)
 
 
 def remove_media(lib: dict, folder_name: str, folder_path: str) -> bool:
@@ -739,7 +810,59 @@ def move_to_holding(lib: dict, folder: str, path: str, state: dict, reason: str)
         if not DRY_RUN:
             state["queued"][state_key(lib, folder)] = datetime.datetime.now().isoformat()
         record_action("hold", folder, reason, lib["name"])
-        sync_arr(lib, folder, lib["app_holding"], monitored=False)
+        sync_arr(lib, folder, lib["app_holding"], monitored=False, state=state, stage="holding")
+
+
+def reconcile_moved_titles(lib: dict, state: dict):
+    """Repair stale tracking after a move; never move or delete media here.
+
+    Only reconcile a title when it exists in exactly one configured stage.
+    Ambiguous or missing paths are left untouched for manual inspection.
+    """
+    stages = {
+        "first_seen": "transient",
+        "queued": "holding",
+        "in_removal": "removal",
+    }
+    for section, source_stage in stages.items():
+        for key in list(state[section]):
+            if not key_belongs_to(lib, key):
+                continue
+            folder = key[len(lib["state_prefix"]):]
+            present = [stage for stage in ("transient", "holding", "removal", "keep")
+                       if os.path.isdir(os.path.join(lib[stage], folder))]
+            if len(present) != 1 or present[0] == source_stage:
+                continue
+            # Never infer an age for a destination stage. Its audit will start
+            # a fresh grace period if no timestamp was persisted.
+            if not DRY_RUN:
+                state[section].pop(key, None)
+                # Conflicting history means the destination clock is not
+                # trustworthy. Restart its grace period rather than inherit
+                # an old timestamp that could authorize premature deletion.
+                destination_section = {
+                    "holding": "queued", "removal": "in_removal",
+                }.get(present[0])
+                if destination_section and key in state[destination_section]:
+                    state[destination_section][key] = datetime.datetime.now().isoformat()
+                if present[0] == "keep":
+                    state["keep_seen"].setdefault(key, datetime.datetime.now().isoformat())
+                # An interrupted move may have occurred before Arr was notified.
+                # Queue only known forward transitions; never infer a backwards move.
+                destination = present[0]
+                if (source_stage, destination) in (
+                    ("transient", "holding"), ("transient", "keep"),
+                    ("holding", "removal"), ("holding", "keep"),
+                    ("removal", "keep"),
+                ):
+                    state.setdefault("arr_sync_pending", {}).setdefault(key, {
+                        "stage": destination,
+                        "root": lib["app_" + destination],
+                        "monitored": destination == "keep",
+                    })
+            print(f"[STATE RECONCILE] {lib['name']}: {folder} is in {present[0]}, "
+                  f"not {source_stage}; stale {section} entry "
+                  f"{'would be cleared' if DRY_RUN else 'cleared'}.")
 
 
 def audit_removal(lib: dict, state: dict, signals: dict):
@@ -793,7 +916,7 @@ def audit_holding(lib: dict, signals: dict, state: dict):
                     state["queued"].pop(key, None)
                     state["keep_seen"].setdefault(key, datetime.datetime.now().isoformat())
                 record_action("rescue", folder, decide("Holding", None, HOLDING_DAYS, sig, FAVORITES_TRIGGER_KEEP)[1], lib["name"])
-                sync_arr(lib, folder, lib["app_keep"], monitored=True)
+                sync_arr(lib, folder, lib["app_keep"], monitored=True, state=state, stage="keep")
             continue
 
         queued_at = state["queued"].get(key)
@@ -810,7 +933,7 @@ def audit_holding(lib: dict, signals: dict, state: dict):
                     state["queued"].pop(key, None)
                     state["in_removal"][key] = datetime.datetime.now().isoformat()
                 record_action("to_removal", folder, f"in Holding {age} days", lib["name"])
-                sync_arr(lib, folder, lib["app_removal"], monitored=False)
+                sync_arr(lib, folder, lib["app_removal"], monitored=False, state=state, stage="removal")
         else:
             print(f"\n[{lib['name']}: {folder}] In Holding {age}d ({HOLDING_DAYS - age} days left to favorite it).")
             _holding_status.append({"library": lib["name"], "folder": folder, "days_left": HOLDING_DAYS - age})
@@ -853,7 +976,7 @@ def audit_transient(lib: dict, signals: dict, state: dict):
                     state["first_seen"].pop(key, None)
                     state["keep_seen"].setdefault(key, datetime.datetime.now().isoformat())
                 record_action("keep", folder, decide("Waiting", age, wait, sig, FAVORITES_TRIGGER_KEEP)[1], lib["name"])
-                sync_arr(lib, folder, lib["app_keep"])
+                sync_arr(lib, folder, lib["app_keep"], state=state, stage="keep")
         # Priority 2: tagged not-at-all -> Holding right away
         elif decide("Waiting", age, wait, sig, FAVORITES_TRIGGER_KEEP)[0] == "hold" and sig["disliked"]:
             print("-> Tagged not-at-all: move to Holding.")
@@ -1165,6 +1288,8 @@ def run_once():
         for lib in libs:
             print(f"\n----- {lib['name']} -----")
             signals = get_signals(lib["jellyfin_type"])
+            reconcile_moved_titles(lib, state)
+            retry_pending_arr_sync(lib, state)
             audit_removal(lib, state, signals)      # block deletion when Jellyfin protection is unknown or active
             audit_holding(lib, signals, state)      # rescue favorites / move expired items to Removal
             audit_transient(lib, signals, state)    # keep favorites / move undecided items to Holding
