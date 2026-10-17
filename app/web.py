@@ -275,14 +275,13 @@ def dashboard():
     config = load_config()
     stages, inventory_warnings = filesystem_stages(state, config)
     health_issues = collection_health(state, stages, inventory_warnings)
-    removal_days = int(load_config().get("REMOVAL_DAYS", os.environ.get("REMOVAL_DAYS", "7")))
+    removal_days = int(config.get("REMOVAL_DAYS", os.environ.get("REMOVAL_DAYS", "7")))
     for item in stages["Removal"]:
         try:
             age = (datetime.now() - datetime.fromisoformat(item["since"])).days
             item["days_left"] = max(0, removal_days - age)
         except (ValueError, TypeError):
             item["days_left"] = None
-    config = load_config()
     def setting_days(key, fallback):
         try:
             return max(1, int(config.get(key, os.environ.get(key, str(fallback)))))
@@ -302,6 +301,7 @@ def dashboard():
     }
     live_signals = _dashboard_signals(config)
     favorites_trigger_keep = str(config.get("FAVORITES_TRIGGER_KEEP", os.environ.get("FAVORITES_TRIGGER_KEEP", "true"))).lower() == "true"
+    deletion_enabled = str(config.get("ALLOW_PERMANENT_DELETE", os.environ.get("ALLOW_PERMANENT_DELETE", "false"))).lower() == "true"
     preview = []
     for stage, items in stages.items():
         for item in items:
@@ -309,6 +309,7 @@ def dashboard():
             item["elapsed_days"] = None
             item["deadline_days"] = None
             item["due"] = False
+            item["next_review_date"] = None
             try:
                 start = datetime.fromisoformat(str(item["since"]))
                 now = datetime.now(start.tzinfo) if start.tzinfo else datetime.now()
@@ -318,6 +319,7 @@ def dashboard():
                     limit = deadlines[stage][item["library"]]
                     item["deadline_days"] = max(0, limit - elapsed)
                     item["due"] = elapsed >= limit
+                    item["next_review_date"] = (start + timedelta(days=limit)).date().isoformat()
             except (ValueError, TypeError, OverflowError):
                 pass
             sig = live_signals.get(item["library"], {}).get(item["title"].casefold()) if live_signals is not None else None
@@ -327,6 +329,8 @@ def dashboard():
                                            favorites_trigger_keep)
             if stage == "Removal" and (sig is None or sig.get("protected") or sig.get("keep") or (favorites_trigger_keep and sig.get("favorite"))):
                 decision, explanation = "blocked", "Deletion blocked: Jellyfin status unknown or title protected. Manual rescue may be needed."
+            if stage == "Removal" and not deletion_enabled:
+                decision, explanation = "blocked", "Permanent deletion is disabled by the master safety switch."
             item["decision"] = decision
             item["decision_reason"] = explanation
             if item["due"] and decision not in ("blocked", "unknown", "keep", "rescue") and (stage != "Removal" or sig is not None):
