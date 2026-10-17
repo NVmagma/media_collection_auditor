@@ -60,8 +60,8 @@ class LogExportTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             path = Path(root) / "actions.jsonl"
             path.write_text('{"action":"run_complete"}\\n')
-            with patch.object(web, "current_user", return_value={"name": "Admin", "admin": True}), \\
-                 patch.object(web, "ACTION_LOG_FILE", str(path)), \\
+            with patch.object(web, "current_user", return_value={"name": "Admin", "admin": True}), \
+                 patch.object(web, "ACTION_LOG_FILE", str(path)), \
                  patch.object(web, "load_config", return_value={
                      "JELLYFIN_API_TOKEN": "DO-NOT-EXPORT-TOKEN",
                      "ALLOW_PERMANENT_DELETE": "false"}):
