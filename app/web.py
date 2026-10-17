@@ -480,6 +480,21 @@ def poster():
         return Response(status=404)
 
 
+@app.get("/logs/export")
+def export_logs():
+    """Download persisted structured activity only; never expose arbitrary server paths."""
+    if not getattr(g, "user", None) or not g.user["admin"]:
+        return Response("Administrator access required.", 403)
+    path = Path(ACTION_LOG_FILE)
+    try:
+        if not path.is_file():
+            return Response("No persisted action log available.", 404)
+        return send_file(path, mimetype="application/x-ndjson", as_attachment=True,
+                         download_name="auditor_actions.jsonl", max_age=0)
+    except OSError:
+        return Response("Action log unavailable.", 503)
+
+
 @app.get("/logs")
 def logs():
     return render_template("logs.html", actions=load_actions(1000))
@@ -513,6 +528,7 @@ def settings():
                 else:
                     updated[key] = validate(key, raw)
             if (updated.get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "false"
+                    or updated.get("ALLOW_PERMANENT_DELETE", "false") == "true"
                     or updated.get("ALLOW_FILESYSTEM_DELETE", "false") == "true"
                     or updated.get("ALLOW_CROSS_FILESYSTEM_MOVES", "false") == "true"
                     or updated.get("ENABLE_SEASON_PRUNING", "false") == "true"):
