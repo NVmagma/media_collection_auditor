@@ -195,16 +195,84 @@ def _dashboard_signals(config):
 _SIGNAL_LOCK = threading.Lock()
 _SIGNAL_CACHE = {}
 
+def filesystem_stages(state, config):
+    """Read-only lifecycle inventory. Missing mounts are reported, not counted as empty."""
+    stages = {label: [] for label in ("Waiting", "Holding", "Removal", "Keep")}
+    warnings = []
+    media_root = config.get("MEDIA_PATH", os.environ.get("MEDIA_PATH", "/media"))
+    layout = (("Movies", "RADARR", "ENABLE_MOVIES",
+               {"Waiting": "Movies", "Holding": "Movies_hold",
+                "Removal": "Movies_removal", "Keep": "Movies_keep"}, ""),
+              ("TV", "SONARR", "ENABLE_TV",
+               {"Waiting": "TV", "Holding": "TV_hold",
+                "Removal": "TV_removal", "Keep": "TV_keep"}, "TV/"))
+    sections = {"Waiting": "first_seen", "Holding": "queued",
+                "Removal": "in_removal", "Keep": "keep_seen"}
+    for library, prefix, enabled_key, defaults, key_prefix in layout:
+        enabled = str(config.get(enabled_key, os.environ.get(enabled_key,
+                      "true" if library == "Movies" else "false"))).lower() == "true"
+        if not enabled:
+            continue
+        for label, dirname in defaults.items():
+            kind = "TRANSIENT" if label == "Waiting" else label.upper()
+            directory = os.environ.get(f"{prefix}_{kind}_PATH") or os.path.join(media_root, dirname)
+            try:
+                with os.scandir(directory) as entries:
+                    names = sorted((entry.name for entry in entries
+                                    if entry.is_dir(follow_symlinks=False)), key=str.casefold)
+            except OSError:
+                warnings.append(f"{library} {label}: directory unavailable ({directory})")
+                continue
+            for name in names:
+                key = key_prefix + name
+                stages[label].append({
+                    "title": name, "library": library,
+                    "since": state.get(sections[label], {}).get(key),
+                })
+    return stages, warnings
+
+
+def collection_health(state, stages, warnings):
+    """Report discrepancies without modifying media or tracking state."""
+    sections = {"Waiting": "first_seen", "Holding": "queued",
+                "Removal": "in_removal", "Keep": "keep_seen"}
+    present = {(item["library"], label, item["title"])
+               for label, items in stages.items() for item in items}
+    issues = []
+    for label, items in stages.items():
+        for item in items:
+            if item["since"] is None:
+                issues.append({"library": item["library"], "title": item["title"],
+                               "detail": f"{label}: no tracking timestamp yet"})
+    for label, section in sections.items():
+        for key in state.get(section, {}):
+            if not isinstance(key, str):
+                continue
+            library = "TV" if key.startswith("TV/") else "Movies"
+            title = key[3:] if library == "TV" else key
+            if any(w.startswith(f"{library} {label}:") for w in warnings):
+                continue  # Unknown inventory must not be interpreted as missing media.
+            if (library, label, title) not in present:
+                issues.append({"library": library, "title": title,
+                               "detail": f"{label}: tracking record has no matching folder"})
+    for key, entry in state.get("arr_sync_pending", {}).items():
+        if not isinstance(key, str):
+            continue
+        library = "TV" if key.startswith("TV/") else "Movies"
+        title = key[3:] if library == "TV" else key
+        stage = entry.get("stage", "unknown") if isinstance(entry, dict) else "unknown"
+        issues.append({"library": library, "title": title,
+                       "detail": f"Radarr/Sonarr sync pending for {stage}"})
+    return sorted(issues, key=lambda item: (item["library"], item["title"].casefold(), item["detail"]))
+
+
 @app.get("/")
 def dashboard():
     actions = load_actions()
     state = load_state()
-    stages = {}
-    for label, section in (("Waiting", "first_seen"), ("Holding", "queued"), ("Removal", "in_removal"), ("Keep", "keep_seen")):
-        records = state.get(section, {})
-        stages[label] = [{"title": key[3:] if key.startswith("TV/") else key,
-                          "library": "TV" if key.startswith("TV/") else "Movies",
-                          "since": since} for key, since in records.items()]
+    config = load_config()
+    stages, inventory_warnings = filesystem_stages(state, config)
+    health_issues = collection_health(state, stages, inventory_warnings)
     removal_days = int(load_config().get("REMOVAL_DAYS", os.environ.get("REMOVAL_DAYS", "7")))
     for item in stages["Removal"]:
         try:
@@ -267,7 +335,7 @@ def dashboard():
                     preview.append({"title": item["title"], "library": item["library"],
                                     "stage": stage, "action": action})
     preview.sort(key=lambda item: (item["library"], item["stage"], item["title"].casefold()))
-    return render_template("dashboard.html", actions=actions, state=state, stages=stages, run=snapshot(), history=read_history(100),
+    return render_template("dashboard.html", actions=actions, state=state, stages=stages, inventory_warnings=inventory_warnings, health_issues=health_issues, run=snapshot(), history=read_history(100),
                            preview=preview, dry_run=load_config().get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "true")
 
 
