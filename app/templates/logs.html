@@ -8,7 +8,7 @@
 </head>
 <body>
   <header class="topbar"><div><h1><img class="brand-icon" src="/static/auditor-badge.png" alt="Auditor logo"> Auditor Logs</h1><p>Persistent activity from the Media Collection Auditor.</p></div><nav><a href="/">Dashboard</a><a href="/logs">Logs</a>{% if viewer.admin %}<a href="/settings">Settings</a>{% endif %} <span class="viewer-indicator" title="Signed in as {{ viewer.name }}">{{ viewer.name }} <span class="viewer-role">{{ "Administrator" if viewer.admin else "Read only" }}</span></span> <form method="post" action="/logout" style="display:inline"><button type="submit">Sign out</button></form></nav></header>
-  <main><section class="panel"><div class="panel-heading"><h2>Activity</h2><span>{{ actions|length }} entries{% if viewer.admin %} · <a href="/logs/export">Download JSONL</a>{% endif %}</span></div>
+  <main><section class="panel"><div class="panel-heading"><h2>Activity</h2><span>{{ actions|length }} entries{% if viewer.admin %} · <a href="/logs/export">Download JSONL</a> · <a href="/logs/diagnostics">Download Diagnostics ZIP</a>{% endif %}</span></div>
   {% if actions %}<div class="table-wrap"><table><thead><tr><th>Time</th><th>Library</th><th>Action</th><th>Status</th><th>Folder</th><th>Detail</th></tr></thead><tbody>
   {% for item in actions %}<tr><td>{{ item.get('time','') }}</td><td>{{ item.get('library','') }}</td><td>{{ item.get('action','') }}</td><td><span class="badge {{ item.get('status','') }}">{{ item.get('status','') }}</span></td><td>{{ item.get('folder','') }}</td><td>{{ item.get('detail','') }}</td></tr>{% endfor %}
   </tbody></table></div>{% else %}<p class="empty">No log entries found.</p>{% endif %}
