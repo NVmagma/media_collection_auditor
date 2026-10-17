@@ -27,7 +27,7 @@ SETTINGS = [
     "ENABLE_MOVIES", "ENABLE_TV", "ENABLE_SEASON_PRUNING", "MEDIA_PATH", "STATE_FILE", "ACTION_LOG_FILE",
     "MOVIE_WAIT_DAYS", "TV_WAIT_DAYS", "HOLDING_DAYS", "REMOVAL_DAYS", "TV_NEW_EPISODES_RESET_CLOCK",
     "KEEP_ALL_SEASONS_TAG", "SEASON_PRUNE_GRACE_DAYS", "SEASON_PRUNE_AFTER_NEW_SEASON_DAYS",
-    "MAX_ACTIONS_PER_RUN", "RUN_INTERVAL_HOURS", "ALLOW_FILESYSTEM_DELETE", "ALLOW_CROSS_FILESYSTEM_MOVES",
+    "MAX_ACTIONS_PER_RUN", "RUN_INTERVAL_HOURS", "ALLOW_PERMANENT_DELETE", "ALLOW_FILESYSTEM_DELETE", "ALLOW_CROSS_FILESYSTEM_MOVES",
     "NOTIFY_DISCORD_WEBHOOK_URL", "NOTIFY_NTFY_URL", "NOTIFY_NTFY_TOKEN", "NOTIFY_WEBHOOK_URL",
     "NOTIFY_ON_DRY_RUN", "NOTIFY_LEAVING_SOON_DIGEST",
 ] + [f"{p}_{k}_PATH" for p in ("RADARR", "SONARR") for k in ("TRANSIENT", "HOLDING", "KEEP", "REMOVAL")] \
@@ -162,6 +162,9 @@ def make_auditor(tmp_path, monkeypatch):
             # Most tests are about timers and decisions with no Radarr/Sonarr involved, so the script
             # may delete folders itself. The safety tests switch this off to check the real default.
             "ALLOW_FILESYSTEM_DELETE": "true",
+            # Disposable-media behavioral tests explicitly opt into the new master gate.
+            # Production remains default-deny; dedicated safety tests verify that default.
+            "ALLOW_PERMANENT_DELETE": "true",
             "STATE_FILE": str(tmp_path / "logs" / "auditor_state.json"),
             "ACTION_LOG_FILE": str(tmp_path / "logs" / "auditor_actions.jsonl"),
         }
