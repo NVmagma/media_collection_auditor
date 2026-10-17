@@ -104,8 +104,27 @@ class WebSecurityTests(unittest.TestCase):
             self.assertIn(b"TV Shows", response.data)
             self.assertIn(b"Movies", response.data)
 
+    def dashboard_media(self):
+        """Create a disposable on-disk title for dashboard preview tests."""
+        from contextlib import contextmanager
+        import tempfile
+        from pathlib import Path
+
+        @contextmanager
+        def fixture():
+            with tempfile.TemporaryDirectory() as root:
+                for folder in ("Movies", "Movies_hold", "Movies_keep", "Movies_removal"):
+                    (Path(root) / folder).mkdir()
+                (Path(root) / "Movies" / "Example (2020)").mkdir()
+                with patch.dict("os.environ", {"MEDIA_PATH": root,
+                                               "ENABLE_MOVIES": "true",
+                                               "ENABLE_TV": "false"}):
+                    yield root
+
+        return fixture()
+
     def test_dashboard_preview_is_read_only_and_explains_stages(self):
-        with patch.object(web, "current_user", return_value={"name": "Viewer", "admin": False}), \
+        with self.dashboard_media(), patch.object(web, "current_user", return_value={"name": "Viewer", "admin": False}), \
              patch.object(web, "load_actions", return_value=[]), \
              patch.object(web, "load_state", return_value={"first_seen": {"Example (2020)": "2020-01-01T00:00:00"}, "queued": {}, "in_removal": {}, "keep_seen": {}}), \
              patch.object(web, "load_config", return_value={"DRY_RUN": "true"}), \
@@ -123,7 +142,7 @@ class WebSecurityTests(unittest.TestCase):
     def test_dashboard_preview_shows_verified_unprotected_deadline(self):
         state = {"first_seen": {"Example (2020)": "2020-01-01T00:00:00"},
                  "queued": {}, "in_removal": {}, "keep_seen": {}}
-        with patch.object(web, "current_user", return_value={"name": "Viewer", "admin": False}), \
+        with self.dashboard_media(), patch.object(web, "current_user", return_value={"name": "Viewer", "admin": False}), \
              patch.object(web, "load_actions", return_value=[]), \
              patch.object(web, "load_state", return_value=state), \
              patch.object(web, "load_config", return_value={"DRY_RUN": "true"}), \
@@ -137,7 +156,7 @@ class WebSecurityTests(unittest.TestCase):
     def test_dashboard_preview_excludes_protected_title(self):
         state = {"first_seen": {"Example (2020)": "2020-01-01T00:00:00"},
                  "queued": {}, "in_removal": {}, "keep_seen": {}}
-        with patch.object(web, "current_user", return_value={"name": "Viewer", "admin": False}), \
+        with self.dashboard_media(), patch.object(web, "current_user", return_value={"name": "Viewer", "admin": False}), \
              patch.object(web, "load_actions", return_value=[]), \
              patch.object(web, "load_state", return_value=state), \
              patch.object(web, "load_config", return_value={"DRY_RUN": "true"}), \
