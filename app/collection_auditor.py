@@ -117,6 +117,8 @@ _actions_taken = 0
 # a title properly. If a title is NOT known to them (or they aren't configured), the script refuses
 # to delete it itself unless you opt in here. Skipped titles are reported so you can handle them.
 ALLOW_FILESYSTEM_DELETE = env_flag("ALLOW_FILESYSTEM_DELETE", False)
+# Master gate: false blocks all permanent deletion, including Arr API deletion and season pruning.
+ALLOW_PERMANENT_DELETE = env_flag("ALLOW_PERMANENT_DELETE", False)
 
 # All of a library's folders should live on ONE mount, so moves are instant renames. If they don't,
 # a move becomes a slow copy-then-delete that can be interrupted half way, so this is an error unless allowed.
@@ -706,6 +708,12 @@ def remove_media(lib: dict, folder_name: str, folder_path: str) -> bool:
     """
     arr = lib["arr"]
     name = lib["name"]
+
+    if not ALLOW_PERMANENT_DELETE:
+        message = "master permanent deletion switch is disabled"
+        print(f"[DELETE SKIPPED] {folder_name}: {message}")
+        record_action("delete_skipped", folder_name, message, name, status="skipped")
+        return False
 
     if os.path.islink(folder_path) or not is_within(folder_path, lib["removal"]):
         message = "refusing to delete: path is not strictly inside the Removal folder"
