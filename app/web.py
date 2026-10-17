@@ -6,6 +6,8 @@ import posixpath
 import re
 import time
 import threading
+import io
+import zipfile
 from urllib.parse import quote
 from datetime import timedelta
 from datetime import datetime
@@ -478,6 +480,50 @@ def poster():
     except (requests.RequestException, ValueError, TypeError, KeyError, AttributeError):
         app.logger.warning("Jellyfin poster lookup failed for %s", library, exc_info=True)
         return Response(status=404)
+
+
+@app.get("/logs/diagnostics")
+def export_diagnostics():
+    """Download a bounded, read-only diagnostic ZIP without tokens or configuration secrets."""
+    if not getattr(g, "user", None) or not g.user["admin"]:
+        return Response("Administrator access required.", 403)
+
+    # Deliberately exclude raw settings, state, cookies, and container environment.
+    # Folder names in activity logs can still be personal; share the ZIP selectively.
+    report = {
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "log_format": "JSON Lines (one action per line)",
+        "included": ["recent activity log", "non-secret safety configuration"],
+        "excluded": ["API keys", "passwords", "tokens", "state file", "environment variables"],
+    }
+    config = load_config()
+    safe_keys = ("DRY_RUN", "ALLOW_PERMANENT_DELETE", "ALLOW_FILESYSTEM_DELETE",
+                 "ENABLE_SEASON_PRUNING", "MAX_ACTIONS_PER_RUN", "ENABLE_MOVIES", "ENABLE_TV")
+    report["safety_settings"] = {
+        key: config.get(key, os.environ.get(key, DEFAULTS.get(key, "unset")))
+        for key in safe_keys
+    }
+    try:
+        # Only export the last 2 MiB of activity to avoid excessive memory use.
+        path = Path(ACTION_LOG_FILE)
+        raw = b""
+        if path.is_file():
+            with path.open("rb") as handle:
+                handle.seek(0, os.SEEK_END)
+                length = handle.tell()
+                handle.seek(max(0, length - 2 * 1024 * 1024))
+                raw = handle.read()
+            if length > 2 * 1024 * 1024:
+                raw = raw.partition(b"\\n")[2]  # omit truncated first record
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("diagnostics.json", json.dumps(report, indent=2))
+            archive.writestr("recent_actions.jsonl", raw)
+        buffer.seek(0)
+        return send_file(buffer, mimetype="application/zip", as_attachment=True,
+                         download_name="auditor_diagnostics.zip", max_age=0)
+    except OSError:
+        return Response("Diagnostic export unavailable.", 503)
 
 
 @app.get("/logs/export")
