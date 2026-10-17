@@ -1023,6 +1023,9 @@ def audit_keep_seasons(lib: dict, signals: dict, state: dict):
     unless the show carries the keep-all tag in Jellyfin. Specials (season 0) are never touched.
     Needs Sonarr, because Sonarr is what deletes the episode files and stops re-downloads.
     """
+    if not ALLOW_PERMANENT_DELETE:
+        print("[PRUNE SKIPPED] Master permanent deletion switch is disabled.")
+        return
     arr = lib["arr"]
     if not arr.enabled:
         print("[WARN] Season pruning needs Sonarr (SONARR_URL / SONARR_API_KEY); skipping.")
