@@ -46,7 +46,20 @@
     </nav>
     <section class="panel dashboard-section" data-panel="Overview">
       <h2>Library overview</h2>
+      {% if inventory_warnings %}
+      <p role="alert"><strong>Filesystem inventory incomplete:</strong> counts for unavailable directories are not reliable.</p>
+      {% for warning in inventory_warnings %}<p class="muted">{{ warning }}</p>{% endfor %}
+      {% endif %}
       <p class="muted">Choose Movies or TV Shows to see their individual lifecycle stages. Activity and History cover both libraries.</p>
+      <details>
+        <summary>Collection health · {{ health_issues|length }} item(s) needing review</summary>
+        <p class="muted">Read-only comparison of media folders, tracking timestamps, and pending Arr updates. A newly moved title may appear here until the next audit.</p>
+        {% if health_issues %}
+        <ul>{% for issue in health_issues %}
+          <li><strong>{{ issue.library }} · {{ issue.title }}</strong>: {{ issue.detail }}</li>
+        {% endfor %}</ul>
+        {% else %}<p class="muted">No discrepancies found in readable directories.</p>{% endif %}
+      </details>
       <div class="library-overview">
         {% for library, label in [('Movies', 'Movies'), ('TV', 'TV Shows')] %}
         <button type="button" class="library-overview-card" data-open-library="{{ label }}">
