@@ -2,6 +2,9 @@
 import os
 import sys
 import tempfile
+import io
+import zipfile
+import json
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -48,6 +51,28 @@ class LogExportTests(unittest.TestCase):
     def test_viewer_cannot_export(self):
         with patch.object(web, "current_user", return_value={"name": "Viewer", "admin": False}):
             self.assertEqual(self.client.get("/logs/export").status_code, 403)
+
+    def test_viewer_cannot_export_diagnostics(self):
+        with patch.object(web, "current_user", return_value={"name": "Viewer", "admin": False}):
+            self.assertEqual(self.client.get("/logs/diagnostics").status_code, 403)
+
+    def test_diagnostics_excludes_secrets_and_state(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "actions.jsonl"
+            path.write_text('{"action":"run_complete"}\\n')
+            with patch.object(web, "current_user", return_value={"name": "Admin", "admin": True}), \\
+                 patch.object(web, "ACTION_LOG_FILE", str(path)), \\
+                 patch.object(web, "load_config", return_value={
+                     "JELLYFIN_API_TOKEN": "DO-NOT-EXPORT-TOKEN",
+                     "ALLOW_PERMANENT_DELETE": "false"}):
+                response = self.client.get("/logs/diagnostics")
+            self.assertEqual(response.status_code, 200)
+            with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
+                self.assertEqual(set(archive.namelist()), {"diagnostics.json", "recent_actions.jsonl"})
+                report = json.loads(archive.read("diagnostics.json"))
+                self.assertEqual(report["safety_settings"]["ALLOW_PERMANENT_DELETE"], "false")
+                self.assertIn(b"run_complete", archive.read("recent_actions.jsonl"))
+                self.assertNotIn(b"DO-NOT-EXPORT-TOKEN", response.data)
 
     def test_admin_can_export_persisted_jsonl(self):
         with tempfile.TemporaryDirectory() as root:
