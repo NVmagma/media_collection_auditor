@@ -181,5 +181,26 @@ class StatePersistenceTests(unittest.TestCase):
                     auditor.load_state()
             self.assertFalse(os.path.exists(state_path))
 
+    def test_state_directory_sync_failure_is_reported_without_erasing_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "state.json")
+            state = {"first_seen": {"Film": "2025-01-01T00:00:00"},
+                     "queued": {}, "in_removal": {}, "keep_seen": {},
+                     "arr_sync_pending": {}}
+            with patch.object(auditor, "STATE_FILE", path):
+                auditor.save_state(state)
+                real_fsync = auditor.os.fsync
+                calls = []
+                def fail_directory_sync(fd):
+                    calls.append(fd)
+                    if len(calls) == 2:
+                        raise OSError("directory sync failed")
+                    return real_fsync(fd)
+                with patch.object(auditor.os, "fsync", side_effect=fail_directory_sync):
+                    with self.assertRaisesRegex(RuntimeError, "Failed to persist auditor state"):
+                        auditor.save_state(state)
+                self.assertEqual(auditor.load_state(), state)
+            self.assertEqual(sorted(os.listdir(directory)), ["state.json"])
+
 if __name__ == "__main__":
     unittest.main()
