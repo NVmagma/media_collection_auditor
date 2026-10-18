@@ -52,10 +52,10 @@ def inspect_fetched_recovery(
     """
     if max_age <= timedelta(0) or max_age > timedelta(minutes=5):
         raise RuntimeError("Recovery freshness window invalid")
-    now = now or datetime.now(timezone.utc)
-    if now.tzinfo is None:
+    if now is not None and now.tzinfo is None:
         raise RuntimeError("Recovery clock must be timezone-aware")
-    now = now.astimezone(timezone.utc)
+    if now is not None:
+        now = now.astimezone(timezone.utc)
     session = RevisionedAuditSession(GuardedSQLiteStateStore(database))
     state, revision = session.read_verified_snapshot()
     pending = state.get(INTENTS_KEY)
@@ -67,7 +67,7 @@ def inspect_fetched_recovery(
         raise RuntimeError("Recovery requires Jellyfin item identity")
     jellyfin = _fresh_response(
         jellyfin_fetch(jellyfin_id), service="jellyfin",
-        title_id=jellyfin_id, now=now, max_age=max_age,
+        title_id=jellyfin_id, now=now or datetime.now(timezone.utc), max_age=max_age,
     )
     arr_record = None
     if pending.get("kind") == "arr_sync":
@@ -78,7 +78,7 @@ def inspect_fetched_recovery(
             raise RuntimeError("Recovery Arr fetcher unavailable")
         arr_record = _fresh_response(
             arr_fetch(service, title_id), service=service,
-            title_id=str(title_id), now=now, max_age=max_age,
+            title_id=str(title_id), now=now or datetime.now(timezone.utc), max_age=max_age,
         )
     elif pending.get("kind") != "move":
         raise RuntimeError("Recovery operation unsupported")
