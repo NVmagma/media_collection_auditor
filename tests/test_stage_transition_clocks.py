@@ -19,8 +19,10 @@ class StageTransitionTests(unittest.TestCase):
         self.lib = {"name": "Movies", "state_prefix": "",
                     "holding": str(root / "holding"),
                     "app_holding": "/media/Movies_hold",
+                    "removal": str(root / "removal"),
+                    "app_removal": "/media/Movies_removal",
                     "transient": str(root / "transient")}
-        for path in (self.lib["holding"], self.lib["transient"]):
+        for path in (self.lib["holding"], self.lib["transient"], self.lib["removal"]):
             Path(path).mkdir()
         (Path(self.lib["transient"]) / "Film").mkdir()
         self.state = {"first_seen": {"Film": "2025-01-01T00:00:00"},
@@ -63,6 +65,47 @@ class StageTransitionTests(unittest.TestCase):
         self.assertEqual(self.state["first_seen"]["Film"], "2025-01-01T00:00:00")
         self.assertEqual(self.state["queued"], {})
 
+
+    def test_holding_to_removal_starts_fresh_clock(self):
+        (Path(self.lib["holding"]) / "Film").mkdir()
+        self.state["first_seen"].clear()
+        self.state["queued"]["Film"] = "2025-01-01T00:00:00"
+        with patch.object(auditor, "DRY_RUN", False), \
+             patch.object(auditor, "decide", return_value=("to_removal", "expired")), \
+             patch.object(auditor, "move_or_report", return_value=True), \
+             patch.object(auditor, "record_action"), \
+             patch.object(auditor, "sync_arr"):
+            before = datetime.datetime.now()
+            auditor.audit_holding(self.lib, {"Film": {}}, self.state)
+            after = datetime.datetime.now()
+        self.assertNotIn("Film", self.state["queued"])
+        entered = datetime.datetime.fromisoformat(self.state["in_removal"]["Film"])
+        self.assertLessEqual(before, entered)
+        self.assertLessEqual(entered, after)
+
+    def test_failed_holding_to_removal_preserves_clock(self):
+        (Path(self.lib["holding"]) / "Film").mkdir()
+        self.state["first_seen"].clear()
+        self.state["queued"]["Film"] = "2025-01-01T00:00:00"
+        with patch.object(auditor, "DRY_RUN", False), \
+             patch.object(auditor, "decide", return_value=("to_removal", "expired")), \
+             patch.object(auditor, "move_or_report", return_value=False):
+            auditor.audit_holding(self.lib, {"Film": {}}, self.state)
+        self.assertEqual(self.state["queued"]["Film"], "2025-01-01T00:00:00")
+        self.assertNotIn("Film", self.state["in_removal"])
+
+    def test_dry_run_holding_to_removal_preserves_clock(self):
+        (Path(self.lib["holding"]) / "Film").mkdir()
+        self.state["first_seen"].clear()
+        self.state["queued"]["Film"] = "2025-01-01T00:00:00"
+        with patch.object(auditor, "DRY_RUN", True), \
+             patch.object(auditor, "decide", return_value=("to_removal", "expired")), \
+             patch.object(auditor, "move_or_report", return_value=True), \
+             patch.object(auditor, "record_action"), \
+             patch.object(auditor, "sync_arr"):
+            auditor.audit_holding(self.lib, {"Film": {}}, self.state)
+        self.assertEqual(self.state["queued"]["Film"], "2025-01-01T00:00:00")
+        self.assertNotIn("Film", self.state["in_removal"])
 
 if __name__ == "__main__":
     unittest.main()
