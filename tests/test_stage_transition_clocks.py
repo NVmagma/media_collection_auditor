@@ -18,6 +18,7 @@ class StageTransitionTests(unittest.TestCase):
         root = Path(self.tmp.name)
         self.lib = {"name": "Movies", "state_prefix": "",
                     "holding": str(root / "holding"),
+                    "app_holding": "/media/Movies_hold",
                     "transient": str(root / "transient")}
         for path in (self.lib["holding"], self.lib["transient"]):
             Path(path).mkdir()
