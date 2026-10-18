@@ -42,6 +42,38 @@ BLOCKERS = {
 }
 
 
+def inspect_pending_recovery_status(database: str | Path) -> dict[str, Any]:
+    """Inspect persisted recovery metadata without network or sensitive details."""
+    session = RevisionedAuditSession(GuardedSQLiteStateStore(database))
+    state, revision = session.read_verified_snapshot()
+    pending = state.get(INTENTS_KEY)
+    base = {
+        "revision": revision,
+        "storage_authority": "json",
+        "production_activation": "disabled",
+        "authorization": "blocked_pending_independent_verification",
+    }
+    if pending is None:
+        return {**base, "status": "no_pending_operation"}
+    if not isinstance(pending, dict):
+        raise RuntimeError("Pending recovery operation invalid")
+    operation_id, kind, phase = (
+        pending.get("id"), pending.get("kind"), pending.get("phase")
+    )
+    if (not isinstance(operation_id, str) or not operation_id
+            or kind not in ("move", "arr_sync")
+            or phase not in ("intent_recorded", "applied_pending_reconciliation")
+            or not isinstance(pending.get("details"), dict)):
+        raise RuntimeError("Pending recovery operation invalid")
+    return {
+        **base, "status": "blocked",
+        "operation_id": operation_id,
+        "operation_kind": kind,
+        "operation_phase": phase,
+        "blocker": "independent_verification_required",
+    }
+
+
 def inspect_http_recovery_report(
     database: str | Path, **connection: Any,
 ) -> dict[str, Any]:
