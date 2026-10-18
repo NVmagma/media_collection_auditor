@@ -38,12 +38,12 @@ on the active development branch and review it alongside development milestones.
 
 | Feature | Status | Acceptance / next step |
 | --- | --- | --- |
-| Dependabot vulnerability alerts and security update PRs | Planned | Confirm availability for private repository; enable Python dependency and GitHub Actions monitoring, with reviewed updates rather than automatic deployment |
-| Automated Docker image CVE scanning | Planned | Add Trivy or equivalent to CI and a weekly scheduled scan; cover OS packages and Python dependencies; document how findings are triaged |
+| Dependabot vulnerability alerts and security update PRs | In progress | Weekly pip, Docker, and GitHub Actions update PRs configured for feature/sqlite; confirm private-repository alerts and PR creation in GitHub settings |
+| Automated Docker image CVE scanning | In progress | Trivy local-image scan added on PRs and weekly schedule; validate workflow and triage any findings |
 | CodeQL static security analysis | Planned | Confirm private-repository eligibility and run on pull requests and a weekly schedule; investigate actionable findings |
-| Weekly security review and urgent CVE triage | Planned | Review new alerts, exploitability, severity, affected versions and remediation; escalate critical/high-risk issues promptly instead of waiting for the weekly review |
+| Weekly security review and urgent CVE triage | In progress | Weekly scheduled pip-audit and Trivy workflow added; establish recurring human review and escalate urgent findings immediately |
 | Dependency and Docker base-image update policy | Planned | Use reproducible versions/digests where practical; review updates regularly, run regression tests, and verify both workflows before recommending deployment |
-| Security policy and vulnerability reporting | Planned | Add SECURITY.md with supported versions, private reporting instructions, response expectations, and no credential disclosure |
+| Security policy and vulnerability reporting | In progress | SECURITY.md added; confirm private vulnerability reporting is enabled and contact route works |
 | Safe security release procedure for Unraid | Planned | Document tested fixes, rollback steps and operator approval; never automatically update production or relax deletion safeguards |
 
 ## P1 — Dashboard and operations
