@@ -13,6 +13,19 @@ from app.sqlite_audit_preflight import prepare_sqlite_audit_state
 from app.sqlite_operation_coordinator import INTENTS_KEY
 
 
+def _verification_blocker(exc: Exception) -> str:
+    """Expose only recognized failure categories, never raw paths or exception text."""
+    if isinstance(exc, RuntimeError):
+        message = str(exc)
+        if message == "Source JSON differs from its original backup":
+            return "json_backup_mismatch"
+        if message == "SQLite snapshot differs from JSON backup":
+            return "sqlite_snapshot_mismatch"
+        if message == "SQLite state already modified; initial parity gate refused":
+            return "sqlite_revision_not_initial"
+    return "migration_or_snapshot_verification_failed"
+
+
 def inspect_sqlite_readiness(
     source_json: str | Path,
     backup_json: str | Path,
@@ -27,6 +40,13 @@ def inspect_sqlite_readiness(
         "revision": None,
     }
     try:
+        paths = tuple(Path(p) for p in (source_json, backup_json, database))
+        if len({p.resolve() for p in paths}) != 3:
+            report["blockers"].append("artifact_paths_not_distinct")
+            return report
+        if not all(p.is_file() for p in paths):
+            report["blockers"].append("migration_artifact_missing")
+            return report
         store, baseline, revision = prepare_sqlite_audit_state(
             source_json, backup_json, database
         )
@@ -38,7 +58,7 @@ def inspect_sqlite_readiness(
         else:
             report["revision"] = revision
             report["ready_for_isolated_review"] = True
-    except Exception:
+    except Exception as exc:
         # No partial or unverified evidence may be interpreted as approval.
-        report["blockers"].append("migration_or_snapshot_verification_failed")
+        report["blockers"].append(_verification_blocker(exc))
     return report
