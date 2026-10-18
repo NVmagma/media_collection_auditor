@@ -20,6 +20,7 @@ def test_valid_snapshot_preserves_values(tmp_path):
     with sqlite3.connect(path) as db:
         db.executescript(SCHEMA_SQL)
         db.execute("INSERT INTO metadata VALUES (?, ?)", ("schema_version", "1"))
+        db.execute("INSERT INTO metadata VALUES (?, ?)", ("snapshot_complete", "1"))
         db.execute(
             "INSERT INTO state_entries VALUES (?, ?, ?)",
             ("queued", "Movies:Example", json.dumps("2025-01-02T03:04:05")),
@@ -56,6 +57,7 @@ def test_invalid_row_fails_closed(tmp_path):
     with sqlite3.connect(path) as db:
         db.executescript(SCHEMA_SQL)
         db.execute("INSERT INTO metadata VALUES (?, ?)", ("schema_version", "1"))
+        db.execute("INSERT INTO metadata VALUES (?, ?)", ("snapshot_complete", "1"))
         db.execute(
             "INSERT INTO state_entries VALUES (?, ?, ?)",
             ("first_seen", "Movies:Example", json.dumps({"not": "a timestamp"})),
@@ -72,6 +74,7 @@ def test_unsafe_timestamp_fails_closed(tmp_path, timestamp):
     with sqlite3.connect(path) as db:
         db.executescript(SCHEMA_SQL)
         db.execute("INSERT INTO metadata VALUES (?, ?)", ("schema_version", "1"))
+        db.execute("INSERT INTO metadata VALUES (?, ?)", ("snapshot_complete", "1"))
         db.execute("INSERT INTO state_entries VALUES (?, ?, ?)",
                    ("queued", "Movie", json.dumps(timestamp)))
     with pytest.raises(RuntimeError, match="timestamp"):
@@ -88,7 +91,21 @@ def test_unsafe_arr_retry_fails_closed(tmp_path, pending):
     with sqlite3.connect(path) as db:
         db.executescript(SCHEMA_SQL)
         db.execute("INSERT INTO metadata VALUES (?, ?)", ("schema_version", "1"))
+        db.execute("INSERT INTO metadata VALUES (?, ?)", ("snapshot_complete", "1"))
         db.execute("INSERT INTO state_entries VALUES (?, ?, ?)",
                    ("arr_sync_pending", "Movie", json.dumps(pending)))
     with pytest.raises(RuntimeError, match="Arr retry"):
+        read_snapshot(path)
+
+
+def test_incomplete_snapshot_fails_closed(tmp_path):
+    path = tmp_path / "state.db"
+    with sqlite3.connect(path) as db:
+        db.executescript(SCHEMA_SQL)
+        db.execute("INSERT INTO metadata VALUES (?, ?)", ("schema_version", "1"))
+        db.execute(
+            "INSERT INTO state_entries VALUES (?, ?, ?)",
+            ("queued", "Movie", json.dumps("2025-01-01T00:00:00")),
+        )
+    with pytest.raises(RuntimeError, match="incomplete"):
         read_snapshot(path)
