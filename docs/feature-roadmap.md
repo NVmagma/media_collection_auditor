@@ -27,6 +27,7 @@ on the active development branch and review it alongside development milestones.
 | Opt-in dashboard integration and navigation | Done | Default off; only admin users can inspect |
 | Human-readable recovery blocker guidance | In progress | Explain known failure modes without granting clearance |
 | Independent verification of interrupted moves and Arr sync | Planned | Verify actual filesystem, Jellyfin protection, Arr identities and freshness; never infer success from stale evidence |
+| Single-snapshot recovery dashboard consistency | Done | Recovery status and readiness checklist derive from one verified SQLite revision; reject unknown statuses |
 | Safe reconciliation state machine | Planned | Define permitted transitions and reject ambiguous, stale, or conflicting observations |
 | SQLite lifecycle integration | Planned | Optional backend only, with JSON remaining authoritative until explicitly approved |
 | JSON-to-SQLite migration and rollback | Planned | Repeatable backup, consistency checks, recovery from failed migration |
