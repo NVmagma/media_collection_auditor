@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Container version="2">
   <Name>media_collection_auditor</Name>
-  <Repository>ghcr.io/nvmagma/media_archiver:feature-unraid</Repository>
+  <Repository>ghcr.io/nvmagma/media_collection_auditor:feature-unraid</Repository>
   <Registry>https://ghcr.io/</Registry>
-  <Project>https://github.com/NVmagma/media_archiver</Project>
-  <Overview>Media Collection Auditor moves unneeded movies and TV shows through a Transient -&gt; Holding -&gt; Removal lifecycle using Jellyfin favorites/tags and optional Radarr/Sonarr integration. The web dashboard provides a visual view of activity and logs.</Overview>
+  <Project>https://github.com/NVmagma/media_collection_auditor</Project>
+  <Overview>Media Collection Auditor moves unneeded movies and TV shows through a Waiting -&gt; Holding -&gt; Removal (or Keep) lifecycle using Jellyfin favorites/tags and optional Radarr/Sonarr integration. The web dashboard provides a visual view of activity and logs.</Overview>
   <Category>MediaServer:Tools</Category>
-  <Icon>https://raw.githubusercontent.com/NVmagma/media_archiver/feature/unraid/unraid/assets/Media_Collection_Auditor_Badge.png</Icon>
+  <Icon>https://raw.githubusercontent.com/NVmagma/media_collection_auditor/feature/unraid/unraid/assets/Media_Collection_Auditor_Badge.png</Icon>
   <WebUI>http://[IP]:[PORT:8080]/</WebUI>
-  <Support>https://github.com/NVmagma/media_archiver/issues</Support>
+  <Support>https://github.com/NVmagma/media_collection_auditor/issues</Support>
   <Privileged>false</Privileged>
   <Network>bridge</Network>
   <Shell>bash</Shell>
@@ -40,7 +40,7 @@
 
   <!-- Safety -->
   <Config Name="Dry Run" Target="DRY_RUN" Default="true" Mode="" Description="Safety switch. true reports planned actions without moving or deleting media." Type="Variable" Display="always" Required="true" Mask="false">true</Config>
-  <Config Name="Allow Filesystem Delete" Target="ALLOW_FILESYSTEM_DELETE" Default="false" Mode="" Description="Allow direct filesystem deletion when a title is not known to Radarr/Sonarr. Leave false unless intentionally enabling this fallback." Type="Variable" Display="advanced" Required="true" Mask="false">false</Config>
+  <Config Name="Allow Permanent Delete" Target="ALLOW_PERMANENT_DELETE" Default="false" Mode="" Description="Master deletion safety switch. Keep false; permanent deletion is not approved for this release." Type="Variable" Display="advanced" Required="true" Mask="false">false</Config>\n  <Config Name="Allow Filesystem Delete" Target="ALLOW_FILESYSTEM_DELETE" Default="false" Mode="" Description="Allow direct filesystem deletion when a title is not known to Radarr/Sonarr. Keep false: direct filesystem deletion is not approved for this release." Type="Variable" Display="advanced" Required="true" Mask="false">false</Config>
   <Config Name="Allow Cross Filesystem Moves" Target="ALLOW_CROSS_FILESYSTEM_MOVES" Default="false" Mode="" Description="Allow copy-then-delete moves across filesystems. Prefer keeping this false and placing each library's lifecycle folders on one filesystem." Type="Variable" Display="advanced" Required="true" Mask="false">false</Config>
   <Config Name="Maximum Actions Per Run" Target="MAX_ACTIONS_PER_RUN" Default="10" Mode="" Description="Maximum successful hold/delete/season-prune actions allowed per run." Type="Variable" Display="advanced" Required="true" Mask="false">10</Config>
 
@@ -53,7 +53,7 @@
   <Config Name="Reset TV Clock For New Episodes" Target="TV_NEW_EPISODES_RESET_CLOCK" Default="true" Mode="" Description="Reset the waiting clock when a show receives new episodes." Type="Variable" Display="advanced" Required="true" Mask="false">true</Config>
 
   <!-- Jellyfin tags and optional TV season pruning -->
-  <Config Name="Dislike Tag" Target="DISLIKE_TAG" Default="not-at-all" Mode="" Description="Jellyfin tag that immediately qualifies a title for Holding." Type="Variable" Display="advanced" Required="true" Mask="false">not-at-all</Config>
+  <Config Name="Keep Tag" Target="KEEP_TAG" Default="keep" Mode="" Description="Jellyfin tag that moves a title to Keep." Type="Variable" Display="advanced" Required="true" Mask="false">keep</Config>\n  <Config Name="Favorites Trigger Keep" Target="FAVORITES_TRIGGER_KEEP" Default="true" Mode="" Description="Treat Jellyfin favorites as Keep triggers." Type="Variable" Display="advanced" Required="true" Mask="false">true</Config>\n  <Config Name="Refresh Jellyfin After Audit" Target="JELLYFIN_REFRESH_AFTER_AUDIT" Default="false" Mode="" Description="Request Jellyfin refresh after successful media moves." Type="Variable" Display="advanced" Required="true" Mask="false">false</Config>\n  <Config Name="Dislike Tag" Target="DISLIKE_TAG" Default="not-at-all" Mode="" Description="Jellyfin tag that immediately qualifies a title for Holding." Type="Variable" Display="advanced" Required="true" Mask="false">not-at-all</Config>
   <Config Name="Protect Tag" Target="PROTECT_TAG" Default="keep-forever" Mode="" Description="Jellyfin tag that protects a title from lifecycle cleanup." Type="Variable" Display="advanced" Required="true" Mask="false">keep-forever</Config>
   <Config Name="Enable Season Pruning" Target="ENABLE_SEASON_PRUNING" Default="false" Mode="" Description="TV only. Allow eligible older seasons to be pruned after configured safety delays." Type="Variable" Display="advanced" Required="true" Mask="false">false</Config>
   <Config Name="Keep All Seasons Tag" Target="KEEP_ALL_SEASONS_TAG" Default="keep-all-seasons" Mode="" Description="Jellyfin tag that prevents TV season pruning." Type="Variable" Display="advanced" Required="true" Mask="false">keep-all-seasons</Config>
