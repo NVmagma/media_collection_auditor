@@ -28,6 +28,18 @@ class CollectionHealthTests(unittest.TestCase):
         self.assertEqual(collection_health(state, stages,
                          ["Movies Waiting: directory unavailable (/media/Movies)"]), [])
 
+    def test_disabled_tv_records_are_preserved_but_not_reported(self):
+        stages = {"Waiting": [], "Holding": [], "Removal": [], "Keep": []}
+        state = {"first_seen": {"TV/Example Show": "2026-10-01"},
+                 "queued": {}, "in_removal": {}, "keep_seen": {},
+                 "arr_sync_pending": {"TV/Example Show": {"stage": "holding"}}}
+        original = repr(state)
+        self.assertEqual(collection_health(state, stages, [],
+                         {"ENABLE_MOVIES": "true", "ENABLE_TV": "false"}), [])
+        self.assertEqual(repr(state), original)
+        self.assertTrue(collection_health(state, stages, [],
+                        {"ENABLE_MOVIES": "true", "ENABLE_TV": "true"}))
+
     def test_missing_folder_reported_with_complete_inventory(self):
         stages = {"Waiting": [], "Holding": [], "Removal": [], "Keep": []}
         state = {"first_seen": {"Film": "2026-10-01"}, "queued": {},
