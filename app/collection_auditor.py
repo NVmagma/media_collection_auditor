@@ -902,6 +902,16 @@ def audit_removal(lib: dict, state: dict, signals: dict):
         path = os.path.join(lib["removal"], folder)
         key = state_key(lib, folder)
 
+        # An interrupted or copied move may leave the same title in two stages.
+        # Do not use an old Removal clock to authorize deletion in that case.
+        duplicates = [stage for stage in ("transient", "holding", "keep")
+                      if os.path.isdir(os.path.join(lib[stage], folder))]
+        if duplicates:
+            print(f"\\n[{lib['name']}: {folder}] Removal paused: title also exists in "
+                  f"{', '.join(duplicates)}; manual reconciliation required.")
+            _stats["in_removal"] += 1
+            continue
+
         entered = state["in_removal"].get(key)
         if entered is None:
             entered = datetime.datetime.now().isoformat()
