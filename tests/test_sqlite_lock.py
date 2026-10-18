@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.sqlite_lock import migration_lock, state_writer_lock
+from app.sqlite_lock import audit_run_lock, migration_lock, state_writer_lock
 from app.sqlite_migration import create_offline_migration_snapshot
 from app.sqlite_state import read_snapshot
 
@@ -89,5 +89,31 @@ def test_json_writer_lock_releases_after_exception(tmp_path):
     with pytest.raises(ValueError):
         with state_writer_lock(source):
             raise ValueError("simulated interrupted save")
+    with state_writer_lock(source):
+        pass
+
+
+def test_audit_lock_blocks_migration_and_allows_nested_save(tmp_path):
+    source = tmp_path / "state.json"
+    source.write_text("{}")
+    with audit_run_lock(source):
+        with state_writer_lock(source):
+            source.write_text('{"queued": {}}')
+        with pytest.raises(RuntimeError, match="Another offline migration"):
+            with migration_lock(source):
+                pass
+        with pytest.raises(RuntimeError, match="Nested auditor"):
+            with audit_run_lock(source):
+                pass
+    with migration_lock(source):
+        pass
+
+
+def test_audit_lock_blocks_competing_writer_and_releases_on_error(tmp_path):
+    source = tmp_path / "state.json"
+    source.write_text("{}")
+    with pytest.raises(ValueError, match="interrupted"):
+        with audit_run_lock(source):
+            raise ValueError("interrupted")
     with state_writer_lock(source):
         pass
