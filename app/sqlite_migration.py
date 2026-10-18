@@ -12,6 +12,7 @@ from pathlib import Path
 
 from app.sqlite_state import SECTIONS, validate_snapshot
 from app.sqlite_snapshot_writer import write_offline_snapshot
+from app.sqlite_lock import migration_lock
 
 
 def prepare_json_backup(source: str | Path, backup: str | Path) -> dict:
@@ -70,15 +71,16 @@ def create_offline_migration_snapshot(
         raise RuntimeError("Source, backup, and database paths must be distinct")
     if destination.exists():
         raise RuntimeError("SQLite destination already exists")
-    state = prepare_json_backup(source, backup)
-    unknown = set(state).difference(SECTIONS)
-    if unknown:
-        raise RuntimeError(
-            "Unknown historical state sections cannot be converted by schema v1: "
-            + ", ".join(sorted(unknown))
-        )
-    # The source is rechecked after backup and immediately before conversion.
-    # Caller must still stop all auditor instances to prevent concurrent writes.
-    if source.read_bytes() != backup.read_bytes():
-        raise RuntimeError("Source changed after backup; refusing conversion")
-    write_offline_snapshot(state, destination)
+    with migration_lock(source):
+        state = prepare_json_backup(source, backup)
+        unknown = set(state).difference(SECTIONS)
+        if unknown:
+            raise RuntimeError(
+                "Unknown historical state sections cannot be converted by schema v1: "
+                + ", ".join(sorted(unknown))
+            )
+        # The source is rechecked after backup and immediately before conversion.
+        # Caller must still stop all auditor instances to prevent concurrent writes.
+        if source.read_bytes() != backup.read_bytes():
+            raise RuntimeError("Source changed after backup; refusing conversion")
+        write_offline_snapshot(state, destination)
