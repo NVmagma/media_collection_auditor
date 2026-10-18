@@ -909,6 +909,9 @@ def audit_removal(lib: dict, state: dict, signals: dict):
         if duplicates:
             print(f"\\n[{lib['name']}: {folder}] Removal paused: title also exists in "
                   f"{', '.join(duplicates)}; manual reconciliation required.")
+            record_action("delete_skipped", folder,
+                          f"Removal blocked: duplicate lifecycle folder in {', '.join(duplicates)}",
+                          lib["name"], status="skipped")
             _stats["in_removal"] += 1
             continue
 
