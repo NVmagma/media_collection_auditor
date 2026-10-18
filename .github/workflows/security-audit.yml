@@ -38,7 +38,7 @@ jobs:
       - name: Build image locally (never publish)
         run: docker build --pull --tag media-collection-auditor:security-check .
       - name: Scan OS and Python packages with Trivy
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@0.32.0
         with:
           image-ref: media-collection-auditor:security-check
           format: table
