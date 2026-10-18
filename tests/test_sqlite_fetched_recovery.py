@@ -134,3 +134,24 @@ def test_incomplete_series_scope_cannot_pass_persisted_recovery(tmp_path):
             now=NOW,
         )
     assert GuardedSQLiteStateStore(database).load_with_revision() == before
+
+
+def test_live_clock_is_sampled_after_each_fetch(tmp_path):
+    database = _setup(tmp_path, kind="move")
+    from datetime import datetime, timezone
+    def observed_after_request(item):
+        return _reply("jellyfin", item, PROTECTION, datetime.now(timezone.utc))
+    report = inspect_fetched_recovery(database, jellyfin_fetch=observed_after_request)
+    assert report["authorization"] == "blocked_pending_independent_verification"
+
+
+def test_explicit_future_timestamp_remains_rejected(tmp_path):
+    database = _setup(tmp_path, kind="move")
+    with pytest.raises(RuntimeError, match="future-dated"):
+        inspect_fetched_recovery(
+            database,
+            jellyfin_fetch=lambda item: _reply(
+                "jellyfin", item, PROTECTION, NOW + timedelta(seconds=1)
+            ),
+            now=NOW,
+        )
