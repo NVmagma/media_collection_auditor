@@ -3,6 +3,7 @@ import sys
 import json
 import time
 import shutil
+import tempfile
 import posixpath
 import datetime
 from typing import Dict, Any, Optional, List, Tuple
@@ -253,17 +254,31 @@ def load_state() -> Dict[str, Dict[str, str]]:
 
 def save_state(state: Dict[str, Dict[str, str]]):
     # Saved even in dry run: it only holds our own bookkeeping, never touches your media.
+    tmp_path = None
     try:
-        os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
-        tmp_path = STATE_FILE + ".tmp"
-        with open(tmp_path, "w") as f:
+        directory = os.path.dirname(os.path.abspath(STATE_FILE))
+        os.makedirs(directory, exist_ok=True)
+        # A unique temporary file avoids collisions between interrupted saves.
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8",
+                                         dir=directory, prefix=".auditor_state_",
+                                         suffix=".tmp", delete=False) as f:
+            tmp_path = f.name
             json.dump(state, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
         os.replace(tmp_path, STATE_FILE)  # atomic: readers never see a half-written file
+        tmp_path = None
         print(f"\n[STATE] Saved {len(state['first_seen'])} tracked folders, {len(state['queued'])} in holding, "
               f"{len(state['in_removal'])} in removal to {os.path.abspath(STATE_FILE)}")
     except Exception as e:
         print(f"\n[STATE ERROR] Could not save {STATE_FILE}: {e}")
         raise RuntimeError(f"Failed to persist auditor state to {STATE_FILE}") from e
+    finally:
+        if tmp_path is not None:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass  # Preserve the original write error; never touch the live state.
 
 
 def state_key(lib: dict, folder: str) -> str:
