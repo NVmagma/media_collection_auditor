@@ -45,7 +45,11 @@ def require_login():
 
 @app.context_processor
 def user_context():
-    return {"viewer": getattr(g, "user", None)}
+    return {"viewer": getattr(g, "user", None),
+            "experimental_sqlite_recovery_enabled": (
+                os.environ.get("EXPERIMENTAL_SQLITE_RECOVERY_VIEW", "").lower() == "true"
+                and "experimental_sqlite_recovery_view" in app.blueprints
+            )}
 
 @app.get("/login-background")
 def login_background():
