@@ -15,6 +15,11 @@ from app.sqlite_recovery_report import inspect_pending_recovery_status
 def inspect_recovery_readiness(database: str | Path) -> dict[str, Any]:
     """Return a fixed checklist with no sensitive operation details."""
     report = inspect_pending_recovery_status(database)
+    return recovery_readiness_from_report(report)
+
+
+def recovery_readiness_from_report(report: dict[str, Any]) -> dict[str, Any]:
+    """Derive a checklist from the same verified snapshot as the status view."""
     status = report["status"]
     pending = status == "blocked"
     return {
