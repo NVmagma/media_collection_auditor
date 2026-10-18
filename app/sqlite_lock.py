@@ -37,3 +37,28 @@ def migration_lock(source: str | Path):
             fcntl.flock(fd, fcntl.LOCK_UN)
     finally:
         os.close(fd)
+
+
+@contextmanager
+def state_writer_lock(source: str | Path):
+    """Serialize cooperating JSON saves against offline migration.
+
+    The lock file is persistent: never unlink it after releasing flock, since
+    another process may already be waiting on the same inode.
+    """
+    if fcntl is None:
+        raise RuntimeError("JSON state locking requires POSIX flock")
+    source = Path(source)
+    lock_path = source.with_name(source.name + ".migration.lock")
+    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise RuntimeError("JSON state write blocked by another state operation") from exc
+        try:
+            yield
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
