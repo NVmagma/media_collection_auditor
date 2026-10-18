@@ -50,7 +50,7 @@ jobs:
         if: github.ref == 'refs/heads/feature/sqlite'
         env:
           PYTHONPATH: ${{ github.workspace }}
-        run: python -m pytest tests/test_sqlite_state.py tests/test_sqlite_migration.py tests/test_sqlite_snapshot_writer.py tests/test_sqlite_lock.py tests/test_sqlite_recovery.py tests/test_sqlite_json.py tests/test_sqlite_end_to_end.py tests/test_sqlite_integrity.py -v
+        run: python -m pytest tests/test_sqlite_state.py tests/test_sqlite_migration.py tests/test_sqlite_snapshot_writer.py tests/test_sqlite_lock.py tests/test_sqlite_recovery.py tests/test_sqlite_json.py tests/test_sqlite_end_to_end.py tests/test_sqlite_integrity.py tests/test_sqlite_interruptions.py -v
 
       - name: Run tests
         env:
