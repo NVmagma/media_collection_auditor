@@ -7,7 +7,7 @@ import pytest
 from app.sqlite_audit_bootstrap import open_isolated_sqlite_audit
 from app.sqlite_migration import create_offline_migration_snapshot
 from app.sqlite_operation_coordinator import SQLiteOperationCoordinator
-from app.sqlite_recovery_readiness import inspect_recovery_readiness
+from app.sqlite_recovery_readiness import inspect_recovery_readiness, recovery_readiness_from_report
 from app.state_store import GuardedSQLiteStateStore
 
 
@@ -58,3 +58,24 @@ def test_no_pending_operation_still_does_not_authorize_cutover(tmp_path):
     assert result["status"] == "no_pending_operation"
     assert result["recovery_clearance"] == "not_authorized"
     assert next(c for c in result["checks"] if c["id"] == "pending_intent")["status"] == "clear"
+
+
+def test_checklist_uses_supplied_snapshot_not_new_database_read(tmp_path):
+    report = {
+        "status": "blocked", "revision": 7,
+        "operation_id": "safe-id", "blocker": "independent_verification_required",
+    }
+    result = recovery_readiness_from_report(report)
+    assert result["status"] == "blocked"
+    assert result["recovery_clearance"] == "not_authorized"
+    assert next(c for c in result["checks"] if c["id"] == "pending_intent")["status"] == "blocked"
+    assert "safe-id" not in str(result)
+
+
+def test_checklist_and_status_stay_consistent_across_distinct_snapshots():
+    before = recovery_readiness_from_report({"status": "blocked", "revision": 1})
+    after = recovery_readiness_from_report({"status": "no_pending_operation", "revision": 2})
+    assert before["status"] == "blocked"
+    assert after["status"] == "no_pending_operation"
+    assert before["checks"][1]["status"] == "blocked"
+    assert after["checks"][1]["status"] == "clear"
