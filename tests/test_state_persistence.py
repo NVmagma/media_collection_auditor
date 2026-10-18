@@ -121,5 +121,55 @@ class StatePersistenceTests(unittest.TestCase):
                 self.assertEqual(auditor.load_state()["first_seen"], previous["first_seen"])
             self.assertEqual(sorted(os.listdir(directory)), ["state.json"])
 
+    def test_restart_preserves_all_lifecycle_timestamps(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state_path = os.path.join(directory, "state.json")
+            original = {
+                "first_seen": {"Waiting Film": "2025-01-02T03:04:05"},
+                "queued": {"Holding Film": "2025-02-03T04:05:06"},
+                "in_removal": {"Removal Film": "2025-03-04T05:06:07"},
+                "keep_seen": {"Keep Film": "2025-04-05T06:07:08"},
+                "arr_sync_pending": {
+                    "Holding Film": {"stage": "holding", "root": "/media/Movies_hold",
+                                     "monitored": False},
+                },
+            }
+            with patch.object(auditor, "STATE_FILE", state_path):
+                auditor.save_state(original)
+                first_load = auditor.load_state()
+                self.assertEqual(first_load, original)
+                auditor.save_state(first_load)
+                restarted = auditor.load_state()
+            self.assertEqual(restarted, original)
+
+    def test_corrupted_existing_state_cannot_be_overwritten_by_recovery_load(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state_path = os.path.join(directory, "state.json")
+            original = {"first_seen": {"Film": "2025-01-01T00:00:00"},
+                        "queued": {}, "in_removal": {}, "keep_seen": {},
+                        "arr_sync_pending": {}}
+            with patch.object(auditor, "STATE_FILE", state_path):
+                auditor.save_state(original)
+                with open(state_path, "w") as handle:
+                    handle.write('{"first_seen":')
+                with self.assertRaisesRegex(RuntimeError, "refusing to reset tracking history"):
+                    auditor.load_state()
+            with open(state_path) as handle:
+                self.assertEqual(handle.read(), '{"first_seen":')
+
+    def test_abandoned_temporary_file_does_not_override_valid_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state_path = os.path.join(directory, "state.json")
+            original = {"first_seen": {"Film": "2025-01-01T00:00:00"},
+                        "queued": {}, "in_removal": {}, "keep_seen": {},
+                        "arr_sync_pending": {}}
+            with patch.object(auditor, "STATE_FILE", state_path):
+                auditor.save_state(original)
+                with open(os.path.join(directory, ".auditor_state_interrupted.tmp"), "w") as handle:
+                    handle.write('{"queued":')
+                self.assertEqual(auditor.load_state(), original)
+            with open(state_path) as handle:
+                self.assertIn("2025-01-01T00:00:00", handle.read())
+
 if __name__ == "__main__":
     unittest.main()
