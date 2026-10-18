@@ -19,6 +19,7 @@ class StageTransitionTests(unittest.TestCase):
         self.lib = {"name": "Movies", "state_prefix": "",
                     "holding": str(root / "holding"),
                     "app_holding": "/media/Movies_hold",
+                    "keep": str(root / "keep"),
                     "removal": str(root / "removal"),
                     "app_removal": "/media/Movies_removal",
                     "transient": str(root / "transient")}
