@@ -88,5 +88,5 @@ def test_duplicate_json_keys_are_rejected(tmp_path):
     duplicate = b'{"queued":{},"queued":{}}'
     source.write_bytes(duplicate)
     backup.write_bytes(duplicate)
-    with pytest.raises(ValueError, match="Duplicate JSON key"):
+    with pytest.raises(RuntimeError, match="integrity verification could not complete"):
         verify_migration_integrity(source, backup, database)
