@@ -20,11 +20,13 @@ class Response:
 
 
 class HTTP:
-    def __init__(self, seasons, *, second=None):
+    def __init__(self, seasons, *, second=None, second_users=None):
         self.seasons = seasons
         self.second = second
         self.calls = []
         self.season_calls = 0
+        self.user_calls = 0
+        self.second_users = second_users
 
     def get(self, url, *, headers, timeout):
         self.calls.append(url)
@@ -35,7 +37,8 @@ class HTTP:
                 else self.seasons
             )
         if url == BASE + "/Users":
-            return Response([{"Id": "user1"}, {"Id": "user2"}])
+            self.user_calls += 1
+            return Response(self.second_users if self.user_calls == 2 and self.second_users is not None else [{"Id": "user1"}, {"Id": "user2"}])
         if url.endswith("/Items/show"):
             return Response({"Id": "show", "Tags": [], "UserData": {"IsFavorite": False}})
         if url.endswith("/Items/season1"):
@@ -95,3 +98,21 @@ def test_empty_series_is_not_mistaken_for_complete_protection():
     http = HTTP(listing([]))
     report = adapter(http).jellyfin_fetch_verified_series("show")
     assert report["data"]["complete"] is False
+
+
+def test_changed_user_set_blocks_after_season_recheck():
+    http = HTTP(
+        listing([{"Id": "season1", "SeriesId": "show"}]),
+        second_users=[{"Id": "user1"}, {"Id": "user3"}],
+    )
+    with pytest.raises(RuntimeError, match="user set changed"):
+        adapter(http).jellyfin_fetch_verified_series("show")
+    assert http.user_calls == 2
+
+
+def test_duplicate_users_on_second_read_block():
+    http = HTTP(
+        listing([]), second_users=[{"Id": "user1"}, {"Id": "user1"}],
+    )
+    with pytest.raises(RuntimeError, match="duplicate user"):
+        adapter(http).jellyfin_fetch_verified_series("show")
