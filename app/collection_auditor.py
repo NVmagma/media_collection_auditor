@@ -262,6 +262,14 @@ def load_state() -> Dict[str, Dict[str, str]]:
 
 
 def save_state(state: Dict[str, Dict[str, str]]):
+    """Save JSON state only while holding the shared migration lock."""
+    from sqlite_lock import state_writer_lock
+
+    with state_writer_lock(STATE_FILE):
+        _save_state_unlocked(state)
+
+
+def _save_state_unlocked(state: Dict[str, Dict[str, str]]):
     # Saved even in dry run: it only holds our own bookkeeping, never touches your media.
     tmp_path = None
     try:
