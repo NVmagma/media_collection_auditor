@@ -7,8 +7,8 @@ backup may contain recoverable evidence. JSON remains authoritative.
 from __future__ import annotations
 
 from pathlib import Path
-import json
 
+from app.sqlite_json import parse_unique_json
 from app.sqlite_state import SECTIONS, read_snapshot, validate_snapshot
 
 
@@ -29,7 +29,7 @@ def inspect_migration_artifacts(
         result["source"] = "missing"
     else:
         try:
-            state = json.loads(source.read_bytes())
+            state = parse_unique_json(source.read_bytes())
             if not isinstance(state, dict):
                 raise RuntimeError("Invalid JSON state")
             for section in SECTIONS:
@@ -45,7 +45,7 @@ def inspect_migration_artifacts(
         result["backup"] = "invalid"
     else:
         try:
-            state = json.loads(backup.read_bytes())
+            state = parse_unique_json(backup.read_bytes())
             if not isinstance(state, dict):
                 raise RuntimeError("Invalid backup")
             for section in SECTIONS:
