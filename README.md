@@ -6,6 +6,8 @@ New titles enter **Waiting**. Jellyfin tags and optionally favorites can move ti
 
 > **Safety:** Start with `DRY_RUN=true`. Live mode permits configured lifecycle moves, not unrestricted deletion. Keep both `ALLOW_PERMANENT_DELETE=false` and `ALLOW_FILESYSTEM_DELETE=false`; permanent filesystem deletion is not approved. Back up persistent state and test with disposable media before deploying changes.
 
+For planned work, current priorities, and future feature ideas, see the [living feature roadmap](docs/feature-roadmap.md). Update it whenever a new feature is proposed or a milestone changes status.
+
 ---
 
 ## Unraid dashboard (feature/unraid)
