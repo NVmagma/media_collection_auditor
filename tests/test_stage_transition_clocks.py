@@ -110,7 +110,7 @@ class StageTransitionTests(unittest.TestCase):
     def test_missing_jellyfin_signals_cannot_advance_holding(self):
         (Path(self.lib["holding"]) / "Film").mkdir()
         self.state["queued"]["Film"] = "2025-01-01T00:00:00"
-        with patch.object(auditor, "DRY_RUN", False), \\
+        with patch.object(auditor, "DRY_RUN", False), \
              patch.object(auditor, "move_or_report") as move:
             auditor.audit_holding(self.lib, {}, self.state)
         move.assert_not_called()
@@ -120,7 +120,7 @@ class StageTransitionTests(unittest.TestCase):
     def test_protected_holding_title_cannot_advance_to_removal(self):
         (Path(self.lib["holding"]) / "Film").mkdir()
         self.state["queued"]["Film"] = "2025-01-01T00:00:00"
-        with patch.object(auditor, "DRY_RUN", False), \\
+        with patch.object(auditor, "DRY_RUN", False), \
              patch.object(auditor, "move_or_report", return_value=False) as move:
             auditor.audit_holding(self.lib, {"Film": {"protected": True}}, self.state)
         move.assert_called_once()
