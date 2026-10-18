@@ -54,3 +54,6 @@ def test_database_has_expected_schema_version(tmp_path):
         assert connection.execute(
             "SELECT value FROM metadata WHERE key = 'schema_version'"
         ).fetchone() == ("1",)
+        assert connection.execute(
+            "SELECT value FROM metadata WHERE key = 'snapshot_complete'"
+        ).fetchone() == ("1",)
