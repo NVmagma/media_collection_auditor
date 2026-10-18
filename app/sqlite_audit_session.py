@@ -26,6 +26,13 @@ class RevisionedAuditSession:
     def revision(self) -> int:
         return self._revision
 
+    def read_verified_snapshot(self) -> tuple[dict[str, Any], int]:
+        """Return a detached snapshot only if the session is still current."""
+        persisted, revision = self._store.load_with_revision()
+        if revision != self._revision or persisted != self.state:
+            raise RuntimeError("SQLite recovery session is stale")
+        return deepcopy(persisted), revision
+
     def checkpoint(self) -> None:
         """Persist a snapshot, refusing to overwrite a concurrent audit."""
         # Never hand a mutable reference to the backend while it is writing.
