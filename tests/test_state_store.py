@@ -1,6 +1,12 @@
 """Storage boundary tests: existing JSON behavior remains authoritative."""
 
+import sys
+from pathlib import Path
+
 import pytest
+
+# The production auditor uses top-level imports from its app/ directory.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 
 from app.state_store import JsonStateStore
 
