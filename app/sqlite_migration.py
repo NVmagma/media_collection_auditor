@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 
 from app.sqlite_state import SECTIONS, validate_snapshot
+from app.sqlite_snapshot_writer import write_offline_snapshot
 
 
 def prepare_json_backup(source: str | Path, backup: str | Path) -> dict:
@@ -53,3 +54,31 @@ def prepare_json_backup(source: str | Path, backup: str | Path) -> dict:
         return normalized
     except (OSError, UnicodeError, json.JSONDecodeError, ValueError, TypeError) as exc:
         raise RuntimeError("Could not validate or back up JSON state") from exc
+
+
+def create_offline_migration_snapshot(
+    source: str | Path, backup: str | Path, destination: str | Path
+) -> None:
+    """Prepare a backed-up SQLite copy, leaving JSON authoritative.
+
+    Unknown top-level fields are not representable in schema v1. Refuse to
+    convert rather than silently discarding potentially important history.
+    No automatic retry or activation is attempted on partial failures.
+    """
+    source, backup, destination = Path(source), Path(backup), Path(destination)
+    if len({source.resolve(), backup.resolve(), destination.resolve()}) != 3:
+        raise RuntimeError("Source, backup, and database paths must be distinct")
+    if destination.exists():
+        raise RuntimeError("SQLite destination already exists")
+    state = prepare_json_backup(source, backup)
+    unknown = set(state).difference(SECTIONS)
+    if unknown:
+        raise RuntimeError(
+            "Unknown historical state sections cannot be converted by schema v1: "
+            + ", ".join(sorted(unknown))
+        )
+    # The source is rechecked after backup and immediately before conversion.
+    # Caller must still stop all auditor instances to prevent concurrent writes.
+    if source.read_bytes() != backup.read_bytes():
+        raise RuntimeError("Source changed after backup; refusing conversion")
+    write_offline_snapshot(state, destination)
