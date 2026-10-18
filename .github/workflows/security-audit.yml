@@ -1,0 +1,48 @@
+name: Security audit (advisory)
+
+on:
+  push:
+    branches: [feature/sqlite]
+    paths:
+      - requirements.txt
+      - Dockerfile
+      - .github/workflows/security-audit.yml
+  pull_request:
+    branches: [feature/sqlite]
+  schedule:
+    - cron: '17 10 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python-vulnerabilities:
+    name: Audit Python dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependency auditor
+        run: python -m pip install pip-audit
+      - name: Audit resolved Python dependencies
+        run: python -m pip_audit -r requirements.txt --progress-spinner off
+
+  container-vulnerabilities:
+    name: Scan local Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image locally (never publish)
+        run: docker build --pull --tag media-collection-auditor:security-check .
+      - name: Scan OS and Python packages with Trivy
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: media-collection-auditor:security-check
+          format: table
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
