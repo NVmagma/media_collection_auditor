@@ -89,6 +89,66 @@ class ReadOnlyRecoveryHTTP:
             "observed_at": datetime.now(timezone.utc), "data": protection,
         }
 
+    def jellyfin_fetch_all_users(self, item_id: str, *, season_ids: tuple[str, ...] = ()) -> dict[str, Any]:
+        """Aggregate explicit user/title/season observations without assuming coverage.
+
+        A caller must supply the complete season identity set independently.
+        This method cannot establish that the set is exhaustive, so complete
+        stays False until trusted library enumeration is implemented.
+        """
+        item_id = _identity(item_id)
+        if not isinstance(season_ids, tuple) or any(
+            not isinstance(value, str) or not value or value == item_id
+            for value in season_ids
+        ) or len(set(season_ids)) != len(season_ids):
+            raise RuntimeError("Recovery season identity set invalid")
+        season_ids = tuple(_identity(value) for value in season_ids)
+        users_url = _endpoint(self.jellyfin_url, "/Users")
+        try:
+            response = self.http.get(
+                users_url, headers={"X-Emby-Token": self.jellyfin_token}, timeout=15
+            )
+            response.raise_for_status()
+            users = response.json()
+        except (requests.RequestException, ValueError, TypeError) as exc:
+            raise RuntimeError("Recovery Jellyfin user enumeration failed") from exc
+        if not isinstance(users, list) or not users:
+            raise RuntimeError("Recovery Jellyfin users unavailable")
+        ids = []
+        for user in users:
+            if not isinstance(user, dict):
+                raise RuntimeError("Recovery Jellyfin user identity invalid")
+            ids.append(_identity(user.get("Id")))
+        if len(set(ids)) != len(ids):
+            raise RuntimeError("Recovery Jellyfin duplicate user identity")
+        flags = {"keep": False, "keep_forever": False,
+                 "keep_all_seasons": False, "favorite": False}
+        for user_id in ids:
+            for title_id in (item_id, *season_ids):
+                data = _get_json(
+                    self.http,
+                    _endpoint(self.jellyfin_url, f"/Users/{user_id}/Items/{title_id}"),
+                    headers={"X-Emby-Token": self.jellyfin_token},
+                )
+                if data.get("Id") != title_id:
+                    raise RuntimeError("Recovery Jellyfin identity mismatch")
+                tags, user_data = data.get("Tags"), data.get("UserData")
+                if not isinstance(tags, list) or not all(
+                    isinstance(tag, str) for tag in tags
+                ):
+                    raise RuntimeError("Recovery Jellyfin tags unavailable")
+                if not isinstance(user_data, dict) or type(user_data.get("IsFavorite")) is not bool:
+                    raise RuntimeError("Recovery Jellyfin favorite unavailable")
+                tags = {tag.casefold() for tag in tags}
+                for flag in ("keep", "keep_forever", "keep_all_seasons"):
+                    flags[flag] |= flag.replace("_", "-") in tags
+                flags["favorite"] |= user_data["IsFavorite"]
+        return {
+            "service": "jellyfin", "title_id": item_id,
+            "observed_at": datetime.now(timezone.utc),
+            "data": {"available": True, "complete": False, **flags},
+        }
+
     def arr_fetch(self, service: str, title_id: int) -> dict[str, Any]:
         """Read exact title record from Radarr or Sonarr; never mutate it."""
         if service not in self.arr or type(title_id) is not int or title_id <= 0:
