@@ -8,6 +8,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/collection_auditor.py .
+COPY app/sqlite_lock.py .
 COPY app/main.py .
 COPY app/web.py .
 COPY app/lifecycle_decisions.py .
