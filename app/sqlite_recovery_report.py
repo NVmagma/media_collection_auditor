@@ -79,7 +79,11 @@ def inspect_http_recovery_report(
         # unrecognized exception text (it may contain secrets).
         session.read_verified_snapshot()
         message = str(exc)
-        if "stale" in message or "checkpoint" in message:
+        if message in (
+            "SQLite recovery session is stale",
+            "SQLite session invalid after failed checkpoint; reopen required",
+            "SQLite audit checkpoint could not be verified",
+        ):
             raise
         return {**result, "status": "blocked",
                 "blocker": BLOCKERS.get(message, "inspection_failed")}
