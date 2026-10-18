@@ -53,7 +53,7 @@ def test_database_has_expected_schema_version(tmp_path):
     with sqlite3.connect(f"file:{destination}?mode=ro", uri=True) as connection:
         assert connection.execute(
             "SELECT value FROM metadata WHERE key = 'schema_version'"
-        ).fetchone() == ("1",)
+        ).fetchone() == ("2",)
         assert connection.execute(
             "SELECT value FROM metadata WHERE key = 'snapshot_complete'"
         ).fetchone() == ("1",)
