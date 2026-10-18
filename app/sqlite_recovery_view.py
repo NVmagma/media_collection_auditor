@@ -15,7 +15,7 @@ from flask import Blueprint, Response
 
 from app.sqlite_recovery_report import inspect_pending_recovery_status
 from app.sqlite_recovery_guidance import explain_recovery_status
-from app.sqlite_recovery_readiness import inspect_recovery_readiness
+from app.sqlite_recovery_readiness import recovery_readiness_from_report
 
 
 def create_recovery_view_blueprint(
@@ -45,7 +45,7 @@ def create_recovery_view_blueprint(
                             headers=headers, mimetype="text/plain")
         try:
             report = inspect_pending_recovery_status(database)
-            readiness = inspect_recovery_readiness(database)
+            readiness = recovery_readiness_from_report(report)
         except Exception:
             return Response("Recovery status unavailable", status=503,
                             headers=headers, mimetype="text/plain")
