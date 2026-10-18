@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 SECTIONS = ("first_seen", "queued", "in_removal", "keep_seen", "arr_sync_pending")
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 # Preserve state keys and values exactly; do not reinterpret naive local timestamps.
 SCHEMA_SQL = """
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS metadata (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS state_entries (
+CREATE TABLE IF NOT EXISTS extra_state (\n    key TEXT PRIMARY KEY,\n    value_json TEXT NOT NULL\n);\nCREATE TABLE IF NOT EXISTS state_entries (
     section TEXT NOT NULL,
     media_key TEXT NOT NULL,
     value_json TEXT NOT NULL,
@@ -99,6 +99,12 @@ def read_snapshot(database_path: str | Path) -> dict[str, dict[str, Any]]:
                 elif not isinstance(value, str):
                     raise RuntimeError("SQLite snapshot contains an invalid lifecycle timestamp")
                 result[section][media_key] = value
+            for key, value_json in connection.execute(
+                "SELECT key, value_json FROM extra_state"
+            ):
+                if not isinstance(key, str) or not key or key in result:
+                    raise RuntimeError("SQLite snapshot contains an invalid extra state key")
+                result[key] = json.loads(value_json)
             validate_snapshot(result)
             return result
         finally:
