@@ -122,8 +122,8 @@ def load_state():
     try:
         with path.open() as handle:
             return json.load(handle)
-    except (OSError, json.JSONDecodeError):
-        return {}
+    except (OSError, json.JSONDecodeError, UnicodeError) as exc:
+        raise RuntimeError("Dashboard tracking state is unreadable; displayed lifecycle dates may be incomplete") from exc
 
 
 
@@ -306,7 +306,12 @@ def collection_health(state, stages, warnings, config=None):
 @app.get("/")
 def dashboard():
     actions = load_actions()
-    state = load_state()
+    state_error = None
+    try:
+        state = load_state()
+    except RuntimeError as exc:
+        state = {}
+        state_error = str(exc)
     config = load_config()
     stages, inventory_warnings = filesystem_stages(state, config)
     health_issues = collection_health(state, stages, inventory_warnings, config)
@@ -376,7 +381,7 @@ def dashboard():
                     preview.append({"title": item["title"], "library": item["library"],
                                     "stage": stage, "action": action})
     preview.sort(key=lambda item: (item["library"], item["stage"], item["title"].casefold()))
-    return render_template("dashboard.html", actions=actions, state=state, stages=stages, inventory_warnings=inventory_warnings, health_issues=health_issues, run=snapshot(), history=read_history(100),
+    return render_template("dashboard.html", actions=actions, state=state, state_error=state_error, stages=stages, inventory_warnings=inventory_warnings, health_issues=health_issues, run=snapshot(), history=read_history(100),
                            preview=preview, dry_run=load_config().get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "true")
 
 
