@@ -20,15 +20,13 @@ def inspect_session_recovery(
     arr_record: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Reject stale sessions and concurrent state changes during inspection."""
-    baseline, revision = session._store.load_with_revision()
-    if revision != session.revision or baseline != session.state:
-        raise RuntimeError("SQLite recovery session is stale")
+    baseline, revision = session.read_verified_snapshot()
     report = inspect_combined_recovery(
         deepcopy(baseline),
         jellyfin_evidence=jellyfin_evidence,
         arr_record=arr_record,
     )
-    confirmed, confirmed_revision = session._store.load_with_revision()
+    confirmed, confirmed_revision = session.read_verified_snapshot()
     if confirmed_revision != revision or confirmed != baseline:
         raise RuntimeError("SQLite recovery state changed during inspection")
     return {**report, "state_revision": revision}
