@@ -55,6 +55,7 @@ class SQLiteOperationCoordinator:
         The earlier prototype accepted caller-provided dictionaries as proof.
         That is not sufficient to safely clear a crashed filesystem/Arr action.
         """
+        self.session.read_verified_snapshot()
         pending = self.session.state.get(INTENTS_KEY)
         if not isinstance(pending, dict) or pending.get("id") != operation_id:
             raise RuntimeError("Missing or mismatched SQLite operation intent")
