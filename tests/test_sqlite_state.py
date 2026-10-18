@@ -19,7 +19,7 @@ def test_valid_snapshot_preserves_values(tmp_path):
     path = tmp_path / "state.db"
     with sqlite3.connect(path) as db:
         db.executescript(SCHEMA_SQL)
-        db.execute("INSERT INTO metadata VALUES (?, ?)", ("schema_version", "1"))
+        db.execute("INSERT INTO metadata VALUES (?, ?)", ("schema_version", "2"))
         db.execute("INSERT INTO metadata VALUES (?, ?)", ("snapshot_complete", "1"))
         db.execute(
             "INSERT INTO state_entries VALUES (?, ?, ?)",
@@ -56,7 +56,7 @@ def test_invalid_row_fails_closed(tmp_path):
     path = tmp_path / "state.db"
     with sqlite3.connect(path) as db:
         db.executescript(SCHEMA_SQL)
-        db.execute("INSERT INTO metadata VALUES (?, ?)", ("schema_version", "1"))
+        db.execute("INSERT INTO metadata VALUES (?, ?)", ("schema_version", "2"))
         db.execute("INSERT INTO metadata VALUES (?, ?)", ("snapshot_complete", "1"))
         db.execute(
             "INSERT INTO state_entries VALUES (?, ?, ?)",
@@ -73,7 +73,7 @@ def test_unsafe_timestamp_fails_closed(tmp_path, timestamp):
     path = tmp_path / "state.db"
     with sqlite3.connect(path) as db:
         db.executescript(SCHEMA_SQL)
-        db.execute("INSERT INTO metadata VALUES (?, ?)", ("schema_version", "1"))
+        db.execute("INSERT INTO metadata VALUES (?, ?)", ("schema_version", "2"))
         db.execute("INSERT INTO metadata VALUES (?, ?)", ("snapshot_complete", "1"))
         db.execute("INSERT INTO state_entries VALUES (?, ?, ?)",
                    ("queued", "Movie", json.dumps(timestamp)))
@@ -90,7 +90,7 @@ def test_unsafe_arr_retry_fails_closed(tmp_path, pending):
     path = tmp_path / "state.db"
     with sqlite3.connect(path) as db:
         db.executescript(SCHEMA_SQL)
-        db.execute("INSERT INTO metadata VALUES (?, ?)", ("schema_version", "1"))
+        db.execute("INSERT INTO metadata VALUES (?, ?)", ("schema_version", "2"))
         db.execute("INSERT INTO metadata VALUES (?, ?)", ("snapshot_complete", "1"))
         db.execute("INSERT INTO state_entries VALUES (?, ?, ?)",
                    ("arr_sync_pending", "Movie", json.dumps(pending)))
@@ -102,7 +102,7 @@ def test_incomplete_snapshot_fails_closed(tmp_path):
     path = tmp_path / "state.db"
     with sqlite3.connect(path) as db:
         db.executescript(SCHEMA_SQL)
-        db.execute("INSERT INTO metadata VALUES (?, ?)", ("schema_version", "1"))
+        db.execute("INSERT INTO metadata VALUES (?, ?)", ("schema_version", "2"))
         db.execute(
             "INSERT INTO state_entries VALUES (?, ?, ?)",
             ("queued", "Movie", json.dumps("2025-01-01T00:00:00")),
