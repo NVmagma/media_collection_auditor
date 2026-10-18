@@ -58,7 +58,7 @@ on the active development branch and review it alongside development milestones.
 
 | Feature | Status | Acceptance / next step |
 | --- | --- | --- |
-| Operator-friendly SQLite readiness checklist | Proposed | Show migration/recovery blockers and test evidence before optional rollout |
+| Operator-friendly SQLite readiness checklist | In progress | Read-only recovery checklist added; extend with independently verified evidence and migration tests before optional rollout |
 | Backup and restore validation tooling | Proposed | Provide non-destructive state consistency and restore rehearsal |
 
 ## How to maintain this roadmap
