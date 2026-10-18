@@ -257,9 +257,21 @@ def collection_health(state, stages, warnings, config=None):
                                      + ", ".join(sorted(locations)) + ". Review manually; no files were moved."})
     for stage, items in stages.items():
         for item in items:
-            if item["library"] in enabled and item["since"] is None:
-                issues.append({"library": item["library"], "title": item["title"],
-                               "detail": f"{stage}: folder has no tracking timestamp yet"})
+            if item["library"] not in enabled or item["since"] is not None:
+                continue
+            key = ("TV/" if item["library"] == "TV" else "") + item["title"]
+            recorded = [label for label, section in sections.items()
+                        if key in state.get(section, {})]
+            if recorded:
+                detail = (f"{stage}: folder has no tracking timestamp yet; "
+                          f"tracking exists in {', '.join(recorded)}. "
+                          "Review after the next audit; no dates were changed.")
+            else:
+                detail = (f"{stage}: folder has no tracking timestamp yet; "
+                          "no lifecycle tracking record exists. "
+                          "Manual review recommended; no dates were changed.")
+            issues.append({"library": item["library"], "title": item["title"],
+                           "detail": detail})
     for stage, section in sections.items():
         for key in state.get(section, {}):
             if not isinstance(key, str):
