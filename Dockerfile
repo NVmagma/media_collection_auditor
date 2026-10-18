@@ -22,6 +22,9 @@ COPY app/audit_history.py .
 COPY app/manual_rescue.py .
 COPY app/auth.py .
 
+# Catch missing runtime modules during image build, not on Unraid.
+RUN python -c "import sqlite_lock; import collection_auditor"
+
 EXPOSE 8080
 
 ENTRYPOINT ["python", "main.py"]
