@@ -147,6 +147,7 @@ class ReadOnlyRecoveryHTTP:
             "service": "jellyfin", "title_id": item_id,
             "observed_at": datetime.now(timezone.utc),
             "data": {"available": True, "complete": False, **flags},
+            "user_ids": tuple(ids),
         }
 
     def jellyfin_fetch_verified_series(self, series_id: str) -> dict[str, Any]:
@@ -195,6 +196,30 @@ class ReadOnlyRecoveryHTTP:
                        for item in confirm_items)
                 or {item["Id"] for item in confirm_items} != set(ids)):
             raise RuntimeError("Recovery Jellyfin season set changed during inspection")
+        # Re-enumerate users as well: a new user appearing during the read
+        # could carry protection information that was not inspected.
+        try:
+            users_response = self.http.get(
+                _endpoint(self.jellyfin_url, "/Users"),
+                headers={"X-Emby-Token": self.jellyfin_token}, timeout=15,
+            )
+            users_response.raise_for_status()
+            confirmed_users = users_response.json()
+        except (requests.RequestException, ValueError, TypeError) as exc:
+            raise RuntimeError("Recovery Jellyfin user recheck failed") from exc
+        if not isinstance(confirmed_users, list) or len(confirmed_users) == 0:
+            raise RuntimeError("Recovery Jellyfin user set changed during inspection")
+        try:
+            confirmed_ids = [_identity(user.get("Id")) for user in confirmed_users]
+        except (AttributeError, RuntimeError) as exc:
+            raise RuntimeError("Recovery Jellyfin user recheck invalid") from exc
+        if len(set(confirmed_ids)) != len(confirmed_ids):
+            raise RuntimeError("Recovery Jellyfin duplicate user identity")
+        # The original user list is retained in the diagnostic result so a
+        # caller can compare the same scope, without treating it as authority.
+        if set(confirmed_ids) != set(observation["user_ids"]):
+            raise RuntimeError("Recovery Jellyfin user set changed during inspection")
+        observation.pop("user_ids")
         # Non-atomic observations remain unsuitable for automatic clearance.
         return observation
 
