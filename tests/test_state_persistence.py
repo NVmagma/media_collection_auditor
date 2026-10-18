@@ -93,5 +93,33 @@ class StatePersistenceTests(unittest.TestCase):
                                         "in_removal": {}, "keep_seen": {}})
 
 
+    def test_failed_replace_keeps_previous_state_and_cleans_temporary_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state_path = os.path.join(directory, "state.json")
+            previous = {"first_seen": {"Film": "2025-01-01T00:00:00"},
+                        "queued": {}, "in_removal": {}, "keep_seen": {}}
+            replacement = {"first_seen": {}, "queued": {"Film": "2026-01-01T00:00:00"},
+                           "in_removal": {}, "keep_seen": {}}
+            with patch.object(auditor, "STATE_FILE", state_path):
+                auditor.save_state(previous)
+                with patch.object(auditor.os, "replace", side_effect=OSError("disk full")):
+                    with self.assertRaisesRegex(RuntimeError, "Failed to persist auditor state"):
+                        auditor.save_state(replacement)
+                self.assertEqual(auditor.load_state()["first_seen"], previous["first_seen"])
+            self.assertEqual(sorted(os.listdir(directory)), ["state.json"])
+
+    def test_failed_serialization_keeps_previous_state_and_cleans_temporary_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state_path = os.path.join(directory, "state.json")
+            previous = {"first_seen": {"Film": "2025-01-01T00:00:00"},
+                        "queued": {}, "in_removal": {}, "keep_seen": {}}
+            with patch.object(auditor, "STATE_FILE", state_path):
+                auditor.save_state(previous)
+                with patch.object(auditor.json, "dump", side_effect=OSError("write failed")):
+                    with self.assertRaisesRegex(RuntimeError, "Failed to persist auditor state"):
+                        auditor.save_state(previous)
+                self.assertEqual(auditor.load_state()["first_seen"], previous["first_seen"])
+            self.assertEqual(sorted(os.listdir(directory)), ["state.json"])
+
 if __name__ == "__main__":
     unittest.main()
