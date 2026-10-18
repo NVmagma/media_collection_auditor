@@ -171,5 +171,15 @@ class StatePersistenceTests(unittest.TestCase):
             with open(state_path) as handle:
                 self.assertIn("2025-01-01T00:00:00", handle.read())
 
+    def test_missing_state_with_abandoned_write_fails_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state_path = os.path.join(directory, "state.json")
+            with open(os.path.join(directory, ".auditor_state_interrupted.tmp"), "w") as handle:
+                handle.write('{"first_seen":')
+            with patch.object(auditor, "STATE_FILE", state_path):
+                with self.assertRaisesRegex(RuntimeError, "refusing to reset tracking history"):
+                    auditor.load_state()
+            self.assertFalse(os.path.exists(state_path))
+
 if __name__ == "__main__":
     unittest.main()
