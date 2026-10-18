@@ -21,6 +21,23 @@ class CollectionHealthTests(unittest.TestCase):
         self.assertTrue(any("no tracking timestamp" in d for d in details))
         self.assertTrue(any("Removal tracking record, but folder is in" in d for d in details))
 
+    def test_missing_timestamp_identifies_stale_stage_record(self):
+        stages = {"Waiting": [], "Holding": [], "Removal": [],
+                  "Keep": [{"library": "Movies", "title": "Film", "since": None}]}
+        state = {"first_seen": {"Film": "2026-10-01"}, "queued": {},
+                 "in_removal": {}, "keep_seen": {}}
+        original = repr(state)
+        details = [issue["detail"] for issue in collection_health(state, stages, [])]
+        self.assertTrue(any("tracking exists in Waiting" in d for d in details))
+        self.assertEqual(repr(state), original)
+
+    def test_missing_timestamp_identifies_never_tracked_folder(self):
+        stages = {"Waiting": [], "Holding": [], "Removal": [],
+                  "Keep": [{"library": "Movies", "title": "Film", "since": None}]}
+        state = {"first_seen": {}, "queued": {}, "in_removal": {}, "keep_seen": {}}
+        details = [issue["detail"] for issue in collection_health(state, stages, [])]
+        self.assertTrue(any("no lifecycle tracking record exists" in d for d in details))
+
     def test_unavailable_directory_does_not_imply_missing_media(self):
         stages = {"Waiting": [], "Holding": [], "Removal": [], "Keep": []}
         state = {"first_seen": {"Film": "2026-10-01"}, "queued": {},
