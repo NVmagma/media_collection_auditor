@@ -6,11 +6,13 @@ auditor's authoritative JSON state. Schema activation is a later, tested step.
 
 from __future__ import annotations
 
+import datetime
 import json
 import sqlite3
 from pathlib import Path
 from typing import Any
 
+SECTIONS = ("first_seen", "queued", "in_removal", "keep_seen", "arr_sync_pending")
 SCHEMA_VERSION = 1
 
 # Preserve state keys and values exactly; do not reinterpret naive local timestamps.
@@ -26,6 +28,37 @@ CREATE TABLE IF NOT EXISTS state_entries (
     PRIMARY KEY (section, media_key)
 );
 """
+
+
+def validate_snapshot(state: dict[str, dict[str, Any]]) -> None:
+    """Apply the auditor's existing lifecycle and Arr retry invariants.
+
+    This is intentionally independent of the production JSON loader; the
+    auditor continues to use that loader until migration is explicitly enabled.
+    """
+    if not isinstance(state, dict) or any(
+        section not in state or not isinstance(state[section], dict)
+        for section in SECTIONS
+    ):
+        raise RuntimeError("SQLite snapshot has missing or invalid state sections")
+    now = datetime.datetime.now()
+    for section in SECTIONS[:-1]:
+        for key, timestamp in state[section].items():
+            if not isinstance(key, str) or not key or not isinstance(timestamp, str):
+                raise RuntimeError(f"Invalid {section} state entry")
+            try:
+                parsed = datetime.datetime.fromisoformat(timestamp)
+            except ValueError as exc:
+                raise RuntimeError(f"Invalid {section} timestamp") from exc
+            if parsed.tzinfo is not None or parsed > now:
+                raise RuntimeError(f"Unsafe {section} timestamp")
+    for key, entry in state["arr_sync_pending"].items():
+        if (not isinstance(key, str) or not key or not isinstance(entry, dict)
+                or entry.get("stage") not in ("holding", "keep", "removal")
+                or not isinstance(entry.get("root"), str) or not entry["root"]
+                or (entry.get("monitored") is not None
+                    and type(entry["monitored"]) is not bool)):
+            raise RuntimeError("Invalid Arr retry entry")
 
 
 def read_snapshot(database_path: str | Path) -> dict[str, dict[str, Any]]:
@@ -49,9 +82,7 @@ def read_snapshot(database_path: str | Path) -> dict[str, dict[str, Any]]:
                 "SELECT section, media_key, value_json FROM state_entries"
             ).fetchall()
             result: dict[str, dict[str, Any]] = {
-                section: {} for section in (
-                    "first_seen", "queued", "in_removal", "keep_seen", "arr_sync_pending"
-                )
+                section: {} for section in SECTIONS
             }
             for section, media_key, value_json in rows:
                 if section not in result or not isinstance(media_key, str) or not media_key:
@@ -63,6 +94,7 @@ def read_snapshot(database_path: str | Path) -> dict[str, dict[str, Any]]:
                 elif not isinstance(value, str):
                     raise RuntimeError("SQLite snapshot contains an invalid lifecycle timestamp")
                 result[section][media_key] = value
+            validate_snapshot(result)
             return result
         finally:
             connection.close()
