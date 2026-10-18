@@ -265,6 +265,9 @@ def save_state(state: Dict[str, Dict[str, str]]):
     """Save JSON state only while holding the shared migration lock."""
     from sqlite_lock import state_writer_lock
 
+    # Fresh installations may not have a state directory yet. Create it
+    # before opening the adjacent lock file, without touching existing state.
+    os.makedirs(os.path.dirname(os.path.abspath(STATE_FILE)), exist_ok=True)
     with state_writer_lock(STATE_FILE):
         _save_state_unlocked(state)
 
