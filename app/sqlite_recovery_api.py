@@ -13,6 +13,7 @@ from typing import Callable
 from flask import Blueprint, jsonify, request
 
 from app.sqlite_recovery_report import inspect_pending_recovery_status
+from app.sqlite_recovery_guidance import explain_recovery_status
 
 
 def create_recovery_status_blueprint(
@@ -42,7 +43,7 @@ def create_recovery_status_blueprint(
         except Exception:
             # Never expose exception strings, paths, or credentials over HTTP.
             return jsonify({"ok": False, "reason": "inspection_failed"}), 503
-        response = jsonify({"ok": True, **report})
+        response = jsonify({"ok": True, **report, "guidance": explain_recovery_status(report)})
         response.headers["Cache-Control"] = "no-store"
         return response
 
