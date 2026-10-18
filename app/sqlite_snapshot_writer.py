@@ -43,11 +43,17 @@ def write_offline_snapshot(state: dict, destination: str | Path) -> None:
                             "VALUES (?, ?, ?)",
                             (section, key, json.dumps(value, ensure_ascii=False)),
                         )
+                for key, value in state.items():
+                    if key not in SECTIONS:
+                        connection.execute(
+                            "INSERT INTO extra_state (key, value_json) VALUES (?, ?)",
+                            (key, json.dumps(value, ensure_ascii=False)),
+                        )
                 connection.execute(
                     "INSERT INTO metadata (key, value) VALUES (?, ?)",
                     ("snapshot_complete", "1"),
                 )
-        if read_snapshot(destination) != {section: state[section] for section in SECTIONS}:
+        if read_snapshot(destination) != state:
             raise RuntimeError("SQLite snapshot verification failed")
         if os.name == "posix":
             fd = os.open(destination.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
