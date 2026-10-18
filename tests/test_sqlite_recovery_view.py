@@ -44,6 +44,8 @@ def test_admin_view_is_read_only_and_discloses_no_media_paths(tmp_path):
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert "op-1" in body
+    assert "Recommended review" in body
+    assert "Do not replay or clear" in body
     assert "blocked" in body
     assert "Production state remains JSON" in body
     assert "Waiting" not in body
