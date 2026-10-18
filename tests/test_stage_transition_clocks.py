@@ -26,11 +26,11 @@ class StageTransitionTests(unittest.TestCase):
                       "queued": {}, "in_removal": {}, "keep_seen": {}}
 
     def test_successful_holding_move_starts_new_clock_and_clears_waiting(self):
-        with patch.object(auditor, "DRY_RUN", False), \\
-             patch.object(auditor, "action_allowed", return_value=True), \\
-             patch.object(auditor, "move_or_report", return_value=True), \\
-             patch.object(auditor, "action_done"), \\
-             patch.object(auditor, "record_action"), \\
+        with patch.object(auditor, "DRY_RUN", False), \
+             patch.object(auditor, "action_allowed", return_value=True), \
+             patch.object(auditor, "move_or_report", return_value=True), \
+             patch.object(auditor, "action_done"), \
+             patch.object(auditor, "record_action"), \
              patch.object(auditor, "sync_arr"):
             before = datetime.datetime.now()
             auditor.move_to_holding(self.lib, "Film", self.lib["transient"],
@@ -42,8 +42,8 @@ class StageTransitionTests(unittest.TestCase):
         self.assertLessEqual(entered, after)
 
     def test_failed_move_preserves_original_tracking(self):
-        with patch.object(auditor, "DRY_RUN", False), \\
-             patch.object(auditor, "action_allowed", return_value=True), \\
+        with patch.object(auditor, "DRY_RUN", False), \
+             patch.object(auditor, "action_allowed", return_value=True), \
              patch.object(auditor, "move_or_report", return_value=False):
             auditor.move_to_holding(self.lib, "Film", self.lib["transient"],
                                     self.state, "expired")
@@ -51,11 +51,11 @@ class StageTransitionTests(unittest.TestCase):
         self.assertEqual(self.state["queued"], {})
 
     def test_dry_run_preserves_original_tracking(self):
-        with patch.object(auditor, "DRY_RUN", True), \\
-             patch.object(auditor, "action_allowed", return_value=True), \\
-             patch.object(auditor, "move_or_report", return_value=True), \\
-             patch.object(auditor, "action_done"), \\
-             patch.object(auditor, "record_action"), \\
+        with patch.object(auditor, "DRY_RUN", True), \
+             patch.object(auditor, "action_allowed", return_value=True), \
+             patch.object(auditor, "move_or_report", return_value=True), \
+             patch.object(auditor, "action_done"), \
+             patch.object(auditor, "record_action"), \
              patch.object(auditor, "sync_arr"):
             auditor.move_to_holding(self.lib, "Film", self.lib["transient"],
                                     self.state, "expired")
