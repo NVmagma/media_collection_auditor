@@ -6,12 +6,9 @@ Stop the auditor before using it; concurrent writes are not supported yet.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 from pathlib import Path
-import shutil
-import tempfile
 
 from app.sqlite_state import SECTIONS, validate_snapshot
 
