@@ -189,8 +189,11 @@ class ReadOnlyRecoveryHTTP:
                 or confirm["TotalRecordCount"] != total
                 or not isinstance(confirm_items, list)
                 or len(confirm_items) != total
-                or any(not isinstance(item, dict) for item in confirm_items)
-                or {item.get("Id") for item in confirm_items} != set(ids)):
+                or any(not isinstance(item, dict)
+                       or not isinstance(item.get("Id"), str)
+                       or item.get("SeriesId") != series_id
+                       for item in confirm_items)
+                or {item["Id"] for item in confirm_items} != set(ids)):
             raise RuntimeError("Recovery Jellyfin season set changed during inspection")
         # Non-atomic observations remain unsuitable for automatic clearance.
         return observation
