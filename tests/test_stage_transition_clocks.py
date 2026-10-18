@@ -107,5 +107,26 @@ class StageTransitionTests(unittest.TestCase):
         self.assertEqual(self.state["queued"]["Film"], "2025-01-01T00:00:00")
         self.assertNotIn("Film", self.state["in_removal"])
 
+    def test_missing_jellyfin_signals_cannot_advance_holding(self):
+        (Path(self.lib["holding"]) / "Film").mkdir()
+        self.state["queued"]["Film"] = "2025-01-01T00:00:00"
+        with patch.object(auditor, "DRY_RUN", False), \\
+             patch.object(auditor, "move_or_report") as move:
+            auditor.audit_holding(self.lib, {}, self.state)
+        move.assert_not_called()
+        self.assertEqual(self.state["queued"]["Film"], "2025-01-01T00:00:00")
+        self.assertEqual(self.state["in_removal"], {})
+
+    def test_protected_holding_title_cannot_advance_to_removal(self):
+        (Path(self.lib["holding"]) / "Film").mkdir()
+        self.state["queued"]["Film"] = "2025-01-01T00:00:00"
+        with patch.object(auditor, "DRY_RUN", False), \\
+             patch.object(auditor, "move_or_report", return_value=False) as move:
+            auditor.audit_holding(self.lib, {"Film": {"protected": True}}, self.state)
+        move.assert_called_once()
+        self.assertEqual(move.call_args.args[3], self.lib["keep"])
+        self.assertEqual(self.state["queued"]["Film"], "2025-01-01T00:00:00")
+        self.assertEqual(self.state["in_removal"], {})
+
 if __name__ == "__main__":
     unittest.main()
