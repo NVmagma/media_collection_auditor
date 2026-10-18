@@ -47,6 +47,7 @@ def test_admin_reads_blocked_status_without_mutation(tmp_path):
     report = response.get_json()
     assert report["ok"] is True
     assert report["status"] == "blocked"
+    assert "Do not replay or clear" in report["guidance"]["next_step"]
     assert report["authorization"] == "blocked_pending_independent_verification"
     assert report["operation_phase"] == "intent_recorded"
     assert "Waiting" not in str(report)
