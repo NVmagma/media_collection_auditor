@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import os
+from contextvars import ContextVar
 from pathlib import Path
 
 try:
@@ -39,6 +40,26 @@ def migration_lock(source: str | Path):
         os.close(fd)
 
 
+_held_state_locks: ContextVar[frozenset[str]] = ContextVar(
+    "held_state_locks", default=frozenset()
+)
+
+
+@contextmanager
+def audit_run_lock(source: str | Path):
+    """Hold the shared lock for an entire audit, including nested saves."""
+    source = Path(source)
+    key = str(source.resolve())
+    if key in _held_state_locks.get():
+        raise RuntimeError("Nested auditor runs are not permitted")
+    with state_writer_lock(source):
+        token = _held_state_locks.set(_held_state_locks.get() | {key})
+        try:
+            yield
+        finally:
+            _held_state_locks.reset(token)
+
+
 @contextmanager
 def state_writer_lock(source: str | Path):
     """Serialize cooperating JSON saves against offline migration.
@@ -49,6 +70,9 @@ def state_writer_lock(source: str | Path):
     if fcntl is None:
         raise RuntimeError("JSON state locking requires POSIX flock")
     source = Path(source)
+    if str(source.resolve()) in _held_state_locks.get():
+        yield  # The current audit already holds the same exclusive lock.
+        return
     lock_path = source.with_name(source.name + ".migration.lock")
     fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
     try:
