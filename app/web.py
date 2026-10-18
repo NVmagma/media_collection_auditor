@@ -234,14 +234,18 @@ def filesystem_stages(state, config):
     return stages, warnings
 
 
-def collection_health(state, stages, warnings):
+def collection_health(state, stages, warnings, config=None):
     """Compare readable folders and tracking records without changing either."""
     sections = {"Waiting": "first_seen", "Holding": "queued",
                 "Removal": "in_removal", "Keep": "keep_seen"}
+    config = config or {}
+    enabled = {library for library, key, fallback in (("Movies", "ENABLE_MOVIES", "true"), ("TV", "ENABLE_TV", "false"))
+               if str(config.get(key, os.environ.get(key, fallback))).lower() == "true"}
     present = {}
     for stage, items in stages.items():
         for item in items:
-            present.setdefault((item["library"], item["title"]), set()).add(stage)
+            if item["library"] in enabled:
+                present.setdefault((item["library"], item["title"]), set()).add(stage)
     unavailable = {(library, stage)
                    for library in ("Movies", "TV") for stage in sections
                    if any(w.startswith(f"{library} {stage}:") for w in warnings)}
@@ -253,7 +257,7 @@ def collection_health(state, stages, warnings):
                                      + ", ".join(sorted(locations)) + ". Review manually; no files were moved."})
     for stage, items in stages.items():
         for item in items:
-            if item["since"] is None:
+            if item["library"] in enabled and item["since"] is None:
                 issues.append({"library": item["library"], "title": item["title"],
                                "detail": f"{stage}: folder has no tracking timestamp yet"})
     for stage, section in sections.items():
@@ -262,7 +266,7 @@ def collection_health(state, stages, warnings):
                 continue
             library = "TV" if key.startswith("TV/") else "Movies"
             title = key[3:] if library == "TV" else key
-            if (library, stage) in unavailable:
+            if library not in enabled or (library, stage) in unavailable:
                 continue
             locations = present.get((library, title), set())
             if stage not in locations:
@@ -279,6 +283,8 @@ def collection_health(state, stages, warnings):
             continue
         library = "TV" if key.startswith("TV/") else "Movies"
         title = key[3:] if library == "TV" else key
+        if library not in enabled:
+            continue
         stage = entry.get("stage", "unknown") if isinstance(entry, dict) else "unknown"
         issues.append({"library": library, "title": title,
                        "detail": f"Radarr/Sonarr sync pending for {stage}"})
@@ -291,7 +297,7 @@ def dashboard():
     state = load_state()
     config = load_config()
     stages, inventory_warnings = filesystem_stages(state, config)
-    health_issues = collection_health(state, stages, inventory_warnings)
+    health_issues = collection_health(state, stages, inventory_warnings, config)
     removal_days = int(config.get("REMOVAL_DAYS", os.environ.get("REMOVAL_DAYS", "7")))
     for item in stages["Removal"]:
         try:
