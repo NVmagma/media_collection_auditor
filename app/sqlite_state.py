@@ -78,6 +78,11 @@ def read_snapshot(database_path: str | Path) -> dict[str, dict[str, Any]]:
             ).fetchone()
             if version_row is None or version_row[0] != str(SCHEMA_VERSION):
                 raise RuntimeError("SQLite snapshot schema version is missing or unsupported")
+            complete_row = connection.execute(
+                "SELECT value FROM metadata WHERE key = 'snapshot_complete'"
+            ).fetchone()
+            if complete_row != ("1",):
+                raise RuntimeError("SQLite snapshot is incomplete; refusing to use it")
             rows = connection.execute(
                 "SELECT section, media_key, value_json FROM state_entries"
             ).fetchall()
