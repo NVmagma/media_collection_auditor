@@ -23,6 +23,7 @@ class SQLiteOperationCoordinator:
 
     def begin(self, operation_id: str, kind: str, details: dict[str, Any]) -> None:
         """Durably record intent before any external operation is attempted."""
+        self.session.read_verified_snapshot()
         if not isinstance(operation_id, str) or not operation_id:
             raise RuntimeError("Operation ID is required")
         if kind not in ALLOWED_OPERATIONS:
@@ -39,6 +40,7 @@ class SQLiteOperationCoordinator:
 
     def mark_applied(self, operation_id: str) -> None:
         """Record external success after a caller independently verifies it."""
+        self.session.read_verified_snapshot()
         pending = self.session.state.get(INTENTS_KEY)
         if not isinstance(pending, dict) or pending.get("id") != operation_id:
             raise RuntimeError("Missing or mismatched SQLite operation intent")
