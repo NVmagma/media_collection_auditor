@@ -56,7 +56,7 @@ def test_disposable_move_recovery_stays_blocked_after_restart(tmp_path):
     assert (target / "fixture.txt").exists()
     reopened = RevisionedAuditSession(GuardedSQLiteStateStore(database))
     assert reopened.state[INTENTS_KEY]["phase"] == "intent_recorded"
-    with pytest.raises(RuntimeError, match="trusted verification"):
+    with pytest.raises(RuntimeError, match="Operation has not been confirmed"):
         SQLiteOperationCoordinator(reopened).reconcile("move-1", reopened.state)
 
 
