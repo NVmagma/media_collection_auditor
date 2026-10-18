@@ -14,6 +14,7 @@ SCRIPT = """
 import json
 from unittest.mock import patch
 import web
+from flask import g, render_template_string
 client = web.app.test_client()
 path = '/experimental/sqlite/recovery'
 api = '/api/experimental/sqlite/recovery-status'
@@ -30,6 +31,17 @@ with patch.object(web, 'current_user', return_value={'name': 'Admin', 'admin': T
     result['admin_view'] = client.get(path).status_code
     result['admin_api'] = client.get(api).status_code
     result['admin_post'] = client.post(api).status_code
+with web.app.test_request_context('/'):
+    g.user = {'name': 'Admin', 'admin': True}
+    result['admin_nav'] = '/experimental/sqlite/recovery' in render_template_string(
+        '{% if viewer.admin and experimental_sqlite_recovery_enabled %}'
+        '<a href="/experimental/sqlite/recovery">Recovery</a>{% endif %}'
+    )
+    g.user = {'name': 'Viewer', 'admin': False}
+    result['viewer_nav'] = '/experimental/sqlite/recovery' in render_template_string(
+        '{% if viewer.admin and experimental_sqlite_recovery_enabled %}'
+        '<a href="/experimental/sqlite/recovery">Recovery</a>{% endif %}'
+    )
 print('RECOVERY_INTEGRATION=' + json.dumps(result))
 """
 
@@ -73,3 +85,17 @@ def test_opt_in_uses_real_dashboard_admin_auth(tmp_path):
 
 def test_flag_requires_literal_true(tmp_path):
     assert probe(tmp_path, "1")["view_registered"] is False
+
+
+def test_navigation_is_only_visible_to_admin_when_enabled(tmp_path):
+    disabled = probe(tmp_path, "false")
+    enabled = probe(tmp_path, "true")
+    assert disabled["admin_nav"] is False
+    assert enabled["admin_nav"] is True
+    assert enabled["viewer_nav"] is False
+
+
+def test_dashboard_template_has_conditional_recovery_link():
+    template = (APP / "templates" / "dashboard.html").read_text()
+    assert "{% if experimental_sqlite_recovery_enabled %}" in template
+    assert 'href="/experimental/sqlite/recovery"' in template
