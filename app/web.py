@@ -235,28 +235,46 @@ def filesystem_stages(state, config):
 
 
 def collection_health(state, stages, warnings):
-    """Report discrepancies without modifying media or tracking state."""
+    """Compare readable folders and tracking records without changing either."""
     sections = {"Waiting": "first_seen", "Holding": "queued",
                 "Removal": "in_removal", "Keep": "keep_seen"}
-    present = {(item["library"], label, item["title"])
-               for label, items in stages.items() for item in items}
+    present = {}
+    for stage, items in stages.items():
+        for item in items:
+            present.setdefault((item["library"], item["title"]), set()).add(stage)
+    unavailable = {(library, stage)
+                   for library in ("Movies", "TV") for stage in sections
+                   if any(w.startswith(f"{library} {stage}:") for w in warnings)}
     issues = []
-    for label, items in stages.items():
+    for (library, title), locations in present.items():
+        if len(locations) > 1:
+            issues.append({"library": library, "title": title,
+                           "detail": "Folder appears in multiple lifecycle directories: "
+                                     + ", ".join(sorted(locations)) + ". Review manually; no files were moved."})
+    for stage, items in stages.items():
         for item in items:
             if item["since"] is None:
                 issues.append({"library": item["library"], "title": item["title"],
-                               "detail": f"{label}: no tracking timestamp yet"})
-    for label, section in sections.items():
+                               "detail": f"{stage}: folder has no tracking timestamp yet"})
+    for stage, section in sections.items():
         for key in state.get(section, {}):
             if not isinstance(key, str):
                 continue
             library = "TV" if key.startswith("TV/") else "Movies"
             title = key[3:] if library == "TV" else key
-            if any(w.startswith(f"{library} {label}:") for w in warnings):
-                continue  # Unknown inventory must not be interpreted as missing media.
-            if (library, label, title) not in present:
-                issues.append({"library": library, "title": title,
-                               "detail": f"{label}: tracking record has no matching folder"})
+            if (library, stage) in unavailable:
+                continue
+            locations = present.get((library, title), set())
+            if stage not in locations:
+                if locations:
+                    detail = (f"{stage} tracking record, but folder is in "
+                              + ", ".join(sorted(locations)) + ". Review tracking after the next audit.")
+                elif any(lib == library for lib, _ in present) or not any(
+                        lib == library for lib, _ in unavailable):
+                    detail = f"{stage}: tracking record has no matching folder in readable lifecycle directories"
+                else:
+                    continue
+                issues.append({"library": library, "title": title, "detail": detail})
     for key, entry in state.get("arr_sync_pending", {}).items():
         if not isinstance(key, str):
             continue
