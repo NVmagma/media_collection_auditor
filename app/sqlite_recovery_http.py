@@ -149,6 +149,52 @@ class ReadOnlyRecoveryHTTP:
             "data": {"available": True, "complete": False, **flags},
         }
 
+    def jellyfin_fetch_verified_series(self, series_id: str) -> dict[str, Any]:
+        """Enumerate Jellyfin seasons and users; fail closed on partial pages.
+
+        The server's season list is independently obtained rather than trusted
+        from the pending operation. Even a complete response is diagnostic only.
+        """
+        series_id = _identity(series_id)
+        url = _endpoint(
+            self.jellyfin_url,
+            f"/Shows/{series_id}/Seasons?UserId={self.jellyfin_user_id}&StartIndex=0&Limit=10000",
+        )
+        response = _get_json(
+            self.http, url, headers={"X-Emby-Token": self.jellyfin_token},
+        )
+        items, total = response.get("Items"), response.get("TotalRecordCount")
+        if not isinstance(items, list) or type(total) is not int or total < 0:
+            raise RuntimeError("Recovery Jellyfin season enumeration incomplete")
+        if len(items) != total or len(items) > 10000:
+            raise RuntimeError("Recovery Jellyfin season enumeration incomplete")
+        ids = []
+        for season in items:
+            if not isinstance(season, dict) or season.get("SeriesId") != series_id:
+                raise RuntimeError("Recovery Jellyfin season ownership mismatch")
+            ids.append(_identity(season.get("Id")))
+        if len(set(ids)) != len(ids) or series_id in ids:
+            raise RuntimeError("Recovery Jellyfin season identities ambiguous")
+        observation = self.jellyfin_fetch_all_users(
+            series_id, season_ids=tuple(ids)
+        )
+        # Multi-user enumeration and per-season reads succeeded, but the
+        # API does not supply a transactional snapshot of library membership.
+        # A season added during enumeration must not be silently missed.
+        confirm = _get_json(
+            self.http, url, headers={"X-Emby-Token": self.jellyfin_token},
+        )
+        confirm_items = confirm.get("Items")
+        if (type(confirm.get("TotalRecordCount")) is not int
+                or confirm["TotalRecordCount"] != total
+                or not isinstance(confirm_items, list)
+                or len(confirm_items) != total
+                or any(not isinstance(item, dict) for item in confirm_items)
+                or {item.get("Id") for item in confirm_items} != set(ids)):
+            raise RuntimeError("Recovery Jellyfin season set changed during inspection")
+        # Non-atomic observations remain unsuitable for automatic clearance.
+        return observation
+
     def arr_fetch(self, service: str, title_id: int) -> dict[str, Any]:
         """Read exact title record from Radarr or Sonarr; never mutate it."""
         if service not in self.arr or type(title_id) is not int or title_id <= 0:
