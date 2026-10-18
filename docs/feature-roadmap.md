@@ -34,6 +34,18 @@ on the active development branch and review it alongside development milestones.
 | Crash/restart/concurrency and disposable-media testing | Planned | Simulate interrupted moves, failed APIs, container restarts, partial state and races |
 | Controlled Unraid SQLite rollout | Approval required | Both CI workflows pass; explicit operator approval and rollback plan |
 
+## P1 — Security maintenance and CVE monitoring
+
+| Feature | Status | Acceptance / next step |
+| --- | --- | --- |
+| Dependabot vulnerability alerts and security update PRs | Planned | Confirm availability for private repository; enable Python dependency and GitHub Actions monitoring, with reviewed updates rather than automatic deployment |
+| Automated Docker image CVE scanning | Planned | Add Trivy or equivalent to CI and a weekly scheduled scan; cover OS packages and Python dependencies; document how findings are triaged |
+| CodeQL static security analysis | Planned | Confirm private-repository eligibility and run on pull requests and a weekly schedule; investigate actionable findings |
+| Weekly security review and urgent CVE triage | Planned | Review new alerts, exploitability, severity, affected versions and remediation; escalate critical/high-risk issues promptly instead of waiting for the weekly review |
+| Dependency and Docker base-image update policy | Planned | Use reproducible versions/digests where practical; review updates regularly, run regression tests, and verify both workflows before recommending deployment |
+| Security policy and vulnerability reporting | Planned | Add SECURITY.md with supported versions, private reporting instructions, response expectations, and no credential disclosure |
+| Safe security release procedure for Unraid | Planned | Document tested fixes, rollback steps and operator approval; never automatically update production or relax deletion safeguards |
+
 ## P1 — Dashboard and operations
 
 | Feature | Status | Acceptance / next step |
@@ -68,7 +80,7 @@ on the active development branch and review it alongside development milestones.
 2. When work is selected, mark **In progress** and reference its branch or milestone in the commit or PR.
 3. Mark **Done** only after relevant tests and GitHub Actions pass; deployment is a separate decision.
 4. Preserve explicit approval gates for deletion, production backend switches, and container updates.
-5. Review priorities after each cohesive milestone. Prefer P0 safety and state integrity before convenience features.
+5. Review priorities after each cohesive milestone. Prefer P0 safety and state integrity before convenience features; treat urgent security vulnerabilities as an exception requiring prompt triage.
 
 ## Current focus
 
