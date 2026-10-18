@@ -2,9 +2,9 @@ name: Python safety checks
 
 on:
   push:
-    branches: [feature/unraid]
+    branches: [feature/unraid, feature/sqlite]
   pull_request:
-    branches: [feature/unraid]
+    branches: [feature/unraid, feature/sqlite]
   workflow_dispatch:
 
 permissions:
@@ -26,6 +26,12 @@ jobs:
         run: python -m pip install -r requirements.txt
       - name: Compile all Python files
         run: python -m compileall -q app tests
+      - name: Install pytest
+        run: python -m pip install pytest
+      - name: Run SQLite regression tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: python -m pytest tests/test_sqlite_state.py tests/test_sqlite_migration.py tests/test_sqlite_snapshot_writer.py -v
       - name: Run isolated safety tests
         env:
           WEB_SESSION_SECRET: ci-only-session-secret
