@@ -40,3 +40,17 @@ def test_no_pending_operation_does_not_suggest_recovery():
 def test_invalid_status_fails_closed():
     result = explain_recovery_status({"status": "unexpected"})
     assert "unchanged" in result["next_step"]
+
+
+def test_every_service_blocker_has_specific_operator_guidance():
+    from app.sqlite_recovery_report import BLOCKERS
+    from app.sqlite_recovery_guidance import GUIDANCE
+    assert set(BLOCKERS.values()) <= set(GUIDANCE)
+    for blocker in set(BLOCKERS.values()):
+        result = explain_recovery_status({
+            "status": "blocked", "blocker": blocker,
+            "operation_phase": "intent_recorded",
+        })
+        assert result["summary"] == GUIDANCE[blocker][0]
+        assert result["next_step"] == GUIDANCE[blocker][1]
+        assert "phase_explanation" in result
