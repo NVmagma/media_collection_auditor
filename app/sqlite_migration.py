@@ -1,4 +1,3 @@
-import json
 """Offline, backup-first preparation for a future SQLite migration.
 
 This module never activates SQLite or changes the auditor's JSON state.
@@ -8,6 +7,7 @@ Stop the auditor before using it; concurrent writes are not supported yet.
 from __future__ import annotations
 
 import os
+import json
 from pathlib import Path
 
 from app.sqlite_json import parse_unique_json
