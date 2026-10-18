@@ -873,6 +873,27 @@ def reconcile_moved_titles(lib: dict, state: dict):
                   f"{'would be cleared' if DRY_RUN else 'cleared'}.")
 
 
+def reconcile_untracked_keep(lib: dict, state: dict):
+    """Record first observation of untracked Keep media, without moving files.
+
+    Keep has no expiry clock. Never overwrite existing history or infer an
+    earlier move date; skip folders that also appear in another stage.
+    """
+    for folder in list_folders(lib["keep"]):
+        key = state_key(lib, folder)
+        if any(key in state[section] for section in
+               ("first_seen", "queued", "in_removal", "keep_seen")):
+            continue
+        if any(os.path.isdir(os.path.join(lib[stage], folder)) for stage in
+               ("transient", "holding", "removal")):
+            print(f"[STATE RECONCILE] {lib['name']}: {folder} is ambiguous; Keep tracking unchanged.")
+            continue
+        if not DRY_RUN:
+            state["keep_seen"][key] = datetime.datetime.now().isoformat()
+        print(f"[STATE RECONCILE] {lib['name']}: {folder} untracked in Keep; "
+              f"{'would record' if DRY_RUN else 'recorded'} first observation (not original move date).")
+
+
 def audit_removal(lib: dict, state: dict, signals: dict):
     """Removal: after REMOVAL_DAYS the media is permanently deleted."""
     for folder in list_folders(lib["removal"]):
@@ -1300,6 +1321,7 @@ def run_once():
             print(f"\n----- {lib['name']} -----")
             signals = get_signals(lib["jellyfin_type"])
             reconcile_moved_titles(lib, state)
+            reconcile_untracked_keep(lib, state)
             retry_pending_arr_sync(lib, state)
             audit_removal(lib, state, signals)      # block deletion when Jellyfin protection is unknown or active
             audit_holding(lib, signals, state)      # rescue favorites / move expired items to Removal
