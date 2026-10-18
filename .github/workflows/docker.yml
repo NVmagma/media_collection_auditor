@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/unraid
+      - feature/sqlite
   workflow_dispatch:
 
 permissions:
@@ -35,15 +36,21 @@ jobs:
       # These checks must pass in THIS job: build-and-push depends on it.
       # Keep other branches' existing publishing behavior unchanged.
       - name: Compile Python source and tests
-        if: github.ref == 'refs/heads/feature/unraid'
+        if: github.ref == 'refs/heads/feature/unraid' || github.ref == 'refs/heads/feature/sqlite'
         run: python -m compileall -q app tests
 
       - name: Run web and rescue safety tests
-        if: github.ref == 'refs/heads/feature/unraid'
+        if: github.ref == 'refs/heads/feature/unraid' || github.ref == 'refs/heads/feature/sqlite'
         env:
           WEB_SESSION_SECRET: ci-only-session-secret
           PYTHONPATH: ${{ github.workspace }}/app
         run: python -m unittest discover -s tests -p 'test_*.py' -v
+
+      - name: Run SQLite regression tests
+        if: github.ref == 'refs/heads/feature/sqlite'
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: python -m pytest tests/test_sqlite_state.py tests/test_sqlite_migration.py tests/test_sqlite_snapshot_writer.py -v
 
       - name: Run tests
         env:
