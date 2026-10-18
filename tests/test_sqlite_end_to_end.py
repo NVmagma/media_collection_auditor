@@ -71,14 +71,18 @@ def test_existing_backup_refuses_retry_without_overwriting(tmp_path):
     assert not database.exists()
 
 
-def test_unknown_history_is_not_silently_discarded(tmp_path):
+def test_unknown_history_round_trips_without_discarding(tmp_path):
     source, backup, database = _paths(tmp_path)
     state = _state()
-    state["future_tracking_field"] = {"preserve": "this"}
-    source.write_text(json.dumps(state), encoding="utf-8")
+    state["future_tracking_field"] = {
+        "preserve": ["this", {"nested": True, "value": None}],
+        "counter": 0,
+    }
+    state["legacy_flags"] = ["keep", "protected"]
+    source.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
     original = source.read_bytes()
-    with pytest.raises(RuntimeError, match="Unknown historical state sections"):
-        create_offline_migration_snapshot(source, backup, database)
+    create_offline_migration_snapshot(source, backup, database)
     assert source.read_bytes() == original
-    assert not database.exists()
     assert backup.read_bytes() == original
+    assert read_snapshot(database) == state
+    assert inspect_migration_artifacts(source, backup, database)["database"] == "complete"
