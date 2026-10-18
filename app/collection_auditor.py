@@ -4,6 +4,7 @@ import json
 import time
 import shutil
 import tempfile
+import glob
 import posixpath
 import datetime
 from typing import Dict, Any, Optional, List, Tuple
@@ -214,6 +215,14 @@ def load_state() -> Dict[str, Dict[str, str]]:
         with open(STATE_FILE) as f:
             state = json.load(f)
     except FileNotFoundError:
+        # A missing live file alongside an interrupted write is not a clean install.
+        directory = os.path.dirname(os.path.abspath(STATE_FILE))
+        abandoned = glob.glob(os.path.join(directory, ".auditor_state_*.tmp"))
+        if abandoned:
+            raise RuntimeError(
+                f"Missing auditor state at {STATE_FILE} with interrupted writes present; "
+                "refusing to reset tracking history"
+            )
         state = {}  # A fresh installation has no tracking file yet.
     except (json.JSONDecodeError, UnicodeError, OSError) as exc:
         raise RuntimeError(
