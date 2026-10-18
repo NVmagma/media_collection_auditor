@@ -48,21 +48,16 @@ class SQLiteOperationCoordinator:
         self.session.checkpoint()
 
     def reconcile(self, operation_id: str, verified_state: dict[str, Any]) -> None:
-        """Complete only after the caller has independently verified reality.
+        """Refuse clearance until trusted independent verification is implemented.
 
-        This method does not verify filesystem or Arr state itself. A future
-        integration must supply a trusted verifier before calling it.
+        The earlier prototype accepted caller-provided dictionaries as proof.
+        That is not sufficient to safely clear a crashed filesystem/Arr action.
         """
         pending = self.session.state.get(INTENTS_KEY)
         if not isinstance(pending, dict) or pending.get("id") != operation_id:
             raise RuntimeError("Missing or mismatched SQLite operation intent")
         if pending.get("phase") != "applied_pending_reconciliation":
             raise RuntimeError("Operation has not been confirmed")
-        if not isinstance(verified_state, dict):
-            raise RuntimeError("Verified state must be a dictionary")
-        replacement = deepcopy(verified_state)
-        if replacement.get(INTENTS_KEY) != pending:
-            raise RuntimeError("Verified state must retain pending intent")
-        replacement.pop(INTENTS_KEY)
-        self.session.state = replacement
-        self.session.checkpoint()
+        raise RuntimeError(
+            "SQLite recovery clearance blocked pending trusted verification"
+        )
