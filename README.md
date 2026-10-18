@@ -35,6 +35,24 @@ The branch's published image tag is `ghcr.io/nvmagma/media_collection_auditor:fe
 
 **Back up** `/app/logs/auditor_state.json`, `auditor_actions.jsonl`, and `auditor_config.json` before changing images. The saved web configuration in `/app/logs/auditor_config.json` overrides matching container environment settings when an audit starts. Use the dashboard Settings page to review the effective configuration; confirm `DRY_RUN=true` before initial testing.
 
+### Verify persistent Unraid tracking storage
+
+Before updating or recreating the Unraid container, open its Docker template and confirm
+that the container path **`/app/logs`** is mapped read/write to a persistent host
+folder, typically **`/mnt/user/appdata/media_collection_auditor`**. The auditor's
+default **`STATE_FILE=/app/logs/auditor_state.json`** must remain inside that
+mounted directory. A custom STATE_FILE outside a persistent mount may be lost when
+the container is recreated.
+
+On the Unraid host, check that the mapped appdata folder contains
+`auditor_state.json` and make a backup of it (along with
+`auditor_config.json` and  auditor_actions.jsonl`) before changing mounts or images.
+Do **not** delete or rename the existing state file to force a fresh start: that
+would discard lifecycle clocks and could shorten retention periods. If the state
+file is missing unexpectedly, stop auditing and investigate the mount before
+resuming. The application cannot reliably determine from inside the container
+whether a bind mount points to durable host storage; verify the mapping in Unraid.
+
 ### Shared lifecycle decision rules (work in progress)
 
 The `app/lifecycle_decisions.py` module centralizes the **pure decision** portion of Waiting, Holding, and Removal transitions. The auditor calls it when evaluating those stages. Waiting favors Jellyfin favorites/protection first, then disliked tags, then the elapsed waiting period. Holding rescues favorites/protected items before considering the holding deadline. Removal returns a **deletion candidate**, not permission to bypass the existing deletion safeguards.
