@@ -79,3 +79,8 @@ def test_checklist_and_status_stay_consistent_across_distinct_snapshots():
     assert after["status"] == "no_pending_operation"
     assert before["checks"][1]["status"] == "blocked"
     assert after["checks"][1]["status"] == "clear"
+
+
+def test_unknown_status_never_reports_clear():
+    with pytest.raises(RuntimeError, match="Recovery status invalid"):
+        recovery_readiness_from_report({"status": "unexpected"})
