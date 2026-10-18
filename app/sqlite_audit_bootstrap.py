@@ -10,6 +10,7 @@ from pathlib import Path
 
 from app.sqlite_audit_preflight import prepare_sqlite_audit_state
 from app.sqlite_audit_session import RevisionedAuditSession
+from app.sqlite_operation_coordinator import INTENTS_KEY
 
 
 def open_isolated_sqlite_audit(
@@ -28,4 +29,7 @@ def open_isolated_sqlite_audit(
     session = RevisionedAuditSession(store)
     if session.revision != revision or session.state != baseline:
         raise RuntimeError("SQLite state changed during isolated audit bootstrap")
+    session.read_verified_snapshot()
+    if INTENTS_KEY in session.state:
+        raise RuntimeError("SQLite bootstrap blocked by unresolved operation intent")
     return session
