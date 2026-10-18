@@ -1,10 +1,10 @@
 # Media Collection Auditor
 
-Automatically clean up a Jellyfin media library without losing anything your family cares about.
+Safely manage a Jellyfin movie and TV collection through Waiting, Holding, Keep, and Removal stages, with an authenticated Unraid dashboard and Radarr/Sonarr synchronization.
 
-New movies and TV shows land in a **transient** folder. Your family has a window of time to **favorite** what they like. Favorites are kept forever. Everything else moves to a **"Leaving Soon"** library, gets a final chance to be rescued, and is then permanently deleted. [Radarr](https://radarr.video) and [Sonarr](https://sonarr.tv) are kept in sync the whole way, so nothing gets re-downloaded.
+New titles enter **Waiting**. Jellyfin tags and optionally favorites can move titles to **Keep** or request early **Holding**. Expired Holding titles may move to **Removal**, but deletion requires separate safety checks. **Permanent deletion remains disabled for this release.** [Radarr](https://radarr.video) and [Sonarr](https://sonarr.tv) are kept in sync the whole way, so nothing gets re-downloaded.
 
-> **Warning:** this tool deletes files. It starts in **dry-run mode** and only prints what it *would* do. Read the output carefully, and enable the Radarr/Sonarr recycle bin, before you switch to live mode. Use it at your own risk.
+> **Safety:** Start with `DRY_RUN=true`. Live mode permits configured lifecycle moves, not unrestricted deletion. Keep both `ALLOW_PERMANENT_DELETE=false` and `ALLOW_FILESYSTEM_DELETE=false`; permanent filesystem deletion is not approved. Back up persistent state and test with disposable media before deploying changes.
 
 ---
 
@@ -22,6 +22,7 @@ The `feature/unraid` branch includes a Flask web dashboard and an Unraid-oriente
 - **Run Now:** administrators can request an audit without waiting for the next scheduled run. The scheduler serializes runs.
 - **Manual Rescue:** administrators can choose a rescue action for an eligible Removal-stage title; dry-run mode previews the action.
 - **Settings:** administrators can edit validated settings and test connections to Jellyfin, Radarr, and Sonarr.
+- **State integrity warning:** unreadable JSON tracking state triggers a prominent dashboard warning rather than silently appearing empty. The auditor separately fails closed on invalid state.
 
 ### Authentication and access
 
@@ -46,7 +47,7 @@ the container is recreated.
 
 On the Unraid host, check that the mapped appdata folder contains
 `auditor_state.json` and make a backup of it (along with
-`auditor_config.json` and  auditor_actions.jsonl`) before changing mounts or images.
+`auditor_config.json` and `auditor_actions.jsonl`) before changing mounts or images.
 Do **not** delete or rename the existing state file to force a fresh start: that
 would discard lifecycle clocks and could shorten retention periods. If the state
 file is missing unexpectedly, stop auditing and investigate the mount before
@@ -81,17 +82,17 @@ flowchart LR
     T -->|"not-at-all tag,<br/>or wait period ends"| H["Holding<br/>(Jellyfin: Leaving Soon)"]
     H -->|favorited| K
     H -->|HOLDING_DAYS| R["Removal"]
-    R -->|REMOVAL_DAYS| D["Deleted"]
+    R -.->|"master switch and safety checks"| D["Deletion disabled by default"]
 ```
 
 | Stage | What happens |
 |---|---|
 | **Transient** (`Movies`, `TV`) | New media waits here. **Favorited** in Jellyfin → moved to Keep. Tagged **`not-at-all`** → moved to Holding right away. No favorite after **30 days** (movies) or **60 days** (TV) → moved to Holding. |
 | **Holding** (`*_hold`) | Point a Jellyfin library called *Leaving Soon* here so the family can still watch it. **Favorited** → rescued to Keep. Otherwise after **7 days** → moved to Removal. |
-| **Removal** (`*_removal`) | Not visible in Jellyfin. After **7 days** → permanently deleted through Radarr/Sonarr. |
+| **Removal** (`*_removal`) | Final retention stage. Deletion requires the master switch and all safeguards; **permanent deletion remains disabled for this release**. |
 | **Keep** (`*_keep`) | Favorites live here. Optionally, old seasons of TV shows are pruned (see below). |
 
-Decisions come from Jellyfin: a title counts as **favorited** if *any* Jellyfin user has favorited it. Priority is always: **favorite (or `keep-forever` tag) → not-at-all tag → waiting period**.
+Decisions use Jellyfin tags and, when `FAVORITES_TRIGGER_KEEP=true` (default), favorites from any Jellyfin user. `keep` moves a title to Keep; `keep-forever` permanently protects the entire title and all TV seasons; `keep-all-seasons` protects seasons while the show remains in Keep; `not-at-all` requests early Holding. Keep/protection rules take priority, and unavailable Jellyfin protection signals block unsafe transitions.
 
 Every time something moves to Holding or Removal, Radarr/Sonarr are told the new path and set to **unmonitored**, so they won't download it again. If it's rescued, monitoring is turned back on.
 
@@ -116,7 +117,10 @@ Every time something moves to Holding or Removal, Radarr/Sonarr are told the new
 - **Rescue window.** Two stages (Holding, then Removal) before anything is deleted.
 - **Season-pruning delays.** A show must sit in Keep for 30 days before pruning, and older seasons are only pruned 7 days after a newer season arrives.
 - **Honest action log.** Every move, rescue, deletion, failure, and skipped action is written to a JSON-lines file, marked `planned` (dry run), `done`, `failed`, or `skipped`.
-- **Atomic state file.** Written to a temp file and renamed, so it's never half-written.
+- **Durable JSON state.** Writes use unique temporary files, flush and file fsync, atomic replacement, and POSIX directory fsync. Corrupt or invalid state blocks auditing rather than resetting lifecycle clocks; missing state with abandoned write-temporary files also blocks auditing.
+- **Interrupted-move reconciliation.** Tracking clocks are recovered conservatively after interrupted moves.
+- **Arr retry tracking.** Pending Radarr/Sonarr synchronization is persisted in `arr_sync_pending`.
+- **Deletion master switch.** `ALLOW_PERMANENT_DELETE=false` must remain disabled until explicitly approved; unavailable Jellyfin protection information and ambiguous Removal-stage duplicates block deletion.
 
 ---
 
@@ -136,7 +140,7 @@ Every time something moves to Holding or Removal, Radarr/Sonarr are told the new
 
 ```bash
 git clone https://github.com/NVmagma/media_collection_auditor.git
-cd media_archiver
+cd media_collection_auditor
 # To work on the Unraid dashboard branch:
 git switch feature/unraid
 cp .env.example .env
@@ -165,9 +169,10 @@ media_storage/
 1. **API key:** Dashboard → API Keys → **+**.
 2. **Leaving Soon libraries:** create a *Movies* library pointing at `Movies_hold` and a *Shows* library pointing at `TV_hold` (name them "Leaving Soon" or similar).
 3. **Tags (optional):** on any title, open ⋮ → *Edit Metadata* → *Tags* and add:
-   - `not-at-all`: the family hated it; skip the wait and send it to Holding.
-   - `keep-all-seasons` (TV only): never prune old seasons of this show.
-   - `keep-forever`: never touch this title. It's treated like a favorite (moved to Keep, or rescued from Holding) and is never season-pruned. Unlike a favorite, it applies to the whole family at once, so it's the admin's override.
+   - `keep`: move the title to Keep.
+   - `not-at-all`: request early Holding unless protection rules apply.
+   - `keep-all-seasons` (TV only): preserve seasons while the show remains in Keep.
+   - `keep-forever`: permanently protect the entire title, including all TV seasons; move or rescue it to Keep as applicable.
 
    Favorites and tags on TV must be set on the **show itself**, not on a season or episode.
 
@@ -186,7 +191,7 @@ docker compose up -d --build
 docker logs -f media_collection_auditor
 ```
 
-Check the output. Each title shows what the script decided and why. When it all looks right, set `DRY_RUN=false` in `.env` and recreate the container:
+Check the output. Each title shows what the script decided and why. Only after testing with disposable media should you consider `DRY_RUN=false` for lifecycle moves. **Keep `ALLOW_PERMANENT_DELETE=false` and `ALLOW_FILESYSTEM_DELETE=false`.** To apply a CLI Compose environment change, recreate the container:
 
 ```bash
 docker compose up -d --force-recreate
@@ -283,7 +288,10 @@ All settings are environment variables (usually in `.env`). Only the first group
 | `ENABLE_TV` | `false` | Manage TV through Sonarr |
 | `ENABLE_SEASON_PRUNING` | `false` | Delete old seasons of favorited shows (needs `ENABLE_TV`) |
 | `RUN_INTERVAL_HOURS` | `0` | `0` = run once and exit; otherwise repeat every N hours |
-| `ALLOW_FILESYSTEM_DELETE` | `false` | Let the script delete a title itself when Radarr/Sonarr don't know it (or aren't configured). Off by default: such titles are skipped and reported. |
+| `ALLOW_FILESYSTEM_DELETE` | `false` | Filesystem deletion fallback; **keep disabled** for this release. |
+| `ALLOW_PERMANENT_DELETE` | `false` | Master permanent deletion safety switch; **must remain disabled until explicitly approved**. |
+| `FAVORITES_TRIGGER_KEEP` | `true` | Use Jellyfin favorites as Keep triggers alongside the `keep` tag. |
+| `JELLYFIN_REFRESH_AFTER_AUDIT` | `false` | Request Jellyfin refresh after successful media moves; updated paths may take time to appear. |
 | `ALLOW_CROSS_FILESYSTEM_MOVES` | `false` | Accept folders on different mounts (moves become slow copy-then-delete). Off by default. |
 
 Yes/no settings accept `true`/`false` (also `yes`/`no`, `1`/`0`, `on`/`off`). Anything else stops the script with an error. Numeric settings are validated too.
@@ -305,6 +313,7 @@ Yes/no settings accept `true`/`false` (also `yes`/`no`, `1`/`0`, `on`/`off`). An
 
 | Variable | Default |
 |---|---|
+| `KEEP_TAG` | `keep` |
 | `DISLIKE_TAG` | `not-at-all` |
 | `KEEP_ALL_SEASONS_TAG` | `keep-all-seasons` |
 | `PROTECT_TAG` | `keep-forever` |
@@ -346,7 +355,7 @@ If Radarr/Sonarr mount your media at **different paths** than this container, al
 
 ## Logs and state
 
-- **State file** (`auditor_state.json`): remembers when each folder was first seen, entered Holding, and entered Removal. **Keep it on a persistent volume**, because if it's lost every waiting clock starts over.
+- **State file** (`auditor_state.json`): tracks Waiting (`first_seen`), Holding (`queued`), Removal (`in_removal`), Keep (`keep_seen`), and pending Arr updates (`arr_sync_pending`). **Keep it on a persistent volume**. Never delete or reset corrupt state to work around an error.
 - **Action log** (`auditor_actions.jsonl`): one JSON line per action:
 
   ```json
@@ -388,7 +397,7 @@ If Radarr/Sonarr mount your media at **different paths** than this container, al
 | `401 Unauthorized` from Jellyfin | The token is wrong, has quotes or spaces, or is not an *API key*. Create one under Dashboard → API Keys. Recreate the container after editing (`docker compose up -d --force-recreate`). |
 | `PREFLIGHT FAILED` | The run stopped on purpose, with nothing touched. The message says why: a folder is missing, not writable, overlapping, or on a different filesystem, or Jellyfin/Radarr/Sonarr can't be reached. Fix it and the next run proceeds. |
 | `Folder does not exist` | The volume mapping doesn't match the folder paths, or you haven't created the folder. Check inside the container: `docker exec media_collection_auditor ls /media`. |
-| `DELETE SKIPPED` / `delete_skipped` in the log | Radarr/Sonarr don't know the title (or are ambiguous about it), so the script refused to delete it. Remove the folder by hand, or set `ALLOW_FILESYSTEM_DELETE=true` if you want the script to. |
+| `DELETE SKIPPED` / `delete_skipped` in the log | A safety check, missing protection information, ambiguous Arr match, or disabled master switch blocked deletion. **Do not enable filesystem deletion to bypass safeguards.** |
 | `arr_sync_failed` in the log | The folder moved but Radarr/Sonarr couldn't be updated. Fix its path/monitoring by hand in Radarr/Sonarr (the log says which title). |
 | `CONFIG ERROR` at startup | A setting has an invalid value (see the message). |
 | `Not found in Jellyfin yet` | Jellyfin hasn't scanned the folder, or the folder name differs from what Jellyfin sees. |
@@ -408,7 +417,7 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-The Unraid branch also adds web authentication/rescue safety tests and pure decision tests (`tests/test_web_security.py`, `tests/test_rescue_safety.py`, `tests/test_lifecycle_decisions.py`). Verify the GitHub Actions results for the exact commit you intend to deploy; a successful Docker build does not prove the tests passed.\n\nIt covers the whole lifecycle (including the exact boundary days), favorites and tags, the dry-run guarantee, the per-run action cap, grace periods, TV clock rules, season pruning (including the exact requests sent to Sonarr), legacy state files, every notification target, and the safety net: preflight checks, fail-closed deletion, verified moves, Radarr/Sonarr failures, and config validation. GitHub Actions runs it on every push and pull request, on Python 3.10 and 3.12 (`.github/workflows/tests.yml`).
+The Unraid branch also adds web authentication/rescue safety tests, dashboard state-error tests, interrupted-move and stage-clock tests, duplicate-removal safety tests, durable JSON state tests, and pure decision tests (`tests/test_web_security.py`, `tests/test_rescue_safety.py`, `tests/test_lifecycle_decisions.py`). Verify the GitHub Actions results for the exact commit you intend to deploy; verify both Python safety checks and Docker Image workflows for the final commit.\n\nIt covers the whole lifecycle (including the exact boundary days), favorites and tags, the dry-run guarantee, the per-run action cap, grace periods, TV clock rules, season pruning (including the exact requests sent to Sonarr), legacy state files, every notification target, and the safety net: preflight checks, fail-closed deletion, verified moves, Radarr/Sonarr failures, and config validation. GitHub Actions runs it on every push and pull request, on Python 3.10 and 3.12 (`.github/workflows/tests.yml`).
 
 If you change the rules, change or add a test with it. These are the tests that keep a tool that deletes files honest.
 
@@ -419,7 +428,13 @@ If you change the rules, change or add a test with it. These are the tests that 
 ```
 .
 ├── app/
-│   ├── collection_auditor.py\n│   ├── lifecycle_decisions.py\n│   ├── main.py, web.py, auth.py, config_store.py\n│   ├── audit_history.py, manual_rescue.py, run_control.py\n│   ├── connection_tests.py\n│   ├── templates/\n│   └── static/
+│   ├── collection_auditor.py 
+│   ├── lifecycle_decisions.py 
+│   ├── main.py, web.py, auth.py, config_store.py 
+│   ├── audit_history.py, manual_rescue.py, run_control.py 
+│   ├── connection_tests.py 
+│   ├── templates/ 
+│   └── static/
 ├── tests/
 │   ├── conftest.py
 │   ├── test_lifecycle.py
@@ -438,6 +453,12 @@ If you change the rules, change or add a test with it. These are the tests that 
 ├── .gitignore
 └── README.md
 ```
+
+---
+
+## Planned SQLite migration
+
+This release uses **JSON** state; SQLite is **not yet integrated**. After final validation, `feature/unraid` will be merged to `main` **only with explicit approval**. SQLite development will then begin on a separate `feature/sqlite` branch. Migration must preserve lifecycle timestamps and pending Arr updates, back up JSON, be transactional and restart-safe, and fail closed on unavailable state. See [SQLite migration readiness](docs/sqlite-migration-readiness.md) and [pre-merge review](docs/pre-merge-review.md).
 
 ---
 
