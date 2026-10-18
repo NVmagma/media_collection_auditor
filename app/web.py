@@ -21,7 +21,7 @@ from audit_history import read_history
 from manual_rescue import rescue_title
 from auth import session_key, jellyfin_login, current_user, store_token, discard_token, verify_user
 from run_control import snapshot, request_run
-from config_store import FIELDS, KEYS, SECRETS, BOOLS, DEFAULTS, FIELD_HELP, load_config, save_config, validate
+from config_store import FIELDS, KEYS, SECRETS, BOOLS, DEFAULTS, FIELD_HELP, load_config, save_config, validate, redacted_config
 
 app = Flask(__name__)
 app.secret_key = session_key()
@@ -507,6 +507,20 @@ def poster():
     except (requests.RequestException, ValueError, TypeError, KeyError, AttributeError):
         app.logger.warning("Jellyfin poster lookup failed for %s", library, exc_info=True)
         return Response(status=404)
+
+
+@app.get("/settings/export-safe")
+def export_safe_settings():
+    """Download only allowlisted non-secret settings; never expose raw configuration."""
+    if not getattr(g, "user", None) or not g.user["admin"]:
+        return Response("Administrator access required.", 403)
+    response = Response(json.dumps({
+        "note": "Shareable settings snapshot; credentials, URLs and filesystem paths excluded.",
+        "settings": redacted_config(load_config()),
+    }, indent=2), mimetype="application/json")
+    response.headers["Content-Disposition"] = 'attachment; filename="auditor_settings_safe.json"'
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.get("/logs/diagnostics")
