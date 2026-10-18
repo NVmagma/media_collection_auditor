@@ -78,10 +78,9 @@ def test_unknown_historical_fields_are_not_silently_dropped(tmp_path):
         tmp_path / "snapshot.db"
     )
     source.write_text('{"legacy":{"Movie":"historical tracking"}}')
-    with pytest.raises(RuntimeError, match="Unknown historical"):
-        create_offline_migration_snapshot(source, backup, database)
+    create_offline_migration_snapshot(source, backup, database)
     assert backup.read_bytes() == source.read_bytes()
-    assert not database.exists()
+    assert read_snapshot(database)["legacy"] == {"Movie": "historical tracking"}
 
 
 def test_existing_destination_blocks_backup_creation(tmp_path):
