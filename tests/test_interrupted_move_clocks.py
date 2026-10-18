@@ -74,5 +74,31 @@ class InterruptedMoveTests(unittest.TestCase):
         self.assertEqual(self.state["arr_sync_pending"], {})
 
 
+    def test_multiple_stale_stage_records_cannot_age_removal(self):
+        (Path(self.lib["removal"]) / "Film").mkdir()
+        self.state["first_seen"]["Film"] = "2024-01-01T00:00:00"
+        self.state["queued"]["Film"] = "2025-01-01T00:00:00"
+        self.state["in_removal"]["Film"] = "2025-02-01T00:00:00"
+        with patch.object(auditor, "DRY_RUN", False):
+            before = datetime.datetime.now()
+            auditor.reconcile_moved_titles(self.lib, self.state)
+            after = datetime.datetime.now()
+        self.assertNotIn("Film", self.state["first_seen"])
+        self.assertNotIn("Film", self.state["queued"])
+        entered = datetime.datetime.fromisoformat(self.state["in_removal"]["Film"])
+        self.assertLessEqual(before, entered)
+        self.assertLessEqual(entered, after)
+        self.assertEqual(self.state["arr_sync_pending"]["Film"]["stage"], "removal")
+
+    def test_multiple_stale_stage_records_dry_run_is_read_only(self):
+        (Path(self.lib["removal"]) / "Film").mkdir()
+        self.state["first_seen"]["Film"] = "2024-01-01T00:00:00"
+        self.state["queued"]["Film"] = "2025-01-01T00:00:00"
+        self.state["in_removal"]["Film"] = "2025-02-01T00:00:00"
+        original = {section: dict(entries) for section, entries in self.state.items()}
+        with patch.object(auditor, "DRY_RUN", True):
+            auditor.reconcile_moved_titles(self.lib, self.state)
+        self.assertEqual(self.state, original)
+
 if __name__ == "__main__":
     unittest.main()
