@@ -119,3 +119,18 @@ def test_protected_jellyfin_title_cannot_be_cleared(tmp_path):
     )
     assert report["jellyfin_protection"] == "protected_manual_review_required"
     assert report["authorization"] == "blocked_pending_independent_verification"
+
+
+def test_incomplete_series_scope_cannot_pass_persisted_recovery(tmp_path):
+    database = _setup(tmp_path, kind="move")
+    before = GuardedSQLiteStateStore(database).load_with_revision()
+    with pytest.raises(RuntimeError, match="Jellyfin protection information incomplete"):
+        inspect_fetched_recovery(
+            database,
+            jellyfin_fetch=lambda title: _reply(
+                "jellyfin", title, {**PROTECTION, "complete": False,
+                                   "keep_forever": True}
+            ),
+            now=NOW,
+        )
+    assert GuardedSQLiteStateStore(database).load_with_revision() == before
