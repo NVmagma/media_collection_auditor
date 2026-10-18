@@ -21,6 +21,8 @@ def inspect_recovery_readiness(database: str | Path) -> dict[str, Any]:
 def recovery_readiness_from_report(report: dict[str, Any]) -> dict[str, Any]:
     """Derive a checklist from the same verified snapshot as the status view."""
     status = report["status"]
+    if status not in ("blocked", "no_pending_operation"):
+        raise RuntimeError("Recovery status invalid")
     pending = status == "blocked"
     return {
         "status": status,
