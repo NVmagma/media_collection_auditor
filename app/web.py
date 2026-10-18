@@ -1,0 +1,700 @@
+import json
+import os
+import hmac
+import requests
+import posixpath
+import re
+import time
+import threading
+import io
+import zipfile
+from urllib.parse import quote
+from datetime import timedelta
+from datetime import datetime
+from urllib.parse import urlsplit
+from pathlib import Path
+from flask import Flask, render_template, request, Response, redirect, url_for, session, g, send_file
+
+from lifecycle_decisions import decide
+from connection_tests import check_connection, SERVICES
+from audit_history import read_history
+from manual_rescue import rescue_title
+from auth import session_key, jellyfin_login, current_user, store_token, discard_token, verify_user
+from run_control import snapshot, request_run
+from config_store import FIELDS, KEYS, SECRETS, BOOLS, DEFAULTS, FIELD_HELP, load_config, save_config, validate, redacted_config
+
+app = Flask(__name__)
+app.secret_key = session_key()
+app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
+                  SESSION_COOKIE_SECURE=os.environ.get("WEB_SECURE_COOKIE", "false").lower() == "true",
+                  PERMANENT_SESSION_LIFETIME=timedelta(hours=12))
+
+@app.before_request
+def require_login():
+    if request.endpoint in ("login", "login_background", "health", "static"):
+        return None
+    g.user = current_user()
+    if g.user is None:
+        if request.path.startswith("/api/"):
+            return {"ok": False, "message": "Please sign in."}, 401
+        return redirect(url_for("login"))
+    if request.endpoint in ("settings", "test_connection", "run_now", "rescue") and not g.user["admin"]:
+        if request.path.startswith("/api/"):
+            return {"ok": False, "message": "Administrator access required."}, 403
+        return Response("Administrator access required.", 403)
+
+@app.context_processor
+def user_context():
+    return {"viewer": getattr(g, "user", None)}
+
+@app.get("/login-background")
+def login_background():
+    path = Path(os.environ.get("WEB_LOGIN_IMAGE_FILE", "/app/logs/login-background.jpg"))
+    if path.is_file():
+        return send_file(path, mimetype="image/jpeg", max_age=3600)
+    return Response(status=404)
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "GET":
+        if current_user():
+            return redirect(url_for("dashboard"))
+        return render_template("login.html", error=None)
+    origin = request.headers.get("Origin") or request.headers.get("Referer")
+    if not origin or urlsplit(origin).netloc != request.host:
+        return Response("Invalid request origin.", 403)
+    username = request.form.get("username", "")[:128]
+    password = request.form.get("password", "")
+    if not username or not password:
+        return render_template("login.html", error="Enter a username and password."), 400
+    user, login_error = jellyfin_login(username, password)
+    if user and not verify_user(user["token"], user["id"]):
+        user = None
+        login_error = "Jellyfin authenticated you, but the account could not be verified. Check Jellyfin permissions and the server URL."
+    discard_token(session.get("jf_handle"))
+    session.clear()
+    if user:
+        session.update(provider="jellyfin", jf_handle=store_token(user["token"], user["id"]))
+    elif (os.environ.get("WEB_ADMIN_PASSWORD")
+          and hmac.compare_digest(username, os.environ.get("WEB_ADMIN_USER", "admin"))
+          and hmac.compare_digest(password, os.environ["WEB_ADMIN_PASSWORD"])):
+        session["provider"] = "local"
+    else:
+        return render_template("login.html", error=login_error or "Invalid credentials for the local administrator account."), 401
+    session.permanent = True
+    return redirect(url_for("dashboard"))
+
+@app.post("/logout")
+def logout():
+    origin = request.headers.get("Origin") or request.headers.get("Referer")
+    if not origin or urlsplit(origin).netloc != request.host:
+        return Response("Invalid request origin.", 403)
+    discard_token(session.get("jf_handle"))
+    session.clear()
+    return redirect(url_for("login"))
+
+
+ACTION_LOG_FILE = os.environ.get("ACTION_LOG_FILE", "/app/logs/auditor_actions.jsonl")
+STATE_FILE = os.environ.get("STATE_FILE", "/app/logs/auditor_state.json")
+
+
+def load_actions(limit=250):
+    path = Path(ACTION_LOG_FILE)
+    if not path.exists():
+        return []
+    actions = []
+    try:
+        with path.open() as handle:
+            for line in handle:
+                try:
+                    actions.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+    except OSError:
+        return []
+    return list(reversed(actions[-limit:]))
+
+
+def load_state():
+    path = Path(STATE_FILE)
+    if not path.exists():
+        return {}
+    try:
+        with path.open() as handle:
+            return json.load(handle)
+    except (OSError, json.JSONDecodeError, UnicodeError) as exc:
+        raise RuntimeError("Dashboard tracking state is unreadable; displayed lifecycle dates may be incomplete") from exc
+
+
+
+def _live_jellyfin_signals(config):
+    """Read-only, short-lived tag/favorite snapshot; never authorizes filesystem actions."""
+    base = config.get("JELLYFIN_HOST_URL", os.environ.get("JELLYFIN_HOST_URL", "")).rstrip("/")
+    token = config.get("JELLYFIN_API_TOKEN", os.environ.get("JELLYFIN_API_TOKEN", "")).strip()
+    if not base.startswith(("http://", "https://")) or not token:
+        return None
+    tag_names = {
+        "keep": config.get("KEEP_TAG", os.environ.get("KEEP_TAG", "keep")).casefold(),
+        "protected": config.get("PROTECT_TAG", os.environ.get("PROTECT_TAG", "keep-forever")).casefold(),
+        "disliked": config.get("DISLIKE_TAG", os.environ.get("DISLIKE_TAG", "not-at-all")).casefold(),
+        "keep_all": config.get("KEEP_ALL_SEASONS_TAG", os.environ.get("KEEP_ALL_SEASONS_TAG", "keep-all-seasons")).casefold(),
+    }
+    headers = _poster_headers(token)
+    signals = {"Movies": {}, "TV": {}}
+    users_response = requests.get(base + "/Users", headers=headers, timeout=(3, 8), allow_redirects=False)
+    users_response.raise_for_status()
+    users = users_response.json()
+    if not isinstance(users, list) or not users:
+        return None
+    for user in users:
+        user_id = user.get("Id")
+        if not user_id:
+            return None
+        for library, media_type in (("Movies", "Movie"), ("TV", "Series")):
+            response = requests.get(base + "/Users/" + quote(str(user_id), safe="") + "/Items",
+                                    params={"Recursive": "true", "IncludeItemTypes": media_type,
+                                            "Fields": "Path,Tags"},
+                                    headers=headers, timeout=(3, 12), allow_redirects=False)
+            response.raise_for_status()
+            payload = response.json()
+            if not isinstance(payload, dict) or not isinstance(payload.get("Items"), list):
+                return None
+            for media in payload["Items"]:
+                folder = _poster_folder(media, media_type)
+                if not folder:
+                    continue
+                sig = signals[library].setdefault(folder, {"favorite": False, "keep": False,
+                                                            "protected": False, "disliked": False,
+                                                            "keep_all": False})
+                sig["favorite"] |= bool((media.get("UserData") or {}).get("IsFavorite"))
+                tags = {str(t).casefold() for t in (media.get("Tags") or [])}
+                for key, tag in tag_names.items():
+                    sig[key] |= tag in tags
+                if sig["protected"]:
+                    sig["keep_all"] = True
+    return signals
+
+
+def _dashboard_signals(config):
+    """Cache for 60 seconds; errors show unknown rather than stale or unverified status."""
+    now = time.monotonic()
+    cache_key = tuple(sorted((key, config.get(key, os.environ.get(key, "")))
+                              for key in ("JELLYFIN_HOST_URL", "JELLYFIN_API_TOKEN", "KEEP_TAG",
+                                          "PROTECT_TAG", "DISLIKE_TAG", "KEEP_ALL_SEASONS_TAG")))
+    with _SIGNAL_LOCK:
+        if _SIGNAL_CACHE.get("key") == cache_key and now - _SIGNAL_CACHE.get("time", 0) < 60:
+            return _SIGNAL_CACHE["value"]
+    try:
+        value = _live_jellyfin_signals(config)
+    except (requests.RequestException, ValueError, TypeError, KeyError, AttributeError):
+        app.logger.warning("Dashboard Jellyfin signals unavailable", exc_info=True)
+        value = None
+    with _SIGNAL_LOCK:
+        _SIGNAL_CACHE.update(key=cache_key, time=time.monotonic(), value=value)
+    return value
+
+
+_SIGNAL_LOCK = threading.Lock()
+_SIGNAL_CACHE = {}
+
+def filesystem_stages(state, config):
+    """Read-only lifecycle inventory. Missing mounts are reported, not counted as empty."""
+    stages = {label: [] for label in ("Waiting", "Holding", "Removal", "Keep")}
+    warnings = []
+    media_root = config.get("MEDIA_PATH", os.environ.get("MEDIA_PATH", "/media"))
+    layout = (("Movies", "RADARR", "ENABLE_MOVIES",
+               {"Waiting": "Movies", "Holding": "Movies_hold",
+                "Removal": "Movies_removal", "Keep": "Movies_keep"}, ""),
+              ("TV", "SONARR", "ENABLE_TV",
+               {"Waiting": "TV", "Holding": "TV_hold",
+                "Removal": "TV_removal", "Keep": "TV_keep"}, "TV/"))
+    sections = {"Waiting": "first_seen", "Holding": "queued",
+                "Removal": "in_removal", "Keep": "keep_seen"}
+    for library, prefix, enabled_key, defaults, key_prefix in layout:
+        enabled = str(config.get(enabled_key, os.environ.get(enabled_key,
+                      "true" if library == "Movies" else "false"))).lower() == "true"
+        if not enabled:
+            continue
+        for label, dirname in defaults.items():
+            kind = "TRANSIENT" if label == "Waiting" else label.upper()
+            directory = os.environ.get(f"{prefix}_{kind}_PATH") or os.path.join(media_root, dirname)
+            try:
+                with os.scandir(directory) as entries:
+                    names = sorted((entry.name for entry in entries
+                                    if entry.is_dir(follow_symlinks=False)), key=str.casefold)
+            except OSError:
+                warnings.append(f"{library} {label}: directory unavailable ({directory})")
+                continue
+            for name in names:
+                key = key_prefix + name
+                stages[label].append({
+                    "title": name, "library": library,
+                    "since": state.get(sections[label], {}).get(key),
+                })
+    return stages, warnings
+
+
+def collection_health(state, stages, warnings, config=None):
+    """Compare readable folders and tracking records without changing either."""
+    sections = {"Waiting": "first_seen", "Holding": "queued",
+                "Removal": "in_removal", "Keep": "keep_seen"}
+    config = config or {}
+    enabled = {library for library, key, fallback in (("Movies", "ENABLE_MOVIES", "true"), ("TV", "ENABLE_TV", "false"))
+               if str(config.get(key, os.environ.get(key, fallback))).lower() == "true"}
+    present = {}
+    for stage, items in stages.items():
+        for item in items:
+            if item["library"] in enabled:
+                present.setdefault((item["library"], item["title"]), set()).add(stage)
+    unavailable = {(library, stage)
+                   for library in ("Movies", "TV") for stage in sections
+                   if any(w.startswith(f"{library} {stage}:") for w in warnings)}
+    issues = []
+    for (library, title), locations in present.items():
+        if len(locations) > 1:
+            issues.append({"library": library, "title": title,
+                           "detail": "Folder appears in multiple lifecycle directories: "
+                                     + ", ".join(sorted(locations)) + ". Review manually; no files were moved."})
+    for stage, items in stages.items():
+        for item in items:
+            if item["library"] not in enabled or item["since"] is not None:
+                continue
+            key = ("TV/" if item["library"] == "TV" else "") + item["title"]
+            recorded = [label for label, section in sections.items()
+                        if key in state.get(section, {})]
+            if recorded:
+                detail = (f"{stage}: folder has no tracking timestamp yet; "
+                          f"tracking exists in {', '.join(recorded)}. "
+                          "Review after the next audit; no dates were changed.")
+            else:
+                detail = (f"{stage}: folder has no tracking timestamp yet; "
+                          "no lifecycle tracking record exists. "
+                          "Manual review recommended; no dates were changed.")
+            issues.append({"library": item["library"], "title": item["title"],
+                           "detail": detail})
+    for stage, section in sections.items():
+        for key in state.get(section, {}):
+            if not isinstance(key, str):
+                continue
+            library = "TV" if key.startswith("TV/") else "Movies"
+            title = key[3:] if library == "TV" else key
+            if library not in enabled or (library, stage) in unavailable:
+                continue
+            locations = present.get((library, title), set())
+            if stage not in locations:
+                if locations:
+                    detail = (f"{stage} tracking record, but folder is in "
+                              + ", ".join(sorted(locations)) + ". Review tracking after the next audit.")
+                elif not any(lib == library for lib, _ in unavailable):
+                    detail = f"{stage}: tracking record has no matching folder in readable lifecycle directories"
+                else:
+                    continue
+                issues.append({"library": library, "title": title, "detail": detail})
+    for key, entry in state.get("arr_sync_pending", {}).items():
+        if not isinstance(key, str):
+            continue
+        library = "TV" if key.startswith("TV/") else "Movies"
+        title = key[3:] if library == "TV" else key
+        if library not in enabled:
+            continue
+        stage = entry.get("stage", "unknown") if isinstance(entry, dict) else "unknown"
+        issues.append({"library": library, "title": title,
+                       "detail": f"Radarr/Sonarr sync pending for {stage}"})
+    return sorted(issues, key=lambda item: (item["library"], item["title"].casefold(), item["detail"]))
+
+
+@app.get("/")
+def dashboard():
+    actions = load_actions()
+    state_error = None
+    try:
+        state = load_state()
+    except RuntimeError as exc:
+        state = {}
+        state_error = str(exc)
+    config = load_config()
+    stages, inventory_warnings = filesystem_stages(state, config)
+    health_issues = collection_health(state, stages, inventory_warnings, config)
+    removal_days = int(config.get("REMOVAL_DAYS", os.environ.get("REMOVAL_DAYS", "7")))
+    for item in stages["Removal"]:
+        try:
+            age = (datetime.now() - datetime.fromisoformat(item["since"])).days
+            item["days_left"] = max(0, removal_days - age)
+        except (ValueError, TypeError):
+            item["days_left"] = None
+    def setting_days(key, fallback):
+        try:
+            return max(1, int(config.get(key, os.environ.get(key, str(fallback)))))
+        except (ValueError, TypeError):
+            return fallback
+
+    deadlines = {"Waiting": {"Movies": setting_days("MOVIE_WAIT_DAYS", 30),
+                              "TV": setting_days("TV_WAIT_DAYS", 60)},
+                 "Holding": {"Movies": setting_days("HOLDING_DAYS", 7),
+                             "TV": setting_days("HOLDING_DAYS", 7)},
+                 "Removal": {"Movies": removal_days, "TV": removal_days}}
+    stage_explanations = {
+        "Waiting": "Tracked in the incoming library. Playback, favorites, and protection rules can change what happens next.",
+        "Holding": "In the holding period before removal. Jellyfin signals and safety rules may prevent the next move.",
+        "Removal": "In the final removal stage. Deletion requires a fresh audit and must pass all deletion safeguards.",
+        "Keep": "Tracked in the Keep library. TV season pruning, if enabled, has separate safeguards."
+    }
+    live_signals = _dashboard_signals(config)
+    favorites_trigger_keep = str(config.get("FAVORITES_TRIGGER_KEEP", os.environ.get("FAVORITES_TRIGGER_KEEP", "true"))).lower() == "true"
+    deletion_enabled = str(config.get("ALLOW_PERMANENT_DELETE", os.environ.get("ALLOW_PERMANENT_DELETE", "false"))).lower() == "true"
+    preview = []
+    for stage, items in stages.items():
+        for item in items:
+            item["reason"] = stage_explanations[stage]
+            item["elapsed_days"] = None
+            item["deadline_days"] = None
+            item["due"] = False
+            item["next_review_date"] = None
+            try:
+                start = datetime.fromisoformat(str(item["since"]))
+                now = datetime.now(start.tzinfo) if start.tzinfo else datetime.now()
+                elapsed = max(0, (now - start).days)
+                item["elapsed_days"] = elapsed
+                if stage in deadlines:
+                    limit = deadlines[stage][item["library"]]
+                    item["deadline_days"] = max(0, limit - elapsed)
+                    item["due"] = elapsed >= limit
+                    item["next_review_date"] = (start + timedelta(days=limit)).date().isoformat()
+            except (ValueError, TypeError, OverflowError):
+                pass
+            sig = live_signals.get(item["library"], {}).get(item["title"].casefold()) if live_signals is not None else None
+            item["jellyfin_signals"] = sig
+            decision, explanation = decide(stage, item["elapsed_days"],
+                                           deadlines.get(stage, {}).get(item["library"], 0), sig,
+                                           favorites_trigger_keep)
+            if stage == "Removal" and (sig is None or sig.get("protected") or sig.get("keep") or (favorites_trigger_keep and sig.get("favorite"))):
+                decision, explanation = "blocked", "Deletion blocked: Jellyfin status unknown or title protected. Manual rescue may be needed."
+            if stage == "Removal" and not deletion_enabled:
+                decision, explanation = "blocked", "Permanent deletion is disabled by the master safety switch."
+            item["decision"] = decision
+            item["decision_reason"] = explanation
+            if item["due"] and decision not in ("blocked", "unknown", "keep", "rescue") and (stage != "Removal" or sig is not None):
+                action = {"Waiting": "Review for move to Holding",
+                          "Holding": "Review for move to Removal",
+                          "Removal": "Review for permanent deletion"}.get(stage)
+                if action:
+                    preview.append({"title": item["title"], "library": item["library"],
+                                    "stage": stage, "action": action})
+    preview.sort(key=lambda item: (item["library"], item["stage"], item["title"].casefold()))
+    return render_template("dashboard.html", actions=actions, state=state, state_error=state_error, stages=stages, inventory_warnings=inventory_warnings, health_issues=health_issues, run=snapshot(), history=read_history(100),
+                           preview=preview, dry_run=load_config().get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "true")
+
+
+# Cache Jellyfin's folder-to-image mapping to avoid a library scan per poster.
+_POSTER_INDEX = {}
+_POSTER_LOCK = threading.Lock()
+_POSTER_TTL = 300
+
+
+def _poster_headers(token):
+    """Use the same Jellyfin authorization headers as connection_tests."""
+    return {"X-Emby-Token": token, "Authorization": f'MediaBrowser Token="{token}"'}
+
+
+def _poster_folder(item, media_type):
+    path = (item.get("Path") or "").replace("\\", "/").rstrip("/")
+    if not path:
+        return ""
+    if media_type == "Movie":
+        return posixpath.basename(posixpath.dirname(path)).casefold()
+    return posixpath.basename(path).casefold()
+
+
+def _poster_index(base, token, media_type):
+    """Match tracked folder names to Jellyfin IDs, like the auditor does."""
+    key = (base, token, media_type)
+    with _POSTER_LOCK:
+        cached = _POSTER_INDEX.get(key)
+        if cached and time.monotonic() - cached[0] < _POSTER_TTL:
+            return cached[1]
+    headers = _poster_headers(token)
+    # Jellyfin API keys can enumerate users; use the same per-user items
+    # endpoint as collection_auditor.get_signals().
+    users_response = requests.get(base + "/Users", headers=headers, timeout=(3, 10),
+                                  allow_redirects=False)
+    users_response.raise_for_status()
+    users = users_response.json()
+    if not isinstance(users, list) or not users:
+        return {}
+    index = {}
+    for user in users:
+        user_id = user.get("Id")
+        if not user_id:
+            continue
+        response = requests.get(base + "/Users/" + user_id + "/Items",
+                                params={"Recursive": "true", "IncludeItemTypes": media_type,
+                                        "Fields": "Path", "EnableImages": "true"},
+                                headers=headers, timeout=(3, 15), allow_redirects=False)
+        response.raise_for_status()
+        for item in response.json().get("Items", []):
+            if item.get("Type") != media_type or not item.get("Id"):
+                continue
+            # Do not require ImageTags here: some Jellyfin responses omit them.
+            folder = _poster_folder(item, media_type)
+            if folder:
+                index.setdefault(folder, item["Id"])
+            name = (item.get("Name") or "").strip().casefold()
+            if name:
+                index.setdefault("name:" + name, item["Id"])
+    with _POSTER_LOCK:
+        _POSTER_INDEX[key] = (time.monotonic(), index)
+    return index
+
+
+@app.template_filter("friendly_date")
+def friendly_date(value):
+    """Show readable dates while preserving unexpected legacy values."""
+    if not value:
+        return "Unknown"
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).strftime("%b %d, %Y")
+    except (ValueError, TypeError, OverflowError):
+        return str(value)
+
+
+def _jellyfin_item_id(title, library):
+    if not title or len(title) > 250 or library not in ("Movies", "TV"):
+        return None, None
+    config = load_config()
+    base = config.get("JELLYFIN_HOST_URL", os.environ.get("JELLYFIN_HOST_URL", "")).rstrip("/")
+    token = config.get("JELLYFIN_API_TOKEN", os.environ.get("JELLYFIN_API_TOKEN", "")).strip()
+    if not base.startswith(("http://", "https://")) or not token:
+        return None, None
+    media_type = "Movie" if library == "Movies" else "Series"
+    index = _poster_index(base, token, media_type)
+    normalized = title.casefold()
+    display_name = re.sub(r"\\s*\\(\\d{4}\\)\\s*$", "", title).strip().casefold()
+    item_id = (index.get(normalized) or index.get("name:" + normalized)
+               or index.get("name:" + display_name))
+    return base, item_id
+
+
+@app.get("/api/jellyfin-link")
+def jellyfin_link():
+    """Open an existing Jellyfin item without leaking API credentials."""
+    title = request.args.get("title", "").strip()
+    library = request.args.get("library", "")
+    if not title or len(title) > 250 or library not in ("Movies", "TV"):
+        return Response(status=400)
+    try:
+        base, item_id = _jellyfin_item_id(title, library)
+        if not item_id:
+            return Response("Title not found in Jellyfin.", status=404)
+        return redirect(base + "/web/index.html#!/details?id=" + quote(item_id, safe=""), code=302)
+    except (requests.RequestException, ValueError, TypeError, KeyError, AttributeError):
+        app.logger.warning("Jellyfin link lookup failed for %s", library, exc_info=True)
+        return Response("Unable to find title in Jellyfin.", status=404)
+
+
+@app.get("/api/poster")
+def poster():
+    """Serve matching Jellyfin artwork without exposing API credentials."""
+    title = request.args.get("title", "").strip()
+    library = request.args.get("library", "")
+    if not title or len(title) > 250 or library not in ("Movies", "TV"):
+        return Response(status=400)
+    config = load_config()
+    base = config.get("JELLYFIN_HOST_URL", os.environ.get("JELLYFIN_HOST_URL", "")).rstrip("/")
+    token = config.get("JELLYFIN_API_TOKEN", os.environ.get("JELLYFIN_API_TOKEN", "")).strip()
+    if not base.startswith(("http://", "https://")) or not token:
+        return Response(status=404)
+    media_type = "Movie" if library == "Movies" else "Series"
+    try:
+        index = _poster_index(base, token, media_type)
+        normalized = title.casefold()
+        # Folder is authoritative; only fall back to a display-title match.
+        display_name = re.sub(r"\s*\(\d{4}\)\s*$", "", title).strip().casefold()
+        item_id = (index.get(normalized) or index.get("name:" + normalized)
+                   or index.get("name:" + display_name))
+        if not item_id:
+            return Response(status=404)
+        image = requests.get(base + "/Items/" + item_id + "/Images/Primary",
+                             params={"maxWidth": 200, "quality": 75},
+                             headers=_poster_headers(token), timeout=(3, 8),
+                             allow_redirects=False)
+        if image.status_code != 200 or not image.headers.get("Content-Type", "").lower().startswith("image/"):
+            return Response(status=404)
+        return Response(image.content, mimetype=image.headers["Content-Type"],
+                        headers={"Cache-Control": "private, max-age=3600"})
+    except (requests.RequestException, ValueError, TypeError, KeyError, AttributeError):
+        app.logger.warning("Jellyfin poster lookup failed for %s", library, exc_info=True)
+        return Response(status=404)
+
+
+@app.get("/settings/export-safe")
+def export_safe_settings():
+    """Download only allowlisted non-secret settings; never expose raw configuration."""
+    if not getattr(g, "user", None) or not g.user["admin"]:
+        return Response("Administrator access required.", 403)
+    response = Response(json.dumps({
+        "note": "Shareable settings snapshot; credentials, URLs and filesystem paths excluded.",
+        "settings": redacted_config(load_config()),
+    }, indent=2), mimetype="application/json")
+    response.headers["Content-Disposition"] = 'attachment; filename="auditor_settings_safe.json"'
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.get("/logs/diagnostics")
+def export_diagnostics():
+    """Download a bounded, read-only diagnostic ZIP without tokens or configuration secrets."""
+    if not getattr(g, "user", None) or not g.user["admin"]:
+        return Response("Administrator access required.", 403)
+
+    # Deliberately exclude raw settings, state, cookies, and container environment.
+    # Folder names in activity logs can still be personal; share the ZIP selectively.
+    report = {
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "log_format": "JSON Lines (one action per line)",
+        "included": ["recent activity log", "non-secret safety configuration"],
+        "excluded": ["API keys", "passwords", "tokens", "state file", "environment variables"],
+    }
+    config = load_config()
+    safe_keys = ("DRY_RUN", "ALLOW_PERMANENT_DELETE", "ALLOW_FILESYSTEM_DELETE",
+                 "ENABLE_SEASON_PRUNING", "MAX_ACTIONS_PER_RUN", "ENABLE_MOVIES", "ENABLE_TV")
+    report["safety_settings"] = {
+        key: config.get(key, os.environ.get(key, DEFAULTS.get(key, "unset")))
+        for key in safe_keys
+    }
+    try:
+        # Only export the last 2 MiB of activity to avoid excessive memory use.
+        path = Path(ACTION_LOG_FILE)
+        raw = b""
+        if path.is_file():
+            with path.open("rb") as handle:
+                handle.seek(0, os.SEEK_END)
+                length = handle.tell()
+                handle.seek(max(0, length - 2 * 1024 * 1024))
+                raw = handle.read()
+            if length > 2 * 1024 * 1024:
+                raw = raw.partition(b"\\n")[2]  # omit truncated first record
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("diagnostics.json", json.dumps(report, indent=2))
+            archive.writestr("recent_actions.jsonl", raw)
+        buffer.seek(0)
+        return send_file(buffer, mimetype="application/zip", as_attachment=True,
+                         download_name="auditor_diagnostics.zip", max_age=0)
+    except OSError:
+        return Response("Diagnostic export unavailable.", 503)
+
+
+@app.get("/logs/export")
+def export_logs():
+    """Download persisted structured activity only; never expose arbitrary server paths."""
+    if not getattr(g, "user", None) or not g.user["admin"]:
+        return Response("Administrator access required.", 403)
+    path = Path(ACTION_LOG_FILE)
+    try:
+        if not path.is_file():
+            return Response("No persisted action log available.", 404)
+        return send_file(path, mimetype="application/x-ndjson", as_attachment=True,
+                         download_name="auditor_actions.jsonl", max_age=0)
+    except OSError:
+        return Response("Action log unavailable.", 503)
+
+
+@app.get("/logs")
+def logs():
+    return render_template("logs.html", actions=load_actions(1000))
+
+
+def admin_authorized():
+    return bool(getattr(g, "user", None) and g.user["admin"])
+
+
+@app.route("/settings", methods=["GET", "POST"])
+def settings():
+    if not admin_authorized():
+        return Response("Settings require WEB_ADMIN_PASSWORD (and HTTP Basic authentication).",
+                        401, {"WWW-Authenticate": 'Basic realm="Auditor settings"'})
+    saved = load_config()
+    error = None
+    success = request.args.get("saved") == "1"
+    if request.method == "POST":
+        # Reject cross-origin browser submissions; don't accept unauthenticated writes.
+        origin = request.headers.get("Origin") or request.headers.get("Referer")
+        if not origin or urlsplit(origin).netloc != request.host:
+            return Response("Invalid request origin", 403)
+        updated = dict(saved)
+        try:
+            for key in KEYS:
+                raw = request.form.get(key, "").strip()
+                if key in SECRETS and not raw:
+                    continue  # Empty password field preserves existing secret.
+                if not raw and key not in BOOLS:
+                    updated.pop(key, None)  # Fall back to Unraid environment.
+                else:
+                    updated[key] = validate(key, raw)
+            if (updated.get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "false"
+                    or updated.get("ALLOW_PERMANENT_DELETE", "false") == "true"
+                    or updated.get("ALLOW_FILESYSTEM_DELETE", "false") == "true"
+                    or updated.get("ALLOW_CROSS_FILESYSTEM_MOVES", "false") == "true"
+                    or updated.get("ENABLE_SEASON_PRUNING", "false") == "true"):
+                if request.form.get("safety_confirmation") != "I UNDERSTAND":
+                    raise ValueError("Type I UNDERSTAND to confirm potentially destructive settings.")
+            save_config(updated)
+            return redirect(url_for("settings", saved=1))
+        except (ValueError, OSError) as exc:
+            error = str(exc)
+    values = {key: saved.get(key, os.environ.get(key, DEFAULTS.get(key, "")))
+              for key in KEYS}
+    sources = {key: ("Web override" if key in saved else
+                     "Unraid" if key in os.environ else "Default") for key in KEYS}
+    for key in SECRETS:
+        values[key] = ""  # Never send stored tokens to the browser.
+    return render_template("settings.html", groups=FIELDS, values=values,
+                           secrets=SECRETS, bools=BOOLS, sources=sources, help_text=FIELD_HELP, error=error,
+                           success=success)
+
+
+@app.post("/api/test-connection/<service>")
+def test_connection(service):
+    if not admin_authorized():
+        return {"ok": False, "message": "Authentication required."}, 401
+    origin = request.headers.get("Origin") or request.headers.get("Referer")
+    if not origin or urlsplit(origin).netloc != request.host:
+        return {"ok": False, "message": "Invalid request origin."}, 403
+    if service not in SERVICES:
+        return {"ok": False, "message": "Unknown service."}, 404
+    return check_connection(service)
+
+
+@app.post("/api/run-now")
+def run_now():
+    if not admin_authorized():
+        return {"ok": False, "message": "Authentication required."}, 401
+    origin = request.headers.get("Origin") or request.headers.get("Referer")
+    if not origin or urlsplit(origin).netloc != request.host:
+        return {"ok": False, "message": "Invalid request origin."}, 403
+    if request_run():
+        return {"ok": True, "message": "Audit queued. Refresh the dashboard for results."}, 202
+    return {"ok": False, "message": "An audit is already running or queued."}, 409
+
+
+@app.post("/api/rescue")
+def rescue():
+    if not admin_authorized():
+        return {"ok": False, "message": "Sign in through Settings first."}, 401
+    origin = request.headers.get("Origin") or request.headers.get("Referer")
+    if not origin or urlsplit(origin).netloc != request.host:
+        return {"ok": False, "message": "Invalid request origin."}, 403
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        return {"ok": False, "message": "Invalid request."}, 400
+    ok, message, status = rescue_title(data.get("library"), data.get("title"), data.get("destination"))
+    return {"ok": ok, "message": message}, status
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("WEB_PORT", "8080")))

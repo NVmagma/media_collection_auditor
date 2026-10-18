@@ -1,0 +1,32 @@
+name: Python safety checks
+
+on:
+  push:
+    branches: [feature/unraid]
+  pull_request:
+    branches: [feature/unraid]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  syntax-and-safety:
+    name: Compile and run safety tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install runtime dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Compile all Python files
+        run: python -m compileall -q app tests
+      - name: Run isolated safety tests
+        env:
+          WEB_SESSION_SECRET: ci-only-session-secret
+        run: python -m unittest discover -s tests -p 'test_*.py' -v

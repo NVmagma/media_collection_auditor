@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Media Collection Auditor</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1><img class="brand-icon" src="/static/auditor-badge.png" alt="Auditor logo"> Media Collection Auditor</h1>
+      <p>Keep your library clean, organized &amp; complete.</p>
+    </div>
+    <nav><a href="/">Dashboard</a><a href="/logs">Logs</a>{% if viewer.admin %}<a href="/settings">Settings</a>{% endif %} <span class="viewer-indicator" title="Signed in as {{ viewer.name }}">{{ viewer.name }} <span class="viewer-role">{{ "Administrator" if viewer.admin else "Read only" }}</span></span> <form method="post" action="/logout" style="display:inline"><button type="submit">Sign out</button></form></nav>
+  </header>
+  <main>
+    {% if state_error %}<section role="alert" class="notice warning"><strong>Tracking state unavailable:</strong> {{ state_error }}. Dashboard lifecycle ages and predictions may be inaccurate. Do not rely on this display for media removal decisions.</section>{% endif %}
+    <section class="hero">
+      <div><span class="status-dot"></span> Auditor is running</div>
+      <strong>Current configuration: {{ 'Dry Run (preview only)' if dry_run else 'LIVE MODE — changes to media are enabled' }}</strong>
+      {% if viewer.admin %}<div class="run-controls"><button id="run-now" type="button">Run Now</button><span id="run-result" role="status" aria-live="polite">Administrator access required.</span></div>{% endif %}
+    </section>
+    <section class="cards run-cards">
+      <article><span>Audit status</span><strong>{{ 'Running' if run.running else 'Queued' if run.queued else run.last_result|capitalize if run.last_result else 'Waiting' }}</strong></article>
+      <article><span>Last audit</span><strong class="small-metric">{{ run.last_finished or 'Not yet recorded' }}</strong></article>
+      <article><span>Next scheduled audit</span><strong class="small-metric">{{ run.next_run or 'Manual only / pending' }}</strong></article>
+      <article><span>Mode</span><strong>{{ 'Dry Run' if dry_run else 'Live' }}</strong></article>
+      <article><span>Movies processed (last run)</span><strong>{{ run.movies_processed if run.movies_processed is not none else '—' }}</strong></article>
+      <article><span>TV folders processed (last run)</span><strong>{{ run.tv_processed if run.tv_processed is not none else '—' }}</strong></article>
+    </section>
+    <section class="cards">
+      <article><span>Recent actions</span><strong>{{ actions|length }}</strong></article>
+      <article><span>Transient records</span><strong>{{ state.get('first_seen', {})|length }}</strong></article>
+      <article><span>Holding records</span><strong>{{ state.get('queued', {})|length }}</strong></article>
+      <article><span>Removal records</span><strong>{{ state.get('in_removal', {})|length }}</strong></article>
+    </section>
+    <div class="dashboard-view-switch" role="group" aria-label="Media display style">
+      <span class="muted">Media display</span>
+      <button type="button" class="view-switch-button selected" data-view="table" aria-pressed="true">Table</button>
+      <button type="button" class="view-switch-button" data-view="posters" aria-pressed="false">Posters</button>
+    </div>
+    <nav class="settings-tabs" aria-label="Dashboard sections">
+      {% for tab in ['Overview','Movies','TV Shows','Audit Preview','Activity','History'] %}
+      <button type="button" class="tab-button{% if loop.first %} selected{% endif %}" data-tab="{{ tab }}" aria-selected="{{ 'true' if loop.first else 'false' }}">{{ tab }}</button>
+      {% endfor %}
+    </nav>
+    <section class="panel dashboard-section" data-panel="Overview">
+      <h2>Library overview</h2>
+      {% if inventory_warnings %}
+      <p role="alert"><strong>Filesystem inventory incomplete:</strong> counts for unavailable directories are not reliable.</p>
+      {% for warning in inventory_warnings %}<p class="muted">{{ warning }}</p>{% endfor %}
+      {% endif %}
+      <p class="muted">Choose Movies or TV Shows to see their individual lifecycle stages. Activity and History cover both libraries.</p>
+      <details>
+        <summary>Collection health · {{ health_issues|length }} item(s) needing review</summary>
+        <p class="muted">Read-only comparison of media folders, tracking timestamps, and pending Arr updates. A newly moved title may appear here until the next audit.</p>
+        {% if health_issues %}
+        <ul>{% for issue in health_issues %}
+          <li><strong>{{ issue.library }} · {{ issue.title }}</strong>: {{ issue.detail }}</li>
+        {% endfor %}</ul>
+        {% else %}<p class="muted">No discrepancies found in readable directories.</p>{% endif %}
+      </details>
+      <div class="library-overview">
+        {% for library, label in [('Movies', 'Movies'), ('TV', 'TV Shows')] %}
+        <button type="button" class="library-overview-card" data-open-library="{{ label }}">
+          <strong>{{ label }}</strong>
+          <span>{{ stages['Waiting']|selectattr('library','equalto',library)|list|length }} waiting · {{ stages['Holding']|selectattr('library','equalto',library)|list|length }} holding · {{ stages['Removal']|selectattr('library','equalto',library)|list|length }} removal · {{ stages['Keep']|selectattr('library','equalto',library)|list|length }} keep</span>
+          <span class="library-card-link">View {{ label }} →</span>
+        </button>
+        {% endfor %}
+      </div>
+    </section>
+    {% for library, label in [('Movies','Movies'), ('TV','TV Shows')] %}
+    <section class="panel dashboard-section hidden-section" data-panel="{{ label }}">
+      <div class="panel-heading"><h2>{{ label }} lifecycle</h2></div>
+      <nav class="lifecycle-tabs" aria-label="{{ label }} lifecycle stages">
+        {% for stage in ['Waiting','Holding','Removal','Keep'] %}
+        {% set count = stages[stage]|selectattr('library','equalto',library)|list|length %}
+        <button type="button" class="lifecycle-tab{% if loop.first %} selected{% endif %}" data-stage-tab="{{ library }}:{{ stage }}" aria-selected="{{ 'true' if loop.first else 'false' }}">{{ stage }} <span class="stage-count">{{ count }}</span></button>
+        {% endfor %}
+      </nav>
+      {% for stage in ['Waiting','Holding','Removal','Keep'] %}
+      {% set items = stages[stage]|selectattr('library','equalto',library)|list %}
+      <div class="lifecycle-panel{% if not loop.first %} hidden-section{% endif %}" data-stage-panel="{{ library }}:{{ stage }}">
+        <h3>{{ stage }} <span class="stage-count">({{ items|length }})</span></h3>
+        {% if stage == 'Removal' and viewer.admin %}<p class="muted">Choose an action to rescue a title. Dry Run previews the move.</p>{% endif %}
+        {% if items %}
+        <div class="table-wrap"><table><thead><tr><th>Title</th><th>Tracked since</th>{% if stage == 'Removal' %}<th>Days left</th>{% if viewer.admin %}<th>Rescue</th>{% endif %}{% endif %}</tr></thead><tbody>
+          {% for item in items %}
+          <tr><td><strong>{{ item.title }}</strong><details><summary>Why this stage?</summary><p>{{ item.reason }}</p><p><strong>Jellyfin:</strong> {% if item.jellyfin_signals is none %}Unknown / not matched{% else %}{% set sig = item.jellyfin_signals %}{% if sig.protected %}<strong>keep-forever (all seasons protected)</strong> {% endif %}{% if sig.keep %}keep {% endif %}{% if sig.keep_all and not sig.protected %}keep-all-seasons {% endif %}{% if sig.disliked %}not-at-all {% endif %}{% if sig.favorite %}Favorited {% endif %}{% if not sig.protected and not sig.keep and not sig.keep_all and not sig.disliked and not sig.favorite %}No lifecycle tags{% endif %}{% endif %}</p><p><strong>Decision:</strong> {{ item.decision_reason }} {% if item.decision == "unknown" %}(Jellyfin signals are not loaded on this dashboard.){% endif %}</p><p>Tracked: {{ item.elapsed_days if item.elapsed_days is not none else "Unknown" }} days{% if item.next_review_date %} · Next timer review: {{ item.next_review_date }}{% endif %}{% if item.deadline_days is not none %} · {{ item.deadline_days }} days remaining{% endif %}</p></details></td><td>{{ item.since|friendly_date }}</td>
+            {% if stage == 'Removal' %}<td>{{ item.days_left if item.days_left is not none else 'Unknown' }}</td>
+            {% if viewer.admin %}<td><select class="rescue-choice" data-library="{{ item.library }}" data-title="{{ item.title }}"><option value="">Choose action…</option><option value="keep">Move to Keep</option><option value="holding">Return to Holding</option></select></td>{% endif %}{% endif %}
+          </tr>
+          {% endfor %}
+        </tbody></table></div>
+        <div class="media-poster-list hidden-section" aria-label="{{ label }} {{ stage }} poster view">
+          {% for item in items %}
+          <article class="media-poster-row">
+            <a class="media-poster-placeholder media-poster-link" href="{{ url_for('jellyfin_link', library=item.library, title=item.title) }}" target="_blank" rel="noopener noreferrer" title="Open {{ item.title }} in Jellyfin"><span>{{ 'TV' if item.library == 'TV' else 'MOVIE' }}</span><img loading="lazy" alt="" src="{{ url_for('poster', library=item.library, title=item.title) }}" onerror="this.remove()"></a>
+            <div class="media-poster-info">
+              <h4>{{ item.title }}</h4>
+              <span class="media-stage-label">{{ stage }}</span><details><summary>Why this stage?</summary><p>{{ item.reason }}</p><p><strong>Jellyfin:</strong> {% if item.jellyfin_signals is none %}Unknown / not matched{% else %}{% set sig = item.jellyfin_signals %}{% if sig.protected %}<strong>keep-forever (all seasons protected)</strong> {% endif %}{% if sig.keep %}keep {% endif %}{% if sig.keep_all and not sig.protected %}keep-all-seasons {% endif %}{% if sig.disliked %}not-at-all {% endif %}{% if sig.favorite %}Favorited {% endif %}{% if not sig.protected and not sig.keep and not sig.keep_all and not sig.disliked and not sig.favorite %}No lifecycle tags{% endif %}{% endif %}</p><p><strong>Decision:</strong> {{ item.decision_reason }} {% if item.decision == "unknown" %}(Jellyfin signals are not loaded on this dashboard.){% endif %}</p><p>Tracked: {{ item.elapsed_days if item.elapsed_days is not none else "Unknown" }} days{% if item.deadline_days is not none %} · {{ item.deadline_days }} days until stage deadline{% endif %}</p></details>
+              <p>Tracked since: {{ item.since|friendly_date }}</p>
+              {% if stage == 'Removal' %}
+              <p>Days left: {{ item.days_left if item.days_left is not none else 'Unknown' }}</p>
+              {% if viewer.admin %}<label>Rescue
+                <select class="rescue-choice" data-library="{{ item.library }}" data-title="{{ item.title }}"><option value="">Choose action…</option><option value="keep">Move to Keep</option><option value="holding">Return to Holding</option></select>
+              </label>{% endif %}
+              {% endif %}
+            </div>
+          </article>
+          {% endfor %}
+        </div>
+        {% else %}<p class="empty">No {{ label|lower }} tracked in {{ stage|lower }}.</p>{% endif %}
+      </div>
+      {% endfor %}
+    </section>
+    {% endfor %}
+    <section class="panel dashboard-section hidden-section" data-panel="Audit Preview">
+      <h2>Audit preview · deadline candidates</h2>
+      <p class="muted">Read-only estimate from saved lifecycle dates, not a simulation of the auditor. These are titles whose stage timers have expired. Jellyfin playback, favorites, protection tags, filesystem checks, action limits, and service availability are NOT checked here. Nothing on this page moves or deletes files.</p>
+      {% if preview %}
+      <p><strong>{{ preview|length }} candidates</strong> for review on a future audit. These actions are not guaranteed.</p>
+      <div class="table-wrap"><table><thead><tr><th>Library</th><th>Title</th><th>Current stage</th><th>Potential next step</th></tr></thead><tbody>
+      {% for item in preview %}<tr><td>{{ item.library }}</td><td>{{ item.title }}</td><td>{{ item.stage }}</td><td>{{ item.action }}</td></tr>{% endfor %}
+      </tbody></table></div>
+      {% else %}<p class="empty">No tracked stage deadlines have expired. This does not guarantee the next audit will take no action.</p>{% endif %}
+    </section>
+    <section class="panel dashboard-section hidden-section" data-panel="Activity">
+      <div class="panel-heading"><h2>Recent activity</h2><a href="/logs">View all logs →</a></div>
+      {% if actions %}
+      <div class="table-wrap"><table><thead><tr><th>Time</th><th>Library</th><th>Action</th><th>Status</th><th>Folder</th><th>Detail</th></tr></thead><tbody>
+      {% for item in actions[:25] %}<tr><td>{{ item.get('time','') }}</td><td>{{ item.get('library','') }}</td><td>{{ item.get('action','') }}</td><td><span class="badge {{ item.get('status','') }}">{{ item.get('status','') }}</span></td><td>{{ item.get('folder','') }}</td><td>{{ item.get('detail','') }}</td></tr>{% endfor %}
+      </tbody></table></div>
+      {% else %}<p class="empty">No action log entries yet.</p>{% endif %}
+    </section>
+    <section class="panel dashboard-section hidden-section" data-panel="History">
+      <div class="panel-heading"><h2>Audit history</h2><span class="muted">Last {{ history|length }} runs · stored in appdata</span></div>
+      <p class="muted">Movie and TV counts reflect titles appearing in action logs, not every title scanned. Times are UTC.</p>
+      {% if history %}
+      <div class="table-wrap"><table><thead><tr><th>Started (UTC)</th><th>Duration</th><th>Trigger</th><th>Mode</th><th>Result</th><th>Movies</th><th>TV</th><th>Details</th></tr></thead><tbody>
+      {% for entry in history %}
+      <tr><td>{{ entry.get('started_at','') }}</td><td>{{ entry.get('duration_seconds','—') }}s</td><td>{{ entry.get('trigger','') }}</td><td>{{ 'Dry run' if entry.get('dry_run') else 'Live' }}</td><td>{{ entry.get('result','') }}</td><td>{{ entry.get('movies_processed',0) }}</td><td>{{ entry.get('tv_processed',0) }}</td><td>
+        <details><summary>View</summary>
+        {% if entry.get('error') %}<p class="history-error">Error: {{ entry.error }}</p>{% endif %}
+        <p>Actions: {% for action, count in entry.get('action_counts',{}).items() %}{{ action }} ({{ count }}){% if not loop.last %}, {% endif %}{% else %}None logged{% endfor %}</p>
+        <p>Statuses: {% for status, count in entry.get('status_counts',{}).items() %}{{ status }} ({{ count }}){% if not loop.last %}, {% endif %}{% else %}None logged{% endfor %}</p>
+        {% if entry.get('actions') %}
+        <div class="history-actions">{% for action in entry.actions %}<div>{{ action.get('library','') }} · {{ action.get('folder','') }} — {{ action.get('action','') }} ({{ action.get('status','') }})</div>{% endfor %}</div>
+        {% endif %}</details>
+      </td></tr>
+      {% endfor %}</tbody></table></div>
+      {% else %}<p class="empty">No recorded audits yet. New runs will appear here after completion.</p>{% endif %}
+    </section>
+  </main>
+<script>
+const mediaViewButtons = document.querySelectorAll('[data-view]');
+function setMediaView(view) {
+  const selectedView = view === 'posters' ? 'posters' : 'table';
+  document.querySelectorAll('.lifecycle-panel .table-wrap').forEach(table =>
+    table.classList.toggle('hidden-section', selectedView !== 'table'));
+  document.querySelectorAll('.media-poster-list').forEach(list =>
+    list.classList.toggle('hidden-section', selectedView !== 'posters'));
+  mediaViewButtons.forEach(button => {
+    const selected = button.dataset.view === selectedView;
+    button.classList.toggle('selected', selected);
+    button.setAttribute('aria-pressed', String(selected));
+  });
+  try { localStorage.setItem('auditor-media-view', selectedView); } catch (_) {}
+}
+mediaViewButtons.forEach(button => button.addEventListener('click', () => setMediaView(button.dataset.view)));
+try { setMediaView(localStorage.getItem('auditor-media-view') || 'table'); }
+catch (_) { setMediaView('table'); }
+const tabs = document.querySelectorAll('[data-tab]');
+const panels = document.querySelectorAll('[data-panel]');
+function openSection(name) {
+  tabs.forEach(tab => {
+    const selected = tab.dataset.tab === name;
+    tab.classList.toggle('selected', selected);
+    tab.setAttribute('aria-selected', String(selected));
+  });
+  panels.forEach(panel => panel.classList.toggle('hidden-section', panel.dataset.panel !== name));
+}
+tabs.forEach(tab => tab.addEventListener('click', () => openSection(tab.dataset.tab)));
+document.querySelectorAll('[data-open-library]').forEach(button =>
+  button.addEventListener('click', () => openSection(button.dataset.openLibrary)));
+document.querySelectorAll('[data-stage-tab]').forEach(tab => tab.addEventListener('click', () => {
+  const section = tab.closest('[data-panel]');
+  section.querySelectorAll('[data-stage-tab]').forEach(item => {
+    const selected = item === tab;
+    item.classList.toggle('selected', selected);
+    item.setAttribute('aria-selected', String(selected));
+  });
+  section.querySelectorAll('[data-stage-panel]').forEach(panel =>
+    panel.classList.toggle('hidden-section', panel.dataset.stagePanel !== tab.dataset.stageTab));
+}));
+document.querySelectorAll('.rescue-choice').forEach(choice => choice.addEventListener('change', async () => {
+  const destination = choice.value;
+  if (!destination) return;
+  const title = choice.dataset.title;
+  const library = choice.dataset.library;
+  if (!confirm('Rescue ' + title + ' (' + library + ') to ' + destination + '? Live mode moves media.')) { choice.value = ''; return; }
+  choice.disabled = true;
+  try {
+    const response = await fetch('/api/rescue', {method:'POST', credentials:'same-origin',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({title, library, destination})});
+    const data = await response.json();
+    alert(data.message || 'Request failed.');
+    if (data.ok) location.reload();
+  } catch (error) { alert('Unable to request rescue.'); }
+  finally { choice.disabled = false; choice.value = ''; }
+}));
+const button = document.getElementById('run-now');
+button?.addEventListener('click', async () => {
+  if (!confirm('Start an audit using your saved configuration? In Live Mode this may move or delete media.')) return;
+  button.disabled = true;
+  const output = document.getElementById('run-result');
+  output.textContent = 'Requesting audit…';
+  try {
+    const response = await fetch('/api/run-now', {method:'POST', credentials:'same-origin'});
+    const data = await response.json();
+    output.textContent = data.message || 'Request failed.';
+    if (response.status === 401) output.textContent = 'Please open Settings to sign in, then try again.';
+  } catch (error) { output.textContent = 'Unable to request an audit.'; }
+  finally { button.disabled = false; }
+});
+</script></body>
+</html>

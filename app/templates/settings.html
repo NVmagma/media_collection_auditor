@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Settings · Media Collection Auditor</title><link rel="stylesheet" href="/static/style.css"></head>
+<body class="app-shell">
+<aside class="sidebar">
+<a class="sidebar-brand" href="/"><img class="brand-icon" src="/static/auditor-badge.png" alt=""><span>Media<br>Auditor</span></a>
+<nav class="side-nav" aria-label="Main navigation"><a href="/">▦ <span>Dashboard</span></a><a href="/logs">☷ <span>Activity Logs</span></a><a class="active" href="/settings">⚙ <span>Settings</span></a></nav>
+<div class="sidebar-footer"><span class="viewer-indicator" title="Signed in as {{ viewer.name }}">{{ viewer.name }} <span class="viewer-role">{{ "Administrator" if viewer.admin else "Read only" }}</span></span> <form method="post" action="/logout" style="display:inline"><button type="submit">Sign out</button></form></div>
+</aside>
+<div class="app-content">
+<header class="settings-header"><div><h1>Settings</h1><p>Manage your auditor without editing Docker environment variables.</p></div><span class="header-note">Changes apply next audit</span></header>
+<main class="settings-main">
+<nav class="settings-tabs" aria-label="Settings categories">
+{% for group in groups %}<button type="button" class="tab-button{% if loop.first %} selected{% endif %}" data-tab="{{ group }}" aria-selected="{{ 'true' if loop.first else 'false' }}">{{ group }}</button>{% endfor %}
+</nav>
+{% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
+{% if success %}<div class="alert" role="status">Settings saved. Changes will apply at the next audit run.</div>{% endif %}
+<form method="post" action="/settings" id="settings-form">
+{% for group, keys in groups.items() %}
+<section class="settings-section{% if not loop.first %} hidden-section{% endif %}" data-panel="{{ group }}">
+<h2>{{ group }} Settings</h2>
+<p class="section-description">{% if group == 'Connections' %}Connect to your media services. Leave password fields empty to keep existing credentials.{% elif group == 'Libraries' %}Choose which libraries are managed and how titles are protected.{% elif group == 'Lifecycle' %}Set how long media stays in each stage before progressing.{% elif group == 'Safety' %}Control dry-run mode and destructive operations. Keep dry-run enabled while testing.{% else %}Configure where audit notifications are sent.{% endif %}</p>
+{% for key in keys %}
+<div class="setting-row">
+<div class="setting-description"><label for="field-{{ key }}">{{ help_text[key][0] }}</label><small>{{ help_text[key][1] }}</small><span class="source-indicator">{{ sources[key] }}</span></div>
+<div class="setting-control">
+{% if key in bools %}
+<select id="field-{{ key }}" name="{{ key }}"><option value="true" {% if values[key]|lower == 'true' %}selected{% endif %}>Enabled</option><option value="false" {% if values[key]|lower == 'false' %}selected{% endif %}>Disabled</option></select>
+{% else %}
+<input id="field-{{ key }}" name="{{ key }}" type="{{ 'password' if key in secrets else 'text' }}" value="{{ values[key] }}" autocomplete="off" placeholder="{{ 'Leave blank to keep existing secret' if key in secrets else 'Unraid default if blank' }}">
+{% endif %}
+</div></div>
+{% endfor %}
+{% if group == 'Connections' %}
+<div class="connection-tests">
+<h3>Test saved connections</h3><p class="section-description">Save your connection settings first. Tests use saved settings or Unraid defaults, and never change your media.</p>
+{% for service in ['jellyfin', 'radarr', 'sonarr'] %}
+<div class="connection-test-row"><span>{{ service|capitalize }}</span><button type="button" class="test-button" data-test-service="{{ service }}">Test Connection</button><span class="test-result" data-test-result="{{ service }}" role="status" aria-live="polite"></span></div>
+{% endfor %}
+</div>
+{% endif %}
+</section>
+{% endfor %}
+<div class="save-panel"><div><strong>Save configuration</strong><p>Settings are stored in persistent appdata. Potentially destructive options require confirmation.</p>
+<label class="confirm-label" for="safety_confirmation">Safety confirmation (when required)</label>
+<input id="safety_confirmation" name="safety_confirmation" autocomplete="off" placeholder="Type I UNDERSTAND"></div>
+<button class="save-button" type="submit">Save Changes</button></div>
+</form></main></div>
+<script>
+const tabs = document.querySelectorAll('[data-tab]');
+const panels = document.querySelectorAll('[data-panel]');
+function showTab(name) {
+  tabs.forEach(tab => { const active = tab.dataset.tab === name; tab.classList.toggle('selected', active); tab.setAttribute('aria-selected', String(active)); });
+  panels.forEach(panel => panel.classList.toggle('hidden-section', panel.dataset.panel !== name));
+}
+tabs.forEach(tab => tab.addEventListener('click', () => showTab(tab.dataset.tab)));
+document.querySelectorAll('[data-test-service]').forEach(button => {
+  button.addEventListener('click', async () => {
+    const service = button.dataset.testService;
+    const result = document.querySelector('[data-test-result="' + service + '"]');
+    button.disabled = true;
+    result.textContent = 'Testing…';
+    result.className = 'test-result';
+    try {
+      const response = await fetch('/api/test-connection/' + service, {
+        method: 'POST',
+        headers: {'Accept': 'application/json'},
+        credentials: 'same-origin'
+      });
+      const data = await response.json();
+      result.textContent = data.message || 'Unable to complete test.';
+      result.classList.add(data.ok ? 'test-success' : 'test-failure');
+    } catch (error) {
+      result.textContent = 'Request failed. Please try again.';
+      result.classList.add('test-failure');
+    } finally {
+      button.disabled = false;
+    }
+  });
+});
+</script></body></html>

@@ -1,0 +1,13 @@
+services:
+  auditor_service:
+    build:
+      context: .
+    container_name: media_collection_auditor
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ${MEDIA_HOST_PATH}:/media
+      - ${LOGS_HOST_PATH}:/app/logs
+      - ./app:/app
+    command: ["python", "collection_auditor.py"]

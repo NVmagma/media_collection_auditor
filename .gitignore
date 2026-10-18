@@ -1,0 +1,15 @@
+# Secrets and personal settings (keep .env.example, which has only placeholders)
+.env
+.env.*
+!.env.example
+
+# Runtime data written by the script (contains your movie/show names)
+logs/
+*.jsonl
+auditor_state.json
+*.tmp
+
+# Python
+__pycache__/
+*.pyc
+.venv/
