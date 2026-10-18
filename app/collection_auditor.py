@@ -277,6 +277,14 @@ def save_state(state: Dict[str, Dict[str, str]]):
             os.fsync(f.fileno())
         os.replace(tmp_path, STATE_FILE)  # atomic: readers never see a half-written file
         tmp_path = None
+        # Persist the directory entry as well as the file contents after a rename.
+        # Not all platforms support directory fsync; do not silently ignore I/O errors.
+        if os.name == "posix":
+            dir_fd = os.open(directory, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
         print(f"\n[STATE] Saved {len(state['first_seen'])} tracked folders, {len(state['queued'])} in holding, "
               f"{len(state['in_removal'])} in removal to {os.path.abspath(STATE_FILE)}")
     except Exception as e:
