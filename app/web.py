@@ -269,8 +269,7 @@ def collection_health(state, stages, warnings):
                 if locations:
                     detail = (f"{stage} tracking record, but folder is in "
                               + ", ".join(sorted(locations)) + ". Review tracking after the next audit.")
-                elif any(lib == library for lib, _ in present) or not any(
-                        lib == library for lib, _ in unavailable):
+                elif not any(lib == library for lib, _ in unavailable):
                     detail = f"{stage}: tracking record has no matching folder in readable lifecycle directories"
                 else:
                     continue
