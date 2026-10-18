@@ -62,3 +62,33 @@ def test_invalid_row_fails_closed(tmp_path):
         )
     with pytest.raises(RuntimeError, match="invalid lifecycle timestamp"):
         read_snapshot(path)
+
+
+@pytest.mark.parametrize("timestamp", [
+    "not-a-date", "2999-01-01T00:00:00", "2025-01-01T00:00:00+00:00"
+])
+def test_unsafe_timestamp_fails_closed(tmp_path, timestamp):
+    path = tmp_path / "state.db"
+    with sqlite3.connect(path) as db:
+        db.executescript(SCHEMA_SQL)
+        db.execute("INSERT INTO metadata VALUES (?, ?)", ("schema_version", "1"))
+        db.execute("INSERT INTO state_entries VALUES (?, ?, ?)",
+                   ("queued", "Movie", json.dumps(timestamp)))
+    with pytest.raises(RuntimeError, match="timestamp"):
+        read_snapshot(path)
+
+
+@pytest.mark.parametrize("pending", [
+    {"stage": "unknown", "root": "/media", "monitored": True},
+    {"stage": "keep", "root": "", "monitored": True},
+    {"stage": "keep", "root": "/media", "monitored": "yes"},
+])
+def test_unsafe_arr_retry_fails_closed(tmp_path, pending):
+    path = tmp_path / "state.db"
+    with sqlite3.connect(path) as db:
+        db.executescript(SCHEMA_SQL)
+        db.execute("INSERT INTO metadata VALUES (?, ?)", ("schema_version", "1"))
+        db.execute("INSERT INTO state_entries VALUES (?, ?, ?)",
+                   ("arr_sync_pending", "Movie", json.dumps(pending)))
+    with pytest.raises(RuntimeError, match="Arr retry"):
+        read_snapshot(path)
