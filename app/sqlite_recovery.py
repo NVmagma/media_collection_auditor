@@ -77,3 +77,28 @@ def inspect_migration_artifacts(
     else:
         result["source_backup"] = "unverified"
     return result
+
+
+def inspect_migration_integrity_status(
+    source: str | Path, backup: str | Path, database: str | Path
+) -> dict[str, str]:
+    """Add a fail-closed cross-artifact integrity status to recovery diagnostics.
+
+    A structurally complete database is not necessarily identical to the
+    backup. This is read-only and never authorizes activation or deletion.
+    """
+    from app.sqlite_integrity import verify_migration_integrity
+
+    result = inspect_migration_artifacts(source, backup, database)
+    if (result["source"] != "valid" or result["backup"] != "valid"
+            or result["database"] != "complete"
+            or result["source_backup"] != "identical"):
+        result["integrity"] = "unverified"
+        return result
+    try:
+        verify_migration_integrity(source, backup, database)
+    except RuntimeError:
+        result["integrity"] = "mismatch_or_unreadable"
+    else:
+        result["integrity"] = "verified"
+    return result
