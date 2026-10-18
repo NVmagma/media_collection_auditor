@@ -70,8 +70,8 @@ def test_missing_jellyfin_evidence_never_authorizes(tmp_path):
     SQLiteOperationCoordinator(session).begin("move-1", "move", {
         "source": str(waiting), "destination": str(target),
     })
-    report = inspect_persisted_recovery(database, jellyfin_evidence=None)
-    assert report["authorization"] == "blocked_pending_independent_verification"
+    with pytest.raises(RuntimeError, match="Jellyfin protection information unavailable"):
+        inspect_persisted_recovery(database, jellyfin_evidence=None)
 
 
 def _paths(tmp_path):
