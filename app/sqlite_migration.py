@@ -63,8 +63,7 @@ def create_offline_migration_snapshot(
 ) -> None:
     """Prepare a backed-up SQLite copy, leaving JSON authoritative.
 
-    Unknown top-level fields are not representable in schema v1. Refuse to
-    convert rather than silently discarding potentially important history.
+    Unknown top-level fields are preserved in schema v2 rather than discarded.
     No automatic retry or activation is attempted on partial failures.
     """
     source, backup, destination = Path(source), Path(backup), Path(destination)
@@ -74,12 +73,6 @@ def create_offline_migration_snapshot(
         raise RuntimeError("SQLite destination already exists")
     with migration_lock(source):
         state = prepare_json_backup(source, backup)
-        unknown = set(state).difference(SECTIONS)
-        if unknown:
-            raise RuntimeError(
-                "Unknown historical state sections cannot be converted by schema v1: "
-                + ", ".join(sorted(unknown))
-            )
         # The source is rechecked after backup and immediately before conversion.
         # Caller must still stop all auditor instances to prevent concurrent writes.
         if source.read_bytes() != backup.read_bytes():
