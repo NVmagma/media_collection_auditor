@@ -14,6 +14,7 @@ from typing import Callable
 from flask import Blueprint, Response
 
 from app.sqlite_recovery_report import inspect_pending_recovery_status
+from app.sqlite_recovery_guidance import explain_recovery_status
 
 
 def create_recovery_view_blueprint(
@@ -60,6 +61,11 @@ def create_recovery_view_blueprint(
                 ("Phase", report["operation_phase"]),
                 ("Blocker", report["blocker"]),
             )
+        guidance = explain_recovery_status(report)
+        fields += tuple((label, guidance[key]) for label, key in (
+            ("Explanation", "summary"), ("Recommended review", "next_step"),
+            ("Phase explanation", "phase_explanation"),
+        ) if key in guidance)
         rows = "".join(
             "<tr><th scope='row'>" + escape(label) + "</th><td>"
             + escape(str(value)) + "</td></tr>"
