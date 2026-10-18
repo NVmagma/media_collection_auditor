@@ -816,7 +816,9 @@ def move_to_holding(lib: dict, folder: str, path: str, state: dict, reason: str)
     if move_or_report(lib, folder, path, lib["holding"]):
         action_done()
         if not DRY_RUN:
-            state["queued"][state_key(lib, folder)] = datetime.datetime.now().isoformat()
+            key = state_key(lib, folder)
+            state["queued"][key] = datetime.datetime.now().isoformat()
+            state["first_seen"].pop(key, None)
         record_action("hold", folder, reason, lib["name"])
         sync_arr(lib, folder, lib["app_holding"], monitored=False, state=state, stage="holding")
 
