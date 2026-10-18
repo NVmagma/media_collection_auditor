@@ -186,3 +186,15 @@ FIELD_HELP = {
     "Include the list of titles currently in Holding in notifications."
   ]
 }
+
+
+def redacted_config(config):
+    """Return a shareable allowlisted settings snapshot; never export credentials or URLs."""
+    safe = ("DRY_RUN", "ALLOW_PERMANENT_DELETE", "ALLOW_FILESYSTEM_DELETE",
+            "ALLOW_CROSS_FILESYSTEM_MOVES", "ENABLE_MOVIES", "ENABLE_TV",
+            "ENABLE_SEASON_PRUNING", "FAVORITES_TRIGGER_KEEP",
+            "JELLYFIN_REFRESH_AFTER_AUDIT", "TV_NEW_EPISODES_RESET_CLOCK",
+            "MOVIE_WAIT_DAYS", "TV_WAIT_DAYS", "HOLDING_DAYS",
+            "REMOVAL_DAYS", "RUN_INTERVAL_HOURS", "MAX_ACTIONS_PER_RUN",
+            "SEASON_PRUNE_GRACE_DAYS", "SEASON_PRUNE_AFTER_NEW_SEASON_DAYS")
+    return {key: str(config[key]) for key in safe if key in config}
