@@ -40,12 +40,13 @@ def test_applied_phase_requires_explicit_reconciliation(tmp_path):
     coordinator.mark_applied("sync-1")
     restarted = _reopen(database)
     assert restarted.state[INTENTS_KEY]["phase"] == "applied_pending_reconciliation"
-    with pytest.raises(RuntimeError, match="retain pending"):
+    with pytest.raises(RuntimeError, match="blocked pending trusted verification"):
+        SQLiteOperationCoordinator(restarted).reconcile("sync-1", restarted.state)
+    with pytest.raises(RuntimeError, match="blocked pending trusted verification"):
         SQLiteOperationCoordinator(restarted).reconcile("sync-1", restarted.state | {
             INTENTS_KEY: {}
         })
-    SQLiteOperationCoordinator(restarted).reconcile("sync-1", restarted.state)
-    assert INTENTS_KEY not in _reopen(database).state
+    assert _reopen(database).state[INTENTS_KEY]["phase"] == "applied_pending_reconciliation"
 
 
 def test_cannot_confirm_unrecorded_or_wrong_operation(tmp_path):
