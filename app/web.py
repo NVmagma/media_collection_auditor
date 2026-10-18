@@ -608,6 +608,23 @@ def admin_authorized():
     return bool(getattr(g, "user", None) and g.user["admin"])
 
 
+# Experimental SQLite recovery views are opt-in and never select SQLite as
+# the production tracking backend. Only the literal value "true" enables them.
+if os.environ.get("EXPERIMENTAL_SQLITE_RECOVERY_VIEW", "").lower() == "true":
+    from app.sqlite_recovery_api import create_recovery_status_blueprint
+    from app.sqlite_recovery_view import create_recovery_view_blueprint
+
+    _experimental_database = os.environ.get("EXPERIMENTAL_SQLITE_RECOVERY_DB", "")
+    if not _experimental_database:
+        raise RuntimeError("Experimental SQLite recovery database path required")
+    app.register_blueprint(create_recovery_status_blueprint(
+        _experimental_database, is_admin=admin_authorized,
+    ))
+    app.register_blueprint(create_recovery_view_blueprint(
+        _experimental_database, is_admin=admin_authorized,
+    ))
+
+
 @app.route("/settings", methods=["GET", "POST"])
 def settings():
     if not admin_authorized():
