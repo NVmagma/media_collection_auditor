@@ -15,6 +15,7 @@ from flask import Blueprint, Response
 
 from app.sqlite_recovery_report import inspect_pending_recovery_status
 from app.sqlite_recovery_guidance import explain_recovery_status
+from app.sqlite_recovery_readiness import inspect_recovery_readiness
 
 
 def create_recovery_view_blueprint(
@@ -44,6 +45,7 @@ def create_recovery_view_blueprint(
                             headers=headers, mimetype="text/plain")
         try:
             report = inspect_pending_recovery_status(database)
+            readiness = inspect_recovery_readiness(database)
         except Exception:
             return Response("Recovery status unavailable", status=503,
                             headers=headers, mimetype="text/plain")
@@ -71,6 +73,11 @@ def create_recovery_view_blueprint(
             + escape(str(value)) + "</td></tr>"
             for label, value in fields
         )
+        checklist = "".join(
+            "<li><strong>" + escape(check["id"].replace("_", " ")) + "</strong>: "
+            + escape(check["status"]) + " — " + escape(check["detail"]) + "</li>"
+            for check in readiness["checks"]
+        )
         page = (
             "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width,initial-scale=1'>"
@@ -78,7 +85,9 @@ def create_recovery_view_blueprint(
             "<body><main><h1>Experimental SQLite recovery status</h1>"
             "<p>Read-only diagnostics. Recovery is not authorized. "
             "Production state remains JSON.</p>"
-            "<table>" + rows + "</table></main></body></html>"
+            "<table>" + rows + "</table>"
+            "<h2>Recovery readiness checklist</h2><ul>" + checklist + "</ul>"
+            "</main></body></html>"
         )
         return Response(page, status=200, headers=headers, mimetype="text/html")
 
