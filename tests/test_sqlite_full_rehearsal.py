@@ -51,7 +51,7 @@ def test_full_rehearsal_move_then_arr_sync_with_restart(tmp_path):
     # Simulate process loss before acknowledgement; never replay the move.
     restarted = RevisionedAuditSession(GuardedSQLiteStateStore(database))
     assert restarted.state[INTENTS_KEY]["phase"] == "intent_recorded"
-    with pytest.raises(RuntimeError, match="unresolved operation intent"):
+    with pytest.raises(RuntimeError, match="SQLite snapshot differs from JSON backup"):
         open_isolated_sqlite_audit(source, backup, database)
     with pytest.raises(RuntimeError, match="Unresolved"):
         SQLiteOperationCoordinator(restarted).begin(
@@ -91,7 +91,7 @@ def test_rehearsal_arr_sync_crash_preserves_pending_and_tracking(tmp_path):
     reopened = RevisionedAuditSession(GuardedSQLiteStateStore(database))
     assert reopened.state[INTENTS_KEY]["kind"] == "arr_sync"
     assert reopened.state[INTENTS_KEY]["phase"] == "applied_pending_reconciliation"
-    with pytest.raises(RuntimeError, match="unresolved operation intent"):
+    with pytest.raises(RuntimeError, match="SQLite snapshot differs from JSON backup"):
         open_isolated_sqlite_audit(source, backup, database)
     assert reopened.state["legacy"] == baseline["legacy"]
     assert source.read_bytes() == backup.read_bytes() == original
