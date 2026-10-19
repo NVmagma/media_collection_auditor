@@ -12,7 +12,7 @@ def test_fixture_names_are_fixed_and_disposable():
 
 
 def test_reject_non_lab_directory(tmp_path):
-    with pytest.raises(RuntimeError, match="Only /lab"):
+    with pytest.raises(RuntimeError, match="Dedicated /lab mount required"):
         validate_disposable_lab(tmp_path)
 
 
