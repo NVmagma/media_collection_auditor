@@ -313,3 +313,13 @@ The local namespace diagnostic now refuses nonnumeric mount/parent IDs,
 invalid device major:minor fields, and incomplete records before reporting
 an advisory local observation. It still cannot establish cross-container
 mount identity or authorize recovery. Tests use synthetic records only.
+
+## Cross-container mount observation boundary
+
+A pure offline diagnostic now accepts advisory local mount reports for the
+auditor, Jellyfin, and an Arr service. It rejects missing, extra, or
+inconsistent service reports. Even three consistent reports cannot prove a
+shared underlying filesystem: `shared_mount_identity` remains
+`unverified`, `authorization` remains `not_authorized`, and reconciliation
+remains disabled. No Docker API calls, media access, or production mounts are
+involved. This is a negative safety gate, not mount attestation.
