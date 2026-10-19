@@ -99,3 +99,38 @@ def test_unavailable_filesystem_observation_fails_closed(monkeypatch):
     result = identity.inspect_move_object_observation("/source", "/destination")
     assert result["reason"] == "not_destination_only"
     assert result["authorization"] == "not_authorized"
+
+
+def test_source_symlink_parent_is_not_trusted(tmp_path):
+    real = tmp_path / "real"
+    real.mkdir()
+    link = tmp_path / "link"
+    link.symlink_to(real, target_is_directory=True)
+    destination = tmp_path / "destination"
+    destination.mkdir()
+    result = inspect_move_object_observation(str(link / "missing"), str(destination))
+    assert result["reason"] == "not_destination_only"
+    assert result["authorization"] == "not_authorized"
+
+
+def test_destination_file_is_not_directory(tmp_path):
+    destination = tmp_path / "destination"
+    destination.write_text("not a directory")
+    result = inspect_move_object_observation(str(tmp_path / "missing"), str(destination))
+    assert result["reason"] == "not_destination_only"
+    assert result["authorization"] == "not_authorized"
+
+
+def test_source_appearing_during_inspection_blocks(monkeypatch):
+    from app import sqlite_recovery_object_identity as identity
+
+    observed = iter([
+        {"status": "missing"},
+        {"status": "present", "device": 1, "inode": 10},
+        {"status": "present", "device": 1, "inode": 20},
+        {"status": "present", "device": 1, "inode": 10},
+    ])
+    monkeypatch.setattr(identity, "_observe_directory", lambda _: next(observed))
+    result = identity.inspect_move_object_observation("/source", "/destination")
+    assert result["reason"] == "filesystem_changed_during_inspection"
+    assert result["authorization"] == "not_authorized"
