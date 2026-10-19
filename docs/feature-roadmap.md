@@ -4,7 +4,7 @@ This is the living backlog for Media Collection Auditor. Update it when a featur
 is proposed, approved, implemented, deferred, or ruled out. Keep this document
 on the active development branch and review it alongside development milestones.
 
-**Last reviewed:** 2026-10-18  
+**Last reviewed:** 2026-10-19  
 **Active development branch:** `feature/sqlite`  
 **Production tracking authority:** JSON  
 **Permanent filesystem deletion:** Disabled; requires explicit approval.
@@ -102,6 +102,7 @@ Do not treat it as authorization to deploy or change production storage.
 
 ## Current focus
 
+See [SQLite recovery acceptance review](sqlite-recovery-acceptance-review.md)\nfor the prioritized gaps, verified evidence, and explicit production gates.\n\n
 Complete safe SQLite recovery verification, then controlled lifecycle integration,
 migration/rollback rehearsals, and Unraid validation. JSON remains authoritative
 until the production switch is separately approved.
