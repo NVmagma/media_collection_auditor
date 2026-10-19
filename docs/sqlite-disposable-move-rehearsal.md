@@ -59,3 +59,11 @@ Do not automatically undo or reconcile an ambiguous operation. Stop the lab,
 capture the sanitized status and fixture hashes, and review the state before
 manual cleanup of the dedicated disposable directory. JSON remains
 authoritative in production; SQLite reconciliation remains disabled.
+
+## Initial read-only fixture guard
+
+`scripts/sqlite_lab_fixture_guard.py` provides an initial non-destructive
+check for the exact `/lab` mount and fixed disposable fixture names. It
+refuses occupied fixture slots, including dangling symlinks. This is **not**
+a move executor or authorization to run a rehearsal. Guard unit tests use
+temporary directories and do not access `/lab`.
