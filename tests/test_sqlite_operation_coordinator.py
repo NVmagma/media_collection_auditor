@@ -245,3 +245,65 @@ def test_disposable_ambiguous_file_state_never_clears_intent(
     assert restarted.state[INTENTS_KEY]["phase"] == "intent_recorded"
     assert source.exists() == (disruption == "both_present")
     assert destination.exists() == (disruption == "both_present")
+
+
+@pytest.mark.parametrize("window,expected", [
+    ("intent_only", "source_only"),
+    ("renamed_before_checkpoint", "destination_only_unverified"),
+    ("applied_after_rename", "destination_only_unverified"),
+    ("both_present", "both_present_ambiguous"),
+    ("both_missing", "both_missing"),
+])
+def test_directory_rename_recovery_diagnostics_are_blocked_and_read_only(
+    tmp_path, window, expected,
+):
+    """Integration of actual disposable directory rename, SQLite and diagnostics."""
+    import os
+    from app.sqlite_recovery_filesystem import inspect_pending_move_filesystem
+    from app.sqlite_recovery_report import inspect_pending_recovery_status
+    from app.state_store import GuardedSQLiteStateStore
+
+    source = tmp_path / "disposable_source_directory"
+    destination = tmp_path / "disposable_destination_directory"
+    source.mkdir()
+    (source / "marker.txt").write_bytes(b"disposable-directory-only")
+    database, session = _session(tmp_path)
+    coordinator = SQLiteOperationCoordinator(session)
+    coordinator.begin_move_with_evidence("directory-move-1", {
+        "source": str(source), "destination": str(destination),
+    })
+
+    if window in ("renamed_before_checkpoint", "applied_after_rename"):
+        os.rename(source, destination)
+    elif window == "both_present":
+        destination.mkdir()
+        (destination / "marker.txt").write_bytes(b"unrelated-disposable-bytes")
+    elif window == "both_missing":
+        # Remove only the disposable test marker and empty test directory.
+        (source / "marker.txt").unlink()
+        source.rmdir()
+    if window == "applied_after_rename":
+        coordinator.mark_applied("directory-move-1")
+
+    before = GuardedSQLiteStateStore(database).load_with_revision()
+    filesystem = inspect_pending_move_filesystem(database)
+    recovery = inspect_pending_recovery_status(database)
+    assert filesystem["interpretation"] == expected
+    assert filesystem["status"] == "blocked"
+    assert filesystem["authorization"] == "not_authorized"
+    assert recovery["status"] == "blocked"
+    assert recovery["storage_authority"] == "json"
+    assert recovery["production_activation"] == "disabled"
+    assert recovery["authorization"] == "blocked_pending_independent_verification"
+    assert GuardedSQLiteStateStore(database).load_with_revision() == before
+    assert _reopen(database).state[INTENTS_KEY]["phase"] == (
+        "applied_pending_reconciliation"
+        if window == "applied_after_rename" else "intent_recorded"
+    )
+    with pytest.raises(RuntimeError, match="Unresolved"):
+        SQLiteOperationCoordinator(_reopen(database)).begin(
+            "unsafe-retry", "move", {"source": str(source)},
+        )
+    if window in ("renamed_before_checkpoint", "applied_after_rename"):
+        assert (destination / "marker.txt").read_bytes() == b"disposable-directory-only"
+        assert not source.exists()

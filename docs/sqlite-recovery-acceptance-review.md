@@ -92,3 +92,15 @@ and even the applied phase refuses reconciliation. No production media,
 Unraid mounts, external APIs, or deletion are involved. These automated
 filesystem tests are not the separate operator-reviewed `/lab` container
 rehearsal; that gate remains open.
+
+## Directory move recovery integration matrix
+
+A second automated integration matrix uses **real disposable directory
+renames** inside pytest temporary directories. It combines captured
+pre-move directory evidence, durable SQLite intent, actual rename, optional
+applied checkpoint, restart, read-only filesystem classification, and
+operator-facing recovery status. It covers source-only, destination-only,
+applied-but-unreconciled, both-present, and both-missing states. All results
+must remain blocked, JSON authoritative, and SQLite revision unchanged by
+inspection. These tests are not a process-kill or container-recreation test,
+and do not satisfy the separate isolated Unraid `/lab` acceptance gate.
