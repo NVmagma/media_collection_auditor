@@ -90,3 +90,46 @@ def test_destination_only_still_lacks_independent_identity(monkeypatch):
     result = module.inspect_offline_move_evidence("unused.db")
     assert result["decision"]["reason"] == "service_identity_unverified"
     assert result["decision"]["authorization"] == "not_authorized"
+
+
+@pytest.mark.parametrize("failure", [
+    RuntimeError("fingerprint unavailable"),
+    OSError("filesystem inaccessible"),
+])
+def test_unavailable_inspector_never_produces_clearance(monkeypatch, failure):
+    """An inspector error must propagate, never become a safe default."""
+    monkeypatch.setattr(module, "inspect_pending_recovery_status", lambda _: status())
+    monkeypatch.setattr(module, "inspect_persisted_move_evidence",
+                        lambda _: (_ for _ in ()).throw(failure))
+    monkeypatch.setattr(module, "inspect_pending_move_filesystem",
+                        lambda _: pytest.fail("filesystem inspection must not run"))
+    with pytest.raises(type(failure)):
+        module.inspect_offline_move_evidence("unused.db")
+
+
+@pytest.mark.parametrize("field,value", [
+    ("status", "ready"),
+    ("authorization", "authorized"),
+    ("revision", 6),
+])
+def test_inconsistent_filesystem_report_rejected(monkeypatch, field, value):
+    monkeypatch.setattr(module, "inspect_pending_recovery_status", lambda _: status())
+    monkeypatch.setattr(module, "inspect_persisted_move_evidence", lambda _: fingerprint())
+    monkeypatch.setattr(module, "inspect_pending_move_filesystem",
+                        lambda _: dict(filesystem(), **{field: value}))
+    with pytest.raises(RuntimeError, match="stale"):
+        module.inspect_offline_move_evidence("unused.db")
+
+
+@pytest.mark.parametrize("field,value", [
+    ("status", "ready"),
+    ("authorization", "authorized"),
+    ("revision", 6),
+])
+def test_inconsistent_fingerprint_report_rejected(monkeypatch, field, value):
+    monkeypatch.setattr(module, "inspect_pending_recovery_status", lambda _: status())
+    monkeypatch.setattr(module, "inspect_persisted_move_evidence",
+                        lambda _: dict(fingerprint(), **{field: value}))
+    monkeypatch.setattr(module, "inspect_pending_move_filesystem", lambda _: filesystem())
+    with pytest.raises(RuntimeError, match="stale"):
+        module.inspect_offline_move_evidence("unused.db")

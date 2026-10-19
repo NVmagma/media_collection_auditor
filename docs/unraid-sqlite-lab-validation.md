@@ -258,3 +258,13 @@ docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm \
 Expect `Both-missing inspection verified: status=blocked` from the second
 container. The result is a filesystem classification rehearsal, **not** proof
 of a real missing-media incident or authorization for SQLite cutover.
+
+## Recovery evidence consistency regression gate
+
+The operator confirmed the both-missing lab inspection passed. Additional
+unit tests now inject unavailable evidence inspectors and inconsistent status,
+authorization, or revision reports. These tests require the combined offline
+inspector to reject the observation rather than produce recovery clearance.
+They run in both GitHub Actions workflows; no new Unraid fixture or production
+service interaction is needed. This is regression coverage, not proof that
+real filesystem observations cannot race or be tampered with.
