@@ -177,3 +177,43 @@ def test_mount_boundary_rejects_missing_and_malformed_metadata():
 def test_mount_boundary_malformed_records_fail_closed(mountinfo):
     from scripts.sqlite_lab_fixture_guard import inspect_lab_mount_boundaries
     assert inspect_lab_mount_boundaries(mountinfo)["status"] == "blocked"
+
+
+def test_rehearsal_assessment_missing_evidence_is_blocked():
+    from scripts.sqlite_lab_fixture_guard import assess_disposable_rehearsal_evidence
+    result = assess_disposable_rehearsal_evidence({})
+    assert result["status"] == "blocked"
+    assert result["authorization"] == "not_authorized"
+    assert len(result["blockers"]) == 4
+
+
+def test_rehearsal_assessment_complete_evidence_still_needs_review():
+    from scripts.sqlite_lab_fixture_guard import assess_disposable_rehearsal_evidence
+    observations = {
+        "mount": {"status": "observed_unverified", "reason": "mount_layout_only"},
+        "source_digest": {"status": "observed_unverified", "reason": "local_digest_matches"},
+        "destination_slot": {"status": "observed_unverified", "reason": "slot_unoccupied_unverified"},
+        "sqlite_state": {"status": "observed_unverified", "reason": "fresh_experimental_state_unverified"},
+    }
+    result = assess_disposable_rehearsal_evidence(observations)
+    assert result == {
+        "status": "review_required",
+        "authorization": "not_authorized",
+        "blockers": ["operator_approval_required"],
+    }
+    observations["mount"]["status"] = "blocked"
+    assert assess_disposable_rehearsal_evidence(observations)["status"] == "blocked"
+
+
+def test_rehearsal_assessment_rejects_unrecognized_and_malformed_evidence():
+    from scripts.sqlite_lab_fixture_guard import assess_disposable_rehearsal_evidence
+    assert assess_disposable_rehearsal_evidence(None)["status"] == "blocked"
+    assert assess_disposable_rehearsal_evidence({
+        "mount": {"status": "observed_unverified", "reason": "fabricated"},
+        "source_digest": "not-an-observation",
+    })["blockers"] == [
+        "mount:unrecognized_evidence",
+        "source_digest:missing",
+        "destination_slot:missing",
+        "sqlite_state:missing",
+    ]

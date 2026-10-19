@@ -97,3 +97,14 @@ existing Compose and host preflight review before a future rehearsal.
 The mountinfo boundary check now also rejects malformed record separators,
 invalid mount identifiers, noncanonical root or mount paths, and escaped
 mount roots. These checks are advisory and do not enable file operations.
+
+## Read-only readiness summary (not a preflight executor)
+
+`assess_disposable_rehearsal_evidence` combines four caller-supplied advisory
+observations: mount layout, source checksum, destination vacancy, and fresh
+experimental SQLite state. Missing, blocked, or unrecognized observations
+produce named blockers. Even a complete set returns `review_required` and
+`authorization: not_authorized`. This pure function does not collect or
+authenticate observations, inspect production, start containers, create
+fixtures, or perform a move. Dedicated lab review and explicit operator
+approval remain prerequisites for any future executable rehearsal.

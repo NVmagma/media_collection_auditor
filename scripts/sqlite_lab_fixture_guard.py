@@ -139,3 +139,35 @@ def inspect_lab_mount_boundaries(
     if observations[0][1] != "/":
         return {"status": "blocked", "reason": "lab_mount_root_unverified"}
     return {"status": "observed_unverified", "reason": "mount_layout_only"}
+
+
+def assess_disposable_rehearsal_evidence(
+    observations: dict[str, dict[str, str]],
+) -> dict[str, object]:
+    """Summarize independent read-only observations without granting permission.
+
+    Caller-supplied observations are not proof of their origin or freshness.
+    Even complete observations require operator approval and an isolated lab.
+    """
+    required = ("mount", "source_digest", "destination_slot", "sqlite_state")
+    if not isinstance(observations, dict):
+        observations = {}
+    blockers = []
+    for name in required:
+        item = observations.get(name)
+        if not isinstance(item, dict):
+            blockers.append(f"{name}:missing")
+        elif item.get("status") != "observed_unverified":
+            blockers.append(f"{name}:blocked")
+        elif item.get("reason") not in {
+            "mount": {"mount_layout_only"},
+            "source_digest": {"local_digest_matches"},
+            "destination_slot": {"slot_unoccupied_unverified"},
+            "sqlite_state": {"fresh_experimental_state_unverified"},
+        }[name]:
+            blockers.append(f"{name}:unrecognized_evidence")
+    return {
+        "status": "blocked" if blockers else "review_required",
+        "authorization": "not_authorized",
+        "blockers": blockers if blockers else ["operator_approval_required"],
+    }
