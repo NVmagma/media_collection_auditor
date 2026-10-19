@@ -19,11 +19,11 @@ on the active development branch and review it alongside development milestones.
 
 ## SQLite production-readiness tracker
 
-**Estimated progress: 76%** (milestone-based planning estimate, not a safety
+**Estimated progress: 78%** (milestone-based planning estimate, not a safety
 certification). Update this estimate after meaningful verified milestones.
 Do not treat it as authorization to deploy or change production storage.
 
-`███████████████░░░░░ 76%`
+`████████████████░░░░ 78%`
 
 | Milestone | Status |
 | --- | --- |
@@ -49,7 +49,7 @@ Do not treat it as authorization to deploy or change production storage.
 | Safe reconciliation state machine | In progress | Offline consolidated evidence now includes filesystem status and a fail-closed decision matrix with revision guards; decision matrix classifies duplicate/missing locations, service identity, mount mapping and cross-device uncertainty; no clearance transitions are enabled |
 | SQLite lifecycle integration | Planned | Optional backend only, with JSON remaining authoritative until explicitly approved |
 | JSON-to-SQLite migration and rollback | In progress | Offline interrupted-conversion and incomplete-snapshot regression rehearsals added; preserve authoritative JSON, require disposable Unraid validation before cutover |
-| Crash/restart/concurrency and disposable-media testing | In progress | Disposable SQLite restart, stale revision and uncertain checkpoint rehearsals added (CI pending); still need container restarts, interrupted moves and disposable-media tests |
+| Crash/restart/concurrency and disposable-media testing | In progress | Disposable SQLite restart, stale revision and uncertain checkpoint rehearsals added (CI pending); disposable-media restart diagnostics added (CI pending); still need actual Unraid container restarts and external API failure tests |
 | Controlled Unraid SQLite rollout | Approval required | Both CI workflows pass; explicit operator approval and rollback plan |
 
 ## P1 — Security maintenance and CVE monitoring
