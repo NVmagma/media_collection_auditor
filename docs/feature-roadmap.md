@@ -19,11 +19,11 @@ on the active development branch and review it alongside development milestones.
 
 ## SQLite production-readiness tracker
 
-**Estimated progress: 70%** (milestone-based planning estimate, not a safety
+**Estimated progress: 72%** (milestone-based planning estimate, not a safety
 certification). Update this estimate after meaningful verified milestones.
 Do not treat it as authorization to deploy or change production storage.
 
-`██████████████░░░░░░ 70%`
+`██████████████░░░░░░ 72%`
 
 | Milestone | Status |
 | --- | --- |
