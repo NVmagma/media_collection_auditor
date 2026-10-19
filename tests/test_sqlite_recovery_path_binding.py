@@ -33,9 +33,32 @@ def test_matching_path_strings_are_not_authoritative():
     (INTENT, JF, ARR, "both_present_ambiguous", "filesystem_not_destination_only"),
     (INTENT, {"Path": "relative"}, ARR, "destination_only_unverified", "remote_path_unavailable"),
     (INTENT, JF, {"path": "/media/Shows/A"}, "destination_only_unverified", "service_paths_disagree"),
-    ({**INTENT, "jellyfin_type": "Movie"}, JF, ARR, "destination_only_unverified", "movie_file_path_requires_binding"),
+    ({**INTENT, "jellyfin_type": "Movie"}, JF, ARR, "destination_only_unverified", "movie_file_parent_mismatch"),
 ])
 def test_path_evidence_fail_closed(intent, jf, arr, interpretation, reason):
     result = check(intent, jf, arr, interpretation)
+    assert result["reason"] == reason
+    assert result["authorization"] == "not_authorized"
+
+
+def test_movie_file_parent_and_radarr_directory_match_but_not_authoritative():
+    intent = {**INTENT, "jellyfin_type": "Movie"}
+    jf = {"Path": "/media/Shows_keep/A/Movie.mkv"}
+    result = check(intent, jf, ARR)
+    assert result["path_binding"] == "path_strings_consistent_unverified"
+    assert result["authorization"] == "not_authorized"
+    assert "/media/" not in str(result)
+
+
+@pytest.mark.parametrize("jf_path,reason", [
+    ("/media/Shows_keep/A", "movie_file_parent_mismatch"),
+    ("/media/Shows_keep/A/subfolder/Movie.mkv", "movie_file_parent_mismatch"),
+    ("/media/Shows_keep/B/Movie.mkv", "movie_file_parent_mismatch"),
+    ("/media/Shows_keep/A/../B/Movie.mkv", "remote_path_unavailable"),
+    ("Movie.mkv", "remote_path_unavailable"),
+])
+def test_movie_paths_never_guess_media_identity(jf_path, reason):
+    intent = {**INTENT, "jellyfin_type": "Movie"}
+    result = check(intent, {"Path": jf_path}, ARR)
     assert result["reason"] == reason
     assert result["authorization"] == "not_authorized"
