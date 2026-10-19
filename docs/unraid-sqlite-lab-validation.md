@@ -114,3 +114,7 @@ a production deployment path or a command that moves files.
 This configuration has not yet been validated against an actual Unraid
 Docker installation. Its `python:3.12-slim` base image is a mutable tag;
 pin a reviewed digest before the real lab rehearsal.
+
+## Required image pin before starting the lab
+
+Set `SQLITE_LAB_IMAGE` to a reviewed `python:3.12-slim@sha256:<64-hex-digest>` reference before running Compose. The Compose configuration now refuses to start without this variable. Retrieve and verify the real digest from a trusted registry; do not substitute a placeholder or a mutable tag. Independently inspect the resolved Unraid bind mount and ensure the lab directory does not overlap production media or appdata. No production image or container is changed by this configuration.

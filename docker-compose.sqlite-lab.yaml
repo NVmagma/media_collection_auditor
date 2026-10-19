@@ -3,7 +3,7 @@
 services:
   sqlite-lab:
     profiles: ["sqlite-lab"]
-    image: python:3.12-slim
+    image: "${SQLITE_LAB_IMAGE:?Set a reviewed python:3.12-slim@sha256 digest}"
     network_mode: "none"
     read_only: true
     cap_drop: ["ALL"]
