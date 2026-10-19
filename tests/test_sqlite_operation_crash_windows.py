@@ -132,3 +132,59 @@ def test_restart_after_applied_checkpoint_refuses_reconciliation(
     assert RevisionedAuditSession(backing).state[INTENTS_KEY]["phase"] == (
         "applied_pending_reconciliation"
     )
+
+
+@pytest.mark.parametrize("kind,details", [
+    ("move", {"source": "/disposable/source", "destination": "/disposable/dest"}),
+    ("arr_sync", {"title": "Disposable"}),
+])
+def test_external_action_outcome_unknown_without_applied_checkpoint(
+    tmp_path, kind, details,
+):
+    """An interrupted external action cannot be inferred from durable intent."""
+    backing = _setup(tmp_path)
+    coordinator = SQLiteOperationCoordinator(RevisionedAuditSession(backing))
+    coordinator.begin("disposable-1", kind, details)
+    # Simulate process termination after an external action was attempted,
+    # but before the applied checkpoint. No external action is performed here.
+    reopened = RevisionedAuditSession(backing)
+    assert reopened.state[INTENTS_KEY]["phase"] == "intent_recorded"
+    with pytest.raises(RuntimeError, match="Unresolved"):
+        SQLiteOperationCoordinator(reopened).begin("disposable-2", kind, details)
+    with pytest.raises(RuntimeError, match="not been confirmed"):
+        SQLiteOperationCoordinator(reopened).reconcile("disposable-1", reopened.state)
+
+
+@pytest.mark.parametrize("kind,details", [
+    ("move", {"source": "/disposable/source", "destination": "/disposable/dest"}),
+    ("arr_sync", {"title": "Disposable"}),
+])
+def test_applied_checkpoint_rejected_before_write_preserves_intent(
+    tmp_path, kind, details,
+):
+    backing = _setup(tmp_path)
+
+    class RejectSecondWrite:
+        def __init__(self):
+            self.writes = 0
+
+        def load_with_revision(self):
+            return backing.load_with_revision()
+
+        def save_if_revision(self, state, revision):
+            self.writes += 1
+            if self.writes == 2:
+                raise OSError("applied checkpoint rejected")
+            return backing.save_if_revision(state, revision)
+
+    session = RevisionedAuditSession(RejectSecondWrite())
+    coordinator = SQLiteOperationCoordinator(session)
+    coordinator.begin("disposable-1", kind, details)
+    with pytest.raises(OSError, match="applied checkpoint rejected"):
+        coordinator.mark_applied("disposable-1")
+    with pytest.raises(RuntimeError, match="reopen required"):
+        coordinator.mark_applied("disposable-1")
+    reopened = RevisionedAuditSession(backing)
+    assert reopened.state[INTENTS_KEY]["phase"] == "intent_recorded"
+    with pytest.raises(RuntimeError, match="Unresolved"):
+        SQLiteOperationCoordinator(reopened).begin("disposable-2", kind, details)

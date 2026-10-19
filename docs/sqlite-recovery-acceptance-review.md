@@ -63,3 +63,13 @@ filesystem moves or contact external services**. An interruption during an
 actual move, real media identity verification, and independent recovery
 clearance remain untested and blocked until a separately reviewed disposable
 lab plan is approved.
+
+## Crash-window matrix: unknown external outcome
+
+Additional checkpoint-only regressions simulate a process disappearing after
+an external action might have been attempted, with no applied checkpoint, and
+a rejected applied checkpoint before SQLite writes. Both `move` and `arr_sync`
+retain the recorded intent and refuse a second operation or reconciliation.
+The tests deliberately do not perform an external action, so they cannot
+establish filesystem or Arr outcomes. Actual interrupted-action behavior
+remains a separate disposable-media acceptance gate.
