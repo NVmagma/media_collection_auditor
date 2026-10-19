@@ -323,3 +323,11 @@ shared underlying filesystem: `shared_mount_identity` remains
 `unverified`, `authorization` remains `not_authorized`, and reconciliation
 remains disabled. No Docker API calls, media access, or production mounts are
 involved. This is a negative safety gate, not mount attestation.
+
+## Strict cross-container evidence schema
+
+Each advisory mount report must contain exactly `status`,
+`authorization`, `mount_identity`, and `reason`. Unknown keys (including
+raw paths, device identifiers, or service secrets) and missing keys are
+rejected. The diagnostic never echoes input values and never authorizes
+recovery. These checks use synthetic reports and require no Unraid changes.

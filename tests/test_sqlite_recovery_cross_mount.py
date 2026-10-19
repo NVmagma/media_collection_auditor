@@ -47,3 +47,23 @@ def test_missing_or_extra_service_reports_fail_closed(data):
     result = inspect_cross_container_mount_evidence(data)
     assert result["reason"] == "service_observations_missing"
     assert result["authorization"] == "not_authorized"
+
+
+@pytest.mark.parametrize("service", ["auditor", "jellyfin", "arr"])
+def test_unexpected_service_metadata_is_rejected_without_leaking(service):
+    data = observations()
+    data[service]["source"] = "/mnt/private/media"
+    result = inspect_cross_container_mount_evidence(data)
+    assert result["reason"] == "service_observation_unverified"
+    assert result["authorization"] == "not_authorized"
+    assert "/mnt/private/media" not in str(result)
+
+
+@pytest.mark.parametrize("service", ["auditor", "jellyfin", "arr"])
+def test_missing_service_report_field_is_rejected(service):
+    data = observations()
+    del data[service]["reason"]
+    result = inspect_cross_container_mount_evidence(data)
+    assert result["reason"] == "service_observation_unverified"
+    assert result["shared_mount_identity"] == "unverified"
+    assert result["reconciliation"] == "disabled"

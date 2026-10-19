@@ -22,6 +22,7 @@ def inspect_cross_container_mount_evidence(observations: Any) -> dict[str, str]:
     for name in ("auditor", "jellyfin", "arr"):
         item = observations[name]
         if (not isinstance(item, dict)
+                or set(item) != {"status", "authorization", "mount_identity", "reason"}
                 or item.get("status") != "blocked"
                 or item.get("authorization") != "not_authorized"
                 or item.get("mount_identity") != "local_namespace_observed_unverified"
