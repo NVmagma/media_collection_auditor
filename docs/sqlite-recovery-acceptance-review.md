@@ -138,3 +138,15 @@ and backup bytes remain unchanged. These tests establish **storage-level
 persistence parity only**: actual Jellyfin tag/favorite protection decisions,
 full media lifecycle execution, and Unraid restart tests remain separate
 acceptance gates. No production SQLite activation is authorized.
+
+## Jellyfin read-only recovery protection matrix
+
+Mocked HTTP integration cases now exercise protected movie and series
+identities, title-level and season-level `keep-forever`, `keep`,
+`keep-all-seasons`, `not-at-all`, favorites, and missing user scope.
+The current recovery inspector deliberately refuses reconciliation for
+**all** of these cases because complete protection evidence is not yet
+transactionally verifiable. The tests verify unchanged JSON, SQLite revision,
+and durable pending move. This is **fail-closed recovery parity**, not proof
+of correct live lifecycle routing for each tag. That requires a separate
+production-logic parity suite before cutover.

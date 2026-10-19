@@ -147,3 +147,62 @@ def test_missing_media_type_blocks_before_service_reads(tmp_path):
     with pytest.raises(RuntimeError, match="media type"):
         inspect(database, http)
     assert http.calls == []
+
+
+@pytest.mark.parametrize("media_type,tag_location,tag", [
+    ("Movie", "title", "keep"),
+    ("Movie", "title", "keep-forever"),
+    ("Series", "title", "keep-forever"),
+    ("Series", "season", "keep-forever"),
+    ("Series", "title", "keep-all-seasons"),
+    ("Series", "title", "not-at-all"),
+])
+def test_jellyfin_protection_tag_matrix_never_authorizes_replay(
+    tmp_path, media_type, tag_location, tag,
+):
+    """Read-only service recovery must never turn tags into replay approval."""
+    source, backup, database, original = fixture(
+        tmp_path, media_type=media_type, kind="move",
+    )
+    routes = mapping(media_type=media_type)
+    target = (
+        "http://jellyfin/Users/user1/Items/season1"
+        if tag_location == "season"
+        else "http://jellyfin/Users/user1/Items/title1"
+    )
+    routes[target]["Tags"] = [tag]
+    before = GuardedSQLiteStateStore(database).load_with_revision()
+    with pytest.raises(RuntimeError, match="protection information incomplete"):
+        inspect(database, HTTP(routes))
+    assert GuardedSQLiteStateStore(database).load_with_revision() == before
+    assert source.read_text() == backup.read_text() == original
+    assert before[0][INTENTS_KEY]["phase"] == "intent_recorded"
+
+
+@pytest.mark.parametrize("media_type", ["Movie", "Series"])
+def test_jellyfin_favorite_matrix_never_authorizes_replay(tmp_path, media_type):
+    source, backup, database, original = fixture(
+        tmp_path, media_type=media_type, kind="move",
+    )
+    routes = mapping(media_type=media_type, protected=True)
+    before = GuardedSQLiteStateStore(database).load_with_revision()
+    with pytest.raises(RuntimeError, match="protection information incomplete"):
+        inspect(database, HTTP(routes))
+    assert GuardedSQLiteStateStore(database).load_with_revision() == before
+    assert source.read_text() == backup.read_text() == original
+
+
+@pytest.mark.parametrize("media_type", ["Movie", "Series"])
+def test_missing_jellyfin_user_blocks_protected_move_recovery(
+    tmp_path, media_type,
+):
+    source, backup, database, original = fixture(
+        tmp_path, media_type=media_type, kind="move",
+    )
+    routes = mapping(media_type=media_type)
+    routes["http://jellyfin/Users"] = []
+    before = GuardedSQLiteStateStore(database).load_with_revision()
+    with pytest.raises(RuntimeError):
+        inspect(database, HTTP(routes))
+    assert GuardedSQLiteStateStore(database).load_with_revision() == before
+    assert source.read_text() == backup.read_text() == original
