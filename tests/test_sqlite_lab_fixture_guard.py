@@ -82,3 +82,51 @@ def test_inspect_refuses_missing_and_unexpected_fixture(tmp_path):
     other.write_bytes(b"untouched")
     assert inspect_disposable_fixture(other, tmp_path)["reason"] == "unexpected_fixture_path"
     assert other.read_bytes() == b"untouched"
+
+
+def test_disposable_digest_matches_without_mutating_contents(tmp_path):
+    import hashlib
+    from scripts.sqlite_lab_fixture_guard import verify_disposable_fixture_digest
+    source = tmp_path / FIXTURE_NAMES[0]
+    payload = b"dedicated-disposable-fixture"
+    source.write_bytes(payload)
+    expected = hashlib.sha256(payload).hexdigest()
+    result = verify_disposable_fixture_digest(source, expected, tmp_path)
+    assert result == {"status": "observed_unverified", "reason": "local_digest_matches"}
+    assert source.read_bytes() == payload
+
+
+def test_disposable_digest_mismatch_fails_closed(tmp_path):
+    from scripts.sqlite_lab_fixture_guard import verify_disposable_fixture_digest
+    source = tmp_path / FIXTURE_NAMES[0]
+    source.write_bytes(b"changed")
+    result = verify_disposable_fixture_digest(source, "0" * 64, tmp_path)
+    assert result["status"] == "blocked"
+    assert result["reason"] == "fixture_digest_mismatch"
+
+
+def test_disposable_digest_refuses_symlink_hardlink_and_large_file(tmp_path):
+    import hashlib
+    import os
+    from scripts.sqlite_lab_fixture_guard import verify_disposable_fixture_digest
+    source = tmp_path / FIXTURE_NAMES[0]
+    expected = hashlib.sha256(b"hello").hexdigest()
+    target = tmp_path / "target"
+    target.write_bytes(b"hello")
+    source.symlink_to(target)
+    assert verify_disposable_fixture_digest(source, expected, tmp_path)["status"] == "blocked"
+    source.unlink()
+    os.link(target, source)
+    assert verify_disposable_fixture_digest(source, expected, tmp_path)["status"] == "blocked"
+    source.unlink()
+    source.write_bytes(b"x" * (1024 * 1024 + 1))
+    assert verify_disposable_fixture_digest(source, expected, tmp_path)["status"] == "blocked"
+
+
+def test_disposable_digest_rejects_missing_invalid_and_unexpected(tmp_path):
+    from scripts.sqlite_lab_fixture_guard import verify_disposable_fixture_digest
+    source = tmp_path / FIXTURE_NAMES[0]
+    assert verify_disposable_fixture_digest(source, "0" * 64, tmp_path)["status"] == "blocked"
+    source.write_bytes(b"fixture")
+    assert verify_disposable_fixture_digest(source, "BAD", tmp_path)["reason"] == "invalid_expected_digest"
+    assert verify_disposable_fixture_digest(tmp_path / "other", "0" * 64, tmp_path)["reason"] == "unexpected_fixture_path"

@@ -76,3 +76,12 @@ multiply linked regular files. A passing observation is explicitly
 `observed_unverified`: it cannot prove cross-restart object identity or
 clear a pending SQLite operation. No fixture is created or moved by this
 inspection, and the test suite uses temporary files only.
+
+## Bounded fixture digest observation
+
+The read-only guard now checks a previously created disposable source or
+destination against a caller-provided lowercase SHA-256 digest. It refuses
+symlinks, multiply linked files, files over 1 MiB, invalid digests, and
+changed or unavailable fixtures. Even a matching digest is reported only as
+`observed_unverified` and **never** authorizes reconciliation. This is a
+small test-fixture limit, not a production-media hashing policy.
