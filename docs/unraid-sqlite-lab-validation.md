@@ -118,3 +118,7 @@ pin a reviewed digest before the real lab rehearsal.
 ## Required image pin before starting the lab
 
 Set `SQLITE_LAB_IMAGE` to a reviewed `python:3.12-slim@sha256:<64-hex-digest>` reference before running Compose. The Compose configuration now refuses to start without this variable. Retrieve and verify the real digest from a trusted registry; do not substitute a placeholder or a mutable tag. Independently inspect the resolved Unraid bind mount and ensure the lab directory does not overlap production media or appdata. No production image or container is changed by this configuration.
+
+## Read-only host preflight
+
+Before rendering or starting the lab Compose configuration, set `SQLITE_LAB_DIR`, `SQLITE_LAB_UID`, `SQLITE_LAB_GID`, and `SQLITE_LAB_IMAGE` and run `PYTHONPATH=. python -m scripts.sqlite_lab_preflight` from the checked-out repository. This refuses missing directories, symlinked paths, common production/media directory names, root UID/GID, and unpinned or malformed Python image references. It does not create directories or start Docker. This is a conservative name-based check, **not** proof that a custom Unraid path is isolated: independently verify resolved bind mounts and share paths before any run.
