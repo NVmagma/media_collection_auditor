@@ -93,3 +93,7 @@ missing or ambiguous `/lab` mounts, nested mounts, and non-root bind
 mount roots. Passing means only `observed_unverified`, never authorization
 for any file operation. Mount observations must still be paired with the
 existing Compose and host preflight review before a future rehearsal.
+
+The mountinfo boundary check now also rejects malformed record separators,
+invalid mount identifiers, noncanonical root or mount paths, and escaped
+mount roots. These checks are advisory and do not enable file operations.

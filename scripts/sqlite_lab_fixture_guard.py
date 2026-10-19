@@ -105,32 +105,37 @@ def verify_disposable_fixture_digest(
 def inspect_lab_mount_boundaries(
     mountinfo: str, lab: Path = Path("/lab")
 ) -> dict[str, str]:
-    """Advisory mount layout check; never authorizes a file operation.
+    """Conservatively inspect Linux mountinfo; never authorize operations."""
+    import re
 
-    Refuse ambiguous mount metadata, nested mounts, and bind roots that do
-    not correspond to the root of a filesystem. This is not identity proof.
-    """
     if lab != Path("/lab"):
         return {"status": "blocked", "reason": "unexpected_lab_path"}
     if not isinstance(mountinfo, str) or not mountinfo.strip():
         return {"status": "blocked", "reason": "mountinfo_unavailable"}
-    try:
-        observations = []
-        for line in mountinfo.splitlines():
-            fields = line.split(" ")
-            if len(fields) < 10 or "-" not in fields:
-                return {"status": "blocked", "reason": "mountinfo_malformed"}
-            mount_point = fields[4]
-            if "\\" in mount_point:
-                return {"status": "blocked", "reason": "mountinfo_escaped_path_unverified"}
-            if mount_point == "/lab" or mount_point.startswith("/lab/"):
-                observations.append((mount_point, fields[3]))
-        if len([point for point, _ in observations if point == "/lab"]) != 1:
-            return {"status": "blocked", "reason": "lab_mount_missing_or_ambiguous"}
-        if any(point != "/lab" for point, _ in observations):
-            return {"status": "blocked", "reason": "nested_lab_mount"}
-        if observations[0][1] != "/":
-            return {"status": "blocked", "reason": "lab_mount_root_unverified"}
-    except (IndexError, TypeError, ValueError):
-        return {"status": "blocked", "reason": "mountinfo_malformed"}
+    observations = []
+    for line in mountinfo.splitlines():
+        halves = line.split(" - ")
+        if len(halves) != 2:
+            return {"status": "blocked", "reason": "mountinfo_malformed"}
+        fields, trailing = halves[0].split(), halves[1].split()
+        if (len(fields) < 6 or len(trailing) < 3
+                or not fields[0].isascii() or not fields[0].isdecimal()
+                or not fields[1].isascii() or not fields[1].isdecimal()
+                or re.fullmatch(r"[0-9]+:[0-9]+", fields[2]) is None):
+            return {"status": "blocked", "reason": "mountinfo_malformed"}
+        root, mount_point = fields[3], fields[4]
+        if "\\" in root or "\\" in mount_point:
+            return {"status": "blocked", "reason": "mountinfo_escaped_path_unverified"}
+        if any(not os.path.isabs(v) or os.path.normpath(v) != v
+               or any(part in (".", "..") for part in v.split("/"))
+               for v in (root, mount_point)):
+            return {"status": "blocked", "reason": "mountinfo_malformed"}
+        if mount_point == "/lab" or mount_point.startswith("/lab/"):
+            observations.append((mount_point, root))
+    if len([point for point, _ in observations if point == "/lab"]) != 1:
+        return {"status": "blocked", "reason": "lab_mount_missing_or_ambiguous"}
+    if any(point != "/lab" for point, _ in observations):
+        return {"status": "blocked", "reason": "nested_lab_mount"}
+    if observations[0][1] != "/":
+        return {"status": "blocked", "reason": "lab_mount_root_unverified"}
     return {"status": "observed_unverified", "reason": "mount_layout_only"}

@@ -163,3 +163,17 @@ def test_mount_boundary_rejects_missing_and_malformed_metadata():
     from scripts.sqlite_lab_fixture_guard import inspect_lab_mount_boundaries
     assert inspect_lab_mount_boundaries("")["status"] == "blocked"
     assert inspect_lab_mount_boundaries("not mountinfo")["status"] == "blocked"
+
+
+@pytest.mark.parametrize("mountinfo", [
+    "21 x 8:2 / /lab rw - ext4 /dev/lab rw\\n",
+    "21 20 invalid / /lab rw - ext4 /dev/lab rw\\n",
+    "21 20 8:2 /../media /lab rw - ext4 /dev/lab rw\\n",
+    "21 20 8:2 / /lab/../lab rw - ext4 /dev/lab rw\\n",
+    "21 20 8:2 / /lab rw ext4 /dev/lab rw\\n",
+    "21 20 8:2 / /lab rw - ext4 rw\\n",
+    "21 20 8:2 /private\\\\040media /lab rw - ext4 /dev/lab rw\\n",
+])
+def test_mount_boundary_malformed_records_fail_closed(mountinfo):
+    from scripts.sqlite_lab_fixture_guard import inspect_lab_mount_boundaries
+    assert inspect_lab_mount_boundaries(mountinfo)["status"] == "blocked"
