@@ -135,8 +135,8 @@ def test_disposable_digest_rejects_missing_invalid_and_unexpected(tmp_path):
 def test_mount_boundary_observation_is_never_authorization():
     from scripts.sqlite_lab_fixture_guard import inspect_lab_mount_boundaries
     mountinfo = (
-        "20 1 8:1 / / rw - ext4 /dev/root rw\\n"
-        "21 20 8:2 / /lab rw - ext4 /dev/lab rw\\n"
+        "20 1 8:1 / / rw - ext4 /dev/root rw\n"
+        "21 20 8:2 / /lab rw - ext4 /dev/lab rw\n"
     )
     assert inspect_lab_mount_boundaries(mountinfo) == {
         "status": "observed_unverified", "reason": "mount_layout_only",
@@ -144,18 +144,18 @@ def test_mount_boundary_observation_is_never_authorization():
 
 
 @pytest.mark.parametrize("extra,reason", [
-    ("22 21 8:3 / /lab/hidden rw - ext4 /dev/other rw\\n", "nested_lab_mount"),
-    ("21 20 8:2 / /lab rw - ext4 /dev/lab rw\\n", "lab_mount_missing_or_ambiguous"),
+    ("22 21 8:3 / /lab/hidden rw - ext4 /dev/other rw\n", "nested_lab_mount"),
+    ("21 20 8:2 / /lab rw - ext4 /dev/lab rw\n", "lab_mount_missing_or_ambiguous"),
 ])
 def test_mount_boundary_rejects_nested_or_duplicate_mounts(extra, reason):
     from scripts.sqlite_lab_fixture_guard import inspect_lab_mount_boundaries
-    base = "21 20 8:2 / /lab rw - ext4 /dev/lab rw\\n"
+    base = "21 20 8:2 / /lab rw - ext4 /dev/lab rw\n"
     assert inspect_lab_mount_boundaries(base + extra)["reason"] == reason
 
 
 def test_mount_boundary_rejects_nonroot_bind_mount():
     from scripts.sqlite_lab_fixture_guard import inspect_lab_mount_boundaries
-    mountinfo = "21 20 8:2 /media /lab rw - ext4 /dev/lab rw\\n"
+    mountinfo = "21 20 8:2 /media /lab rw - ext4 /dev/lab rw\n"
     assert inspect_lab_mount_boundaries(mountinfo)["status"] == "blocked"
 
 
