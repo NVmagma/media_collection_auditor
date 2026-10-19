@@ -20,9 +20,13 @@ services:
         source: .
         target: /workspace
         read_only: true
+        bind:
+          create_host_path: false
       - type: bind
         source: "${SQLITE_LAB_DIR:?Set dedicated disposable lab directory}"
         target: /lab
+        bind:
+          create_host_path: false
     tmpfs:
       - /tmp:rw,nosuid,nodev,noexec,size=32m
     entrypoint: ["python", "-c", "print('SQLite lab is isolated; use explicit offline commands only.')"]

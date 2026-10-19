@@ -122,3 +122,7 @@ Set `SQLITE_LAB_IMAGE` to a reviewed `python:3.12-slim@sha256:<64-hex-digest>` r
 ## Read-only host preflight
 
 Before rendering or starting the lab Compose configuration, set `SQLITE_LAB_DIR`, `SQLITE_LAB_UID`, `SQLITE_LAB_GID`, and `SQLITE_LAB_IMAGE` and run `PYTHONPATH=. python -m scripts.sqlite_lab_preflight` from the checked-out repository. This refuses missing directories, symlinked paths, common production/media directory names, root UID/GID, and unpinned or malformed Python image references. It does not create directories or start Docker. This is a conservative name-based check, **not** proof that a custom Unraid path is isolated: independently verify resolved bind mounts and share paths before any run.
+
+## Missing host paths fail closed
+
+Both Compose bind mounts explicitly set `bind.create_host_path: false`. Docker Compose must reject a missing checkout or lab directory rather than silently creating one. Run `PYTHONPATH=. python -m scripts.sqlite_lab_preflight` **before** rendering/running Compose; the preflight is not automatically invoked by Docker Compose. This does not eliminate mount changes between checking and starting the container. Recheck the resolved Compose configuration and host path immediately before launch.

@@ -20,3 +20,10 @@ def test_lab_compose_is_isolated_and_not_a_production_runner():
         "ALLOW_PERMANENT_DELETE", "ports:", "build:",
     ):
         assert forbidden not in text
+
+
+def test_bind_mounts_cannot_create_missing_host_directories():
+    """Compose must refuse absent paths rather than creating host directories."""
+    text = (Path(__file__).resolve().parents[1] / "docker-compose.sqlite-lab.yaml").read_text()
+    assert text.count("create_host_path: false") == 2
+    assert "create_host_path: true" not in text
