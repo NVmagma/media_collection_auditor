@@ -46,11 +46,16 @@ def inspect_live_move_identity(database: str | Path, **connection: Any) -> dict[
         identity = inspect_fetched_move_identity(
             intent, jellyfin_response=jellyfin, arr_response=arr,
         )
-        binding = inspect_move_path_binding(
-            intent, jellyfin_record=jellyfin.get("data"),
-            arr_record=arr.get("data"),
-            filesystem_interpretation=filesystem["interpretation"],
-        )
+        # Path agreement is not meaningful when identity or freshness fails.
+        if identity["identity_verification"] == "consistent_not_authoritative":
+            binding = inspect_move_path_binding(
+                intent, jellyfin_record=jellyfin.get("data"),
+                arr_record=arr.get("data"),
+                filesystem_interpretation=filesystem["interpretation"],
+            )
+        else:
+            binding = {"path_binding": "unverified",
+                       "reason": "identity_not_consistent"}
     except RuntimeError as exc:
         # Never expose service URLs, response bodies or credentials.
         identity = {"status": "blocked", "authorization": "not_authorized",
