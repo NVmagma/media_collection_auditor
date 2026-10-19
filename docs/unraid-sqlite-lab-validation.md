@@ -296,3 +296,13 @@ separators, and declared roots that point directly at a title directory.
 Even consistent declared mount mappings remain `not_authorized`: these
 checks cannot establish Docker mount identity or service object identity.
 No production mount is read and no Unraid command is required.
+
+## Local mountinfo observation (diagnostic only)
+
+A read-only parser can inspect Linux `/proc/self/mountinfo` within one
+container namespace. It rejects malformed records, ambiguous matches, and
+escaped mount paths; even a valid local observation remains
+`local_namespace_observed_unverified` and `not_authorized`. Mount IDs and
+device numbers from separate namespaces are **not** proof of a common media
+object. This parser is not connected to recovery clearance and requires no
+production mount access. Tests use synthetic mountinfo records only.
