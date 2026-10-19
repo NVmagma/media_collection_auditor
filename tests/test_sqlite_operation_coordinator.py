@@ -307,3 +307,75 @@ def test_directory_rename_recovery_diagnostics_are_blocked_and_read_only(
     if window in ("renamed_before_checkpoint", "applied_after_rename"):
         assert (destination / "marker.txt").read_bytes() == b"disposable-directory-only"
         assert not source.exists()
+
+
+@pytest.mark.parametrize("window,expected_phase,expected_location", [
+    ("after_intent", "intent_recorded", "source_only"),
+    ("after_rename", "intent_recorded", "destination_only_unverified"),
+    ("after_applied", "applied_pending_reconciliation", "destination_only_unverified"),
+])
+def test_disposable_directory_move_survives_separate_process_exit(
+    tmp_path, window, expected_phase, expected_location,
+):
+    """Run a worker in a fresh interpreter, exit, then inspect independently.
+
+    The worker can only rename directories created by this test under tmp_path.
+    No network, production mounts, or cleanup of production data is involved.
+    """
+    import json
+    import os
+    import subprocess
+    import sys
+    from app.sqlite_recovery_filesystem import inspect_pending_move_filesystem
+    from app.sqlite_recovery_report import inspect_pending_recovery_status
+    from app.state_store import GuardedSQLiteStateStore
+
+    source = tmp_path / "disposable_source_directory"
+    destination = tmp_path / "disposable_destination_directory"
+    source.mkdir()
+    (source / "marker.txt").write_bytes(b"isolated-worker-test")
+    database, _ = _session(tmp_path)
+    worker = """
+import os
+import sys
+from app.sqlite_audit_session import RevisionedAuditSession
+from app.sqlite_operation_coordinator import SQLiteOperationCoordinator
+from app.state_store import GuardedSQLiteStateStore
+db, source, destination, window = sys.argv[1:]
+coordinator = SQLiteOperationCoordinator(
+    RevisionedAuditSession(GuardedSQLiteStateStore(db))
+)
+coordinator.begin_move_with_evidence(
+    "isolated-worker-1", {"source": source, "destination": destination}
+)
+if window != "after_intent":
+    os.rename(source, destination)
+if window == "after_applied":
+    coordinator.mark_applied("isolated-worker-1")
+"""
+    from pathlib import Path
+    repository_root = Path(__file__).resolve().parents[1]
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(repository_root)
+    completed = subprocess.run(
+        [sys.executable, "-c", worker, str(database), str(source),
+         str(destination), window],
+        cwd=repository_root, env=environment, capture_output=True,
+        text=True, timeout=30, check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    before = GuardedSQLiteStateStore(database).load_with_revision()
+    filesystem = inspect_pending_move_filesystem(database)
+    report = inspect_pending_recovery_status(database)
+    assert filesystem["interpretation"] == expected_location
+    assert filesystem["authorization"] == "not_authorized"
+    assert report["status"] == "blocked"
+    assert report["operation_phase"] == expected_phase
+    assert report["storage_authority"] == "json"
+    assert GuardedSQLiteStateStore(database).load_with_revision() == before
+    with pytest.raises(RuntimeError, match="Unresolved"):
+        SQLiteOperationCoordinator(_reopen(database)).begin(
+            "unsafe-second-worker", "move", {"source": str(source)}
+        )
+    if window != "after_intent":
+        assert (destination / "marker.txt").read_bytes() == b"isolated-worker-test"

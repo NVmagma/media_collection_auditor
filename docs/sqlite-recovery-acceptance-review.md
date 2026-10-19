@@ -104,3 +104,15 @@ applied-but-unreconciled, both-present, and both-missing states. All results
 must remain blocked, JSON authoritative, and SQLite revision unchanged by
 inspection. These tests are not a process-kill or container-recreation test,
 and do not satisfy the separate isolated Unraid `/lab` acceptance gate.
+
+## Separate-process disposable directory interruption matrix
+
+A fresh Python subprocess now records the SQLite intent, optionally renames
+an isolated disposable directory, and optionally checkpoints the applied
+phase. The worker exits; the parent process independently reopens SQLite,
+checks persisted phase and filesystem classification, verifies read-only
+inspection does not alter revision, and confirms retry remains blocked.
+The three windows are after intent, after rename without applied checkpoint,
+and after applied checkpoint. These are clean process exits at deliberate
+interruption boundaries, **not forced SIGKILL, mid-syscall interruption, or
+container recreation**. They do not authorize recovery or activate SQLite.
