@@ -126,3 +126,15 @@ removing the experimental database from service leaves the authoritative
 JSON intact. Additional tests reject source changes after backup and
 ambiguous duplicate JSON keys. This is **offline copy/rollback parity only**,
 not permission to cut over or a full Unraid backup-restore rehearsal.
+
+## Isolated lifecycle state persistence matrix
+
+Additional disposable SQLite tests exercise guarded checkpoints for each
+lifecycle tracking section, retention of unrelated historical sections,
+unknown legacy fields, and all three Arr retry stages. A stale second
+writer attempting to place a title in Removal after another writer saved
+Keep must fail without overwriting the committed Keep state. Original JSON
+and backup bytes remain unchanged. These tests establish **storage-level
+persistence parity only**: actual Jellyfin tag/favorite protection decisions,
+full media lifecycle execution, and Unraid restart tests remain separate
+acceptance gates. No production SQLite activation is authorized.
