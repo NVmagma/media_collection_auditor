@@ -91,3 +91,21 @@ def test_second_snapshot_race_rejected(monkeypatch):
     monkeypatch.setattr(live, "RevisionedAuditSession", ChangedSession)
     with pytest.raises(RuntimeError, match="stale"):
         live.inspect_live_move_identity("unused.db")
+
+
+def test_path_binding_not_evaluated_when_identity_mismatches(monkeypatch):
+    setup(monkeypatch)
+    class MismatchedAdapter(Adapter):
+        def arr_fetch(self, service, title_id):
+            record = super().arr_fetch(service, title_id)
+            record["data"]["imdbId"] = "tt9999999"
+            return record
+    monkeypatch.setattr(live, "ReadOnlyRecoveryHTTP", MismatchedAdapter)
+    def forbidden(*args, **kwargs):
+        raise AssertionError("path comparison must not run on mismatched identity")
+    monkeypatch.setattr(live, "inspect_move_path_binding", forbidden)
+    result = live.inspect_live_move_identity("unused.db")
+    assert result["identity_reason"] == "shared_identity_mismatch"
+    assert result["path_binding"] == "unverified"
+    assert result["path_binding_reason"] == "identity_not_consistent"
+    assert result["authorization"] == "not_authorized"
