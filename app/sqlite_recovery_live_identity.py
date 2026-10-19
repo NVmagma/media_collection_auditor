@@ -38,7 +38,10 @@ def inspect_live_move_identity(database: str | Path, **connection: Any) -> dict[
     filesystem = inspect_pending_move_filesystem(database)
     if filesystem["revision"] != revision:
         raise RuntimeError("SQLite recovery session is stale")
-    object_observation = inspect_move_object_observation(\n        intent.get("source"), intent.get("destination"),\n    )\n    adapter = ReadOnlyRecoveryHTTP(**connection)
+    object_observation = inspect_move_object_observation(
+        intent.get("source"), intent.get("destination"),
+    )
+    adapter = ReadOnlyRecoveryHTTP(**connection)
     service = "radarr" if media_type == "Movie" else "sonarr"
     binding = {"path_binding": "unverified", "reason": "service_inspection_failed"}
     try:
@@ -72,7 +75,9 @@ def inspect_live_move_identity(database: str | Path, **connection: Any) -> dict[
         "identity_verification": identity["identity_verification"],
         "identity_reason": identity["reason"],
         "path_binding": binding["path_binding"],
-        "path_binding_reason": binding["reason"],\n        "object_identity": object_observation["object_identity"],\n        "object_identity_reason": object_observation["reason"],
+        "path_binding_reason": binding["reason"],
+        "object_identity": object_observation["object_identity"],
+        "object_identity_reason": object_observation["reason"],
         "external_verification": "incomplete",
         "reconciliation": "disabled",
     }
