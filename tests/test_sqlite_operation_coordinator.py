@@ -174,8 +174,12 @@ def test_disposable_file_move_crash_windows_preserve_pending_state(
         assert inspect_disposable_destination_slot(destination, tmp_path)[
             "status"
         ] == "observed_unverified"
-        coordinator.begin_move_with_evidence(operation_id, {
+        # This rehearsal moves a disposable regular file, whereas
+        # begin_move_with_evidence captures directory fingerprints only.
+        # Record the durable intent without bypassing that safety contract.
+        coordinator.begin(operation_id, "move", {
             "source": str(source), "destination": str(destination),
+            "fixture_kind": "disposable_regular_file",
         })
     if crash_window in ("after_move", "after_applied"):
         # A real filesystem operation is deliberately restricted to tmp_path
@@ -224,8 +228,10 @@ def test_disposable_ambiguous_file_state_never_clears_intent(
     destination = tmp_path / "sqlite_disposable_move_destination.bin"
     source.write_bytes(b"disposable-only")
     database, session = _session(tmp_path)
-    SQLiteOperationCoordinator(session).begin_move_with_evidence(
-        "ambiguous-1", {"source": str(source), "destination": str(destination)},
+    SQLiteOperationCoordinator(session).begin(
+        "ambiguous-1", "move",
+        {"source": str(source), "destination": str(destination),
+         "fixture_kind": "disposable_regular_file"},
     )
     if disruption == "both_present":
         destination.write_bytes(b"unrelated-disposable-file")
