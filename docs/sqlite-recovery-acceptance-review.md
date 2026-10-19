@@ -73,3 +73,10 @@ retain the recorded intent and refuse a second operation or reconciliation.
 The tests deliberately do not perform an external action, so they cannot
 establish filesystem or Arr outcomes. Actual interrupted-action behavior
 remains a separate disposable-media acceptance gate.
+
+## Disposable-file rehearsal design
+
+The proposed isolated fixture contract and crash-window matrix are documented
+in [SQLite disposable move rehearsal](sqlite-disposable-move-rehearsal.md).
+This is a reviewable plan only: no move-executing lab script has been enabled,
+and approval is required before the isolated rehearsal runs.
