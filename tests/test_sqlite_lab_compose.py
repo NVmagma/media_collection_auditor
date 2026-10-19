@@ -27,3 +27,10 @@ def test_bind_mounts_cannot_create_missing_host_directories():
     text = (Path(__file__).resolve().parents[1] / "docker-compose.sqlite-lab.yaml").read_text()
     assert text.count("create_host_path: false") == 2
     assert "create_host_path: true" not in text
+
+
+def test_explicit_module_command_does_not_use_placeholder_entrypoint():
+    text = (Path(__file__).resolve().parents[1] / "docker-compose.sqlite-lab.yaml").read_text()
+    assert 'entrypoint: ["python"]' in text
+    assert 'command: ["-c"' in text
+    assert 'entrypoint: ["python", "-c"' not in text
