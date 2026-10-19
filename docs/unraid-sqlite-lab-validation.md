@@ -181,3 +181,23 @@ window, changed mount, or actual move outcome.
 - **Not yet tested on Unraid:** interrupted checkpoint scenarios, simulated destination-only/both-present recovery, tampered state, and reconciliation safeguards across actual container recreation.
 
 Never use these results to approve SQLite cutover, live media moves, or deletion.
+
+## Third actual-container gate: applied checkpoint without reconciliation
+
+This test uses a **different disposable database**, so earlier lab evidence
+is preserved. It simulates an Arr-sync intent marked as applied but does **not**
+contact Arr or execute an external action. After rechecking the lab preflight,
+reviewed image and mounts, run from the repository checkout:
+
+```sh
+docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm \\
+  --entrypoint python sqlite-lab -m scripts.sqlite_lab_applied_rehearsal create
+docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm \\
+  --entrypoint python sqlite-lab -m scripts.sqlite_lab_applied_rehearsal verify
+```
+
+Expect `Applied restart verified: revision=2, status=blocked` (revision
+may differ). The second container must refuse reconciliation and a new intent,
+with no persisted changes. Do not reset or remove existing fixtures. This
+simulates a checkpoint boundary; it is **not** an injected process crash or
+proof of all crash windows.
