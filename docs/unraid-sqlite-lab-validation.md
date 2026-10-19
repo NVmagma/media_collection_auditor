@@ -1,6 +1,6 @@
 # Isolated Unraid SQLite recovery rehearsal (not production deployment)
 
-**Status:** operator confirmed isolated JSON marker create/verify across two Unraid containers; SQLite intent rehearsal not yet run. **Branch:** `feature/sqlite`.
+**Status:** operator confirmed both the isolated JSON marker test and SQLite pending-intent create/verify across separate Unraid containers. Additional interrupted-operation scenarios remain untested. **Branch:** `feature/sqlite`.
 **Authority:** production JSON only. **Permanent deletion:** disabled.
 
 ## Important image limitation
@@ -111,9 +111,7 @@ offline Python diagnostics with an explicit `--entrypoint python` override,
 using only `/lab` fixtures. The Compose file intentionally does not provide
 a production deployment path or a command that moves files.
 
-This configuration has not yet been validated against an actual Unraid
-Docker installation. Its `python:3.12-slim` base image is a mutable tag;
-pin a reviewed digest before the real lab rehearsal.
+The operator has run the isolated lab on Unraid. A reviewed digest is mandatory through `SQLITE_LAB_IMAGE`; the lab result does not validate the production Docker image.
 
 ## Required image pin before starting the lab
 
@@ -173,3 +171,13 @@ new destination appeared. Existing fixtures block `create`; do not delete
 or reset artifacts automatically. This test never executes a move and never
 clears the pending intent. It does **not** prove recovery for every crash
 window, changed mount, or actual move outcome.
+
+## Recorded operator results (2026-10-19)
+
+- Disposable JSON marker persisted across container recreation: **operator reported pass**.
+- SQLite pending move intent persisted across container recreation, second operation refused, and `status=blocked`: **operator reported pass**.
+- Both GitHub Actions workflows for commit `a2b74b3`: **success**.
+- These results are based on the operator's confirmation; raw Unraid command logs and hashes have not been uploaded to the repository.
+- **Not yet tested on Unraid:** interrupted checkpoint scenarios, simulated destination-only/both-present recovery, tampered state, and reconciliation safeguards across actual container recreation.
+
+Never use these results to approve SQLite cutover, live media moves, or deletion.
