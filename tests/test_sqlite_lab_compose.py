@@ -10,7 +10,7 @@ def test_lab_compose_is_isolated_and_not_a_production_runner():
         'cap_drop: ["ALL"]', 'no-new-privileges:true',
         'SQLITE_LAB_DIR:?', 'SQLITE_LAB_UID:?', 'SQLITE_LAB_GID:?',
         'target: /workspace', 'target: /lab', 'PYTHONDONTWRITEBYTECODE',
-        'entrypoint: ["python", "-c"',
+        'entrypoint: ["python"]', 'command: ["-c"',
     )
     for token in required:
         assert token in text
