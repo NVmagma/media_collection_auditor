@@ -85,3 +85,11 @@ symlinks, multiply linked files, files over 1 MiB, invalid digests, and
 changed or unavailable fixtures. Even a matching digest is reported only as
 `observed_unverified` and **never** authorizes reconciliation. This is a
 small test-fixture limit, not a production-media hashing policy.
+
+## Advisory mount-boundary inspection
+
+A separate read-only guard inspects supplied mountinfo text and blocks
+missing or ambiguous `/lab` mounts, nested mounts, and non-root bind
+mount roots. Passing means only `observed_unverified`, never authorization
+for any file operation. Mount observations must still be paired with the
+existing Compose and host preflight review before a future rehearsal.
