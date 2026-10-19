@@ -222,3 +222,21 @@ Each verify must print `Ambiguous recovery verified: <scenario>, status=blocked`
 Existing fixtures refuse creation. Stop if any check fails; preserve evidence.
 This does not test an actual interrupted filesystem rename or destination-only
 scenario, and it cannot authorize production SQLite activation.
+
+## Fifth lab gate: destination-only inspection (no filesystem move)
+
+This gate constructs the destination-only observation directly in a **new**
+disposable fixture. It does not simulate a real rename or invoke any media
+executor. The database records an experimental pending move without claiming
+that it was completed. Recheck the pinned image, preflight, and lab mount.
+
+```sh
+docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm \\
+  --entrypoint python sqlite-lab -m scripts.sqlite_lab_destination_inspection create
+docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm \\
+  --entrypoint python sqlite-lab -m scripts.sqlite_lab_destination_inspection verify
+```
+
+The second container must print `Destination-only inspection verified:
+status=blocked`. This is an **offline classification test only**, not proof
+of crash safety for a real filesystem move. Existing fixtures are preserved.
