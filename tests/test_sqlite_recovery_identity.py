@@ -1,8 +1,9 @@
 """Identity checks never clear interrupted media moves."""
 
 import pytest
+from datetime import datetime, timedelta, timezone
 
-from app.sqlite_recovery_identity import inspect_move_identity
+from app.sqlite_recovery_identity import inspect_move_identity, inspect_fetched_move_identity
 
 
 MOVIE = {"jellyfin_item_id": "jf-1", "jellyfin_type": "Movie",
@@ -41,3 +42,57 @@ def test_consistent_series_still_blocked():
     jellyfin = {"Id": "series1", "Type": "Series", "ProviderIds": {"Tvdb": "12345"}}
     arr = {"service": "sonarr", "record": {"id": 7, "tvdbId": 12345}}
     assert inspect_move_identity(intent, jellyfin=jellyfin, arr=arr)["identity_verification"] == "consistent_not_authoritative"
+
+
+NOW = datetime(2026, 10, 18, tzinfo=timezone.utc)
+
+
+def envelopes():
+    return (
+        {"service": "jellyfin", "title_id": "jf-1", "observed_at": NOW, "data": JF},
+        {"service": "radarr", "title_id": "42", "observed_at": NOW, "data": ARR["record"]},
+    )
+
+
+def test_fetched_matching_evidence_still_cannot_authorize():
+    jf, arr = envelopes()
+    result = inspect_fetched_move_identity(
+        MOVIE, jellyfin_response=jf, arr_response=arr, now=NOW
+    )
+    assert result["identity_verification"] == "consistent_not_authoritative"
+    assert result["authorization"] == "not_authorized"
+
+
+@pytest.mark.parametrize("change,reason", [
+    ({"service": "sonarr"}, "response_identity_mismatch"),
+    ({"title_id": "43"}, "response_identity_mismatch"),
+    ({"observed_at": NOW - timedelta(minutes=2)}, "observation_not_fresh"),
+    ({"observed_at": NOW + timedelta(seconds=1)}, "observation_not_fresh"),
+    ({"observed_at": NOW.replace(tzinfo=None)}, "observation_timestamp_missing"),
+    ({"data": {"id": 43, "imdbId": "tt1234567"}}, "arr_identity_mismatch"),
+])
+def test_fetched_arr_envelope_fail_closed(change, reason):
+    jf, arr = envelopes()
+    result = inspect_fetched_move_identity(
+        MOVIE, jellyfin_response=jf, arr_response={**arr, **change}, now=NOW
+    )
+    assert result["reason"] == reason
+    assert result["authorization"] == "not_authorized"
+
+
+def test_fetched_jellyfin_response_identity_mismatch():
+    jf, arr = envelopes()
+    result = inspect_fetched_move_identity(
+        MOVIE, jellyfin_response={**jf, "title_id": "other"},
+        arr_response=arr, now=NOW
+    )
+    assert result["reason"] == "response_identity_mismatch"
+
+
+def test_invalid_freshness_window_blocks():
+    jf, arr = envelopes()
+    result = inspect_fetched_move_identity(
+        MOVIE, jellyfin_response=jf, arr_response=arr, now=NOW,
+        max_age=timedelta(minutes=6),
+    )
+    assert result["reason"] == "invalid_freshness_window"
