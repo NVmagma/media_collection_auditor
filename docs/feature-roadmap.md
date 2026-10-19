@@ -26,7 +26,7 @@ on the active development branch and review it alongside development milestones.
 | Offline recovery CLI, admin-only API, read-only recovery page | Done | Preserve redaction, authorization, and no-write guarantees |
 | Opt-in dashboard integration and navigation | Done | Default off; only admin users can inspect |
 | Human-readable recovery blocker guidance | In progress | Explain known failure modes without granting clearance |
-| Independent verification of interrupted moves and Arr sync | In progress | Read-only filesystem and live-service diagnostic reports can now be combined with revision checks and redaction; still need trusted identity matching, freshness, and independent authorization; never infer success from presence alone |
+| Independent verification of interrupted moves and Arr sync | In progress | Read-only filesystem and live-service diagnostic reports can now be combined with revision checks and redaction; pure read-only Jellyfin/Arr shared-ID consistency diagnostic added; still need independently fetched identity evidence, filesystem binding, freshness, and independent authorization; never infer success from presence alone |
 | Single-snapshot recovery dashboard consistency | Done | Recovery status and readiness checklist derive from one verified SQLite revision; reject unknown statuses |
 | Safe reconciliation state machine | Planned | Define permitted transitions and reject ambiguous, stale, or conflicting observations |
 | SQLite lifecycle integration | Planned | Optional backend only, with JSON remaining authoritative until explicitly approved |
