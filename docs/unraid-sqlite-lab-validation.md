@@ -1,0 +1,79 @@
+# Isolated Unraid SQLite recovery rehearsal (not production deployment)
+
+**Status:** operator checklist; not executed on Unraid. **Branch:** `feature/sqlite`.
+**Authority:** production JSON only. **Permanent deletion:** disabled.
+
+## Important image limitation
+
+The current production `Dockerfile` copies selected application files and starts
+`python main.py`; it does **not** copy the experimental `app/sqlite_*.py`
+modules into the published web image. A successful `feature/sqlite` Docker
+workflow is therefore **not** proof that SQLite recovery diagnostics run in
+that image. Do not change the production Dockerfile or point an existing
+Unraid container at the experimental branch for this rehearsal.
+
+## Preconditions (stop if any fails)
+
+1. Confirm Python safety and Docker workflows succeeded for the exact tested
+   commit. Record the commit SHA and image digest; never rely on a mutable tag.
+2. Keep the existing auditor container and its `/app/logs` bind mount untouched.
+   Verify the actual Unraid host mount mapping and back up
+   `auditor_state.json`, `auditor_config.json`, and `auditor_actions.jsonl`
+   independently. Do not rename, reset or restore live tracking state.
+3. Create a **separate** temporary directory on an Unraid host path, e.g.
+   `/mnt/user/appdata/media_collection_auditor_sqlite_lab`, with a dedicated
+   `state.json`, `backup.json`, `state.db` and disposable media folders.
+   Never mount production media or production appdata into the test container.
+4. Use a separate Python 3.12 test container with the reviewed repository
+   checkout at the pinned commit and **no access to Jellyfin/Radarr/Sonarr
+   credentials or network**. Mount only the lab directory read/write; mount
+   code read-only. No host Docker socket, privileged mode, or production volumes.
+5. Do not start `main.py`, `collection_auditor.run_once()`, scheduler, web
+   server, or any media executor. The rehearsal uses offline diagnostic/test
+   functions only.
+
+## Rehearsal sequence
+
+1. Write a minimal disposable JSON fixture including `first_seen`,
+   `arr_sync_pending`, and an unknown legacy field. Record a SHA-256 digest
+   of its exact bytes. Create separate disposable source/destination folders.
+2. Run the reviewed offline migration helper to create an exclusive JSON
+   backup and SQLite snapshot. Confirm byte-identical source and backup,
+   semantic snapshot parity, and a completed snapshot marker. **No production
+   storage selection is changed.**
+3. Persist an experimental move intent for the disposable source using
+   `SQLiteOperationCoordinator.begin_move_with_evidence()`. Do **not**
+   execute a move. Record the SQLite revision and pending phase.
+4. Stop and remove the **lab-only** container. Recreate it with the same
+   isolated lab mount. Reopen the SQLite state; confirm the pending intent
+   persists and a new intent is blocked. Read offline filesystem and recovery
+   reports; verify `authorization=not_authorized` and
+   `reconciliation=disabled`.
+5. Repeat with a **new disposable database** for each simulated outcome:
+   source only, both directories present, and destination only. The
+   destination-only case may use a manual rename of the **disposable**
+   fixture while the lab container is stopped. Neither a diagnostic nor a
+   restart may move, delete, or reconcile a file.
+6. Rehearse an incomplete SQLite database and a changed JSON source in
+   separate lab fixtures. Integrity/preflight must refuse activation; the
+   JSON backup must remain intact. Never delete partial output automatically.
+7. Compare pre/post JSON SHA-256 digests, file inventories, SQLite revisions,
+   pending intent phases, and sanitized diagnostic results. Record results
+   without including API credentials or private media paths.
+
+## Stop conditions and acceptance
+
+**Stop immediately** on a missing or unexpected mount, any non-disposable
+path in a test command, unexpected filesystem changes, lost tracking state,
+successful recovery authorization, cleared intent, stale-session acceptance,
+unexpected outbound service call, or integrity/preflight acceptance of a
+partial snapshot. Preserve the lab artifacts for inspection; do not
+automatically retry or clean them up.
+
+**Pass** requires stable persistent lab state across an actual container
+recreation, fail-closed recovery reports, preserved JSON bytes, blocked
+reconciliation, and zero unrequested media changes. Record both CI URLs and
+the lab run evidence before marking Unraid validation complete.
+
+This checklist does **not** approve SQLite cutover, production image changes,
+automatic replay, reconciliation, or permanent filesystem deletion.
