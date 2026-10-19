@@ -60,6 +60,12 @@ def inspect_pending_move_filesystem(database: str | Path) -> dict[str, Any]:
     destination_status = _inspect_directory(destination)
     # Confirm SQLite did not change while filesystem was observed.
     session.read_verified_snapshot()
+    # A second observation detects simple mid-inspection changes. This does
+    # not provide an atomic filesystem snapshot or eliminate TOCTOU races.
+    if (_inspect_directory(source) != source_status
+            or _inspect_directory(destination) != destination_status):
+        source_status = "unavailable"
+        destination_status = "unavailable"
     if source_status == "present" and destination_status == "missing":
         interpretation = "source_only"
     elif source_status == "missing" and destination_status == "present":

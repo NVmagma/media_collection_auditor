@@ -80,3 +80,45 @@ def test_no_pending_move_is_rejected(tmp_path):
     create_offline_migration_snapshot(source, backup, db)
     with pytest.raises(RuntimeError, match="Pending move unavailable"):
         inspect_pending_move_filesystem(db)
+
+
+def test_changed_source_observation_fails_closed(tmp_path, monkeypatch):
+    from app import sqlite_recovery_filesystem as module
+    _, _, db, waiting, keep = prepared(tmp_path)
+    waiting.mkdir()
+    original = module._inspect_directory
+    counts = {"source": 0}
+
+    def changing(path):
+        if path == str(waiting):
+            counts["source"] += 1
+            if counts["source"] == 2:
+                return "missing"
+        return original(path)
+
+    monkeypatch.setattr(module, "_inspect_directory", changing)
+    result = module.inspect_pending_move_filesystem(db)
+    assert result["interpretation"] == "inspection_incomplete"
+    assert result["authorization"] == "not_authorized"
+    assert result["source_status"] == "unavailable"
+
+
+def test_changed_destination_observation_fails_closed(tmp_path, monkeypatch):
+    from app import sqlite_recovery_filesystem as module
+    _, _, db, waiting, keep = prepared(tmp_path)
+    waiting.mkdir()
+    original = module._inspect_directory
+    counts = {"destination": 0}
+
+    def changing(path):
+        if path == str(keep):
+            counts["destination"] += 1
+            if counts["destination"] == 2:
+                return "present"
+        return original(path)
+
+    monkeypatch.setattr(module, "_inspect_directory", changing)
+    result = module.inspect_pending_move_filesystem(db)
+    assert result["interpretation"] == "inspection_incomplete"
+    assert result["authorization"] == "not_authorized"
+    assert result["destination_status"] == "unavailable"

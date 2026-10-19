@@ -268,3 +268,13 @@ inspector to reject the observation rather than produce recovery clearance.
 They run in both GitHub Actions workflows; no new Unraid fixture or production
 service interaction is needed. This is regression coverage, not proof that
 real filesystem observations cannot race or be tampered with.
+
+## Filesystem observation stability
+
+The read-only pending-move inspector now observes both directories twice.
+If either presence/type observation differs, it returns
+`inspection_incomplete` and `not_authorized`, rather than presenting a
+stable-looking source/destination classification. Automated tests inject
+changes to each path. This detects some inspection races but does **not**
+provide an atomic filesystem snapshot, trusted mount identity, or permission
+to reconcile a pending operation. No additional Unraid fixture is required.
