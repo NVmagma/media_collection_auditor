@@ -51,3 +51,51 @@ def test_identity_does_not_change_when_destination_replaced(monkeypatch):
     monkeypatch.setattr(identity, "_observe_directory", lambda _: next(observed))
     result = identity.inspect_move_object_observation("/source", "/destination")
     assert result["reason"] == "filesystem_changed_during_inspection"
+
+
+def test_nested_symlink_parent_is_rejected(tmp_path):
+    source = tmp_path / "source"
+    actual = tmp_path / "actual"
+    actual.mkdir()
+    (actual / "destination").mkdir()
+    link = tmp_path / "link"
+    link.symlink_to(actual, target_is_directory=True)
+    result = inspect_move_object_observation(str(source), str(link / "destination"))
+    assert result["reason"] == "not_destination_only"
+    assert result["authorization"] == "not_authorized"
+
+
+def test_missing_destination_is_not_recovery_proof(tmp_path):
+    result = inspect_move_object_observation(
+        str(tmp_path / "source"), str(tmp_path / "destination")
+    )
+    assert result["reason"] == "not_destination_only"
+    assert result["object_identity"] == "unverified"
+
+
+def test_destination_replaced_with_different_device(monkeypatch):
+    from app import sqlite_recovery_object_identity as identity
+
+    observed = iter([
+        {"status": "missing"},
+        {"status": "present", "device": 1, "inode": 10},
+        {"status": "missing"},
+        {"status": "present", "device": 2, "inode": 10},
+    ])
+    monkeypatch.setattr(identity, "_observe_directory", lambda _: next(observed))
+    result = identity.inspect_move_object_observation("/source", "/destination")
+    assert result["reason"] == "filesystem_changed_during_inspection"
+    assert result["authorization"] == "not_authorized"
+
+
+def test_unavailable_filesystem_observation_fails_closed(monkeypatch):
+    from app import sqlite_recovery_object_identity as identity
+
+    monkeypatch.setattr(
+        identity, "_observe_directory",
+        lambda path: {"status": "unavailable"} if path == "/source"
+        else {"status": "present", "device": 1, "inode": 10},
+    )
+    result = identity.inspect_move_object_observation("/source", "/destination")
+    assert result["reason"] == "not_destination_only"
+    assert result["authorization"] == "not_authorized"
