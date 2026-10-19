@@ -240,3 +240,21 @@ docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm \
 The second container must print `Destination-only inspection verified:
 status=blocked`. This is an **offline classification test only**, not proof
 of crash safety for a real filesystem move. Existing fixtures are preserved.
+
+## Sixth lab gate: both paths missing (read-only inspection)
+
+Operator reported that the destination-only inspection and earlier ambiguous
+filesystem scenarios passed on Unraid. This gate records a pending experimental
+move with **neither** source nor destination directory created. It does not
+move, delete, or reconcile anything. After lab preflight and mount review:
+
+```sh
+docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm \\
+  --entrypoint python sqlite-lab -m scripts.sqlite_lab_missing_inspection create
+docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm \\
+  --entrypoint python sqlite-lab -m scripts.sqlite_lab_missing_inspection verify
+```
+
+Expect `Both-missing inspection verified: status=blocked` from the second
+container. The result is a filesystem classification rehearsal, **not** proof
+of a real missing-media incident or authorization for SQLite cutover.
