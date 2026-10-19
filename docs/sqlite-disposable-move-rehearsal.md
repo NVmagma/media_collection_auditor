@@ -1,4 +1,4 @@
-# Disposable-file SQLite recovery rehearsal (proposal; not yet executable)
+# Disposable-file SQLite recovery rehearsal (isolated executable available)
 
 Status: **design only**. Do not run a filesystem move until the operator
 reviews this plan and the dedicated lab mount. This rehearsal is not
@@ -116,3 +116,39 @@ destination name with `lstat`. Existing files, directories, and dangling
 symlinks are blocked; an absent slot returns `slot_unoccupied_unverified`.
 This is a time-of-check observation, **not** an exclusive reservation or
 permission to write. The readiness summary can consume it as advisory input.
+
+## Executable disposable lab phases (operator review required)
+
+The experimental `scripts.sqlite_disposable_rehearsal` command now provides
+four explicit phases: `prepare`, `move`, `applied`, and `inspect`.
+Each invocation is a separate process; stop/recreate the container between
+phases to test persistence. The CLI **only accepts /lab** and requires
+`--execute-disposable-lab`. The mountinfo guard blocks unsupported bind
+mount roots, so an ordinary Docker subdirectory bind may need a reviewed
+isolation adjustment before running. Do **not** bypass the guard.
+
+Before starting, create an empty dedicated host directory named with
+`sqlite_lab`, review that it is outside all media/appdata mounts, set the
+reviewed `SQLITE_LAB_DIR`, non-root `SQLITE_LAB_UID` and
+`SQLITE_LAB_GID`, and pinned `SQLITE_LAB_IMAGE` environment variables.
+Run `PYTHONPATH=. python -m scripts.sqlite_lab_preflight` on the host.
+Check `docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab
+config` and confirm **only** the disposable host directory is writable.
+
+For each phase, run an explicitly new container using the same reviewed
+Compose configuration:
+
+```sh
+docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm sqlite-lab python -m scripts.sqlite_disposable_rehearsal prepare --execute-disposable-lab
+docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm sqlite-lab python -m scripts.sqlite_disposable_rehearsal inspect --execute-disposable-lab
+docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm sqlite-lab python -m scripts.sqlite_disposable_rehearsal move --execute-disposable-lab
+docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm sqlite-lab python -m scripts.sqlite_disposable_rehearsal inspect --execute-disposable-lab
+docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm sqlite-lab python -m scripts.sqlite_disposable_rehearsal applied --execute-disposable-lab
+```
+
+All reports remain `blocked` and `not_authorized`. The move uses an
+exclusive hard-link operation followed by unlink, never destination overwrite.
+If interrupted between those steps, **both files remain**, and a retry is
+blocked. Do not automatically clean up or retry; preserve fixtures for
+inspection. The command never reconciles an intent or touches media roots.
+Run only after the workflows pass and host mount configuration is reviewed.
