@@ -1,0 +1,28 @@
+# Experimental SQLite lab only. Never use for production auditor.
+# Run only with explicit lab profile and a dedicated, disposable host directory.
+services:
+  sqlite-lab:
+    profiles: ["sqlite-lab"]
+    image: python:3.12-slim
+    network_mode: "none"
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    user: "${SQLITE_LAB_UID:?Set lab directory owner UID}:${SQLITE_LAB_GID:?Set lab directory owner GID}"
+    working_dir: /workspace
+    environment:
+      PYTHONPATH: /workspace
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONNOUSERSITE: "1"
+    volumes:
+      - type: bind
+        source: .
+        target: /workspace
+        read_only: true
+      - type: bind
+        source: "${SQLITE_LAB_DIR:?Set dedicated disposable lab directory}"
+        target: /lab
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=32m
+    entrypoint: ["python", "-c", "print('SQLite lab is isolated; use explicit offline commands only.')"]

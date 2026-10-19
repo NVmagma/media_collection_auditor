@@ -77,3 +77,40 @@ the lab run evidence before marking Unraid validation complete.
 
 This checklist does **not** approve SQLite cutover, production image changes,
 automatic replay, reconciliation, or permanent filesystem deletion.
+
+
+## Optional test-only Compose container
+
+The repository includes `docker-compose.sqlite-lab.yaml`. This is an
+**offline Python lab**, not the production web image and not an auditor
+service. It has no network, no exposed ports, no production media mount,
+read-only repository code, and a single explicitly selected disposable lab
+mount. It does not start the auditor or execute migrations automatically.
+
+**Before running**, create a fresh empty directory solely for this lab and
+confirm its canonical path is not inside production appdata or a media share.
+Do not point `SQLITE_LAB_DIR` at `/app/logs`, any production appdata
+directory, or a media library. Inspect the rendered Compose configuration
+with `docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab config`
+before creating a container. Docker bind mounts can create missing host
+directories: verify the lab directory already exists and is owned by the
+dedicated unprivileged UID/GID you intend to use.
+
+Example, from a checked-out `feature/sqlite` repository:
+
+```sh
+export SQLITE_LAB_DIR=/mnt/user/appdata/media_collection_auditor_sqlite_lab
+export SQLITE_LAB_UID=1000  # replace with the lab directory owner's UID
+export SQLITE_LAB_GID=1000  # replace with the lab directory owner's GID
+docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab config
+docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm sqlite-lab
+```
+
+The final command only prints an isolation message. Run specific reviewed
+offline Python diagnostics with an explicit `--entrypoint python` override,
+using only `/lab` fixtures. The Compose file intentionally does not provide
+a production deployment path or a command that moves files.
+
+This configuration has not yet been validated against an actual Unraid
+Docker installation. Its `python:3.12-slim` base image is a mutable tag;
+pin a reviewed digest before the real lab rehearsal.

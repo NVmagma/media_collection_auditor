@@ -50,7 +50,7 @@ Do not treat it as authorization to deploy or change production storage.
 | SQLite lifecycle integration | Planned | Optional backend only, with JSON remaining authoritative until explicitly approved |
 | JSON-to-SQLite migration and rollback | In progress | Offline interrupted-conversion and incomplete-snapshot regression rehearsals added; preserve authoritative JSON, require disposable Unraid validation before cutover |
 | Crash/restart/concurrency and disposable-media testing | In progress | Disposable SQLite restart, stale revision and uncertain checkpoint rehearsals added (CI pending); disposable-media restart diagnostics added (CI pending); still need actual Unraid container restarts and external API failure tests |
-| Controlled Unraid SQLite rollout | Approval required | Isolated lab-only rehearsal checklist: [Unraid SQLite lab validation](unraid-sqlite-lab-validation.md); real container restart evidence still required; explicit operator approval and rollback plan |
+| Controlled Unraid SQLite rollout | Approval required | Isolated lab-only rehearsal checklist: [Unraid SQLite lab validation](unraid-sqlite-lab-validation.md); dedicated offline Compose lab configuration added (CI pending); real container restart evidence still required; explicit operator approval and rollback plan |
 
 ## P1 — Security maintenance and CVE monitoring
 
