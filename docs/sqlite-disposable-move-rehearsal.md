@@ -139,11 +139,11 @@ For each phase, run an explicitly new container using the same reviewed
 Compose configuration:
 
 ```sh
-docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm sqlite-lab python -m scripts.sqlite_disposable_rehearsal prepare --execute-disposable-lab
-docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm sqlite-lab python -m scripts.sqlite_disposable_rehearsal inspect --execute-disposable-lab
-docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm sqlite-lab python -m scripts.sqlite_disposable_rehearsal move --execute-disposable-lab
-docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm sqlite-lab python -m scripts.sqlite_disposable_rehearsal inspect --execute-disposable-lab
-docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm sqlite-lab python -m scripts.sqlite_disposable_rehearsal applied --execute-disposable-lab
+docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm sqlite-lab -m scripts.sqlite_disposable_rehearsal prepare --execute-disposable-lab
+docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm sqlite-lab -m scripts.sqlite_disposable_rehearsal inspect --execute-disposable-lab
+docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm sqlite-lab -m scripts.sqlite_disposable_rehearsal move --execute-disposable-lab
+docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm sqlite-lab -m scripts.sqlite_disposable_rehearsal inspect --execute-disposable-lab
+docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm sqlite-lab -m scripts.sqlite_disposable_rehearsal applied --execute-disposable-lab
 ```
 
 All reports remain `blocked` and `not_authorized`. The move uses an
@@ -152,3 +152,16 @@ If interrupted between those steps, **both files remain**, and a retry is
 blocked. Do not automatically clean up or retry; preserve fixtures for
 inspection. The command never reconciles an intent or touches media roots.
 Run only after the workflows pass and host mount configuration is reviewed.
+
+## Unraid shfs readiness note (2026-10-19)
+
+The selected host directory is `/mnt/user/sqlite_lab_test` on Unraid
+`fuse.shfs`. Docker Engine 29.8.2 and Compose v2.40.3 were reported.
+The Compose entrypoint is now `python`; use `-m` after the service name
+rather than a second `python`. **Do not execute the move yet**: a bind of
+a subdirectory may report a non-root mountinfo root, which the current
+conservative guard intentionally blocks. First capture a read-only mountinfo
+observation from the reviewed, isolated Python lab image and confirm its
+identity and non-production mount set. Do not relax the root check based on
+an unverified root string. FUSE persistence and directory fsync behavior
+also require an actual host rehearsal; CI cannot establish Unraid durability.
