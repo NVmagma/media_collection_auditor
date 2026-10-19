@@ -80,3 +80,15 @@ The proposed isolated fixture contract and crash-window matrix are documented
 in [SQLite disposable move rehearsal](sqlite-disposable-move-rehearsal.md).
 This is a reviewable plan only: no move-executing lab script has been enabled,
 and approval is required before the isolated rehearsal runs.
+
+## Disposable-file crash-window integration tests (automated)
+
+The test suite now performs a **real rename of test-created bytes inside
+pytest temporary directories** after a durable SQLite move intent, then
+reopens the SQLite database. It covers before intent, after intent, after
+rename, and after applied checkpoint; it also tests both-present and
+both-missing ambiguous file states. Every pending operation blocks replay,
+and even the applied phase refuses reconciliation. No production media,
+Unraid mounts, external APIs, or deletion are involved. These automated
+filesystem tests are not the separate operator-reviewed `/lab` container
+rehearsal; that gate remains open.
