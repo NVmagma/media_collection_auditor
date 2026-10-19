@@ -29,4 +29,5 @@ services:
           create_host_path: false
     tmpfs:
       - /tmp:rw,nosuid,nodev,noexec,size=32m
-    entrypoint: ["python", "-c", "print('SQLite lab is isolated; use explicit offline commands only.')"]
+    entrypoint: ["python"]
+    command: ["-c", "print('SQLite lab is isolated; use explicit offline commands only.')"]
