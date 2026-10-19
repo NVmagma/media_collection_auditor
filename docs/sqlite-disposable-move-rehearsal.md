@@ -108,3 +108,11 @@ produce named blockers. Even a complete set returns `review_required` and
 authenticate observations, inspect production, start containers, create
 fixtures, or perform a move. Dedicated lab review and explicit operator
 approval remain prerequisites for any future executable rehearsal.
+
+## Read-only destination vacancy observation
+
+`inspect_disposable_destination_slot` now checks only the fixed disposable
+destination name with `lstat`. Existing files, directories, and dangling
+symlinks are blocked; an absent slot returns `slot_unoccupied_unverified`.
+This is a time-of-check observation, **not** an exclusive reservation or
+permission to write. The readiness summary can consume it as advisory input.

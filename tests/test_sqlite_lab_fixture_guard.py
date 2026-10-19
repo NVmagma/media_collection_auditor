@@ -217,3 +217,37 @@ def test_rehearsal_assessment_rejects_unrecognized_and_malformed_evidence():
         "destination_slot:missing",
         "sqlite_state:missing",
     ]
+
+
+def test_destination_slot_absence_is_only_advisory(tmp_path):
+    from scripts.sqlite_lab_fixture_guard import inspect_disposable_destination_slot
+    destination = tmp_path / FIXTURE_NAMES[1]
+    result = inspect_disposable_destination_slot(destination, tmp_path)
+    assert result == {
+        "status": "observed_unverified", "reason": "slot_unoccupied_unverified",
+    }
+    assert not destination.exists()
+
+
+@pytest.mark.parametrize("kind", ["file", "directory", "dangling_symlink"])
+def test_destination_slot_refuses_existing_objects(tmp_path, kind):
+    from scripts.sqlite_lab_fixture_guard import inspect_disposable_destination_slot
+    destination = tmp_path / FIXTURE_NAMES[1]
+    if kind == "file":
+        destination.write_bytes(b"untouched")
+    elif kind == "directory":
+        destination.mkdir()
+    else:
+        destination.symlink_to(tmp_path / "missing")
+    assert inspect_disposable_destination_slot(destination, tmp_path) == {
+        "status": "blocked", "reason": "destination_occupied",
+    }
+    assert destination.is_symlink() if kind == "dangling_symlink" else destination.exists()
+
+
+def test_destination_slot_refuses_source_and_unexpected_paths(tmp_path):
+    from scripts.sqlite_lab_fixture_guard import inspect_disposable_destination_slot
+    for name in (FIXTURE_NAMES[0], FIXTURE_NAMES[2], "other"):
+        assert inspect_disposable_destination_slot(
+            tmp_path / name, tmp_path
+        )["reason"] == "unexpected_destination_path"

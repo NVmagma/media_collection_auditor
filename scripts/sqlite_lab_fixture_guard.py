@@ -171,3 +171,23 @@ def assess_disposable_rehearsal_evidence(
         "authorization": "not_authorized",
         "blockers": blockers if blockers else ["operator_approval_required"],
     }
+
+
+def inspect_disposable_destination_slot(
+    path: Path, lab: Path = Path("/lab")
+) -> dict[str, str]:
+    """Observe destination absence without creating or clearing anything.
+
+    Only the fixed disposable destination name is permitted. An absent slot
+    is advisory: another process could create it immediately afterward.
+    """
+    if (not isinstance(path, Path) or not isinstance(lab, Path)
+            or path.parent != lab or path.name != FIXTURE_NAMES[1]):
+        return {"status": "blocked", "reason": "unexpected_destination_path"}
+    try:
+        os.lstat(path)
+    except FileNotFoundError:
+        return {"status": "observed_unverified", "reason": "slot_unoccupied_unverified"}
+    except OSError:
+        return {"status": "blocked", "reason": "destination_unavailable"}
+    return {"status": "blocked", "reason": "destination_occupied"}
