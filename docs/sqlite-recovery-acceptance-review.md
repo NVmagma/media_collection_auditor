@@ -51,3 +51,15 @@ The prior conversational estimate of approximately 82% is an informal planning
 estimate, **not** a measured acceptance percentage. The roadmap previously
 reported 78% and was stale. Progress should be described by acceptance gates
 rather than treating a percentage as a safety certification.
+
+## Crash-window matrix: checkpoint-only stage
+
+The first crash-window matrix now exercises both `move` and `arr_sync`
+intents using isolated SQLite fixtures. It covers a write rejected before
+checkpoint, restart after intent but before any external action, and restart
+after an applied checkpoint. Existing tests also cover lost acknowledgement
+after durable intent and applied writes. These tests **do not perform any
+filesystem moves or contact external services**. An interruption during an
+actual move, real media identity verification, and independent recovery
+clearance remain untested and blocked until a separately reviewed disposable
+lab plan is approved.
