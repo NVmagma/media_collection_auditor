@@ -6,6 +6,7 @@ cross-container identity, media safety, or reconciliation authorization.
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -27,7 +28,10 @@ def inspect_mountinfo(path: Any, mountinfo: str) -> dict[str, str]:
         if len(halves) != 2:
             return {**blocked, "reason": "mountinfo_malformed"}
         fields = halves[0].split()
-        if len(fields) < 6 or len(halves[1].split()) < 3:
+        if (len(fields) < 6 or len(halves[1].split()) < 3
+                or not fields[0].isascii() or not fields[0].isdecimal()
+                or not fields[1].isascii() or not fields[1].isdecimal()
+                or re.fullmatch(r"[0-9]+:[0-9]+", fields[2]) is None):
             return {**blocked, "reason": "mountinfo_malformed"}
         mount = fields[4]
         if "\\" in mount:

@@ -26,3 +26,24 @@ def test_invalid_or_ambiguous_mountinfo_fails_closed(path, data, reason):
     assert result["reason"] == reason
     assert result["authorization"] == "not_authorized"
     assert result["mount_identity"] == "unverified"
+
+
+@pytest.mark.parametrize("record", [
+    "x 20 8:2 / /lab rw - ext4 /dev/lab rw",
+    "21 x 8:2 / /lab rw - ext4 /dev/lab rw",
+    "21 20 x:y / /lab rw - ext4 /dev/lab rw",
+    "21 20 8:2 / /lab rw - ext4",
+    "",
+])
+def test_malformed_mount_metadata_never_claims_observation(record):
+    result = inspect_mountinfo("/lab/movie", record)
+    assert result["reason"] in ("mountinfo_malformed", "mountinfo_unavailable")
+    assert result["mount_identity"] == "unverified"
+    assert result["authorization"] == "not_authorized"
+
+
+def test_nested_mount_wins_over_parent_without_authorizing():
+    result = inspect_mountinfo("/lab/movie", INFO)
+    assert result["mount_identity"] == "local_namespace_observed_unverified"
+    assert result["reason"] == "cross_container_identity_not_established"
+    assert result["authorization"] == "not_authorized"

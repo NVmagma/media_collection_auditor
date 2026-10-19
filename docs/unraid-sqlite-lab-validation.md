@@ -306,3 +306,10 @@ escaped mount paths; even a valid local observation remains
 device numbers from separate namespaces are **not** proof of a common media
 object. This parser is not connected to recovery clearance and requires no
 production mount access. Tests use synthetic mountinfo records only.
+
+## Mountinfo record-format regression checks
+
+The local namespace diagnostic now refuses nonnumeric mount/parent IDs,
+invalid device major:minor fields, and incomplete records before reporting
+an advisory local observation. It still cannot establish cross-container
+mount identity or authorize recovery. Tests use synthetic records only.
