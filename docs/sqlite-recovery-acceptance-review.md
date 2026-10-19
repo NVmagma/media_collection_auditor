@@ -150,3 +150,14 @@ transactionally verifiable. The tests verify unchanged JSON, SQLite revision,
 and durable pending move. This is **fail-closed recovery parity**, not proof
 of correct live lifecycle routing for each tag. That requires a separate
 production-logic parity suite before cutover.
+
+## Forced process termination recovery matrix
+
+A separate POSIX Python worker now receives real `SIGKILL` after each of
+three deliberate crash boundaries: durable intent, filesystem directory
+rename, and applied checkpoint. The parent process independently reopens
+SQLite, verifies the persisted phase and blocked read-only filesystem
+classification, and confirms no automatic retry. These are actual forced
+process terminations, but **not** kernel power-loss simulations or Unraid
+Docker container restart/volume-remount acceptance. Only disposable pytest
+paths are affected; production JSON remains authoritative.

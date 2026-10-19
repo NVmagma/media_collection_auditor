@@ -379,3 +379,79 @@ if window == "after_applied":
         )
     if window != "after_intent":
         assert (destination / "marker.txt").read_bytes() == b"isolated-worker-test"
+
+
+@pytest.mark.parametrize("window,expected_phase,expected_location", [
+    ("after_intent", "intent_recorded", "source_only"),
+    ("after_rename", "intent_recorded", "destination_only_unverified"),
+    ("after_applied", "applied_pending_reconciliation", "destination_only_unverified"),
+])
+def test_sigkill_disposable_directory_worker_preserves_recovery_block(
+    tmp_path, window, expected_phase, expected_location,
+):
+    """Force-kill a separate worker after a durable checkpoint or rename.
+
+    SIGKILL is deliberately sent only to the child Python interpreter.
+    All filesystem effects are limited to pytest's disposable tmp_path.
+    """
+    import os
+    import signal
+    import subprocess
+    import sys
+    from pathlib import Path
+    from app.sqlite_recovery_filesystem import inspect_pending_move_filesystem
+    from app.sqlite_recovery_report import inspect_pending_recovery_status
+    from app.state_store import GuardedSQLiteStateStore
+
+    if os.name != "posix" or not hasattr(signal, "SIGKILL"):
+        pytest.skip("SIGKILL rehearsal requires POSIX")
+    source = tmp_path / "sigkill_disposable_source"
+    destination = tmp_path / "sigkill_disposable_destination"
+    source.mkdir()
+    (source / "marker.txt").write_bytes(b"sigkill-disposable-only")
+    database, _ = _session(tmp_path)
+    worker = """
+import os
+import signal
+import sys
+from app.sqlite_audit_session import RevisionedAuditSession
+from app.sqlite_operation_coordinator import SQLiteOperationCoordinator
+from app.state_store import GuardedSQLiteStateStore
+db, src, dst, window = sys.argv[1:]
+coordinator = SQLiteOperationCoordinator(
+    RevisionedAuditSession(GuardedSQLiteStateStore(db))
+)
+coordinator.begin_move_with_evidence(
+    "sigkill-rehearsal-1", {"source": src, "destination": dst}
+)
+if window != "after_intent":
+    os.rename(src, dst)
+if window == "after_applied":
+    coordinator.mark_applied("sigkill-rehearsal-1")
+os.kill(os.getpid(), signal.SIGKILL)
+"""
+    repository_root = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(repository_root)
+    completed = subprocess.run(
+        [sys.executable, "-c", worker, str(database), str(source),
+         str(destination), window],
+        cwd=repository_root, env=env, capture_output=True,
+        text=True, timeout=30, check=False,
+    )
+    assert completed.returncode == -signal.SIGKILL, completed.stderr
+    before = GuardedSQLiteStateStore(database).load_with_revision()
+    filesystem = inspect_pending_move_filesystem(database)
+    recovery = inspect_pending_recovery_status(database)
+    assert filesystem["interpretation"] == expected_location
+    assert filesystem["authorization"] == "not_authorized"
+    assert recovery["status"] == "blocked"
+    assert recovery["operation_phase"] == expected_phase
+    assert recovery["storage_authority"] == "json"
+    assert GuardedSQLiteStateStore(database).load_with_revision() == before
+    with pytest.raises(RuntimeError, match="Unresolved"):
+        SQLiteOperationCoordinator(_reopen(database)).begin(
+            "unsafe-retry", "move", {"source": str(source)}
+        )
+    if window != "after_intent":
+        assert (destination / "marker.txt").read_bytes() == b"sigkill-disposable-only"
