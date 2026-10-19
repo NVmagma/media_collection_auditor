@@ -102,3 +102,82 @@ def test_overlapping_paths_fail_before_writes(tmp_path):
     with pytest.raises(RuntimeError, match="distinct"):
         create_offline_migration_snapshot(source, tmp_path / "backup.json", source)
     assert source.read_text() == "{}"
+
+
+@pytest.mark.parametrize("variant", ["empty", "lifecycle", "arr_retry", "legacy"])
+def test_offline_migration_roundtrip_and_json_rollback_parity(tmp_path, variant):
+    """Migration is a copy: restoring authority means retaining original JSON."""
+    from app.sqlite_json import parse_unique_json
+    from app.sqlite_state import SECTIONS
+    source, backup, database = (
+        tmp_path / "state.json", tmp_path / "backup.json",
+        tmp_path / "snapshot.db",
+    )
+    states = {
+        "empty": {},
+        "lifecycle": {
+            "first_seen": {"Movie A": "2025-01-01T01:02:03"},
+            "queued": {"Show B": "2025-02-02T02:03:04"},
+            "in_removal": {"Movie C": "2025-03-03T03:04:05"},
+            "keep_seen": {"Show D": "2025-04-04T04:05:06"},
+        },
+        "arr_retry": {
+            "arr_sync_pending": {
+                "Movie E": {"stage": "keep", "root": "/media/Movies_keep",
+                            "monitored": False},
+                "Show F": {"stage": "holding", "root": "/media/TV_holding",
+                           "monitored": True},
+            },
+        },
+        "legacy": {"legacy": {"unknown": [1, 2, {"nested": True}]},
+                   "last_scan": "2025-06-01T00:00:00"},
+    }
+    raw = json.dumps(states[variant], indent=2, ensure_ascii=False).encode() + b"\n"
+    source.write_bytes(raw)
+    create_offline_migration_snapshot(source, backup, database)
+    expected = parse_unique_json(raw)
+    for section in SECTIONS:
+        expected.setdefault(section, {})
+    assert read_snapshot(database) == expected
+    assert source.read_bytes() == backup.read_bytes() == raw
+    # Offline rollback must not require writing or reading SQLite:
+    # the original byte-for-byte JSON remains available.
+    database.rename(tmp_path / "snapshot.disabled")
+    assert source.read_bytes() == backup.read_bytes() == raw
+    assert parse_unique_json(backup.read_bytes()) == states[variant]
+
+
+def test_offline_migration_rejects_changed_source_before_conversion(
+    tmp_path, monkeypatch,
+):
+    from app import sqlite_migration
+    source, backup, database = (
+        tmp_path / "state.json", tmp_path / "backup.json",
+        tmp_path / "snapshot.db",
+    )
+    source.write_bytes(b'{"legacy":{"version":1}}')
+    original = sqlite_migration.prepare_json_backup
+
+    def tamper_after_backup(src, dst):
+        result = original(src, dst)
+        source.write_bytes(b'{"legacy":{"version":2}}')
+        return result
+
+    monkeypatch.setattr(sqlite_migration, "prepare_json_backup", tamper_after_backup)
+    with pytest.raises(RuntimeError, match="changed after backup"):
+        create_offline_migration_snapshot(source, backup, database)
+    assert backup.read_bytes() == b'{"legacy":{"version":1}}'
+    assert source.read_bytes() == b'{"legacy":{"version":2}}'
+    assert not database.exists()
+
+
+def test_offline_migration_rejects_invalid_duplicate_keys_without_backup(tmp_path):
+    source, backup, database = (
+        tmp_path / "state.json", tmp_path / "backup.json",
+        tmp_path / "snapshot.db",
+    )
+    source.write_bytes(b'{"queued":{},"queued":{"Movie":"2025-01-01T00:00:00"}}')
+    with pytest.raises(RuntimeError):
+        create_offline_migration_snapshot(source, backup, database)
+    assert not backup.exists()
+    assert not database.exists()

@@ -116,3 +116,13 @@ The three windows are after intent, after rename without applied checkpoint,
 and after applied checkpoint. These are clean process exits at deliberate
 interruption boundaries, **not forced SIGKILL, mid-syscall interruption, or
 container recreation**. They do not authorize recovery or activate SQLite.
+
+## Offline migration and rollback parity matrix
+
+Automated disposable JSON-to-SQLite round-trip tests now cover empty state,
+all four lifecycle tracking sections, Arr retry entries, and unknown legacy
+fields. Each verifies exact source/backup JSON bytes and SQLite content;
+removing the experimental database from service leaves the authoritative
+JSON intact. Additional tests reject source changes after backup and
+ambiguous duplicate JSON keys. This is **offline copy/rollback parity only**,
+not permission to cut over or a full Unraid backup-restore rehearsal.
