@@ -15,10 +15,14 @@ from app.sqlite_recovery_http import ReadOnlyRecoveryHTTP
 from app.sqlite_recovery_identity import inspect_fetched_move_identity
 from app.sqlite_recovery_path_binding import inspect_move_path_binding
 from app.sqlite_recovery_object_identity import inspect_move_object_observation
+from app.sqlite_recovery_mount_binding import inspect_mount_namespace_binding
 from app.state_store import GuardedSQLiteStateStore
 
 
-def inspect_live_move_identity(database: str | Path, **connection: Any) -> dict[str, Any]:
+def inspect_live_move_identity(
+    database: str | Path, *, mount_roots: dict[str, str] | None = None,
+    **connection: Any,
+) -> dict[str, Any]:
     """Inspect authenticated service identities against one stable move intent."""
     session = RevisionedAuditSession(GuardedSQLiteStateStore(database))
     state, revision = session.read_verified_snapshot()
@@ -44,6 +48,7 @@ def inspect_live_move_identity(database: str | Path, **connection: Any) -> dict[
     adapter = ReadOnlyRecoveryHTTP(**connection)
     service = "radarr" if media_type == "Movie" else "sonarr"
     binding = {"path_binding": "unverified", "reason": "service_inspection_failed"}
+    mount_binding = {"mount_binding": "unverified", "reason": "mount_roots_unavailable"}
     try:
         jellyfin = adapter.jellyfin_fetch_identity(jellyfin_id)
         arr = adapter.arr_fetch(service, arr_id)
@@ -52,6 +57,14 @@ def inspect_live_move_identity(database: str | Path, **connection: Any) -> dict[
         )
         # Path agreement is not meaningful when identity or freshness fails.
         if identity["identity_verification"] == "consistent_not_authoritative":
+            if mount_roots is not None:
+                jf_data, arr_data = jellyfin.get("data"), arr.get("data")
+                mount_binding = inspect_mount_namespace_binding(
+                    local_destination=intent.get("destination"),
+                    jellyfin_path=jf_data.get("Path") if isinstance(jf_data, dict) else None,
+                    arr_path=arr_data.get("path") if isinstance(arr_data, dict) else None,
+                    media_type=media_type, roots=mount_roots,
+                )
             binding = inspect_move_path_binding(
                 intent, jellyfin_record=jellyfin.get("data"),
                 arr_record=arr.get("data"),
@@ -76,6 +89,8 @@ def inspect_live_move_identity(database: str | Path, **connection: Any) -> dict[
         "identity_reason": identity["reason"],
         "path_binding": binding["path_binding"],
         "path_binding_reason": binding["reason"],
+        "mount_binding": mount_binding["mount_binding"],
+        "mount_binding_reason": mount_binding["reason"],
         "object_identity": object_observation["object_identity"],
         "object_identity_reason": object_observation["reason"],
         "external_verification": "incomplete",

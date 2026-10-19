@@ -109,3 +109,75 @@ def test_path_binding_not_evaluated_when_identity_mismatches(monkeypatch):
     assert result["path_binding"] == "unverified"
     assert result["path_binding_reason"] == "identity_not_consistent"
     assert result["authorization"] == "not_authorized"
+
+
+def test_live_mount_mapping_is_advisory_and_redacted(monkeypatch):
+    setup(monkeypatch)
+
+    class MountedSession(Session):
+        def read_verified_snapshot(self):
+            state, revision = super().read_verified_snapshot()
+            state["sqlite_pending_operations"]["details"].update({
+                "source": "/media/Movies/A",
+                "destination": "/media/Movies_keep/A",
+            })
+            return state, revision
+
+    class MountedAdapter(Adapter):
+        def jellyfin_fetch_identity(self, item_id):
+            record = super().jellyfin_fetch_identity(item_id)
+            record["data"]["Path"] = "/jf/Movies_keep/A/Film.mkv"
+            return record
+
+        def arr_fetch(self, service, title_id):
+            record = super().arr_fetch(service, title_id)
+            record["data"]["path"] = "/arr/Movies_keep/A"
+            return record
+
+    monkeypatch.setattr(live, "RevisionedAuditSession", MountedSession)
+    monkeypatch.setattr(live, "ReadOnlyRecoveryHTTP", MountedAdapter)
+    result = live.inspect_live_move_identity(
+        "unused.db",
+        mount_roots={"local": "/media", "jellyfin": "/jf", "arr": "/arr"},
+    )
+    assert result["mount_binding"] == "relative_paths_consistent_unverified"
+    assert result["authorization"] == "not_authorized"
+    assert result["reconciliation"] == "disabled"
+    assert "/Movies_keep" not in str(result)
+
+
+def test_live_mount_mapping_absent_does_not_change_existing_behavior(monkeypatch):
+    setup(monkeypatch)
+    result = live.inspect_live_move_identity("unused.db")
+    assert result["mount_binding"] == "unverified"
+    assert result["mount_binding_reason"] == "mount_roots_unavailable"
+    assert result["authorization"] == "not_authorized"
+
+
+def test_live_mount_mapping_skipped_when_identity_mismatches(monkeypatch):
+    setup(monkeypatch)
+
+    class MismatchedAdapter(Adapter):
+        def arr_fetch(self, service, title_id):
+            record = super().arr_fetch(service, title_id)
+            record["data"]["imdbId"] = "tt9999999"
+            return record
+
+    monkeypatch.setattr(live, "ReadOnlyRecoveryHTTP", MismatchedAdapter)
+    def forbidden(**kwargs):
+        raise AssertionError("mount mapping must not run on mismatched identity")
+    monkeypatch.setattr(live, "inspect_mount_namespace_binding", forbidden)
+    result = live.inspect_live_move_identity(
+        "unused.db", mount_roots={"local": "/media", "jellyfin": "/jf", "arr": "/arr"},
+    )
+    assert result["mount_binding"] == "unverified"
+    assert result["authorization"] == "not_authorized"
+
+
+def test_invalid_mount_roots_are_blocked_not_authorized(monkeypatch):
+    setup(monkeypatch)
+    result = live.inspect_live_move_identity(
+        "unused.db", mount_roots={"local": "relative"},
+    )
+    assert result["mount_binding"] == "unverified"
+    assert result["authorization"] == "not_authorized"
