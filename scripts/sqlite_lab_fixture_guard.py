@@ -38,3 +38,20 @@ def validate_fixture_slot(path: Path, lab: Path = Path("/lab")) -> None:
     except FileNotFoundError:
         return
     raise RuntimeError("Fixture path already occupied")
+
+
+def inspect_disposable_fixture(path: Path, lab: Path = Path("/lab")) -> dict[str, str]:
+    """Read-only, fail-closed inspection of one already-created fixture.
+
+    This is local metadata only: it cannot establish identity across a move
+    or authorize recovery. Reject symlinks, directories and hard-linked files.
+    """
+    if path.parent != lab or path.name not in FIXTURE_NAMES[:2]:
+        return {"status": "blocked", "reason": "unexpected_fixture_path"}
+    try:
+        metadata = os.lstat(path)
+    except OSError:
+        return {"status": "blocked", "reason": "fixture_unavailable"}
+    if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+        return {"status": "blocked", "reason": "fixture_not_isolated_regular_file"}
+    return {"status": "observed_unverified", "reason": "local_metadata_only"}

@@ -43,3 +43,42 @@ def test_missing_expected_slot_is_allowed_without_creation(tmp_path):
     source = tmp_path / FIXTURE_NAMES[0]
     validate_fixture_slot(source, tmp_path)
     assert not source.exists()
+
+
+def test_inspect_disposable_fixture_is_read_only(tmp_path):
+    from scripts.sqlite_lab_fixture_guard import inspect_disposable_fixture
+    source = tmp_path / FIXTURE_NAMES[0]
+    source.write_bytes(b"disposable-only")
+    before = source.stat()
+    result = inspect_disposable_fixture(source, tmp_path)
+    assert result == {
+        "status": "observed_unverified", "reason": "local_metadata_only",
+    }
+    assert source.read_bytes() == b"disposable-only"
+    assert source.stat().st_mtime_ns == before.st_mtime_ns
+
+
+def test_inspect_refuses_symlink_directory_and_hardlink(tmp_path):
+    import os
+    from scripts.sqlite_lab_fixture_guard import inspect_disposable_fixture
+    source = tmp_path / FIXTURE_NAMES[0]
+    source.symlink_to(tmp_path / "missing")
+    assert inspect_disposable_fixture(source, tmp_path)["status"] == "blocked"
+    source.unlink()
+    source.mkdir()
+    assert inspect_disposable_fixture(source, tmp_path)["status"] == "blocked"
+    source.rmdir()
+    source.write_bytes(b"disposable")
+    other = tmp_path / "hardlink"
+    os.link(source, other)
+    assert inspect_disposable_fixture(source, tmp_path)["status"] == "blocked"
+
+
+def test_inspect_refuses_missing_and_unexpected_fixture(tmp_path):
+    from scripts.sqlite_lab_fixture_guard import inspect_disposable_fixture
+    source = tmp_path / FIXTURE_NAMES[0]
+    assert inspect_disposable_fixture(source, tmp_path)["reason"] == "fixture_unavailable"
+    other = tmp_path / "production_movie"
+    other.write_bytes(b"untouched")
+    assert inspect_disposable_fixture(other, tmp_path)["reason"] == "unexpected_fixture_path"
+    assert other.read_bytes() == b"untouched"

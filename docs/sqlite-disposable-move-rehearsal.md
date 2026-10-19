@@ -67,3 +67,12 @@ check for the exact `/lab` mount and fixed disposable fixture names. It
 refuses occupied fixture slots, including dangling symlinks. This is **not**
 a move executor or authorization to run a rehearsal. Guard unit tests use
 temporary directories and do not access `/lab`.
+
+## Read-only existing fixture inspection
+
+The guard can now inspect local metadata for a previously created source or
+destination fixture. It rejects missing files, symlinks, directories, and
+multiply linked regular files. A passing observation is explicitly
+`observed_unverified`: it cannot prove cross-restart object identity or
+clear a pending SQLite operation. No fixture is created or moved by this
+inspection, and the test suite uses temporary files only.
