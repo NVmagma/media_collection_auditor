@@ -28,7 +28,10 @@ def classify_move_recovery(
     """
     base = {"status": "blocked", "authorization": "not_authorized",
             "reconciliation": "disabled", "decision": "manual_review_required"}
-    if (filesystem not in FS or identity not in IDENTITY
+    if (any(not isinstance(value, str) for value in (
+            filesystem, identity, evidence, source_fingerprint,
+            destination_fingerprint, mount_binding, cross_device))
+            or filesystem not in FS or identity not in IDENTITY
             or evidence not in EVIDENCE
             or source_fingerprint not in FINGERPRINT
             or destination_fingerprint not in FINGERPRINT
