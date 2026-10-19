@@ -20,10 +20,10 @@ def inspect_json_rollback_readiness(source: str | Path, backup: str | Path) -> d
                "storage_authority": "json", "production_activation": "disabled",
                "restore_performed": False, "media_actions_performed": False}
     source, backup = Path(source), Path(backup)
-    if source == backup or source.resolve() == backup.resolve():
-        return {**blocked, "reason": "paths_not_distinct"}
     if source.is_symlink() or backup.is_symlink():
         return {**blocked, "reason": "symlink_unsafe"}
+    if source == backup or source.resolve() == backup.resolve():
+        return {**blocked, "reason": "paths_not_distinct"}
     try:
         original = source.read_bytes()
         archived = backup.read_bytes()
