@@ -12,6 +12,9 @@ from copy import deepcopy
 from typing import Any
 
 from app.sqlite_audit_session import RevisionedAuditSession
+from app.sqlite_recovery_pre_move_evidence import (
+    build_pre_move_evidence, validate_pre_move_evidence,
+)
 
 INTENTS_KEY = "sqlite_pending_operations"
 ALLOWED_OPERATIONS = frozenset({"move", "arr_sync"})
@@ -37,6 +40,31 @@ class SQLiteOperationCoordinator:
             "phase": "intent_recorded",
         }
         self.session.checkpoint()
+
+    def begin_move_with_evidence(
+        self, operation_id: str, details: dict[str, Any],
+    ) -> None:
+        """Checkpoint a candidate pre-move fingerprint with an experimental intent.
+
+        This is not an executor. Callers must not perform external actions
+        until begin() successfully checkpoints. Evidence is not trusted proof
+        of a completed move, even after restart.
+        """
+        if not isinstance(details, dict) or not details:
+            raise RuntimeError("Operation details are required")
+        if "pre_move_evidence" in details:
+            raise RuntimeError("Caller-supplied pre-move evidence is not accepted")
+        source = details.get("source")
+        destination = details.get("destination")
+        if (not isinstance(source, str) or not isinstance(destination, str)
+                or source == destination):
+            raise RuntimeError("Move paths must be distinct")
+        # Capture before the durable intent checkpoint; failures never grant
+        # permission to perform an external operation.
+        evidence = build_pre_move_evidence(source)
+        if validate_pre_move_evidence(evidence)["evidence_verification"] != "schema_valid_untrusted":
+            raise RuntimeError("Pre-move evidence invalid")
+        self.begin(operation_id, "move", {**details, "pre_move_evidence": evidence})
 
     def mark_applied(self, operation_id: str) -> None:
         """Record external success after a caller independently verifies it."""
