@@ -19,17 +19,17 @@ on the active development branch and review it alongside development milestones.
 
 ## SQLite production-readiness tracker
 
-**Estimated progress: 60%** (milestone-based planning estimate, not a safety
+**Estimated progress: 63%** (milestone-based planning estimate, not a safety
 certification). Update this estimate after meaningful verified milestones.
 Do not treat it as authorization to deploy or change production storage.
 
-`████████████░░░░░░░░ 60%`
+`█████████████░░░░░░░ 63%`
 
 | Milestone | Status |
 | --- | --- |
 | Experimental SQLite state, snapshots, revision checks | Done |
 | Read-only recovery diagnostics, identity, mount and fingerprint observations | Done for current experimental scope |
-| Durable pre-move evidence intent checkpoint | Implemented experimentally; CI verification pending |
+| Durable pre-move evidence intent checkpoint | Done for experimental scope; persisted read-only inspection added, CI pending |
 | Independently trusted recovery and safe reconciliation state machine | In progress / blocked pending design |
 | Migration, backup, rollback and production parity | Planned |
 | Crash/restart, disposable-media and Unraid validation | Planned |
@@ -44,7 +44,7 @@ Do not treat it as authorization to deploy or change production storage.
 | Offline recovery CLI, admin-only API, read-only recovery page | Done | Preserve redaction, authorization, and no-write guarantees |
 | Opt-in dashboard integration and navigation | Done | Default off; only admin users can inspect |
 | Human-readable recovery blocker guidance | In progress | Explain known failure modes without granting clearance |
-| Independent verification of interrupted moves and Arr sync | In progress | Read-only filesystem and live-service diagnostic reports can now be combined with revision checks and redaction; read-only shared-ID and fetched-envelope identity checks now reject stale, future-dated and mismatched observations; authenticated read-only Jellyfin/Arr identity fetch orchestration now paired with filesystem status and revision checks; conservative remote path-string comparison now supports movie file-parent and series directory observations, gated on consistent fresh service identities; read-only filesystem object observations now reject symlinks, unstable directory identities, and ambiguous source/destination presence, but cannot prove original object identity; additional regression coverage now checks nested symlink parents, missing destinations, changed device identities and unavailable observations; additional tests now reject symlinked source ancestors, destination files and source appearance during inspection; read-only declared mount-root comparisons now support distinct container path prefixes and optional offline live-identity reporting, but cannot verify mount configurations; read-only metadata fingerprint capture/comparison is now available but not yet recorded before actual moves and cannot prove identity; versioned strict-schema pre-move evidence envelopes are now available for offline experiments, but provenance and durable pre-action ordering remain unverified; experimental intent creation now supports local pre-move evidence capture and durable checkpointing without executing a move, but evidence provenance and cross-container identity remain untrusted; still need verified mount namespace handling, non-atomic scope handling, and independent authorization; never infer success from presence alone |
+| Independent verification of interrupted moves and Arr sync | In progress | Read-only filesystem and live-service diagnostic reports can now be combined with revision checks and redaction; read-only shared-ID and fetched-envelope identity checks now reject stale, future-dated and mismatched observations; authenticated read-only Jellyfin/Arr identity fetch orchestration now paired with filesystem status and revision checks; conservative remote path-string comparison now supports movie file-parent and series directory observations, gated on consistent fresh service identities; read-only filesystem object observations now reject symlinks, unstable directory identities, and ambiguous source/destination presence, but cannot prove original object identity; additional regression coverage now checks nested symlink parents, missing destinations, changed device identities and unavailable observations; additional tests now reject symlinked source ancestors, destination files and source appearance during inspection; read-only declared mount-root comparisons now support distinct container path prefixes and optional offline live-identity reporting, but cannot verify mount configurations; read-only metadata fingerprint capture/comparison is now available but not yet recorded before actual moves and cannot prove identity; versioned strict-schema pre-move evidence envelopes are now available for offline experiments, but provenance and durable pre-action ordering remain unverified; experimental intent creation now supports local pre-move evidence capture and durable checkpointing without executing a move; persisted fingerprints can now be inspected after restart against source and destination with revision-race detection, but cannot authorize recovery, but evidence provenance and cross-container identity remain untrusted; still need verified mount namespace handling, non-atomic scope handling, and independent authorization; never infer success from presence alone |
 | Single-snapshot recovery dashboard consistency | Done | Recovery status and readiness checklist derive from one verified SQLite revision; reject unknown statuses |
 | Safe reconciliation state machine | Planned | Define permitted transitions and reject ambiguous, stale, or conflicting observations |
 | SQLite lifecycle integration | Planned | Optional backend only, with JSON remaining authoritative until explicitly approved |
