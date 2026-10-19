@@ -38,11 +38,13 @@ def inspect_move_path_binding(
     arr_path = arr_record.get("path")
     if not _absolute_normal_path(jf_path) or not _absolute_normal_path(arr_path):
         return {**base, "reason": "remote_path_unavailable"}
-    # Jellyfin movie Path normally points to the media file, whereas series
-    # and Arr title paths commonly point to a directory. Do not guess the
-    # directory for movies from a filename; treat it as ambiguous.
+    # For movies, Jellyfin's Path is a file while Radarr's path is normally
+    # the title directory. Only compare the literal parent component; never
+    # resolve a symlink or infer file identity from a matching filename.
     if media_type == "Movie":
-        return {**base, "reason": "movie_file_path_requires_binding"}
+        if jf_path in (source, destination) or os.path.dirname(jf_path) not in (source, destination):
+            return {**base, "reason": "movie_file_parent_mismatch"}
+        jf_path = os.path.dirname(jf_path)
     if jf_path not in (source, destination) or arr_path not in (source, destination):
         return {**base, "reason": "remote_path_mismatch"}
     if jf_path != arr_path:
