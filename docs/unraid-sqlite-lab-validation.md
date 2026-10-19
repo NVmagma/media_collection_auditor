@@ -126,3 +126,28 @@ Before rendering or starting the lab Compose configuration, set `SQLITE_LAB_DIR`
 ## Missing host paths fail closed
 
 Both Compose bind mounts explicitly set `bind.create_host_path: false`. Docker Compose must reject a missing checkout or lab directory rather than silently creating one. Run `PYTHONPATH=. python -m scripts.sqlite_lab_preflight` **before** rendering/running Compose; the preflight is not automatically invoked by Docker Compose. This does not eliminate mount changes between checking and starting the container. Recheck the resolved Compose configuration and host path immediately before launch.
+
+## First actual-container restart gate: persistent lab mount
+
+This preliminary gate checks only that a disposable file survives a **new
+container instance**. It does not yet prove SQLite recovery correctness.
+
+After verifying the pinned image, isolated lab path, host preflight, and
+rendered Compose configuration, run these commands from the repository root:
+
+```sh
+docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm \
+  --entrypoint python sqlite-lab -m scripts.sqlite_lab_restart_probe create
+docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm \
+  --entrypoint python sqlite-lab -m scripts.sqlite_lab_restart_probe verify
+```
+
+The first container writes `/lab/sqlite_restart_probe.json` exclusively;
+the second container checks its exact JSON content and prints a SHA-256
+digest. A pre-existing marker blocks creation, rather than being overwritten.
+Never run this with a production bind mount. The script does not delete or
+reset the marker. Record the container exit statuses and SHA-256 output.
+
+**Next gate:** independently rehearse SQLite pending-intent persistence and
+blocked recovery across container recreation with disposable state. Do not
+claim the SQLite restart milestone complete based only on this marker probe.
