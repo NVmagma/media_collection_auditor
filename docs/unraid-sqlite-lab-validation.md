@@ -1,6 +1,6 @@
 # Isolated Unraid SQLite recovery rehearsal (not production deployment)
 
-**Status:** operator checklist; not executed on Unraid. **Branch:** `feature/sqlite`.
+**Status:** operator confirmed isolated JSON marker create/verify across two Unraid containers; SQLite intent rehearsal not yet run. **Branch:** `feature/sqlite`.
 **Authority:** production JSON only. **Permanent deletion:** disabled.
 
 ## Important image limitation
@@ -151,3 +151,25 @@ reset the marker. Record the container exit statuses and SHA-256 output.
 **Next gate:** independently rehearse SQLite pending-intent persistence and
 blocked recovery across container recreation with disposable state. Do not
 claim the SQLite restart milestone complete based only on this marker probe.
+
+## Second actual-container gate: SQLite pending move intent
+
+The operator confirmed the earlier disposable JSON marker survived container
+recreation. For this **separate SQLite-specific rehearsal**, verify all
+preflight and mount requirements again, then run:
+
+```sh
+docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm \\
+  --entrypoint python sqlite-lab -m scripts.sqlite_lab_intent_rehearsal create
+docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm \\
+  --entrypoint python sqlite-lab -m scripts.sqlite_lab_intent_rehearsal verify
+```
+
+The first container creates only `/lab/sqlite_intent_rehearsal.db` and
+`/lab/sqlite_intent_rehearsal_source`, records a pre-move intent, and exits.
+The second container must print `SQLite restart verified` with a revision
+and `status=blocked`. It refuses a second operation and checks that no
+new destination appeared. Existing fixtures block `create`; do not delete
+or reset artifacts automatically. This test never executes a move and never
+clears the pending intent. It does **not** prove recovery for every crash
+window, changed mount, or actual move outcome.
