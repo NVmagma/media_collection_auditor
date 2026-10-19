@@ -278,3 +278,12 @@ stable-looking source/destination classification. Automated tests inject
 changes to each path. This detects some inspection races but does **not**
 provide an atomic filesystem snapshot, trusted mount identity, or permission
 to reconcile a pending operation. No additional Unraid fixture is required.
+
+## Reject noncanonical filesystem evidence paths
+
+The filesystem-only inspector now rejects paths containing dot segments,
+parent traversal, redundant separators, or trailing separators as
+`invalid_path`. This aligns its path validation with the existing directory
+fingerprint capture. These are offline read-only checks; they do not replace
+trusted mount binding or authorize recovery. Automated tests cover malformed
+paths and an unchanged canonical directory. No new Unraid command is needed.

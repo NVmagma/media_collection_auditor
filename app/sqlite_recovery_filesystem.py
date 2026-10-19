@@ -16,7 +16,9 @@ from app.state_store import GuardedSQLiteStateStore
 
 
 def _inspect_directory(raw: Any) -> str:
-    if not isinstance(raw, str) or not raw or not os.path.isabs(raw):
+    if (not isinstance(raw, str) or not raw or not os.path.isabs(raw)
+            or os.path.normpath(raw) != raw
+            or any(part in (".", "..") for part in raw.split(os.sep))):
         return "invalid_path"
     path = Path(raw)
     # Do not resolve() or traverse symlinked ancestors: their targets could

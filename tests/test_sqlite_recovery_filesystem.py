@@ -122,3 +122,19 @@ def test_changed_destination_observation_fails_closed(tmp_path, monkeypatch):
     assert result["interpretation"] == "inspection_incomplete"
     assert result["authorization"] == "not_authorized"
     assert result["destination_status"] == "unavailable"
+
+
+@pytest.mark.parametrize("suffix", ["/../Movie", "/./Movie", "//Movie", "/"])
+def test_noncanonical_paths_are_not_treated_as_verified(tmp_path, suffix):
+    from app.sqlite_recovery_filesystem import _inspect_directory
+    directory = tmp_path / "Movie"
+    directory.mkdir()
+    result = _inspect_directory(str(tmp_path) + suffix)
+    assert result == "invalid_path"
+
+
+def test_canonical_directory_still_observed(tmp_path):
+    from app.sqlite_recovery_filesystem import _inspect_directory
+    directory = tmp_path / "Movie"
+    directory.mkdir()
+    assert _inspect_directory(str(directory)) == "present"
