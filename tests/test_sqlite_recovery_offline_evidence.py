@@ -11,6 +11,11 @@ def status(revision=5, operation_id="op-1"):
             "operation_phase": "intent_recorded"}
 
 
+def filesystem(revision=5):
+    return {"revision": revision, "status": "blocked",
+            "authorization": "not_authorized", "interpretation": "both_present_ambiguous"}
+
+
 def fingerprint(revision=5):
     return {"revision": revision, "status": "blocked",
             "authorization": "not_authorized",
@@ -26,10 +31,13 @@ def fingerprint(revision=5):
 def test_combined_evidence_redacted_and_blocked(monkeypatch):
     monkeypatch.setattr(module, "inspect_pending_recovery_status", lambda _: status())
     monkeypatch.setattr(module, "inspect_persisted_move_evidence", lambda _: fingerprint())
+    monkeypatch.setattr(module, "inspect_pending_move_filesystem", lambda _: filesystem())
     result = module.inspect_offline_move_evidence("unused.db")
     assert result["evidence"]["source"] == "metadata_consistent_unverified"
     assert result["authorization"] == "not_authorized"
     assert result["reconciliation"] == "disabled"
+    assert result["decision"]["reason"] == "duplicate_locations_ambiguous"
+    assert result["decision"]["authorization"] == "not_authorized"
     assert "never-display" not in str(result)
     assert "op-1" not in str(result)
 
@@ -41,6 +49,7 @@ def test_stale_or_changed_evidence_rejected(monkeypatch, changed):
     monkeypatch.setattr(module, "inspect_pending_recovery_status", lambda _: next(calls))
     monkeypatch.setattr(module, "inspect_persisted_move_evidence",
                         lambda _: fingerprint(6 if changed == "fingerprint" else 5))
+    monkeypatch.setattr(module, "inspect_pending_move_filesystem", lambda _: filesystem())
     with pytest.raises(RuntimeError, match="stale"):
         module.inspect_offline_move_evidence("unused.db")
 
@@ -59,5 +68,25 @@ def test_invalid_fingerprint_report_never_becomes_clear(monkeypatch):
     monkeypatch.setattr(module, "inspect_pending_recovery_status", lambda _: status())
     monkeypatch.setattr(module, "inspect_persisted_move_evidence",
                         lambda _: dict(fingerprint(), authorization="authorized"))
+    monkeypatch.setattr(module, "inspect_pending_move_filesystem", lambda _: filesystem())
     with pytest.raises(RuntimeError, match="stale"):
         module.inspect_offline_move_evidence("unused.db")
+
+
+def test_filesystem_revision_race_is_rejected(monkeypatch):
+    monkeypatch.setattr(module, "inspect_pending_recovery_status", lambda _: status())
+    monkeypatch.setattr(module, "inspect_persisted_move_evidence", lambda _: fingerprint())
+    monkeypatch.setattr(module, "inspect_pending_move_filesystem",
+                        lambda _: filesystem(revision=6))
+    with pytest.raises(RuntimeError, match="stale"):
+        module.inspect_offline_move_evidence("unused.db")
+
+
+def test_destination_only_still_lacks_independent_identity(monkeypatch):
+    monkeypatch.setattr(module, "inspect_pending_recovery_status", lambda _: status())
+    monkeypatch.setattr(module, "inspect_persisted_move_evidence", lambda _: fingerprint())
+    monkeypatch.setattr(module, "inspect_pending_move_filesystem",
+                        lambda _: dict(filesystem(), interpretation="destination_only_unverified"))
+    result = module.inspect_offline_move_evidence("unused.db")
+    assert result["decision"]["reason"] == "service_identity_unverified"
+    assert result["decision"]["authorization"] == "not_authorized"
