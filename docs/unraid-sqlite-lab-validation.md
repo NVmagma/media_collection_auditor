@@ -331,3 +331,11 @@ Each advisory mount report must contain exactly `status`,
 raw paths, device identifiers, or service secrets) and missing keys are
 rejected. The diagnostic never echoes input values and never authorizes
 recovery. These checks use synthetic reports and require no Unraid changes.
+
+## Mountinfo filesystem-root validation
+
+The local mountinfo parser now checks the mount record's filesystem root as
+well as its mount point. Relative, noncanonical, or escaped roots are refused,
+including records that otherwise have a matching mount point. A canonical
+subvolume root is still only a local, unverified observation. These synthetic
+regressions do not touch Docker mounts or authorize recovery.

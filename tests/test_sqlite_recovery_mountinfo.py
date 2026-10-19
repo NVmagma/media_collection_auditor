@@ -47,3 +47,29 @@ def test_nested_mount_wins_over_parent_without_authorizing():
     assert result["mount_identity"] == "local_namespace_observed_unverified"
     assert result["reason"] == "cross_container_identity_not_established"
     assert result["authorization"] == "not_authorized"
+
+
+@pytest.mark.parametrize("record,reason", [
+    ("21 20 8:2 relative /lab rw - ext4 /dev/lab rw",
+     "mountinfo_malformed"),
+    ("21 20 8:2 /../private /lab rw - ext4 /dev/lab rw",
+     "mountinfo_malformed"),
+    ("21 20 8:2 /private/./media /lab rw - ext4 /dev/lab rw",
+     "mountinfo_malformed"),
+    ("21 20 8:2 /private//media /lab rw - ext4 /dev/lab rw",
+     "mountinfo_malformed"),
+    ("21 20 8:2 /private\\040media /lab rw - ext4 /dev/lab rw",
+     "mountinfo_escaped_path_unverified"),
+])
+def test_mount_root_must_be_unambiguous(record, reason):
+    result = inspect_mountinfo("/lab/movie", record + "\n")
+    assert result["reason"] == reason
+    assert result["mount_identity"] == "unverified"
+    assert result["authorization"] == "not_authorized"
+
+
+def test_canonical_non_root_mount_root_is_still_advisory():
+    record = "21 20 8:2 /subvolume /lab rw - ext4 /dev/lab rw\n"
+    result = inspect_mountinfo("/lab/movie", record)
+    assert result["mount_identity"] == "local_namespace_observed_unverified"
+    assert result["authorization"] == "not_authorized"

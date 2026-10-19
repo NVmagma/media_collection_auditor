@@ -33,10 +33,12 @@ def inspect_mountinfo(path: Any, mountinfo: str) -> dict[str, str]:
                 or not fields[1].isascii() or not fields[1].isdecimal()
                 or re.fullmatch(r"[0-9]+:[0-9]+", fields[2]) is None):
             return {**blocked, "reason": "mountinfo_malformed"}
-        mount = fields[4]
-        if "\\" in mount:
+        root, mount = fields[3], fields[4]
+        if "\\" in root or "\\" in mount:
             return {**blocked, "reason": "mountinfo_escaped_path_unverified"}
-        if not os.path.isabs(mount) or os.path.normpath(mount) != mount:
+        if any(not os.path.isabs(item) or os.path.normpath(item) != item
+               or any(part in (".", "..") for part in item.split("/"))
+               for item in (root, mount)):
             return {**blocked, "reason": "mountinfo_malformed"}
         if path == mount or path.startswith(mount.rstrip("/") + "/"):
             candidates.append(mount)
