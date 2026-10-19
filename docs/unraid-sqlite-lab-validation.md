@@ -201,3 +201,24 @@ may differ). The second container must refuse reconciliation and a new intent,
 with no persisted changes. Do not reset or remove existing fixtures. This
 simulates a checkpoint boundary; it is **not** an injected process crash or
 proof of all crash windows.
+
+## Fourth actual-container gate: ambiguous filesystem observations
+
+Use separate, disposable fixtures for `source_only` and `both_present`.
+The script creates directories only under `/lab`, checkpoints an intent,
+and later inspects read-only evidence from a new container. It does **not**
+perform a move or clear an intent. Re-run preflight and inspect mounts first.
+
+```sh
+for scenario in source_only both_present; do
+  docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm \\
+    --entrypoint python sqlite-lab -m scripts.sqlite_lab_ambiguous_rehearsal create "$scenario"
+  docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm \\
+    --entrypoint python sqlite-lab -m scripts.sqlite_lab_ambiguous_rehearsal verify "$scenario"
+done
+```
+
+Each verify must print `Ambiguous recovery verified: <scenario>, status=blocked`.
+Existing fixtures refuse creation. Stop if any check fails; preserve evidence.
+This does not test an actual interrupted filesystem rename or destination-only
+scenario, and it cannot authorize production SQLite activation.
