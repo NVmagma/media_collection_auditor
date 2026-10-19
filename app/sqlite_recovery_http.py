@@ -58,6 +58,19 @@ class ReadOnlyRecoveryHTTP:
                     "sonarr": (sonarr_url, sonarr_key, "series")}
         self.http = http
 
+    def jellyfin_fetch_identity(self, item_id: str) -> dict[str, Any]:
+        """Read one Jellyfin item identity; does not establish protection scope."""
+        item_id = _identity(item_id)
+        data = _get_json(
+            self.http,
+            _endpoint(self.jellyfin_url, f"/Users/{self.jellyfin_user_id}/Items/{item_id}"),
+            headers={"X-Emby-Token": self.jellyfin_token},
+        )
+        if data.get("Id") != item_id:
+            raise RuntimeError("Recovery Jellyfin identity mismatch")
+        return {"service": "jellyfin", "title_id": item_id,
+                "observed_at": datetime.now(timezone.utc), "data": data}
+
     def jellyfin_fetch(self, item_id: str) -> dict[str, Any]:
         """Fetch title tags and one user's favorite; incomplete scope blocks clearance."""
         item_id = _identity(item_id)
