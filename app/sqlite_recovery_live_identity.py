@@ -13,6 +13,7 @@ from app.sqlite_operation_coordinator import INTENTS_KEY
 from app.sqlite_recovery_filesystem import inspect_pending_move_filesystem
 from app.sqlite_recovery_http import ReadOnlyRecoveryHTTP
 from app.sqlite_recovery_identity import inspect_fetched_move_identity
+from app.sqlite_recovery_path_binding import inspect_move_path_binding
 from app.state_store import GuardedSQLiteStateStore
 
 
@@ -38,11 +39,17 @@ def inspect_live_move_identity(database: str | Path, **connection: Any) -> dict[
         raise RuntimeError("SQLite recovery session is stale")
     adapter = ReadOnlyRecoveryHTTP(**connection)
     service = "radarr" if media_type == "Movie" else "sonarr"
+    binding = {"path_binding": "unverified", "reason": "service_inspection_failed"}
     try:
         jellyfin = adapter.jellyfin_fetch_identity(jellyfin_id)
         arr = adapter.arr_fetch(service, arr_id)
         identity = inspect_fetched_move_identity(
             intent, jellyfin_response=jellyfin, arr_response=arr,
+        )
+        binding = inspect_move_path_binding(
+            intent, jellyfin_record=jellyfin.get("data"),
+            arr_record=arr.get("data"),
+            filesystem_interpretation=filesystem["interpretation"],
         )
     except RuntimeError as exc:
         # Never expose service URLs, response bodies or credentials.
@@ -58,6 +65,8 @@ def inspect_live_move_identity(database: str | Path, **connection: Any) -> dict[
         "filesystem_interpretation": filesystem["interpretation"],
         "identity_verification": identity["identity_verification"],
         "identity_reason": identity["reason"],
+        "path_binding": binding["path_binding"],
+        "path_binding_reason": binding["reason"],
         "external_verification": "incomplete",
         "reconciliation": "disabled",
     }
