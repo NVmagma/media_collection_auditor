@@ -68,3 +68,28 @@ def test_root_slash_is_supported_without_prefix_collision():
         local_destination="/title", jellyfin_path="/title", arr_path="/title",
     )
     assert result["mount_binding"] == "relative_paths_consistent_unverified"
+
+
+@pytest.mark.parametrize("changes", [
+    {"roots": {**ROOTS, "local": "/media/"}},
+    {"roots": {**ROOTS, "jellyfin": "/jf//"}},
+    {"local_destination": "/media//Shows_keep/A"},
+    {"arr_path": "/arr/Shows_keep/A/"},
+    {"jellyfin_path": "/jf/Shows_keep/./A"},
+])
+def test_noncanonical_namespace_strings_never_verify(changes):
+    result = inspect(**changes)
+    assert result["mount_binding"] == "unverified"
+    assert result["authorization"] == "not_authorized"
+    assert result["status"] == "blocked"
+
+
+@pytest.mark.parametrize("changes", [
+    {"roots": {**ROOTS, "local": "/media/Shows_keep/A"}},
+    {"roots": {**ROOTS, "arr": "/arr/Shows_keep/A"}},
+    {"roots": {**ROOTS, "jellyfin": "/jf/Shows_keep/A"}},
+])
+def test_title_directory_cannot_be_declared_as_mount_root(changes):
+    result = inspect(**changes)
+    assert result["reason"] in ("mount_root_not_title", "relative_paths_disagree")
+    assert result["authorization"] == "not_authorized"

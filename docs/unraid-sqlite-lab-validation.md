@@ -287,3 +287,12 @@ parent traversal, redundant separators, or trailing separators as
 fingerprint capture. These are offline read-only checks; they do not replace
 trusted mount binding or authorize recovery. Automated tests cover malformed
 paths and an unchanged canonical directory. No new Unraid command is needed.
+
+## Advisory mount mapping edge-case tests
+
+The operator confirmed the prior filesystem-path hardening workflows passed.
+Regression tests now cover redundant separators, dot segments, trailing
+separators, and declared roots that point directly at a title directory.
+Even consistent declared mount mappings remain `not_authorized`: these
+checks cannot establish Docker mount identity or service object identity.
+No production mount is read and no Unraid command is required.
