@@ -218,8 +218,25 @@ the failed fixture directory and pending intents. No production mount changes
 or activation are authorized by these test results.
 
 The full suite passed on native Btrfs lab storage: **1,159 tests** through
-`8cae0f5`. The same access model failed the required rename on fuse.shfs. The next
-increment blocks that observed unsupported filesystem before move intent and
-binds filesystem type to descriptor mount observations. Gate 6 remains open:
+`8cae0f5`. The same access model failed the required rename on fuse.shfs. The historical next increment blocked the observed filesystem label before intent.
+That label blacklist is now superseded by the public-release portability
+requirement: keep filesystem type diagnostic and select safe strategies by
+capability, retaining no-overwrite and fail-closed requirements. Gate 6 remains open:
 production currently uses the shfs path and still has overlapping external
 writers; a native lab pass does not authorize mount changes.
+
+
+## Public-release portability and API scope
+
+The user confirmed 81 focused native Btrfs tests passed and clarified that users
+must not be forced onto this deployment's filesystem layout. The filesystem-name
+blacklist is removed; the required atomic no-overwrite rename remains one optional
+fast path, with no unsafe fallback. A separate source-retaining verified-copy
+staging component starts the portable backend work. It is not a completed move
+backend or a newly completed gate. Gate 6 must assess strategy-specific capability,
+writer ownership and recovery rather than mandate native Btrfs.
+
+[The product roadmap](product-roadmap.md) also records the requested authenticated
+read-only integration API for Homarr, Homepage and other clients. It must use the
+active authoritative snapshot and remain independent of SQLite activation. API
+implementation is planned separately; no live routes or configuration changed.

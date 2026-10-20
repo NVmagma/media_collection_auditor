@@ -1,5 +1,11 @@
 # SQLite production move trust contract — blocked draft
 
+**Current product requirement:** filesystem-independent media handling using
+capability-based strategies. The earlier single-mount rename model is an optional
+fast path, not the required deployment layout. The filesystem-name blacklist
+described in the historical record below is superseded. See
+[the product roadmap](product-roadmap.md) and the portability update at the end.
+
 This is the gate 6 acceptance contract, not approval to enable SQLite. The
 production backend gate still requires JSON. The current executable runner is
 restricted to marked disposable fixtures.
@@ -210,3 +216,37 @@ filesystem selection, missing/duplicate/malformed mount records, shfs rejection
 and pre-intent/no-rename enforcement. Native Unraid focused validation for this
 increment is pending. The regression command should keep using fresh uniquely
 named native lab directories and preserve failed shfs artifacts.
+
+
+## Portability requirement supersedes the filesystem-name policy
+
+The user reported **81 focused tests passed** on native Btrfs through `1d52e27`
+and clarified that the public application must not be governed by this deployment's
+filesystem. The hardcoded fuse.shfs rejection has therefore been removed. This
+change follows the product requirement, not an attempt to turn failed rename
+tests green: the rename implementation still requires RENAME_NOREPLACE and
+retains pending intent on unsupported/uncertain outcomes. It never falls back to
+ordinary overwriting rename or source deletion. Filesystem type remains diagnostic.
+
+The first portable component is `stage_disposable_verified_copy`. Under a marked
+lab lock it rejects pending operations, inventories a source with held directory
+handles, creates a private operation slot exclusively and copies files using
+exclusive output creation. Symlinks and special files are rejected. It compares
+recursive content digests and source identities before/after copying, checks
+held path bindings, syncs the staged data/directories, and retains source and
+tracking state. No renameat2 or filesystem-name check is used by this component.
+Partial failures preserve staging; an occupied slot is never overwritten or
+automatically resumed.
+
+This is only copy staging. It deliberately does not promote a title, remove its
+source, change lifecycle clocks, create an Arr notification or authorize recovery.
+Permissions/extended metadata, durable copy-phase intents, restart reconciliation,
+publication and guarded source cleanup still need a complete portable protocol.
+External writer exclusion and service freshness remain open too. Do not present
+successful staging as a completed move or universal filesystem certification.
+
+Local checks: **57 passed, 9 Linux-only skipped**. New copy tests cover nested
+content and empty directories, database/source preservation, occupied slots,
+source mutation, symlinks, partial failure and pending-operation precedence.
+Next validate this portable component on fresh dedicated lab directories through
+both user-share and native paths. Production mounts remain unchanged.
