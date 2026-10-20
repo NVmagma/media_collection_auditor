@@ -119,3 +119,8 @@ Unraid. The following descriptor-relative rename increment advances parent-path
 binding in that runner, with adversarial substitution tests; source-entry races
 and external-writer ownership remain unresolved. No production gate is newly
 complete and no production behavior changes.
+
+The descriptor-relative runner passed all 1,054 SQLite tests on Unraid through
+`a2d58ba`. The following increment binds root/marker/database/lock observations
+across startup and execution boundaries and stops on substitution. Uncooperative
+writer isolation and trusted crash clearance remain open; no new gate is claimed.

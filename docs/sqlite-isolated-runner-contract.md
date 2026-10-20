@@ -117,3 +117,34 @@ and bind verified state/path context throughout the runner. Until unrelated
 writers can be excluded under a reviewed operational model, this runner must
 remain disposable-only. No persisted fingerprint is sufficient to clear a
 crashed move automatically.
+
+## Runner binding checks
+
+The user reported **1,054 SQLite tests passed on Unraid** through `a2d58ba`.
+The next increment binds the marker, database inode and lock inode to the held
+root. It verifies that the opened root matches the pre-open root identity,
+opens and reads the marker relative to that directory, and rejects nonregular
+or hardlinked marker/database files. Marker reads are bounded and do not follow
+symlinks. Lock files remain persistent.
+
+The lock context supplies a binding check. It compares held identities with
+current entries and checks marker contents before yielding, after state loading,
+when entering the executor, before intent creation, after durable intent,
+after rename and before reconciliation. A normal context exit checks again.
+Exceptions stop execution without automatic retry. A check failure after an
+intent checkpoint retains that intent; a startup failure never enters the
+executor. Post-commit check failures are uncertain outcomes, not rollback.
+
+Tests replace the root at open, each bound file while the lock is held, and the
+database during state loading. They also change marker contents without changing
+its inode, reject hardlinked databases, and replace the lock after durable
+intent to prove the rename is not called. Related local tests: **71 passed,
+5 Linux-only tests skipped** on macOS. Unraid validation remains pending.
+
+These are observations at execution boundaries, not continuous exclusion of
+uncooperative writers. There are still windows between a check and a filesystem
+or SQLite operation. Descriptor-relative rename does not atomically compare the
+source entry with the witness. Neither this increment nor the marker/lock checks
+satisfy production ownership, mount-isolation or recovery-clearance requirements.
+The runner is still restricted to marked disposable fixtures; production remains
+JSON-only with activation and permanent deletion disabled.
