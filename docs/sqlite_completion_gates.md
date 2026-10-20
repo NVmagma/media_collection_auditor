@@ -271,3 +271,9 @@ Durable transition binding through `56810b7` passed 52 tests on each Unraid
 filesystem. Copy staging now rechecks held source content/path and the SQLite
 snapshot after advisory review, before intent. This detects observed changes;
 it does not establish external-writer exclusion or complete gate 6.
+
+Source boundary revalidation through `93ecbb0` passed 56 tests per filesystem
+on Unraid. Portable staging now shares the existing two-scan collector/planner
+flow, rejects changed/incomplete protections and checks freshness budget again
+at intent after hashing. This is isolated synthetic-transport integration, not
+production freshness, promotion or recovery authority. No gate is completed.

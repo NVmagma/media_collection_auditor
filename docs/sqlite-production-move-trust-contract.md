@@ -423,3 +423,27 @@ failure behavior remain required. No production move/cleanup is enabled.
 
 Unraid confirmed durable transition binding through `56810b7`: 52 tests passed
 on shfs and 52 on native Btrfs. Intent-boundary revalidation awaits server tests.
+
+### Collected protections for portable staging
+
+`run_collected_isolated_copy` shares the isolated move runner's collector/planner
+logic under one lab lock. It enumerates complete title observations, binds the
+candidate and revision, refreshes identity/signals before copy intent, and
+requires unchanged observations. Missing/ambiguous data, changed protections,
+transport failures and expired/reversed observation windows stop before intent.
+After repeated source hashing it checks the observation window again, preventing
+slow hashing from silently extending the budget. This means large titles may
+require a different reviewed freshness design rather than a longer unsafe
+window. No network-writing transport or production CLI is added; the fetch
+callback remains trusted local input. Observations are experimentally bounded,
+not independent production freshness or protection transactions.
+
+The copy path accepts Waiting-to-Holding/Keep candidates only, rejects Arr
+requests and retains source, tracking clocks and pending intent on success.
+Pending operations precede network access and prevent automatic replay. The
+rename path retains its existing behavior. External writer exclusion, promotion,
+source cleanup and production integration remain unresolved.
+
+Unraid confirmed source intent-boundary revalidation through `93ecbb0`: 56 tests
+passed on each filesystem. Collected-copy tests use synthetic GET responses and
+await Unraid validation; they do not assert a new live service test occurred.

@@ -4,6 +4,7 @@ No renameat2, filesystem-name policy, source removal, lifecycle checkpoint,
 notification, promotion, automatic retry or production caller. A separate
 wrapper records durable copy intents without clearing them.
 """
+from contextlib import nullcontext
 from copy import deepcopy
 from datetime import datetime
 import hashlib
@@ -179,7 +180,8 @@ def stage_planned_disposable_copy(*, root, title_folder, media_key, operation_id
 
 
 def _stage_copy(*, root, title_folder, operation_id, media_key=None,
-                persist_intent=False, fault_at=None, planned_move=None, planned_destination=None):
+                persist_intent=False, fault_at=None, planned_move=None, planned_destination=None,
+                _held_binding=None, _before_intent_review=None, _before_intent_check=None):
     """Create an exclusive hidden staged copy; retain source and tracking state.
 
     Requires trusted local transport primitives (exclusive create, fsync, reads).
@@ -192,7 +194,8 @@ def _stage_copy(*, root, title_folder, operation_id, media_key=None,
         raise ValueError("Copy folder and tracking key mismatch")
     if fault_at not in (None, "after_intent", "after_copy", "after_verified_checkpoint"):
         raise ValueError("Invalid copy rehearsal fault boundary")
-    with isolated_runner_lock(root) as verify_binding:
+    with (isolated_runner_lock(root) if _held_binding is None else nullcontext(_held_binding)) as verify_binding:
+        verify_binding()
         session = RevisionedAuditSession(GuardedSQLiteStateStore(root / "state.db"))
         state, _ = session.read_verified_snapshot()
         if INTENTS_KEY in state:
@@ -241,6 +244,8 @@ def _stage_copy(*, root, title_folder, operation_id, media_key=None,
                         "source_revision": session.revision, "source_stage": "transient",
                         "destination_stage": planned_destination,
                         "observed_at": planned_move["now"].isoformat()}}
+                if _before_intent_review is not None:
+                    _before_intent_review()
                 # Advisory review can be slow. Do not persist an intent against
                 # the earlier source observation if an external writer changed it.
                 current_manifest, current_identities = _manifest(source_fd)
@@ -253,6 +258,8 @@ def _stage_copy(*, root, title_folder, operation_id, media_key=None,
                     raise RuntimeError("Copy source binding changed before intent")
                 verify_binding()
                 session.read_verified_snapshot()
+                if _before_intent_check is not None:
+                    _before_intent_check()
                 SQLiteOperationCoordinator(session).begin(operation, "copy_stage", {
                     "media_key": media_key, "source": str(source_path),
                     "staging": str(staged_path), "copy_phase": "prepared",

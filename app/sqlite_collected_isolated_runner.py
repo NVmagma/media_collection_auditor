@@ -1,7 +1,8 @@
 """Jellyfin-collected, plan-bound execution for marked disposable titles only.
 
 The supplied fetch transport must be trusted. No production CLI or activation,
-Arr notifications, season pruning, cross-device copying or deletion exists here.
+automatic Arr delivery, season pruning or deletion exists here. Portable copy
+staging retains its source and never promotes or reconciles the lifecycle.
 """
 from copy import deepcopy
 from datetime import datetime
@@ -22,11 +23,24 @@ from app.state_store import GuardedSQLiteStateStore
 STAGES = {"Waiting": "transient", "Holding": "holding", "Removal": "removal", "Keep": "keep"}
 
 
-def run_collected_isolated_move(*, root, database, operation_id, media_key,
+def run_collected_isolated_move(**kwargs):
+    """Collect and refresh protections for the isolated no-replace move flow."""
+    return _run_collected_isolated_operation(_copy_stage=False, **kwargs)
+
+
+def run_collected_isolated_copy(**kwargs):
+    """Collect and refresh protections for source-retaining disposable staging.
+
+    No promotion, source cleanup, Arr delivery or lifecycle reconciliation.
+    """
+    return _run_collected_isolated_operation(_copy_stage=True, **kwargs)
+
+
+def _run_collected_isolated_operation(*, root, database, operation_id, media_key,
                                 title_folder, jellyfin_type, thresholds, fetch,
                                 favorites_trigger_keep=True, maximum_age_seconds=60,
                                 clock=datetime.now, timer=monotonic, fault_at=None,
-                                arr_sync_request=None):
+                                arr_sync_request=None, _copy_stage=False):
     """Collect twice under the runner lock; require unchanged complete signals.
 
     Time budget covers both scans and intervening planning. This establishes a
@@ -95,6 +109,18 @@ def run_collected_isolated_move(*, root, database, operation_id, media_key,
                 raise RuntimeError("Jellyfin identity or signals changed; replan required")
 
         verify_binding()
+        if _copy_stage:
+            if source != "transient" or destination not in ("holding", "keep"):
+                raise RuntimeError("Portable staging requires a Waiting source candidate")
+            if arr_sync_request is not None:
+                raise ValueError("Copy staging cannot deliver or queue Arr requests")
+            from app.sqlite_disposable_copy_stage import _stage_copy
+            return _stage_copy(
+                root=root, operation_id=operation_id, media_key=media_key,
+                title_folder=folder, persist_intent=True, planned_move=bundle,
+                planned_destination=destination, fault_at=fault_at,
+                _held_binding=verify_binding, _before_intent_review=refresh_before_intent,
+                _before_intent_check=check_window)
         return execute_disposable_lifecycle_move(
             root=root, database=database, operation_id=operation_id, media_key=media_key,
             title_folder=folder, source_stage=source, destination_stage=destination,
