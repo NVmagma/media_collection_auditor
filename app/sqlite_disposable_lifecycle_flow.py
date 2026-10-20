@@ -84,7 +84,7 @@ def execute_disposable_lifecycle_move(*, root, database, operation_id, media_key
 def _perform_pinned_move(root, database, operation_id, media_key,
                          source_stage, destination_stage, observed_at,
                          fault_at, source, destination, fd, parents):
-    try:
+    if True:
         original = os.fstat(fd)
         current = os.stat(source, follow_symlinks=False)
         if (original.st_dev, original.st_ino) != (current.st_dev, current.st_ino):
@@ -116,6 +116,3 @@ def _perform_pinned_move(root, database, operation_id, media_key,
             media_key=media_key, source_stage=source_stage,
             destination_stage=destination_stage,
             observed_at=observed_at, witness_fd=fd)
-    finally:
-        # ExitStack owns the live witness; no automatic restart clearance.
-        pass
