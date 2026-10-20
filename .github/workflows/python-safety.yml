@@ -2,7 +2,7 @@ name: Python safety checks
 
 on:
   push:
-    branches: [feature/unraid, feature/sqlite]
+    branches: [feature/unraid]
   pull_request:
     branches: [feature/unraid, feature/sqlite]
   workflow_dispatch:
