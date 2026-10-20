@@ -31,12 +31,14 @@ TRANSITIONS = {
 def execute_disposable_lifecycle_move(*, root, database, operation_id, media_key,
                                       source_stage="transient",
                                       destination_stage="holding",
-                                      observed_at=None, fault_at=None):
+                                      observed_at=None, fault_at=None, expected_revision=None):
     """Persist intent, rename with live witness, checkpoint clocks and intent.
 
     fault_at is test-only: after_intent, after_rename, after_applied.
     An interrupted run never attempts a second move or clears its intent.
     """
+    if expected_revision is not None and (type(expected_revision) is not int or expected_revision < 0):
+        raise ValueError("Invalid expected SQLite revision")
     root, database = Path(root), Path(database)
     if (not root.is_absolute() or root.is_symlink() or not root.is_dir()
             or root.resolve() != root or database != root / "state.db"
@@ -78,17 +80,21 @@ def execute_disposable_lifecycle_move(*, root, database, operation_id, media_key
         stack.callback(os.close, fd)
         return _perform_pinned_move(root, database, operation_id, media_key,
                                     source_stage, destination_stage, observed_at,
-                                    fault_at, source, destination, fd, parents)
+                                    fault_at, source, destination, fd, parents,
+                                    expected_revision)
 
 
 def _perform_pinned_move(root, database, operation_id, media_key,
                          source_stage, destination_stage, observed_at,
-                         fault_at, source, destination, fd, parents):
+                         fault_at, source, destination, fd, parents,
+                         expected_revision):
     original = os.fstat(fd)
     current = os.stat(source, follow_symlinks=False)
     if (original.st_dev, original.st_ino) != (current.st_dev, current.st_ino):
         raise RuntimeError("Source changed before intent")
     session = RevisionedAuditSession(GuardedSQLiteStateStore(database))
+    if expected_revision is not None and session.revision != expected_revision:
+        raise RuntimeError("Stale disposable plan revision; no intent or move performed")
     coordinator = SQLiteOperationCoordinator(session)
     coordinator.begin_move_with_evidence(
         operation_id, {"media_key": media_key,
