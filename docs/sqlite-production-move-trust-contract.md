@@ -374,3 +374,20 @@ There are no resume, clear, promote, delete or activation switches.
 Unraid confirmed the prior inspection hardening through `43c76e1`: 32 tests
 passed on shfs and 32 on native Btrfs. These results do not advance production
 activation, writer exclusion, or recovery authorization gates.
+
+### Plan-bound portable staging
+
+`stage_planned_disposable_copy` connects the existing advisory move planner to
+source-retaining portable staging for Waiting-to-Holding/Keep candidates. It
+copies the supplied bundle, validates one matching candidate and its time, checks
+the SQLite revision under the lab lock, then recomputes the advisory plan after
+source hashing and before recording intent. Missing fields, changed signals,
+protected/noncandidate titles and stale revisions stop before staging writes.
+Caller-provided signals remain untrusted for independent Jellyfin freshness.
+This is a disposable parity integration, with no promotion, lifecycle checkpoint,
+Arr request, source cleanup or production caller. Successful copies still leave
+a pending intent for review; no recovery authority is introduced.
+
+Unraid confirmed the operator inspection increment through `b51f2f2`: 39 tests
+passed on both shfs and native Btrfs. Plan-bound staging requires its own Unraid
+validation. Production activation and gates remain unchanged.

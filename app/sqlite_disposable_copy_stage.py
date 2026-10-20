@@ -4,6 +4,8 @@ No renameat2, filesystem-name policy, source removal, lifecycle checkpoint,
 notification, promotion, automatic retry or production caller. A separate
 wrapper records durable copy intents without clearing them.
 """
+from copy import deepcopy
+from datetime import datetime
 import hashlib
 import json
 import os
@@ -156,8 +158,28 @@ def stage_disposable_copy_with_intent(*, root, title_folder, media_key, operatio
                        operation_id=operation_id, persist_intent=True, fault_at=fault_at)
 
 
+def stage_planned_disposable_copy(*, root, title_folder, media_key, operation_id,
+                                  planned_move, destination_stage="holding"):
+    """Bind source-retaining staging to a caller-supplied advisory candidate.
+
+    This is planner parity, not independent Jellyfin freshness verification.
+    """
+    from app.sqlite_disposable_planned_executor import validate_disposable_move_candidate
+    bundle = deepcopy(planned_move)
+    if destination_stage not in ("holding", "keep"):
+        raise ValueError("Unsupported copy candidate destination")
+    validate_disposable_move_candidate(planned_move=bundle, media_key=media_key,
+                                      source_stage="transient", destination_stage=destination_stage)
+    if (not isinstance(bundle.get("now"), datetime) or bundle["now"].tzinfo is not None
+            or bundle["now"] > datetime.now()):
+        raise ValueError("Naive nonfuture advisory plan time required")
+    return _stage_copy(root=root, title_folder=title_folder, media_key=media_key,
+                       operation_id=operation_id, persist_intent=True,
+                       planned_move=bundle)
+
+
 def _stage_copy(*, root, title_folder, operation_id, media_key=None,
-                persist_intent=False, fault_at=None):
+                persist_intent=False, fault_at=None, planned_move=None):
     """Create an exclusive hidden staged copy; retain source and tracking state.
 
     Requires trusted local transport primitives (exclusive create, fsync, reads).
@@ -175,6 +197,8 @@ def _stage_copy(*, root, title_folder, operation_id, media_key=None,
         state, _ = session.read_verified_snapshot()
         if INTENTS_KEY in state:
             raise RuntimeError("Unresolved operation; copy staging stopped")
+        if planned_move is not None and session.revision != planned_move["plan"]["source_revision"]:
+            raise RuntimeError("Stale copy plan revision; staging stopped")
         source_parent = root / "transient"
         if source_parent.is_symlink() or not source_parent.is_dir():
             raise RuntimeError("Safe disposable source stage required")
@@ -196,6 +220,19 @@ def _stage_copy(*, root, title_folder, operation_id, media_key=None,
                     raise RuntimeError("Copy source tracking clock missing or conflicting")
                 manifest_digest = hashlib.sha256(json.dumps(
                     before, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")).hexdigest()
+                if planned_move is not None:
+                    from app.sqlite_stale_plan_review import review_plan_again
+                    try:
+                        review = review_plan_again(
+                            database=root / "state.db", original_plan=planned_move["plan"],
+                            now=planned_move["now"], thresholds=planned_move["thresholds"],
+                            signals_by_key=planned_move["signals_by_key"],
+                            favorites_trigger_keep=planned_move.get("favorites_trigger_keep", True))
+                    except KeyError as exc:
+                        raise ValueError("Incomplete copy advisory bundle") from exc
+                    if review["status"] != "unchanged_advisory_only":
+                        raise RuntimeError("Copy advisory plan changed; staging stopped")
+                    session.read_verified_snapshot()
                 verify_binding()
                 SQLiteOperationCoordinator(session).begin(operation, "copy_stage", {
                     "media_key": media_key, "source": str(source_path),

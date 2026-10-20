@@ -256,3 +256,9 @@ match. Writer exclusion, production recovery and activation gates remain open.
 Unraid confirmed the disposable restart-inspection suite through `b3b329d`
 (28 passed on each filesystem). Follow-up malformed-intent and concurrent-change
 checks remain advisory and do not complete production recovery/writer exclusion.
+
+Unraid confirmed 39 portable-copy/inspection tests per filesystem through
+`b51f2f2`. Portable staging now has a disposable plan-bound entry point with
+revision and advisory decision revalidation before intent. This connects planner
+parity to copying but does not provide trusted freshness, promotion, source
+cleanup or production lifecycle reconciliation; no gate is newly complete.
