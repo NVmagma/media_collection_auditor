@@ -22,6 +22,8 @@ def scan(fetch):
         "failure_category": None,
     }
     stage = "users"
+    requested_kind = None
+    returned_kind = None
     validation_failure = None
     try:
         users = fetch("/Users", None)
@@ -35,6 +37,7 @@ def scan(fetch):
         report["users_checked"] = len(ids)
         for uid in ids:
             for kind in ("Movie", "Series"):
+                requested_kind = kind
                 stage = "items"
                 start = 0
                 expected = None
@@ -89,6 +92,12 @@ def scan(fetch):
                         if type(data.get("PlayCount")) is not int or data["PlayCount"] < 0:
                             raise ValueError("play_count_field")
                         if item.get("Type") is not None and item["Type"] != kind:
+                            value = item["Type"]
+                            returned_kind = (value if type(value) is str and
+                                             value in {"Movie", "Series", "Episode",
+                                                       "Season", "Folder", "CollectionFolder",
+                                                       "BoxSet", "Video", "Trailer",
+                                                       "MusicVideo"} else "other_or_invalid")
                             raise ValueError("item_type")
                         seen.add(item_id)
                     count = len(items)
@@ -120,6 +129,9 @@ def scan(fetch):
                                         and str(exc) in allowed else "unexpected_shape")
     if not report["scan_complete"]:
         report["failure_stage"] = stage
+        if report.get("validation_failure") == "item_type":
+            report["requested_item_type"] = requested_kind
+            report["returned_item_type"] = returned_kind
     return report
 
 
