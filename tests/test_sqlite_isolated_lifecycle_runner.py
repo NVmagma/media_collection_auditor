@@ -428,3 +428,21 @@ def test_changed_mount_after_intent_blocks_rename_and_retains_intent(tmp_path, m
     assert "sqlite_pending_operations" in state
     assert "Movie" in state["first_seen"]
     assert (root / "transient" / "Movie").is_dir()
+
+
+def test_verified_shfs_incompatibility_blocks_before_move_intent(tmp_path, monkeypatch):
+    import app.sqlite_disposable_lifecycle_flow as flow
+    import app.sqlite_rename_mount_binding as mounts
+    root, database = lab(tmp_path)
+    before = database.read_bytes()
+    monkeypatch.setattr(flow.sys, "platform", "linux")
+    monkeypatch.setattr(mounts, "read_mount_namespace_identity", lambda: (1, 2))
+    monkeypatch.setattr(mounts, "read_fd_mount_id", lambda fd: 10)
+    monkeypatch.setattr(mounts, "read_mount_filesystem", lambda mount_id: "fuse.shfs")
+    monkeypatch.setattr(flow, "rename_directory_noreplace_at",
+                        lambda *args: pytest.fail("rename must not run"))
+    with pytest.raises(RuntimeError, match="fuse.shfs blocked"):
+        run(root, database)
+    assert database.read_bytes() == before
+    assert (root / "transient" / "Movie").is_dir()
+    assert not (root / "holding" / "Movie").exists()

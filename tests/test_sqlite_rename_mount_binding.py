@@ -40,6 +40,7 @@ def test_same_device_different_mount_ids_are_rejected(directories, monkeypatch):
 
 
 def test_changed_namespace_or_mount_is_rejected(directories, monkeypatch):
+    monkeypatch.setattr(module, "read_mount_filesystem", lambda mount_id: "btrfs")
     monkeypatch.setattr(module, "read_mount_namespace_identity", lambda: (1, 2))
     monkeypatch.setattr(module, "read_fd_mount_id", lambda fd: 10)
     binding = module.capture_rename_mount_binding(*directories)
@@ -58,3 +59,25 @@ def test_real_kernel_descriptor_mount_binding(directories):
     binding = module.capture_rename_mount_binding(*directories)
     assert len({item["mount_id"] for item in binding["directories"]}) == 1
     module.assert_rename_mount_binding(binding, *directories)
+
+
+
+def test_mount_filesystem_is_selected_by_descriptor_mount_id():
+    contents = "7 1 0:1 / / rw - tmpfs tmpfs rw\n8 7 0:2 / /media rw - btrfs /dev/test rw\n"
+    assert module.parse_mount_filesystem(contents, 8) == "btrfs"
+
+
+@pytest.mark.parametrize("contents", ["", "malformed", "8 x",
+    "8 1 0:1 / / rw - btrfs /dev/test rw\n8 1 0:1 / / rw - btrfs /dev/test rw",
+    "7 1 0:1 / / rw - tmpfs tmpfs rw"])
+def test_missing_ambiguous_or_malformed_filesystem_blocks(contents):
+    with pytest.raises(RuntimeError):
+        module.parse_mount_filesystem(contents, 8)
+
+
+def test_observed_shfs_policy_blocks_held_rename(directories, monkeypatch):
+    monkeypatch.setattr(module, "read_mount_namespace_identity", lambda: (1, 2))
+    monkeypatch.setattr(module, "read_fd_mount_id", lambda fd: 10)
+    monkeypatch.setattr(module, "read_mount_filesystem", lambda mount_id: "fuse.shfs")
+    with pytest.raises(RuntimeError, match="fuse.shfs blocked"):
+        module.capture_rename_mount_binding(*directories)
