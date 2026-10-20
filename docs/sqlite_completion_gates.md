@@ -252,3 +252,7 @@ Portable-copy follow-up: Unraid durable-copy tests passed on both shfs and nativ
 Btrfs (20 each through `8c80c74`). Added non-authorizing disposable restart content
 inspection; pending intents remain pending even when both content manifests
 match. Writer exclusion, production recovery and activation gates remain open.
+
+Unraid confirmed the disposable restart-inspection suite through `b3b329d`
+(28 passed on each filesystem). Follow-up malformed-intent and concurrent-change
+checks remain advisory and do not complete production recovery/writer exclusion.

@@ -57,7 +57,9 @@ def inspect_disposable_copy(*, root):
         details = pending.get("details")
         if (not isinstance(details, dict)
                 or pending.get("phase") not in ("intent_recorded", "applied_pending_reconciliation")
-                or details.get("copy_phase") not in ("prepared", "verified_source_retained")):
+                or (pending.get("phase"), details.get("copy_phase")) not in (
+                    ("intent_recorded", "prepared"),
+                    ("applied_pending_reconciliation", "verified_source_retained"))):
             raise RuntimeError("Pending copy invalid")
         operation = validate_title_folder(pending.get("id"))
         key = details.get("media_key")
@@ -69,6 +71,8 @@ def inspect_disposable_copy(*, root):
                 or details.get("staging") != str(root / ".sqlite_copy_staging" / operation)
                 or not isinstance(digest, str) or len(digest) != 64
                 or any(c not in "0123456789abcdef" for c in digest)
+                or key not in state["first_seen"]
+                or not isinstance(details.get("source_timestamp"), str)
                 or state["first_seen"].get(key) != details.get("source_timestamp")
                 or any(key in state[section] for section in ("queued", "in_removal", "keep_seen"))):
             raise RuntimeError("Pending copy binding invalid")

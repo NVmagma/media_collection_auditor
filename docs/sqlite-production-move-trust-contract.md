@@ -349,3 +349,12 @@ Unraid confirmed the preceding durable-copy tests through `8c80c74`: 20 passed
 on shfs and 20 on native Btrfs. Detailed restart inspection still requires its
 own Unraid validation. Production remains JSON-authoritative and disabled for
 SQLite activation; no completion gate advances from these results alone.
+
+Unraid restart-inspection validation through `b3b329d`: 28 tests passed on shfs
+and 28 on native Btrfs. Follow-up validation rejects inconsistent intent/copy
+phase pairs and missing source clock bindings before reading content. Regression
+coverage also replaces the source parent during hashing and changes the SQLite
+revision during inspection: the former reports observed change, the latter
+rejects the report as stale. These checks detect observable races; they do not
+provide exclusion against arbitrary filesystem writers or an atomic snapshot
+across independently scanned source and staging trees.
