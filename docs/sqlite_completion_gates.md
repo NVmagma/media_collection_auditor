@@ -147,3 +147,9 @@ collects and refreshes Jellyfin signals inside the isolated runner's operation
 window before intent creation. It connects existing collector and planner code
 in disposable execution but does not establish independent production freshness
 or external-writer exclusion. No production gate is newly complete.
+
+All 1,115 SQLite tests passed on Unraid through `58b3b8b`. The following increment
+adds a one-shot disposable Arr delivery boundary with durable intent and
+persistent unknown/acknowledged-but-unverified outcomes. Automatic retry and
+clearance are refused. Atomic queue creation after a move and independently
+verified remote identity/outcome are still open; gate 9 remains in progress.

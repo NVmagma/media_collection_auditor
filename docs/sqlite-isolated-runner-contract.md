@@ -291,3 +291,43 @@ spanning the move. External filesystem writer exclusion remains unresolved.
 No live moving CLI, production activation, Arr request, season pruning or
 permanent deletion is added. The Docker regression command uses fake transport
 and disposable media, with no Jellyfin credentials or production mounts.
+
+## One-shot isolated Arr delivery
+
+The user reported **1,115 SQLite tests passed on Unraid** through `58b3b8b`.
+The next increment adds a separate `deliver_isolated_arr_request` rehearsal. It
+has no HTTP implementation or production caller: `send(details)` is an explicit
+trusted test transport. It is restricted by the same marked-root lock and
+binding checks, with the database fixed to that root's `state.db`.
+
+Before sending, the runner requires a matching existing `arr_sync_pending`
+entry, destination lifecycle clock, one unique safe title directory in the
+queued stage, service/key agreement (Radarr movie or Sonarr TV key), positive
+integer Arr ID, canonical absolute remote root and strict boolean monitoring
+state. It accepts only service, title_id, root and monitored request fields;
+credentials or arbitrary extra request fields are rejected, not persisted.
+The existing response inspector now shares the extracted request-shape validator.
+
+The runner checkpoints an `arr_sync` intent before calling `send` once. A strict
+boolean True response is recorded as `acknowledged_unverified` in phase
+`applied_pending_reconciliation`. False, None and other response shapes remain
+`unknown_response`; exceptions become `request_exception_unknown`, without raw
+exception text. Unknown phases remain `intent_recorded`. The outcome update is
+revision-checked; checkpoint uncertainty propagates and does not trigger retry.
+Every result leaves both intent and queue entry in place. A restart sees pending
+intent and refuses another send, including after apparent acknowledgement.
+
+New fixture tests prove durable ordering inside the send callback, no replay
+for all response categories, crashes before/after send, queue and destination
+mismatch refusal, no send after intent-checkpoint failure, and no replay after
+an outcome checkpoint fails either before or after committing. They verify
+preservation of lifecycle clocks and queue state, detached callback arguments,
+and secret-field rejection. Related local tests: **88 passed, 8 Linux-only
+skipped**. New Unraid validation is pending; expected collection size is 1,130.
+
+This foundation does not yet enqueue notifications atomically with move
+reconciliation, authenticate an Arr service, verify that a supplied Arr ID
+belongs to the local title, fetch the remote result, or authorize intent
+clearance. Those are remaining integration work, not implied by a send callback
+return value. It does not change the production JSON retry implementation.
+No real service requests or production mounts are used by regression tests.
