@@ -358,3 +358,19 @@ revision during inspection: the former reports observed change, the latter
 rejects the report as stale. These checks detect observable races; they do not
 provide exclusion against arbitrary filesystem writers or an atomic snapshot
 across independently scanned source and staging trees.
+
+### Explicit operator inspection command
+
+With the checkout on `PYTHONPATH`, run
+`python -B scripts/sqlite_disposable_copy_inspect.py --root /absolute/disposable/lab`.
+Use only an existing marked lab root containing state.db and a pending copy
+intent. The command does not create a copy fixture or select a production path.
+A valid JSON diagnostic exits 0 while its recovery status remains `blocked`;
+inspection failures exit 2 with a fixed redacted reason, never exception text.
+Read-only refers to media and SQLite state: the cooperating-runner lock requires
+a writable lab mount. Full content hashing is explicit and potentially costly.
+There are no resume, clear, promote, delete or activation switches.
+
+Unraid confirmed the prior inspection hardening through `43c76e1`: 32 tests
+passed on shfs and 32 on native Btrfs. These results do not advance production
+activation, writer exclusion, or recovery authorization gates.
