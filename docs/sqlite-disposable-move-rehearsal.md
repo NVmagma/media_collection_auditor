@@ -182,3 +182,19 @@ verdict; it intentionally omits mount source devices and other host paths.
 It never grants permission to move files. A non-root mount root continues to
 return `blocked` until reviewed; do not bypass the guard. Running the probe
 does not require an empty lab, but the later `prepare` phase does.
+
+## Host-side read-only Compose inspection
+
+From the isolated checkout on the Unraid host, with reviewed
+`SQLITE_LAB_DIR`, `SQLITE_LAB_UID`, `SQLITE_LAB_GID`, and pinned
+`SQLITE_LAB_IMAGE` environment variables set, run:
+
+```sh
+python3 -m scripts.sqlite_lab_host_inspect
+```
+
+This checks the host directory using the existing preflight and validates
+resolved Compose JSON against exactly two bind mounts, a read-only checkout,
+and no networking. It never starts containers and never authorizes writes.
+If host Python is unavailable, do not bypass the check or run it inside a
+container (that would lose the host filesystem perspective).
