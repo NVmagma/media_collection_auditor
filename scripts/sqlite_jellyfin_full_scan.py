@@ -22,10 +22,11 @@ def scan(fetch):
         "failure_category": None,
     }
     stage = "users"
+    validation_failure = None
     try:
         users = fetch("/Users", None)
         if not isinstance(users, list) or not users:
-            raise ValueError("users")
+            raise ValueError("users_shape")
         ids = [u.get("Id") for u in users if isinstance(u, dict)]
         if (len(ids) != len(users) or
                 any(not isinstance(uid, str) or not uid for uid in ids) or
@@ -46,7 +47,7 @@ def scan(fetch):
                     })
                     report["pages_checked"] += 1
                     if not isinstance(page, dict):
-                        raise ValueError("page")
+                        raise ValueError("page_shape")
                     total = page.get("TotalRecordCount")
                     items = page.get("Items")
                     if (type(total) is not int or total < 0 or
@@ -56,14 +57,14 @@ def scan(fetch):
                             ("StartIndex" in page and
                              (type(page["StartIndex"]) is not int or
                               page["StartIndex"] != start))):
-                        raise ValueError("pagination")
+                        raise ValueError("pagination_metadata")
                     if expected is None:
                         expected = total
                     if len(items) != min(PAGE_SIZE, total - start):
-                        raise ValueError("partial_page")
+                        raise ValueError("page_length")
                     for item in items:
                         if not isinstance(item, dict):
-                            raise ValueError("item")
+                            raise ValueError("item_fields")
                         item_id = item.get("Id")
                         path = item.get("Path")
                         tags = item.get("Tags")
@@ -103,8 +104,13 @@ def scan(fetch):
         report["failure_category"] = "connection_error"
     except requests.RequestException:
         report["failure_category"] = "request_error"
-    except (ValueError, TypeError, KeyError):
+    except (ValueError, TypeError, KeyError) as exc:
         report["failure_category"] = "invalid_or_incomplete_response"
+        # Only fixed internal labels are permitted; never echo exception text.
+        allowed = {"users_shape", "page_shape", "pagination_metadata",
+                   "page_length", "item_fields"}
+        report["validation_failure"] = (str(exc) if type(exc) is ValueError
+                                        and str(exc) in allowed else "unexpected_shape")
     if not report["scan_complete"]:
         report["failure_stage"] = stage
     return report
