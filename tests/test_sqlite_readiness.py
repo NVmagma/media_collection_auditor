@@ -104,3 +104,38 @@ def test_verification_errors_never_expose_raw_message(tmp_path, monkeypatch, mes
     report = sqlite_readiness.inspect_sqlite_readiness(*_artifacts(tmp_path))
     assert report["blockers"] == [expected]
     assert "/private/" not in str(report)
+
+
+def test_real_artifacts_reject_post_migration_changes_without_mutation(tmp_path):
+    """Use the real parity gate: a changed SQLite snapshot is not activation-ready."""
+    import json
+
+    source = tmp_path / "source.json"
+    backup = tmp_path / "backup.json"
+    database = tmp_path / "state.db"
+    original = {section: {} for section in SECTIONS}
+    original["first_seen"]["DISPOSABLE/Movie"] = "2024-01-01T00:00:00"
+    source.write_text(json.dumps(original))
+    backup.write_bytes(source.read_bytes())
+    write_offline_snapshot(original, database)
+
+    initial = sqlite_readiness.inspect_sqlite_readiness(source, backup, database)
+    assert initial["ready_for_isolated_review"] is True
+    assert initial["production_activation"] == "disabled"
+    assert initial["storage_authority"] == "json"
+
+    store = GuardedSQLiteStateStore(database)
+    state, revision = store.load_with_revision()
+    state["keep_seen"]["DISPOSABLE/Movie"] = state["first_seen"].pop("DISPOSABLE/Movie")
+    store.save_if_revision(state, revision)
+    before_state, before_revision = store.load_with_revision()
+    source_before, backup_before = source.read_bytes(), backup.read_bytes()
+
+    blocked = sqlite_readiness.inspect_sqlite_readiness(source, backup, database)
+    assert blocked["ready_for_isolated_review"] is False
+    assert blocked["blockers"] == ["sqlite_snapshot_mismatch"]
+    assert blocked["production_activation"] == "disabled"
+    assert blocked["storage_authority"] == "json"
+    assert store.load_with_revision() == (before_state, before_revision)
+    assert source.read_bytes() == source_before
+    assert backup.read_bytes() == backup_before
