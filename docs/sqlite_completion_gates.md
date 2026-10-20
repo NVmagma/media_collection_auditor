@@ -194,3 +194,7 @@ rename descriptors before intent and across operation boundaries. The supported
 single-mount model and unresolved ownership/recovery requirements are now
 collected in [the blocked production move trust contract](sqlite-production-move-trust-contract.md).
 No new gate is marked complete; production still rejects SQLite.
+
+All 1,153 SQLite tests passed on Unraid through `641144b`. Next gate 6 work moves
+from fixture validation to read-only deployment mount/writer discovery. The
+inventory is evidence for review, not proof of ownership or activation approval.

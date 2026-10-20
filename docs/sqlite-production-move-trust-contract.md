@@ -71,3 +71,24 @@ Do not implement an `exclusive_writers=true` flag that merely suppresses blocker
 The current mount increment advances item 1's executable checking, not all five
 items. It does not complete a production gate, perform live service actions,
 change the running container, authorize SQLite activation, or enable deletion.
+
+## Deployment evidence collection after mount validation
+
+The user reported **1,153 SQLite tests passed on Unraid**, with the same single
+non-failing Requests warning, through `641144b`. This validates the new mount
+binding and existing suite in disposable fixtures. Production writer ownership
+is still not established.
+
+The next review needs Docker mount and running-state metadata from the actual
+server, not another synthetic ownership flag. Inventory all containers because
+writers may include download/import tools as well as Radarr/Sonarr. Use a
+formatted Docker inspect that exposes only names, running state and mount
+source/destination/type/read-write flags. Do not dump full inspect JSON or
+container environment variables: those may contain credentials.
+
+This inventory is read-only and cannot prove exclusion. It establishes which
+container mounts need closer review. Host processes, SMB/NFS clients, manual
+shell access and privileged/mount-administration actors remain outside this
+inventory. No pause/stop or mount-mode changes should occur during discovery.
+Once paths are known, inspect their backing mounts and propose a concrete
+writer-ownership model before production integration or approval.
