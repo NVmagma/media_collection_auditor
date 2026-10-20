@@ -116,7 +116,11 @@ def main():
     session.trust_env = False
     # Match the working MediaBrowser authorization format verified on Jellyfin.
     # The production auditor also sends this header alongside its legacy token header.
-    session.headers.update({"Authorization": (\n        "MediaBrowser Client=MediaCollectionAuditor, "\n        "Device=Unraid, DeviceId=sqlite-compat-probe, "\n        "Version=1.0, Token=" + token\n    )})
+    session.headers.update({"Authorization": (
+        "MediaBrowser Client=MediaCollectionAuditor, "
+        "Device=Unraid, DeviceId=sqlite-compat-probe, "
+        "Version=1.0, Token=" + token
+    )})
 
     def fetch(path, params):
         response = session.get(url + path, params=params, timeout=15)
