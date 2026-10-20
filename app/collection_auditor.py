@@ -1349,6 +1349,10 @@ def refresh_jellyfin_after_audit():
 def run_once():
     """Run one audit under the same lock used by offline migration."""
     from sqlite_lock import audit_run_lock
+    from sqlite_backend_gate import require_json_backend
+
+    # Fail before creating directories, acquiring locks, or dispatching actions.
+    require_json_backend(os.environ.get("AUDITOR_STATE_BACKEND", "json"))
 
     os.makedirs(os.path.dirname(os.path.abspath(STATE_FILE)), exist_ok=True)
     with audit_run_lock(STATE_FILE):
