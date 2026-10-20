@@ -16,6 +16,7 @@ from app.sqlite_audit_session import RevisionedAuditSession
 from app.sqlite_lifecycle_checkpoint_plan import CLOCKS, TRANSITIONS
 from app.sqlite_operation_coordinator import INTENTS_KEY
 from app.state_store import GuardedSQLiteStateStore
+from app.sqlite_title_identity import validate_title_folder
 
 STAGE_NAMES = {"transient": "Waiting", "holding": "Holding",
                "removal": "Removal", "keep": "Keep"}
@@ -24,12 +25,14 @@ STAGE_NAMES = {"transient": "Waiting", "holding": "Holding",
 def reconcile_witnessed_disposable_rename(*, root, database, operation_id,
                                           media_key, source_stage,
                                           destination_stage, observed_at,
-                                          witness_fd, require_clock_binding=False):
+                                          witness_fd, require_clock_binding=False,
+                                          title_folder="Movie"):
     """Commit clock and intent clearance in one guarded snapshot transaction.
 
     Requires a live, independently opened pre-rename directory descriptor.
     Caller must retain it across the rename. Never recover this from disk.
     """
+    validate_title_folder(title_folder)
     root = Path(root)
     database = Path(database)
     if (not root.is_absolute() or root.is_symlink() or not root.is_dir()
@@ -54,13 +57,13 @@ def reconcile_witnessed_disposable_rename(*, root, database, operation_id,
         raise RuntimeError("Live rename witness unavailable") from exc
     if not stat.S_ISDIR(witnessed.st_mode):
         raise RuntimeError("Witness is not a directory")
-    source = root / source_stage / "Movie"
-    destination = root / destination_stage / "Movie"
+    source = root / source_stage / title_folder
+    destination = root / destination_stage / title_folder
     for stage in STAGE_NAMES:
         directory = root / stage
         if directory.is_symlink() or not directory.is_dir():
             raise RuntimeError("Unsafe stage root")
-        candidate = directory / "Movie"
+        candidate = directory / title_folder
         if candidate.is_symlink():
             raise RuntimeError("Unsafe stage title")
         if stage == destination_stage:

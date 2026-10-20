@@ -291,3 +291,91 @@ def test_binding_check_after_intent_blocks_rename_on_lock_replacement(tmp_path, 
     assert "Movie" in state["first_seen"]
     assert "Movie" not in state["queued"]
     assert (root / "transient" / "Movie").is_dir()
+
+
+@pytest.mark.parametrize("folder", ["", " ", ".", "..", "../Movie", "/Movie", "a/b", "a\\b", "a\x00b", "a\nb"])
+def test_unsafe_title_name_never_creates_lock_or_intent(tmp_path, folder):
+    root, database = lab(tmp_path)
+    before = database.read_bytes()
+    with pytest.raises(ValueError, match="Single safe title folder"):
+        run(root, database, title_folder=folder)
+    assert database.read_bytes() == before
+    assert not (root / ".sqlite_runner.lock").exists()
+
+
+def test_folder_key_mismatch_stops_before_lock_or_executor(tmp_path, monkeypatch):
+    root, database = lab(tmp_path)
+    before = database.read_bytes()
+    monkeypatch.setattr(module, "execute_disposable_lifecycle_move",
+                        lambda **kwargs: pytest.fail("executor must not run"))
+    with pytest.raises(RuntimeError, match="folder and tracking key mismatch"):
+        run(root, database, title_folder="Other")
+    assert database.read_bytes() == before
+    assert not (root / ".sqlite_runner.lock").exists()
+
+
+def named_lab(tmp_path, folder, key):
+    root, database = lab(tmp_path)
+    (root / "transient" / "Movie").rename(root / "transient" / folder)
+    store = GuardedSQLiteStateStore(database)
+    state, revision = store.load_with_revision()
+    state["first_seen"][key] = state["first_seen"].pop("Movie")
+    store.save_if_revision(state, revision)
+    return root, database
+
+
+def test_named_title_duplicates_are_blocked_before_intent(tmp_path):
+    folder = "Movie A (2025)"
+    root, database = named_lab(tmp_path, folder, folder)
+    (root / "keep" / folder).mkdir()
+    before = database.read_bytes()
+    with pytest.raises(RuntimeError, match="Ambiguous title locations"):
+        module.run_isolated_lifecycle_move(
+            root=root, database=database, operation_id="named", media_key=folder,
+            title_folder=folder, observed_at=datetime(2026, 1, 1))
+    assert database.read_bytes() == before
+    assert (root / "transient" / folder).is_dir()
+    assert (root / "keep" / folder).is_dir()
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Atomic no-replace rename requires Linux")
+@pytest.mark.parametrize("folder,key", [("Movie A (2025)", "Movie A (2025)"),
+                                        ("Série A", "TV/Série A")])
+def test_named_movie_or_show_moves_only_its_bound_folder(tmp_path, folder, key):
+    root, database = named_lab(tmp_path, folder, key)
+    unrelated = root / "transient" / "Unrelated"
+    unrelated.mkdir()
+    (unrelated / "payload").write_text("preserve")
+    result = module.run_isolated_lifecycle_move(
+        root=root, database=database, operation_id="named", media_key=key,
+        title_folder=folder, observed_at=datetime(2026, 1, 1))
+    assert result["status"] == "disposable_reconciled"
+    state, _ = GuardedSQLiteStateStore(database).load_with_revision()
+    assert key not in state["first_seen"]
+    assert state["queued"][key] == "2026-01-01T00:00:00"
+    assert "sqlite_pending_operations" not in state
+    assert (root / "holding" / folder / "fixture.txt").read_text() == "disposable media"
+    assert (unrelated / "payload").read_text() == "preserve"
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Atomic no-replace rename requires Linux")
+def test_named_move_crash_retains_bound_paths_and_clock(tmp_path):
+    folder, key = "Show A", "TV/Show A"
+    root, database = named_lab(tmp_path, folder, key)
+    with pytest.raises(RuntimeError, match="Injected crash after rename"):
+        module.run_isolated_lifecycle_move(
+            root=root, database=database, operation_id="named", media_key=key,
+            title_folder=folder, observed_at=datetime(2026, 1, 1), fault_at="after_rename")
+    state, _ = GuardedSQLiteStateStore(database).load_with_revision()
+    details = state["sqlite_pending_operations"]["details"]
+    assert details["source"] == str(root / "transient" / folder)
+    assert details["destination"] == str(root / "holding" / folder)
+    assert details["media_key"] == key
+    assert key in state["first_seen"]
+    assert key not in state["queued"]
+    before = database.read_bytes()
+    with pytest.raises(RuntimeError, match="Unresolved"):
+        module.run_isolated_lifecycle_move(
+            root=root, database=database, operation_id="again", media_key=key,
+            title_folder=folder, observed_at=datetime(2026, 1, 1))
+    assert database.read_bytes() == before

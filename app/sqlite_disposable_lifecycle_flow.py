@@ -24,6 +24,7 @@ from app.sqlite_lifecycle_checkpoint_plan import CLOCKS
 from app.sqlite_stale_plan_review import review_plan_again
 from app.sqlite_recovery_fingerprint import capture_directory_fingerprint
 from app.state_store import GuardedSQLiteStateStore
+from app.sqlite_title_identity import validate_title_folder
 
 TRANSITIONS = {
     ("transient", "holding"), ("transient", "keep"),
@@ -36,12 +37,13 @@ def execute_disposable_lifecycle_move(*, root, database, operation_id, media_key
                                       destination_stage="holding",
                                       observed_at=None, fault_at=None, expected_revision=None,
                                       planned_move=None, _use_directory_handles=False,
-                                      _verify_runner_binding=None):
+                                      _verify_runner_binding=None, title_folder="Movie"):
     """Persist intent, rename with live witness, checkpoint clocks and intent.
 
     fault_at is test-only: after_intent, after_rename, after_applied.
     An interrupted run never attempts a second move or clears its intent.
     """
+    validate_title_folder(title_folder)
     if expected_revision is not None and (type(expected_revision) is not int or expected_revision < 0):
         raise ValueError("Invalid expected SQLite revision")
     if planned_move is not None:
@@ -73,7 +75,7 @@ def execute_disposable_lifecycle_move(*, root, database, operation_id, media_key
         stage_dir = root / stage
         if stage_dir.is_symlink() or not stage_dir.is_dir():
             raise RuntimeError("Unsafe disposable stage")
-        paths[stage] = stage_dir / "Movie"
+        paths[stage] = stage_dir / title_folder
     source, destination = paths[source_stage], paths[destination_stage]
     if any(path.exists() or path.is_symlink() for stage, path in paths.items()
            if stage != source_stage):
@@ -93,13 +95,13 @@ def execute_disposable_lifecycle_move(*, root, database, operation_id, media_key
                                     source_stage, destination_stage, observed_at,
                                     fault_at, source, destination, fd, parents,
                                     expected_revision, planned_move, _use_directory_handles,
-                                    _verify_runner_binding)
+                                    _verify_runner_binding, title_folder)
 
 
 def _perform_pinned_move(root, database, operation_id, media_key,
                          source_stage, destination_stage, observed_at,
                          fault_at, source, destination, fd, parents,
-                         expected_revision, planned_move, use_directory_handles, verify_runner_binding):
+                         expected_revision, planned_move, use_directory_handles, verify_runner_binding, title_folder):
     if verify_runner_binding is not None:
         verify_runner_binding()
     original = os.fstat(fd)
@@ -168,11 +170,11 @@ def _perform_pinned_move(root, database, operation_id, media_key,
     # The persisted intent is durable before this external operation.
     try:
         if use_directory_handles:
-            current = os.stat("Movie", dir_fd=parents[source_stage], follow_symlinks=False)
+            current = os.stat(title_folder, dir_fd=parents[source_stage], follow_symlinks=False)
             if (original.st_dev, original.st_ino) != (current.st_dev, current.st_ino):
                 raise RuntimeError("Source changed before descriptor-bound rename")
-            rename_directory_noreplace_at(parents[source_stage], "Movie",
-                                         parents[destination_stage], "Movie")
+            rename_directory_noreplace_at(parents[source_stage], title_folder,
+                                         parents[destination_stage], title_folder)
         else:
             rename_directory_noreplace(source, destination)
     except OSError as exc:
@@ -194,4 +196,5 @@ def _perform_pinned_move(root, database, operation_id, media_key,
         root=root, database=database, operation_id=operation_id,
         media_key=media_key, source_stage=source_stage,
         destination_stage=destination_stage,
-        observed_at=observed_at, witness_fd=fd, require_clock_binding=True)
+        observed_at=observed_at, witness_fd=fd, require_clock_binding=True,
+        title_folder=title_folder)

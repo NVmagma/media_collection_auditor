@@ -12,6 +12,7 @@ import stat
 from app.sqlite_disposable_lifecycle_flow import execute_disposable_lifecycle_move
 from app.sqlite_operation_coordinator import INTENTS_KEY
 from app.state_store import GuardedSQLiteStateStore
+from app.sqlite_title_identity import validate_title_folder
 
 
 @contextmanager
@@ -86,6 +87,9 @@ def run_isolated_lifecycle_move(*, root, database, **operation):
     Exceptions propagate; no retry, recovery clearance or automatic replay.
     Existing same-filesystem rename, witness and CAS guards remain mandatory.
     """
+    folder = validate_title_folder(operation.get("title_folder", "Movie"))
+    if operation.get("media_key") not in (folder, "TV/" + folder):
+        raise RuntimeError("Isolated title folder and tracking key mismatch")
     root, database = Path(root), Path(database)
     if database != root / "state.db":
         raise RuntimeError("Disposable runner database binding mismatch")
