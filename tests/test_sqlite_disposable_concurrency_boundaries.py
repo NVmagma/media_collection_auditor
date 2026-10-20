@@ -58,7 +58,7 @@ def test_cross_device_rename_error_preserves_intent_and_source(tmp_path, monkeyp
     def cross_device(*_args):
         raise OSError(errno.EXDEV, "cross-device")
 
-    monkeypatch.setattr(flow.os, "rename", cross_device)
+    monkeypatch.setattr(flow, "rename_directory_noreplace", cross_device)
     with pytest.raises(RuntimeError, match="Cross-device"):
         run(root, database)
     assert (root / "transient" / "Movie" / "payload").read_text() == "original"
