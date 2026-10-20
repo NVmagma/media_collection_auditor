@@ -114,3 +114,26 @@ def test_pending_intent_blocks_copy_staging(tmp_path):
         run(root)
     assert (root / "state.db").read_bytes() == before
     assert not (root / ".sqlite_copy_staging").exists()
+
+
+def test_mismatch_diagnostics_distinguish_metadata_without_exposing_names():
+    before = {"private-title/file": ("file", 10, "private-digest")}
+    identities = {"private-title/file": (1, 2, 10, 100, 200)}
+    changed = {"private-title/file": (1, 2, 10, 100, 201)}
+    error = module.CopyVerificationError(before, dict(before), identities, changed, dict(before))
+    assert error.diagnostics["source_content_unchanged"] is True
+    assert error.diagnostics["destination_content_matches"] is True
+    assert error.diagnostics["source_metadata_unchanged"] is False
+    assert error.diagnostics["metadata_change_counts"]["ctime_ns"] == 1
+    assert "private-title" not in str(error)
+    assert "private-digest" not in str(error)
+
+
+def test_mismatch_diagnostics_identify_incomplete_copy():
+    before = {"file": ("file", 10, "digest")}
+    identities = {"file": (1, 2, 10, 100, 200)}
+    error = module.CopyVerificationError(before, before, identities, identities, {})
+    assert error.diagnostics["source_content_unchanged"] is True
+    assert error.diagnostics["source_metadata_unchanged"] is True
+    assert error.diagnostics["destination_content_matches"] is False
+    assert error.diagnostics["destination_entries"] == 0

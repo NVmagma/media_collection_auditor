@@ -4,6 +4,7 @@ No renameat2, filesystem-name policy, source removal, tracking checkpoint,
 notification, promotion, automatic retry or production caller.
 """
 import hashlib
+import json
 import os
 from pathlib import Path
 import stat
@@ -14,6 +15,35 @@ from app.sqlite_operation_coordinator import INTENTS_KEY
 from app.state_store import GuardedSQLiteStateStore
 
 FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+
+
+class CopyVerificationError(RuntimeError):
+    """Aggregate mismatch diagnostics only; no source names or content digests."""
+    def __init__(self, before, after, identities, after_identities, copied):
+        fields = ("device", "inode", "size", "mtime_ns", "ctime_ns")
+        common = set(identities) & set(after_identities)
+        summary = {
+            "source_content_unchanged": before == after,
+            "source_metadata_unchanged": identities == after_identities,
+            "destination_content_matches": copied == before,
+            "source_entries_before": len(before),
+            "source_entries_after": len(after),
+            "destination_entries": len(copied),
+            "source_identity_keys_unchanged": set(identities) == set(after_identities),
+            "metadata_changed_directories": sum(
+                identities[key] != after_identities[key] for key in common
+                if not key or key.endswith("/")),
+            "metadata_changed_files": sum(
+                identities[key] != after_identities[key] for key in common
+                if key and not key.endswith("/")),
+            "metadata_change_counts": {
+                field: sum(identities[key][index] != after_identities[key][index] for key in common)
+                for index, field in enumerate(fields)
+            },
+        }
+        self.diagnostics = summary
+        super().__init__("Staged copy verification mismatch; source retained; " +
+                         json.dumps(summary, sort_keys=True))
 
 
 def _identity(info):
@@ -140,7 +170,7 @@ def stage_disposable_verified_copy(*, root, title_folder, operation_id):
             after, after_identities = _manifest(source_fd)
             copied, _ = _manifest(stage_fd)
             if before != after or identities != after_identities or copied != before:
-                raise RuntimeError("Staged copy verification mismatch; source retained")
+                raise CopyVerificationError(before, after, identities, after_identities, copied)
             source_current = os.stat(source_path, follow_symlinks=False)
             stage_current = os.stat(operation, dir_fd=stage_parent_fd, follow_symlinks=False)
             if ((source_current.st_dev, source_current.st_ino) != (original_source.st_dev, original_source.st_ino)
