@@ -250,3 +250,26 @@ content and empty directories, database/source preservation, occupied slots,
 source mutation, symlinks, partial failure and pending-operation precedence.
 Next validate this portable component on fresh dedicated lab directories through
 both user-share and native paths. Production mounts remain unchanged.
+
+
+## Portable staging validation: shfs passes, Btrfs mismatch under investigation
+
+The dual-storage run through `ce1e30d` reported **7 passed on shfs**, then
+**2 failed and 5 passed on native Btrfs**. Both Btrfs failures stop at the combined
+final manifest/identity check, before promotion, source removal or tracking
+commit. The occupied-slot test fails during its initial staging call, so it is
+not evidence that overwrite protection failed. Neither result authorizes a
+filesystem-specific exception or relaxation of content/identity verification.
+
+The next diagnostic increment separates source-content equality, source-identity
+metadata equality and destination-content equality, reporting only entry counts
+and aggregate changed-field counts (device, inode, size, mtime, ctime). Directory
+and file change counts are distinguished. No filenames, paths, content digests
+or contents are included in the diagnostic summary. A mismatch still raises and
+retains source/staging; there is no automatic retry or cleanup. Local tests:
+**9 passed**, including diagnostic redaction and classification.
+
+A fresh native-only targeted rerun is needed to identify which comparison fails;
+filesystem behavior is not yet the established root cause. The shfs pass remains
+valid evidence for the prior portable component; repeating the full unrelated
+suite is not necessary for this diagnostic step. Preserve the existing artifacts.
