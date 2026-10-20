@@ -12,7 +12,7 @@ A gate is complete only when its acceptance criteria are verified.
 | 4. Lifecycle decision parity | Representative movie/season clocks and read-only rehearsal | Complete: isolated tests |
 | 5. Restart and failure rehearsals | Pending intents persist, crashes fail closed, no automatic replay | Complete: disposable Unraid tests |
 | 6. Trusted move verification | Bind identity and paths, independently prove the moved object, reject races and ambiguous outcomes | In progress: live directory witnesses and no-replace rename verified in disposable tests; concurrent-writer isolation and crash trust remain open |
-| 7. Atomic lifecycle reconciliation | Verified move clock change and intent clearance commit together; failure injection proves all-or-nothing | Not implemented |
+| 7. Atomic lifecycle reconciliation | Verified move clock change and intent clearance commit together; failure injection proves all-or-nothing | In progress: witnessed disposable rename uses a single revision-checked reconciliation checkpoint; injected pre/post-commit failures tested. Production trust and integration remain open |
 | 8. Production lifecycle integration | Real Waiting/Holding/Keep/Removal moves use guarded ordering; existing JSON path unaffected until cutover | Not implemented |
 | 9. External integrations | Arr uncertain outcomes, Jellyfin protection, dashboard authoritative reads, TV-season behavior | Not implemented |
 | 10. Deployment and rollback | Disposable Unraid end-to-end tests, full CI, Docker build, backup/rollback, explicit activation approval | Not completed |
@@ -29,17 +29,17 @@ filesystem deletion remain disabled.
 
 ## Next engineering task
 
-Implement and test a trusted verification contract **before** permitting
-intent clearance. The existing directory fingerprints, unique-location checks,
+Extend the disposable witnessed-move contract into a production-reviewed,
+trusted verification design **before** permitting production intent clearance. The existing directory fingerprints, unique-location checks,
 and persisted-intent binding are advisory. A matching inode or metadata record
 is not proof of a completed move, particularly across mounts or after crashes.
 
 The verifier design must explicitly address source/destination identity,
 symlink and path substitution, concurrent writers, same-filesystem rename
 versus cross-filesystem copy, and what happens when identity cannot be proven.
-Uncertain outcomes must remain pending for operator review. Once the verifier
-is reviewed, add atomic checkpoint/intent-clearance tests with injected
-failures before wiring any production move.
+Uncertain outcomes must remain pending for operator review. Disposable atomic checkpoint/intent-clearance tests with injected failures
+exist; production wiring remains blocked until verifier and recovery designs
+are reviewed.
 
 ## Status reporting rule
 
