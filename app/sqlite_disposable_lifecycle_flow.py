@@ -6,6 +6,7 @@ recovery, cross-device copy, deletion, or Arr/Jellyfin side effects.
 
 from __future__ import annotations
 
+from contextlib import ExitStack
 from datetime import datetime
 import errno
 import os
@@ -13,6 +14,8 @@ from pathlib import Path
 
 from app.sqlite_disposable_atomic_reconcile import reconcile_witnessed_disposable_rename
 from app.sqlite_noreplace_rename import rename_directory_noreplace
+from app.sqlite_disposable_parent_witness import (pinned_stage_directories,
+    assert_stage_directories_unchanged)
 from app.sqlite_disposable_move_runner import STAGES
 from app.sqlite_audit_session import RevisionedAuditSession
 from app.sqlite_operation_coordinator import SQLiteOperationCoordinator
@@ -68,8 +71,19 @@ def execute_disposable_lifecycle_move(*, root, database, operation_id, media_key
     # No cross-device fallback: copy/delete requires a different trust model.
     if os.stat(source.parent).st_dev != os.stat(destination.parent).st_dev:
         raise RuntimeError("Cross-device moves unsupported")
-    fd = os.open(source, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
-                 | getattr(os, "O_NOFOLLOW", 0))
+    with ExitStack() as stack:
+        parents = stack.enter_context(pinned_stage_directories(root, STAGES))
+        fd = os.open(source, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+                     | getattr(os, "O_NOFOLLOW", 0))
+        stack.callback(os.close, fd)
+        return _perform_pinned_move(root, database, operation_id, media_key,
+                                    source_stage, destination_stage, observed_at,
+                                    fault_at, source, destination, fd, parents)
+
+
+def _perform_pinned_move(root, database, operation_id, media_key,
+                         source_stage, destination_stage, observed_at,
+                         fault_at, source, destination, fd, parents):
     try:
         original = os.fstat(fd)
         current = os.stat(source, follow_symlinks=False)
@@ -80,6 +94,7 @@ def execute_disposable_lifecycle_move(*, root, database, operation_id, media_key
         coordinator.begin_move_with_evidence(
             operation_id, {"media_key": media_key,
                            "source": str(source), "destination": str(destination)})
+        assert_stage_directories_unchanged(root, parents)
         if fault_at == "after_intent":
             raise RuntimeError("Injected crash after intent")
         # The persisted intent is durable before this external operation.
@@ -89,15 +104,18 @@ def execute_disposable_lifecycle_move(*, root, database, operation_id, media_key
             if exc.errno == errno.EXDEV:
                 raise RuntimeError("Cross-device move blocked; intent retained") from exc
             raise
+        assert_stage_directories_unchanged(root, parents)
         if fault_at == "after_rename":
             raise RuntimeError("Injected crash after rename")
         coordinator.mark_applied(operation_id)
         if fault_at == "after_applied":
             raise RuntimeError("Injected crash after applied checkpoint")
+        assert_stage_directories_unchanged(root, parents)
         return reconcile_witnessed_disposable_rename(
             root=root, database=database, operation_id=operation_id,
             media_key=media_key, source_stage=source_stage,
             destination_stage=destination_stage,
             observed_at=observed_at, witness_fd=fd)
     finally:
-        os.close(fd)
+        # ExitStack owns the live witness; no automatic restart clearance.
+        pass
