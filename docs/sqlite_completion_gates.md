@@ -129,3 +129,9 @@ writer isolation and trusted crash clearance remain open; no new gate is claimed
 All 1,062 SQLite tests passed on Unraid through `c3ee114`. The next increment
 moves observation-time validation ahead of intent/rename and binds lifecycle
 clock reconciliation to the durable request. Production gates remain unchanged.
+
+
+All 1,071 SQLite tests passed on Unraid through `ddd71c4`. The following increment
+supports explicitly named disposable title folders bound to standard movie/show
+tracking keys. It removes the single-title fixture limitation without connecting
+production execution, season pruning, or activation. Gates 6–10 remain open.

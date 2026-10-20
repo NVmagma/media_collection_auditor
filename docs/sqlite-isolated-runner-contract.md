@@ -8,8 +8,9 @@ production.
 
 `app/sqlite_isolated_lifecycle_runner.py` wraps the existing disposable lifecycle
 executor. It accepts only a canonical absolute marked lab directory and its
-existing `state.db`. The existing executor still restricts media to the lab's
-fixture named `Movie`; it is not a general-purpose movie/show runner.
+existing `state.db`. It supports explicitly named disposable title folders;
+it is not a production movie/show runner. Earlier revisions supported only the
+fixture named `Movie`.
 
 The runner opens a persistent `.sqlite_runner.lock` relative to a held root
 directory descriptor, refusing symlink/nonregular/hardlinked lock files. A
@@ -178,3 +179,35 @@ validation is pending; the expected collection size is 1,071 tests.
 This binds a request to its tracking update; it does not prove a fresh Jellyfin
 observation, exclude unrelated filesystem writers, or authorize production
 activation. Those remain separate unresolved integration requirements.
+
+
+## Named title identity increment
+
+The user reported **1,071 SQLite tests passed on Unraid** through `ddd71c4`.
+The next increment removes the isolated runner's fixed `Movie` title assumption.
+A `title_folder` argument is carried through stage lookup, duplicate-location
+checks, held-source verification, descriptor rename and witnessed reconciliation.
+The default remains `Movie` for existing disposable fixtures.
+
+The isolated runner requires `media_key` to equal the folder (movie) or `TV/`
+plus the folder (whole show). It rejects mismatch before creating the lock or
+intent. This is the standard tracking convention, not a library/type discovery
+mechanism. The shared name validator permits a single nonblank directory entry,
+including spaces and Unicode, but refuses separators, dot traversal and control
+characters. No filename/path sanitization silently maps one title to another.
+Source and destination paths plus the media key remain bound in durable intent.
+The lower-level legacy test helpers retain their synthetic-key compatibility.
+
+New tests cover unsafe names, key mismatch and duplicates without changing the
+database. Linux tests move a named movie and a named whole-show directory while
+preserving an unrelated title, and verify crash-after-rename leaves the named
+intent pending and prevents a second operation. Related local validation:
+**95 passed, 8 Linux-only tests skipped, 1 known Linux rename test deselected**.
+New Unraid validation is pending; expected collection size is 1,086 tests.
+
+This is whole-folder execution only. It does not implement season pruning,
+external integrations, Jellyfin freshness, production activation or deletion.
+The next integration step is binding named execution to a revalidated advisory
+lifecycle candidate, while retaining the existing revision, path and intent
+checks. Arbitrary caller-supplied success or protection flags remain insufficient
+for production operations.
