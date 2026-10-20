@@ -78,9 +78,10 @@ def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
     if not matched:
         blockers.append("jellyfin_title_unmatched")
     if matched:
-        paths = {path for _, _, path, _, _ in matched}
-        ids_for_path = {(item_id, path) for _, item_id, path, _, _ in matched}
-        if len(paths) != 1 or len(ids_for_path) != 1:
+        # One logical Jellyfin item may appear for multiple users. Distinct
+        # item IDs or paths are ambiguous, even if folder names match.
+        identities = {(item_id, path) for _, item_id, path, _, _ in matched}
+        if len(identities) != 1:
             blockers.append("jellyfin_title_ambiguous")
     signals = {name: False for name in FIELDS}
     if not blockers:
