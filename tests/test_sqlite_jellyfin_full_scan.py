@@ -88,7 +88,7 @@ def test_failure_reason_is_fixed_label_not_exception_text():
             return [{"Id": "private"}]
         return {"TotalRecordCount": 1, "Items": [{"Id": "private"}]}
     result = scan(fetch)
-    assert result["validation_failure"] == "item_fields"
+    assert result["validation_failure"] == "item_path"
     assert "private" not in repr(result)
 
 
@@ -98,3 +98,28 @@ def test_page_length_failure_is_identifiable():
             return [{"Id": "private"}]
         return {"TotalRecordCount": 101, "Items": [item(0)]}
     assert scan(fetch)["validation_failure"] == "page_length"
+
+
+def test_specific_missing_favorite_is_redacted():
+    def fetch(path, params):
+        if path == "/Users":
+            return [{"Id": "secret-user"}]
+        bad = item(0)
+        del bad["UserData"]["IsFavorite"]
+        return {"TotalRecordCount": 1, "Items": [bad]}
+    result = scan(fetch)
+    assert result["validation_failure"] == "favorite_field"
+    assert "secret" not in repr(result)
+    assert result["scan_complete"] is False
+
+
+def test_specific_bad_path_fails_closed():
+    def fetch(path, params):
+        if path == "/Users":
+            return [{"Id": "secret-user"}]
+        bad = item(0)
+        bad["Path"] = "/private/../secret/video.mkv"
+        return {"TotalRecordCount": 1, "Items": [bad]}
+    result = scan(fetch)
+    assert result["validation_failure"] == "unsafe_item_path"
+    assert result["production_authorized"] is False
