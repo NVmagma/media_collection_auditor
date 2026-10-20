@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Read-only full Jellyfin response contract scan. No identifying output."""
+"""Read-only full Jellyfin response contract scan. No identifying output.
+
+Request exclusion of BoxSet collection records, but still fail closed if the
+server returns an unexpected type. No media is moved or modified.
+"""
 from __future__ import annotations
 
 import json
@@ -45,6 +49,7 @@ def scan(fetch):
                 while True:
                     page = fetch(f"/Users/{uid}/Items", {
                         "Recursive": "true", "IncludeItemTypes": kind,
+                        "ExcludeItemTypes": "BoxSet",
                         "Fields": "Path,Tags", "StartIndex": start,
                         "Limit": PAGE_SIZE,
                     })
