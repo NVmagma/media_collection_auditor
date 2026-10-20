@@ -277,3 +277,8 @@ on Unraid. Portable staging now shares the existing two-scan collector/planner
 flow, rejects changed/incomplete protections and checks freshness budget again
 at intent after hashing. This is isolated synthetic-transport integration, not
 production freshness, promotion or recovery authority. No gate is completed.
+
+Collected-copy integration through `e4e0942` passed 65 tests per filesystem on
+Unraid. Whole-show portable staging now has explicit TV-key, nested-season and
+refreshed protection regression coverage. This does not implement season pruning,
+production TV execution or complete gate 9; gate states remain unchanged.

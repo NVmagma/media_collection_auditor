@@ -447,3 +447,18 @@ source cleanup and production integration remain unresolved.
 Unraid confirmed source intent-boundary revalidation through `93ecbb0`: 56 tests
 passed on each filesystem. Collected-copy tests use synthetic GET responses and
 await Unraid validation; they do not assert a new live service test occurred.
+
+### Whole-show portable staging coverage
+
+Disposable collected-copy regressions now exercise a `TV/` tracking key with
+specials, multiple populated seasons and an empty season directory. Successful
+staging preserves the complete tree in both source and private staging while
+retaining the original clock, leaving the copy intent pending and queuing no
+Arr update. Refreshed keep-forever, keep-all-seasons, keep and favorite flags,
+changed Series identity and ambiguous Series matches stop before staging.
+These are whole-show synthetic collection tests, not season-pruning execution
+or live Jellyfin validation. Existing show retention semantics are unchanged.
+
+Unraid confirmed collected-copy integration through `e4e0942`: 65 tests passed
+on shfs and 65 on native Btrfs. Whole-show regression coverage awaits server
+validation. Production remains JSON-authoritative and SQLite-disabled.
