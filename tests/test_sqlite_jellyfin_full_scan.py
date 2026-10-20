@@ -80,3 +80,21 @@ def test_full_scan_rejects_changed_total():
         return {"TotalRecordCount": total,
                 "Items": [item(i) for i in range(start, min(start + 100, total))]}
     assert scan(fetch)["scan_complete"] is False
+
+
+def test_failure_reason_is_fixed_label_not_exception_text():
+    def fetch(path, params):
+        if path == "/Users":
+            return [{"Id": "private"}]
+        return {"TotalRecordCount": 1, "Items": [{"Id": "private"}]}
+    result = scan(fetch)
+    assert result["validation_failure"] == "item_fields"
+    assert "private" not in repr(result)
+
+
+def test_page_length_failure_is_identifiable():
+    def fetch(path, params):
+        if path == "/Users":
+            return [{"Id": "private"}]
+        return {"TotalRecordCount": 101, "Items": [item(0)]}
+    assert scan(fetch)["validation_failure"] == "page_length"
