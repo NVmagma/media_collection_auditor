@@ -4,6 +4,8 @@ This is not a production executor. The lock excludes cooperating runners,
 not Arr, manual filesystem writers, mount changes or other databases.
 """
 from contextlib import contextmanager
+from copy import deepcopy
+from datetime import datetime
 import fcntl
 import os
 from pathlib import Path
@@ -13,6 +15,7 @@ from app.sqlite_disposable_lifecycle_flow import execute_disposable_lifecycle_mo
 from app.sqlite_operation_coordinator import INTENTS_KEY
 from app.state_store import GuardedSQLiteStateStore
 from app.sqlite_title_identity import validate_title_folder
+from app.sqlite_disposable_planned_executor import validate_disposable_move_candidate
 
 
 @contextmanager
@@ -104,3 +107,30 @@ def run_isolated_lifecycle_move(*, root, database, **operation):
         return execute_disposable_lifecycle_move(
             root=root, database=database, expected_revision=expected,
             _use_directory_handles=True, _verify_runner_binding=verify_binding, **operation)
+
+
+def run_isolated_planned_move(*, root, database, operation_id, media_key,
+                              title_folder="Movie", planned_move,
+                              source_stage="transient", destination_stage="holding",
+                              observed_at=None, fault_at=None):
+    """Require a candidate, then revalidate it inside the locked execution flow.
+
+    The detached bundle is caller-provided advisory evidence, never proof of
+    Jellyfin freshness. Production remains disabled and marked labs mandatory.
+    """
+    bundle = deepcopy(planned_move)
+    revision = validate_disposable_move_candidate(
+        planned_move=bundle, media_key=media_key, source_stage=source_stage,
+        destination_stage=destination_stage)
+    planned_at = bundle.get("now")
+    if not isinstance(planned_at, datetime) or planned_at.tzinfo is not None:
+        raise ValueError("Naive advisory plan time required")
+    if observed_at is None:
+        observed_at = planned_at
+    if observed_at != planned_at:
+        raise RuntimeError("Observation differs from advisory plan time; replan required")
+    return run_isolated_lifecycle_move(
+        root=root, database=database, operation_id=operation_id, media_key=media_key,
+        title_folder=title_folder, source_stage=source_stage,
+        destination_stage=destination_stage, observed_at=observed_at,
+        fault_at=fault_at, expected_revision=revision, planned_move=bundle)

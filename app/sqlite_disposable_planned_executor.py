@@ -16,6 +16,20 @@ def rehearse_planned_disposable_move(*, root, database, operation_id, media_key,
                                     destination_stage="holding", observed_at=None,
                                     fault_at=None):
     """Require a bound candidate before delegating to the disposable runner."""
+    revision = validate_disposable_move_candidate(
+        planned_move=planned_move, media_key=media_key,
+        source_stage=source_stage, destination_stage=destination_stage)
+    return execute_disposable_lifecycle_move(
+        root=root, database=database, operation_id=operation_id,
+        media_key=media_key, source_stage=source_stage,
+        destination_stage=destination_stage, observed_at=observed_at,
+        fault_at=fault_at, expected_revision=revision,
+        planned_move=planned_move)
+
+
+def validate_disposable_move_candidate(*, planned_move, media_key,
+                                       source_stage, destination_stage):
+    """Validate a non-authorizing candidate shape, without state or media IO."""
     if not isinstance(planned_move, dict):
         raise ValueError("A complete disposable advisory plan is required")
     plan = planned_move.get("plan")
@@ -43,9 +57,4 @@ def rehearse_planned_disposable_move(*, root, database, operation_id, media_key,
             or matches[0].get("required_checks") != list(REQUIRED_CHECKS)
             or matches[0].get("authorization") != "not_authorized"):
         raise RuntimeError("No matching disposable advisory move candidate")
-    return execute_disposable_lifecycle_move(
-        root=root, database=database, operation_id=operation_id,
-        media_key=media_key, source_stage=source_stage,
-        destination_stage=destination_stage, observed_at=observed_at,
-        fault_at=fault_at, expected_revision=revision,
-        planned_move=planned_move)
+    return revision
