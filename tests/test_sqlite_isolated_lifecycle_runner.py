@@ -162,3 +162,48 @@ def test_different_database_is_rejected_before_lock_creation(tmp_path):
     with pytest.raises(RuntimeError, match="binding mismatch"):
         run(root, tmp_path / "other.db")
     assert not (root / ".sqlite_runner.lock").exists()
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Atomic no-replace rename requires Linux")
+@pytest.mark.parametrize("stage", ["transient", "holding"])
+def test_parent_replacement_at_syscall_does_not_redirect_and_retains_intent(tmp_path, monkeypatch, stage):
+    import app.sqlite_disposable_lifecycle_flow as flow
+    root, database = lab(tmp_path)
+    actual = flow.rename_directory_noreplace_at
+    def racing_rename(*args):
+        (root / stage).rename(root / ("original_" + stage))
+        (root / stage).mkdir()
+        (root / stage / "Movie").mkdir()
+        (root / stage / "Movie" / "fixture.txt").write_text("unrelated")
+        actual(*args)
+    monkeypatch.setattr(flow, "rename_directory_noreplace_at", racing_rename)
+    with pytest.raises(RuntimeError, match="stage directory changed"):
+        run(root, database)
+    state, _ = GuardedSQLiteStateStore(database).load_with_revision()
+    assert "sqlite_pending_operations" in state
+    assert "Movie" in state["first_seen"]
+    assert "Movie" not in state["queued"]
+    assert (root / stage / "Movie" / "fixture.txt").read_text() == "unrelated"
+    destination_parent = root / ("original_holding" if stage == "holding" else "holding")
+    assert (destination_parent / "Movie" / "fixture.txt").read_text() == "disposable media"
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Atomic no-replace rename requires Linux")
+def test_source_entry_substitution_never_clears_intent(tmp_path, monkeypatch):
+    import app.sqlite_disposable_lifecycle_flow as flow
+    root, database = lab(tmp_path)
+    actual = flow.rename_directory_noreplace_at
+    def racing_rename(*args):
+        source = root / "transient" / "Movie"
+        source.rename(root / "transient" / "OriginalMovie")
+        source.mkdir()
+        (source / "fixture.txt").write_text("replacement")
+        actual(*args)
+    monkeypatch.setattr(flow, "rename_directory_noreplace_at", racing_rename)
+    with pytest.raises(RuntimeError, match="Witness does not match destination"):
+        run(root, database)
+    state, _ = GuardedSQLiteStateStore(database).load_with_revision()
+    assert "sqlite_pending_operations" in state
+    assert "Movie" in state["first_seen"]
+    assert "Movie" not in state["queued"]
+    assert (root / "transient" / "OriginalMovie" / "fixture.txt").read_text() == "disposable media"

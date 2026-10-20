@@ -13,7 +13,8 @@ import os
 from pathlib import Path
 
 from app.sqlite_disposable_atomic_reconcile import reconcile_witnessed_disposable_rename
-from app.sqlite_noreplace_rename import rename_directory_noreplace
+from app.sqlite_noreplace_rename import (rename_directory_noreplace,
+                                        rename_directory_noreplace_at)
 from app.sqlite_disposable_parent_witness import (pinned_stage_directories,
     assert_stage_directories_unchanged)
 from app.sqlite_disposable_move_runner import STAGES
@@ -34,7 +35,7 @@ def execute_disposable_lifecycle_move(*, root, database, operation_id, media_key
                                       source_stage="transient",
                                       destination_stage="holding",
                                       observed_at=None, fault_at=None, expected_revision=None,
-                                      planned_move=None):
+                                      planned_move=None, _use_directory_handles=False):
     """Persist intent, rename with live witness, checkpoint clocks and intent.
 
     fault_at is test-only: after_intent, after_rename, after_applied.
@@ -87,13 +88,13 @@ def execute_disposable_lifecycle_move(*, root, database, operation_id, media_key
         return _perform_pinned_move(root, database, operation_id, media_key,
                                     source_stage, destination_stage, observed_at,
                                     fault_at, source, destination, fd, parents,
-                                    expected_revision, planned_move)
+                                    expected_revision, planned_move, _use_directory_handles)
 
 
 def _perform_pinned_move(root, database, operation_id, media_key,
                          source_stage, destination_stage, observed_at,
                          fault_at, source, destination, fd, parents,
-                         expected_revision, planned_move):
+                         expected_revision, planned_move, use_directory_handles):
     original = os.fstat(fd)
     current = os.stat(source, follow_symlinks=False)
     if (original.st_dev, original.st_ino) != (current.st_dev, current.st_ino):
@@ -147,7 +148,14 @@ def _perform_pinned_move(root, database, operation_id, media_key,
         raise RuntimeError("Injected crash after intent")
     # The persisted intent is durable before this external operation.
     try:
-        rename_directory_noreplace(source, destination)
+        if use_directory_handles:
+            current = os.stat("Movie", dir_fd=parents[source_stage], follow_symlinks=False)
+            if (original.st_dev, original.st_ino) != (current.st_dev, current.st_ino):
+                raise RuntimeError("Source changed before descriptor-bound rename")
+            rename_directory_noreplace_at(parents[source_stage], "Movie",
+                                         parents[destination_stage], "Movie")
+        else:
+            rename_directory_noreplace(source, destination)
     except OSError as exc:
         if exc.errno == errno.EXDEV:
             raise RuntimeError("Cross-device move blocked; intent retained") from exc

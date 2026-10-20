@@ -69,4 +69,5 @@ def run_isolated_lifecycle_move(*, root, database, **operation):
         if expected != revision:
             raise RuntimeError("Stale isolated runner revision")
         return execute_disposable_lifecycle_move(
-            root=root, database=database, expected_revision=expected, **operation)
+            root=root, database=database, expected_revision=expected,
+            _use_directory_handles=True, **operation)
