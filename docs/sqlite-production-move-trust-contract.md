@@ -180,3 +180,33 @@ user-share and native paths within one move. A new candidate requires reviewed
 mapping, same-mount checks, no-replace tests and the full relevant suite before
 any release claim. Retain failed fixtures; do not reset pending operations just
 to rerun the suite in the same directory. No unsafe fallback is introduced.
+
+## Native Btrfs result and early shfs policy
+
+The host findmnt evidence identifies `/mnt/user/sql_test` and the current user-
+share media path as `fuse.shfs`, while `/mnt/media/sql_test` and its corresponding
+native media path are Btrfs on the same observed pool. A fresh native Btrfs lab
+run through `8cae0f5` reported **1,159 passed, one non-failing Requests warning**
+in about four minutes. The earlier shfs lab run remains failed evidence, not a
+result to discard. No production path was switched.
+
+The next increment looks up filesystem type by the held descriptor mount ID in
+`/proc/self/mountinfo`. Missing, malformed or ambiguous records fail closed.
+`fuse.shfs` is explicitly blocked by the verified-deployment compatibility policy
+before creating a move intent; there is no unsafe fallback or override boolean.
+The filesystem type joins the in-process binding and is rechecked at operation
+boundaries. This is a conservative compatibility policy for the observed system,
+not a universal assertion about every future Unraid/kernel version.
+
+Other filesystem labels are not a production approval. They still require the
+no-replace syscall and every mount/path/witness/revision guard. A Btrfs lab pass
+does not prove that native media paths cover all files in a user share, establish
+exclusive writers, permit mixing native/user-share paths, or authorize changing
+container mounts. Review all backing roots and per-title mapping before any
+native-path production proposal.
+
+Local focused checks: **69 passed, 12 Linux-only skipped**. Tests cover mount-ID
+filesystem selection, missing/duplicate/malformed mount records, shfs rejection
+and pre-intent/no-rename enforcement. Native Unraid focused validation for this
+increment is pending. The regression command should keep using fresh uniquely
+named native lab directories and preserve failed shfs artifacts.

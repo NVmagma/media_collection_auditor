@@ -216,3 +216,10 @@ rename-flag capability. Gate 6 has a concrete deployment blocker, not a reason t
 fall back to overwriting rename, copy/delete, or skip the failing tests. Preserve
 the failed fixture directory and pending intents. No production mount changes
 or activation are authorized by these test results.
+
+The full suite passed on native Btrfs lab storage: **1,159 tests** through
+`8cae0f5`. The same access model failed the required rename on fuse.shfs. The next
+increment blocks that observed unsupported filesystem before move intent and
+binds filesystem type to descriptor mount observations. Gate 6 remains open:
+production currently uses the shfs path and still has overlapping external
+writers; a native lab pass does not authorize mount changes.
