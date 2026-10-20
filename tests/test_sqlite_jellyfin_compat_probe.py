@@ -67,3 +67,29 @@ def test_timeout_reports_category_only():
     result = probe(fetch)
     assert result["failure_category"] == "timeout"
     assert "private" not in repr(result)
+
+
+def test_users_failure_stage_is_redacted():
+    import requests
+
+    def fetch(path, params):
+        raise requests.ConnectionError("secret network path")
+
+    result = probe(fetch)
+    assert result["failure_stage"] == "users"
+    assert result["failure_category"] == "connection_error"
+    assert "secret" not in repr(result)
+
+
+def test_items_failure_stage_is_redacted():
+    import requests
+
+    def fetch(path, params):
+        if path == "/Users":
+            return [{"Id": "private-user"}]
+        raise requests.ConnectionError("private title path")
+
+    result = probe(fetch)
+    assert result["failure_stage"] == "items"
+    assert result["failure_category"] == "connection_error"
+    assert "private" not in repr(result)
