@@ -41,3 +41,29 @@ def test_transport_failure_does_not_expose_exception_text():
     result = probe(fetch)
     assert result["request_failed"] is True
     assert "SECRET" not in repr(result)
+
+
+def test_http_error_reports_status_only():
+    import requests
+
+    def fetch(path, params):
+        response = requests.Response()
+        response.status_code = 401
+        response._content = b"secret server details"
+        raise requests.HTTPError("private url token", response=response)
+
+    result = probe(fetch)
+    assert result["failure_category"] == "http_401"
+    assert "secret" not in repr(result)
+    assert "private" not in repr(result)
+
+
+def test_timeout_reports_category_only():
+    import requests
+
+    def fetch(path, params):
+        raise requests.Timeout("private endpoint")
+
+    result = probe(fetch)
+    assert result["failure_category"] == "timeout"
+    assert "private" not in repr(result)
