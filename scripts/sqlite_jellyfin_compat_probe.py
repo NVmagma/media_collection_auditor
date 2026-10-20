@@ -114,7 +114,7 @@ def main():
     session = requests.Session()
     # Do not inherit host proxy settings for the explicitly configured Jellyfin URL.
     session.trust_env = False
-    session.headers.update({"X-Emby-Token": token})
+    # Match the working MediaBrowser authorization format verified on Jellyfin.\n    # The production auditor also sends this header alongside its legacy token header.\n    session.headers.update({"Authorization": (\n        "MediaBrowser Client=MediaCollectionAuditor, "\n        "Device=Unraid, DeviceId=sqlite-compat-probe, "\n        "Version=1.0, Token=" + token\n    )})
 
     def fetch(path, params):
         response = session.get(url + path, params=params, timeout=15)
