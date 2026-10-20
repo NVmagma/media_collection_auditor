@@ -116,3 +116,58 @@ def test_missing_marker_never_clears_intent(tmp_path):
     finally:
         os.close(fd)
     assert INTENTS_KEY in _state(database)
+
+
+@pytest.mark.parametrize("binding", [None, {}, {
+    "source_stage": "transient", "destination_stage": "holding",
+    "source_timestamp": "2024-01-01T00:00:00", "observed_at": "2024-03-01T00:00:00",
+}])
+def test_required_clock_binding_rejects_absent_or_changed_plan(tmp_path, binding):
+    root, database, coordinator = _fixture(tmp_path)
+    source = root / "transient" / "Movie"
+    fd = os.open(source, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    try:
+        source.rename(root / "holding" / "Movie")
+        coordinator.mark_applied("op-1")
+        store = GuardedSQLiteStateStore(database)
+        state, revision = store.load_with_revision()
+        if binding is not None:
+            state[INTENTS_KEY]["details"]["lifecycle_clock_binding"] = binding
+            store.save_if_revision(state, revision)
+        before = database.read_bytes()
+        with pytest.raises(RuntimeError, match="clock binding mismatch"):
+            reconcile_witnessed_disposable_rename(
+                root=root, database=database, operation_id="op-1", media_key=KEY,
+                source_stage="transient", destination_stage="holding",
+                observed_at=datetime(2024, 2, 1), witness_fd=fd, require_clock_binding=True)
+        assert database.read_bytes() == before
+        assert INTENTS_KEY in _state(database)
+    finally:
+        os.close(fd)
+
+
+def test_matching_required_clock_binding_commits_atomically(tmp_path):
+    root, database, coordinator = _fixture(tmp_path)
+    source = root / "transient" / "Movie"
+    fd = os.open(source, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    try:
+        source.rename(root / "holding" / "Movie")
+        coordinator.mark_applied("op-1")
+        store = GuardedSQLiteStateStore(database)
+        state, revision = store.load_with_revision()
+        state[INTENTS_KEY]["details"]["lifecycle_clock_binding"] = {
+            "source_stage": "transient", "destination_stage": "holding",
+            "source_timestamp": "2024-01-01T00:00:00", "observed_at": "2024-02-01T00:00:00",
+        }
+        store.save_if_revision(state, revision)
+        reconcile_witnessed_disposable_rename(
+            root=root, database=database, operation_id="op-1", media_key=KEY,
+            source_stage="transient", destination_stage="holding",
+            observed_at=datetime(2024, 2, 1), witness_fd=fd, require_clock_binding=True)
+        after, after_revision = store.load_with_revision()
+        assert after_revision == revision + 2
+        assert KEY not in after["first_seen"]
+        assert after["queued"][KEY] == "2024-02-01T00:00:00"
+        assert INTENTS_KEY not in after
+    finally:
+        os.close(fd)

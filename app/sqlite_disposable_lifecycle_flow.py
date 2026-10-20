@@ -65,6 +65,9 @@ def execute_disposable_lifecycle_move(*, root, database, operation_id, media_key
         raise RuntimeError("Invalid media key")
     if observed_at is None:
         observed_at = datetime.now()
+    if (not isinstance(observed_at, datetime) or observed_at.tzinfo is not None
+            or observed_at > datetime.now()):
+        raise RuntimeError("Invalid lifecycle observation time; move blocked")
     paths = {}
     for stage in STAGES:
         stage_dir = root / stage
@@ -143,12 +146,20 @@ def _perform_pinned_move(root, database, operation_id, media_key,
     if any(media_key in persisted[section] for section in CLOCKS.values()
            if section != source_clock):
         raise RuntimeError("Conflicting lifecycle clocks; move blocked")
+    if observed_at < datetime.fromisoformat(persisted[source_clock][media_key]):
+        raise RuntimeError("Lifecycle observation predates source clock; move blocked")
+    clock_binding = {
+        "source_stage": source_stage, "destination_stage": destination_stage,
+        "source_timestamp": persisted[source_clock][media_key],
+        "observed_at": observed_at.isoformat(),
+    }
     if verify_runner_binding is not None:
         verify_runner_binding()
     coordinator = SQLiteOperationCoordinator(session)
     coordinator.begin_move_with_evidence(
         operation_id, {"media_key": media_key,
-                       "source": str(source), "destination": str(destination)})
+                       "source": str(source), "destination": str(destination),
+                       "lifecycle_clock_binding": clock_binding})
     assert_stage_directories_unchanged(root, parents)
     if verify_runner_binding is not None:
         verify_runner_binding()
@@ -183,4 +194,4 @@ def _perform_pinned_move(root, database, operation_id, media_key,
         root=root, database=database, operation_id=operation_id,
         media_key=media_key, source_stage=source_stage,
         destination_stage=destination_stage,
-        observed_at=observed_at, witness_fd=fd)
+        observed_at=observed_at, witness_fd=fd, require_clock_binding=True)

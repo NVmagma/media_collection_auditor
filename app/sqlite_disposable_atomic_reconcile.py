@@ -24,7 +24,7 @@ STAGE_NAMES = {"transient": "Waiting", "holding": "Holding",
 def reconcile_witnessed_disposable_rename(*, root, database, operation_id,
                                           media_key, source_stage,
                                           destination_stage, observed_at,
-                                          witness_fd):
+                                          witness_fd, require_clock_binding=False):
     """Commit clock and intent clearance in one guarded snapshot transaction.
 
     Requires a live, independently opened pre-rename directory descriptor.
@@ -91,6 +91,17 @@ def reconcile_witnessed_disposable_rename(*, root, database, operation_id,
             or any(media_key in persisted[section] for section in CLOCKS.values()
                    if section != source_clock)):
         raise RuntimeError("Lifecycle clock conflict")
+    if observed_at < datetime.fromisoformat(persisted[source_clock][media_key]):
+        raise RuntimeError("Lifecycle observation predates source clock")
+    binding = intent["details"].get("lifecycle_clock_binding")
+    expected_binding = {
+        "source_stage": source_stage, "destination_stage": destination_stage,
+        "source_timestamp": persisted[source_clock][media_key],
+        "observed_at": observed_at.isoformat(),
+    }
+    if ((require_clock_binding or "lifecycle_clock_binding" in intent["details"])
+            and binding != expected_binding):
+        raise RuntimeError("Persisted lifecycle clock binding mismatch")
     session.state[source_clock].pop(media_key)
     session.state[destination_clock][media_key] = observed_at.isoformat()
     session.state.pop(INTENTS_KEY)

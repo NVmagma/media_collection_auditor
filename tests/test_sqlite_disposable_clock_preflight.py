@@ -60,3 +60,22 @@ def test_valid_clock_still_reconciles(tmp_path):
     result = attempt(root, db)
     assert result["status"] == "disposable_reconciled"
     assert KEY in RevisionedAuditSession(GuardedSQLiteStateStore(db)).state["queued"]
+
+
+@pytest.mark.parametrize("observed_at", [
+    "2024-02-01T00:00:00", 0, datetime(2999, 1, 1), datetime(2023, 12, 31),
+    datetime.fromisoformat("2024-02-01T00:00:00+00:00"),
+])
+def test_invalid_observation_time_never_creates_intent_or_moves(tmp_path, monkeypatch, observed_at):
+    import app.sqlite_disposable_lifecycle_flow as flow
+    root, db = lab(tmp_path)
+    before = db.read_bytes()
+    monkeypatch.setattr(flow, "rename_directory_noreplace",
+                        lambda *args: pytest.fail("rename must not run"))
+    with pytest.raises(RuntimeError, match="observation"):
+        flow.execute_disposable_lifecycle_move(
+            root=root, database=db, operation_id="op-1", media_key=KEY,
+            observed_at=observed_at)
+    assert db.read_bytes() == before
+    assert (root / "transient" / "Movie").is_dir()
+    assert not (root / "holding" / "Movie").exists()
