@@ -37,7 +37,8 @@ def execute_disposable_lifecycle_move(*, root, database, operation_id, media_key
                                       destination_stage="holding",
                                       observed_at=None, fault_at=None, expected_revision=None,
                                       planned_move=None, _use_directory_handles=False,
-                                      _verify_runner_binding=None, title_folder="Movie"):
+                                      _verify_runner_binding=None, title_folder="Movie",
+                                      _before_intent_review=None):
     """Persist intent, rename with live witness, checkpoint clocks and intent.
 
     fault_at is test-only: after_intent, after_rename, after_applied.
@@ -95,13 +96,13 @@ def execute_disposable_lifecycle_move(*, root, database, operation_id, media_key
                                     source_stage, destination_stage, observed_at,
                                     fault_at, source, destination, fd, parents,
                                     expected_revision, planned_move, _use_directory_handles,
-                                    _verify_runner_binding, title_folder)
+                                    _verify_runner_binding, title_folder, _before_intent_review)
 
 
 def _perform_pinned_move(root, database, operation_id, media_key,
                          source_stage, destination_stage, observed_at,
                          fault_at, source, destination, fd, parents,
-                         expected_revision, planned_move, use_directory_handles, verify_runner_binding, title_folder):
+                         expected_revision, planned_move, use_directory_handles, verify_runner_binding, title_folder, before_intent_review):
     if verify_runner_binding is not None:
         verify_runner_binding()
     original = os.fstat(fd)
@@ -157,6 +158,11 @@ def _perform_pinned_move(root, database, operation_id, media_key,
     }
     if verify_runner_binding is not None:
         verify_runner_binding()
+    if before_intent_review is not None:
+        before_intent_review()
+        assert_stage_directories_unchanged(root, parents)
+        if verify_runner_binding is not None:
+            verify_runner_binding()
     coordinator = SQLiteOperationCoordinator(session)
     coordinator.begin_move_with_evidence(
         operation_id, {"media_key": media_key,
