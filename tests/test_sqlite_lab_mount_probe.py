@@ -32,3 +32,16 @@ def test_nested_mount_and_malformed_input_fail_closed():
     assert result["reason"] == "nested_lab_mount"
     assert result["lab_mount_count"] == 2
     assert inspect_lab_mount_report("garbage")["status"] == "blocked"
+
+
+def test_observed_unraid_shfs_subdirectory_stays_blocked():
+    # Captured from the disposable /mnt/user/sqlite_lab_test bind on Unraid.
+    info = ("20 1 8:1 / / rw - overlay overlay rw\\n"
+            "21 20 0:45 /sqlite_lab_test /lab rw - fuse.shfs shfs rw\\n")
+    result = inspect_lab_mount_report(info)
+    assert result["status"] == "blocked"
+    assert result["reason"] == "lab_mount_root_unverified"
+    assert result["authorization"] == "not_authorized"
+    assert result["lab_mount_count"] == 1
+    assert result["lab_mounts"][0]["root"] == "/sqlite_lab_test"
+    assert result["lab_mounts"][0]["filesystem"] == "fuse.shfs"
