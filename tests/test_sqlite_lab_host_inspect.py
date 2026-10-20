@@ -8,7 +8,12 @@ from scripts.sqlite_lab_host_inspect import verify_compose_layout
 def config():
     return {"services": {"sqlite-lab": {
         "network_mode": "none", "read_only": True, "cap_drop": ["ALL"],
-        "entrypoint": ["python"],\n        "security_opt": ["no-new-privileges:true"],\n        "working_dir": "/workspace",\n        "tmpfs": ["/tmp:rw,nosuid,nodev,noexec,size=32m"],\n        "environment": {"PYTHONPATH": "/workspace", "PYTHONDONTWRITEBYTECODE": "1", "PYTHONNOUSERSITE": "1"},\n        "user": "99:100", "image": "python:3.12-slim@sha256:" + "a" * 64,
+        "entrypoint": ["python"],
+        "security_opt": ["no-new-privileges:true"],
+        "working_dir": "/workspace",
+        "tmpfs": ["/tmp:rw,nosuid,nodev,noexec,size=32m"],
+        "environment": {"PYTHONPATH": "/workspace", "PYTHONDONTWRITEBYTECODE": "1", "PYTHONNOUSERSITE": "1"},
+        "user": "99:100", "image": "python:3.12-slim@sha256:" + "a" * 64,
         "volumes": [
             {"type": "bind", "source": "/mnt/user/sqlite_lab_test",
              "target": "/lab", "read_only": False,
@@ -22,7 +27,9 @@ def config():
 
 def verify(value):
     return verify_compose_layout(value, Path("/mnt/user/sqlite_lab_test"),
-                                 Path("/mnt/user/sqlite_lab_checkout"),\n                                 expected_image="python:3.12-slim@sha256:" + "a" * 64,\n                                 expected_user="99:100")
+                                 Path("/mnt/user/sqlite_lab_checkout"),
+                                 expected_image="python:3.12-slim@sha256:" + "a" * 64,
+                                 expected_user="99:100")
 
 
 def test_expected_layout_is_only_advisory():
