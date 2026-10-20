@@ -41,3 +41,34 @@ def test_invalid_or_changed_plan_never_stages(tmp_path, change):
     assert database.read_bytes() == before
     assert not (root / ".sqlite_copy_staging").exists()
     assert (root / "transient" / FOLDER / "payload").read_text() == "disposable"
+
+
+def test_plan_binding_survives_restart_without_authority(tmp_path):
+    from app.sqlite_disposable_copy_inspection import inspect_disposable_copy
+    root, database, bundle = lab(tmp_path)
+    stage(root, bundle)
+    state, _ = GuardedSQLiteStateStore(database).load_with_revision()
+    binding = state["sqlite_pending_operations"]["details"]["plan_binding"]
+    assert binding == {"source_revision": 0, "source_stage": "transient",
+                       "destination_stage": "holding", "observed_at": bundle["now"].isoformat()}
+    before = database.read_bytes()
+    report = inspect_disposable_copy(root=root)
+    assert report["plan_binding_available"]
+    assert report["proposed_destination_stage"] == "holding"
+    assert report["status"] == "blocked" and not report["recovery_authorized"]
+    assert database.read_bytes() == before
+
+
+@pytest.mark.parametrize("field,value", [("source_revision", True), ("source_revision", 999),
+    ("destination_stage", "removal"), ("source_stage", "keep"),
+    ("observed_at", "2020-01-01T00:00:00"), ("observed_at", "bad")])
+def test_invalid_persisted_plan_binding_blocks_inspection(tmp_path, monkeypatch, field, value):
+    import app.sqlite_disposable_copy_inspection as module
+    root, database, bundle = lab(tmp_path)
+    stage(root, bundle)
+    session = RevisionedAuditSession(GuardedSQLiteStateStore(database))
+    session.state["sqlite_pending_operations"]["details"]["plan_binding"][field] = value
+    session.checkpoint()
+    monkeypatch.setattr(module, "_observe", lambda *args: pytest.fail("invalid binding must not read content"))
+    with pytest.raises(RuntimeError, match="Pending copy plan"):
+        module.inspect_disposable_copy(root=root)

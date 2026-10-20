@@ -175,11 +175,11 @@ def stage_planned_disposable_copy(*, root, title_folder, media_key, operation_id
         raise ValueError("Naive nonfuture advisory plan time required")
     return _stage_copy(root=root, title_folder=title_folder, media_key=media_key,
                        operation_id=operation_id, persist_intent=True,
-                       planned_move=bundle)
+                       planned_move=bundle, planned_destination=destination_stage)
 
 
 def _stage_copy(*, root, title_folder, operation_id, media_key=None,
-                persist_intent=False, fault_at=None, planned_move=None):
+                persist_intent=False, fault_at=None, planned_move=None, planned_destination=None):
     """Create an exclusive hidden staged copy; retain source and tracking state.
 
     Requires trusted local transport primitives (exclusive create, fsync, reads).
@@ -233,12 +233,20 @@ def _stage_copy(*, root, title_folder, operation_id, media_key=None,
                     if review["status"] != "unchanged_advisory_only":
                         raise RuntimeError("Copy advisory plan changed; staging stopped")
                     session.read_verified_snapshot()
+                plan_binding = {}
+                if planned_move is not None:
+                    if planned_move["now"] < datetime.fromisoformat(state["first_seen"][media_key]):
+                        raise RuntimeError("Copy observation predates source clock")
+                    plan_binding = {"plan_binding": {
+                        "source_revision": session.revision, "source_stage": "transient",
+                        "destination_stage": planned_destination,
+                        "observed_at": planned_move["now"].isoformat()}}
                 verify_binding()
                 SQLiteOperationCoordinator(session).begin(operation, "copy_stage", {
                     "media_key": media_key, "source": str(source_path),
                     "staging": str(staged_path), "copy_phase": "prepared",
                     "source_timestamp": state["first_seen"][media_key],
-                    "manifest_sha256": manifest_digest,
+                    "manifest_sha256": manifest_digest, **plan_binding,
                 })
                 verify_binding()
                 if fault_at == "after_intent":

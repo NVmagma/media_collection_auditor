@@ -262,3 +262,7 @@ Unraid confirmed 39 portable-copy/inspection tests per filesystem through
 revision and advisory decision revalidation before intent. This connects planner
 parity to copying but does not provide trusted freshness, promotion, source
 cleanup or production lifecycle reconciliation; no gate is newly complete.
+
+Plan-bound staging through `ca7b0e7` passed 45 tests per filesystem on Unraid.
+Its durable intent now retains the proposed transition and plan revision/time,
+validated on inspection without granting recovery authority. Gates unchanged.

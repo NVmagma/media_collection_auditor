@@ -391,3 +391,20 @@ a pending intent for review; no recovery authority is introduced.
 Unraid confirmed the operator inspection increment through `b51f2f2`: 39 tests
 passed on both shfs and native Btrfs. Plan-bound staging requires its own Unraid
 validation. Production activation and gates remain unchanged.
+
+### Durable advisory transition binding
+
+Plan-bound copies now persist a `plan_binding` containing the source revision,
+source/destination stages and advisory observation time before copying. Source
+observations must not predate the tracked source clock. Restart inspection
+validates present bindings before content reads: revision must be an earlier
+nonnegative integer, the source must be Waiting, destination Holding or Keep,
+and the naive observation time must lie between the source clock and now.
+Reports expose only whether a binding is available and the proposed destination
+stage. Historical primitive-only copy intents remain inspectable with no plan
+binding; absence never grants authority. This metadata is an advisory proposal,
+not proof of historical protection freshness, a completed move, or permission
+to promote/clear/clean up. No production execution changed.
+
+Unraid confirmed plan-bound staging through `ca7b0e7`: 45 tests passed on each
+of shfs and native Btrfs. Durable transition binding awaits its own server test.

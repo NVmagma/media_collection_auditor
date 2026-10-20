@@ -1,4 +1,5 @@
 """Explicit, potentially expensive content inspection; never copy recovery."""
+from datetime import datetime
 import hashlib
 import json
 import os
@@ -76,11 +77,30 @@ def inspect_disposable_copy(*, root):
                 or state["first_seen"].get(key) != details.get("source_timestamp")
                 or any(key in state[section] for section in ("queued", "in_removal", "keep_seen"))):
             raise RuntimeError("Pending copy binding invalid")
+        plan_binding = details.get("plan_binding")
+        if "plan_binding" in details:
+            if (not isinstance(plan_binding, dict)
+                    or set(plan_binding) != {"source_revision", "source_stage", "destination_stage", "observed_at"}
+                    or type(plan_binding.get("source_revision")) is not int
+                    or not 0 <= plan_binding["source_revision"] < revision
+                    or plan_binding.get("source_stage") != "transient"
+                    or plan_binding.get("destination_stage") not in ("holding", "keep")):
+                raise RuntimeError("Pending copy plan binding invalid")
+            try:
+                observed = datetime.fromisoformat(plan_binding["observed_at"])
+                source_time = datetime.fromisoformat(details["source_timestamp"])
+                if (observed.tzinfo is not None or source_time.tzinfo is not None
+                        or observed < source_time or observed > datetime.now()):
+                    raise ValueError("Invalid plan time")
+            except (ValueError, TypeError):
+                raise RuntimeError("Pending copy plan time invalid") from None
         source = _observe(root, "transient", folder, digest)
         staging = _observe(root, ".sqlite_copy_staging", operation, digest)
         verify_binding()
         session.read_verified_snapshot()
         return {"status": "blocked", "revision": revision, "copy_phase": details["copy_phase"],
                 "source_status": source, "staging_status": staging, "read_only": True,
+                "plan_binding_available": plan_binding is not None,
+                "proposed_destination_stage": plan_binding["destination_stage"] if plan_binding else None,
                 "recovery_authorized": False, "promotion_authorized": False,
                 "production_activation": "disabled", "storage_authority": "json"}
