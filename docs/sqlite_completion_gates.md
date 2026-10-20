@@ -14,7 +14,7 @@ A gate is complete only when its acceptance criteria are verified.
 | 6. Trusted move verification | Bind identity and paths, independently prove the moved object, reject races and ambiguous outcomes | In progress: live directory witnesses and no-replace rename verified in disposable tests; concurrent-writer isolation and crash trust remain open |
 | 7. Atomic lifecycle reconciliation | Verified move clock change and intent clearance commit together; failure injection proves all-or-nothing | In progress: witnessed disposable rename uses a single revision-checked reconciliation checkpoint; injected pre/post-commit failures tested. Production trust and integration remain open |
 | 8. Production lifecycle integration | Real Waiting/Holding/Keep/Removal moves use guarded ordering; existing JSON path unaffected until cutover | Not implemented |
-| 9. External integrations | Arr uncertain outcomes, Jellyfin protection, dashboard authoritative reads, TV-season behavior | Not implemented |
+| 9. External integrations | Arr uncertain outcomes, Jellyfin protection, dashboard authoritative reads, TV-season behavior | In progress: live read-only title coverage and protection summary verified on Unraid; production freshness, Arr/dashboard/TV-season execution remain open |
 | 10. Deployment and rollback | Disposable Unraid end-to-end tests, full CI, Docker build, backup/rollback, explicit activation approval | Not completed |
 
 ## Current decision
@@ -46,3 +46,60 @@ are reviewed.
 For each milestone report: changed files, commit, tests executed and where,
 newly completed gate (if any), remaining blockers, and whether production
 behavior changed. A new test does not by itself complete a gate.
+
+
+## Evidence and delivery order — October 20, 2026
+
+The user verified 998 SQLite fixture tests on Unraid for the earlier coverage
+increment, followed by 125 focused fixture tests and a successful live read-only
+coverage/protection report through `f48c9e9`. That report covered 539 of 539
+tracked titles in 13 requests, with no blocked titles or transport failures.
+Observed counts were favorite=7, keep=3, keep_all=2, protected=1; counts overlap.
+Production activation was disabled and freshness independently unverified.
+This is meaningful integration evidence but does not complete gates 6–10.
+
+The remaining implementation should follow this order. Do not treat additional
+aggregate report fields as progress on the production move/checkpoint barrier.
+
+1. **Close the move verification design (gates 6–7).** Define the supported
+   filesystem/mount model and writer ownership. Start with same-filesystem
+   atomic no-replace rename; reject cross-filesystem operations until a separate
+   copy/verification contract is implemented. Bind held directory handles,
+   intent identity, source/destination roots and SQLite revision. State exactly
+   which substitution and concurrent-writer threats are covered. A single audit
+   lock does not exclude Arr or manual writers. Crashes that destroy the live
+   witness must remain pending for operator review, not auto-clear from inode
+   matches or apparent destination presence. Acceptance requires disposable
+   Unraid tests of writer contention, path substitution, crashes and uncertain
+   commit outcomes. Existing disposable helpers cannot simply be relabeled as
+   production-safe.
+2. **Implement the isolated SQLite lifecycle runner (gate 8).** Use the reviewed
+   contract for intent-before-move and clock/intent checkpoint-after-verification.
+   Preserve action caps and tracking history. Every production move touchpoint
+   must use this ordering; startup must stop on unresolved intents. First prove
+   the runner with disposable media, while `run_once()` retains its JSON gate.
+3. **Finish external behavior (gate 9).** Bind fresh Jellyfin protection to each
+   planned action, including full-show/season retention. Persist Arr retry and
+   unknown-outcome handling without blind replay. Verify dashboard reads against
+   the same authoritative revision. The current live probe is diagnostic only.
+4. **Rehearse cutover and rollback (gate 10).** Stop writers, preserve verified
+   JSON backups, migrate and prove parity on disposable Unraid storage; prove
+   persistence, restart and rollback after SQLite has advanced. Do not restore
+   stale JSON over newer tracking history. Run the full suite on the final
+   revision; the earlier 998-pass result is not evidence for later revisions.
+5. **Release verification and explicit activation.** Only when implementation
+   and rehearsals are complete, obtain approval for manual CI/Docker verification
+   and review the built image before proposing a container update. SQLite
+   activation needs explicit approval. Permanent deletion remains separately
+   disabled.
+
+No overall completion percentage or calendar ETA is justified by the present
+evidence. Storage is implemented; end-to-end production orchestration is not.
+The next major milestone is the move contract and isolated runner, rather than
+more coverage-summary extensions.
+
+A preflight defect discovered during this review allowed nested stage roots to
+pass the overlap check. The guard now treats identical and ancestor/descendant
+roots as overlapping, while accepting similarly named siblings. This is a
+read-only diagnostic check, not trusted move-time path verification: it does not
+prevent later mount/path changes or grant intent-clearance authority.
