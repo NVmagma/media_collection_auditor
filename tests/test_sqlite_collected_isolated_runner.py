@@ -160,3 +160,25 @@ def test_concurrent_state_change_during_refresh_prevents_intent(tmp_path):
     assert FOLDER in state["first_seen"]
     assert (root / "transient" / FOLDER).is_dir()
     assert not (root / "holding" / FOLDER).exists()
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Atomic no-replace rename requires Linux")
+def test_collected_move_queues_arr_atomically_then_delivers_once(tmp_path):
+    from app.sqlite_isolated_arr_runner import deliver_isolated_arr_request
+    root, database = lab(tmp_path)
+    fetch, _ = transport([[item(["keep-forever"])]])
+    request = {"service": "radarr", "title_id": 42, "root": "/arr/keep", "monitored": False}
+    run(root, database, fetch, arr_sync_request=request)
+    state, _ = GuardedSQLiteStateStore(database).load_with_revision()
+    assert state["keep_seen"][FOLDER] == NOW.isoformat()
+    assert state["arr_sync_pending"][FOLDER] == {"stage": "keep", **request}
+    assert "sqlite_pending_operations" not in state
+    calls = []
+    result = deliver_isolated_arr_request(
+        root=root, database=database, operation_id="arr", media_key=FOLDER,
+        title_folder=FOLDER, details=request, send=lambda details: calls.append(details) or True)
+    assert result["outcome"] == "acknowledged_unverified"
+    assert len(calls) == 1
+    state, _ = GuardedSQLiteStateStore(database).load_with_revision()
+    assert state["sqlite_pending_operations"]["kind"] == "arr_sync"
+    assert FOLDER in state["arr_sync_pending"]

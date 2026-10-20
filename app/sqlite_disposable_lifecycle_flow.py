@@ -7,6 +7,7 @@ recovery, cross-device copy, deletion, or Arr/Jellyfin side effects.
 from __future__ import annotations
 
 from contextlib import ExitStack
+from copy import deepcopy
 from datetime import datetime
 import errno
 import os
@@ -25,6 +26,7 @@ from app.sqlite_stale_plan_review import review_plan_again
 from app.sqlite_recovery_fingerprint import capture_directory_fingerprint
 from app.state_store import GuardedSQLiteStateStore
 from app.sqlite_title_identity import validate_title_folder
+from app.sqlite_arr_queue_plan import planned_arr_queue_entry
 
 TRANSITIONS = {
     ("transient", "holding"), ("transient", "keep"),
@@ -38,13 +40,17 @@ def execute_disposable_lifecycle_move(*, root, database, operation_id, media_key
                                       observed_at=None, fault_at=None, expected_revision=None,
                                       planned_move=None, _use_directory_handles=False,
                                       _verify_runner_binding=None, title_folder="Movie",
-                                      _before_intent_review=None):
+                                      _before_intent_review=None, arr_sync_request=None):
     """Persist intent, rename with live witness, checkpoint clocks and intent.
 
     fault_at is test-only: after_intent, after_rename, after_applied.
     An interrupted run never attempts a second move or clears its intent.
     """
     validate_title_folder(title_folder)
+    arr_sync_request = deepcopy(arr_sync_request)
+    if arr_sync_request is not None:
+        planned_arr_queue_entry(request=arr_sync_request, media_key=media_key,
+                                title_folder=title_folder, destination_stage=destination_stage)
     if expected_revision is not None and (type(expected_revision) is not int or expected_revision < 0):
         raise ValueError("Invalid expected SQLite revision")
     if planned_move is not None:
@@ -96,13 +102,16 @@ def execute_disposable_lifecycle_move(*, root, database, operation_id, media_key
                                     source_stage, destination_stage, observed_at,
                                     fault_at, source, destination, fd, parents,
                                     expected_revision, planned_move, _use_directory_handles,
-                                    _verify_runner_binding, title_folder, _before_intent_review)
+                                    _verify_runner_binding, title_folder, _before_intent_review,
+                                    arr_sync_request)
 
 
 def _perform_pinned_move(root, database, operation_id, media_key,
                          source_stage, destination_stage, observed_at,
                          fault_at, source, destination, fd, parents,
-                         expected_revision, planned_move, use_directory_handles, verify_runner_binding, title_folder, before_intent_review):
+                         expected_revision, planned_move, use_directory_handles,
+                         verify_runner_binding, title_folder, before_intent_review,
+                         arr_sync_request):
     if verify_runner_binding is not None:
         verify_runner_binding()
     original = os.fstat(fd)
@@ -151,6 +160,8 @@ def _perform_pinned_move(root, database, operation_id, media_key,
         raise RuntimeError("Conflicting lifecycle clocks; move blocked")
     if observed_at < datetime.fromisoformat(persisted[source_clock][media_key]):
         raise RuntimeError("Lifecycle observation predates source clock; move blocked")
+    if arr_sync_request is not None and media_key in persisted["arr_sync_pending"]:
+        raise RuntimeError("Existing Arr queue entry; move blocked")
     clock_binding = {
         "source_stage": source_stage, "destination_stage": destination_stage,
         "source_timestamp": persisted[source_clock][media_key],
@@ -164,10 +175,11 @@ def _perform_pinned_move(root, database, operation_id, media_key,
         if verify_runner_binding is not None:
             verify_runner_binding()
     coordinator = SQLiteOperationCoordinator(session)
-    coordinator.begin_move_with_evidence(
-        operation_id, {"media_key": media_key,
-                       "source": str(source), "destination": str(destination),
-                       "lifecycle_clock_binding": clock_binding})
+    details = {"media_key": media_key, "source": str(source),
+               "destination": str(destination), "lifecycle_clock_binding": clock_binding}
+    if arr_sync_request is not None:
+        details["arr_sync_request"] = arr_sync_request
+    coordinator.begin_move_with_evidence(operation_id, details)
     assert_stage_directories_unchanged(root, parents)
     if verify_runner_binding is not None:
         verify_runner_binding()
@@ -203,4 +215,4 @@ def _perform_pinned_move(root, database, operation_id, media_key,
         media_key=media_key, source_stage=source_stage,
         destination_stage=destination_stage,
         observed_at=observed_at, witness_fd=fd, require_clock_binding=True,
-        title_folder=title_folder)
+        title_folder=title_folder, arr_sync_request=arr_sync_request)

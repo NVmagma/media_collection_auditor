@@ -161,3 +161,15 @@ def test_secret_or_unexpected_request_fields_are_not_persisted(tmp_path):
             title_folder=KEY, details={**DETAILS, "api_key": "private-token"},
             send=lambda request: pytest.fail("send must not run"))
     assert database.read_bytes() == before
+
+
+def test_stable_arr_id_in_queue_cannot_be_substituted(tmp_path):
+    root, database = lab(tmp_path)
+    store = GuardedSQLiteStateStore(database)
+    state, revision = store.load_with_revision()
+    state["arr_sync_pending"][KEY].update({"service": "radarr", "title_id": 99})
+    store.save_if_revision(state, revision)
+    before = database.read_bytes()
+    with pytest.raises(RuntimeError, match="stable identity"):
+        run(root, database, lambda request: pytest.fail("send must not run"))
+    assert database.read_bytes() == before

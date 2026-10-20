@@ -112,7 +112,7 @@ def run_isolated_lifecycle_move(*, root, database, **operation):
 def run_isolated_planned_move(*, root, database, operation_id, media_key,
                               title_folder="Movie", planned_move,
                               source_stage="transient", destination_stage="holding",
-                              observed_at=None, fault_at=None):
+                              observed_at=None, fault_at=None, arr_sync_request=None):
     """Require a candidate, then revalidate it inside the locked execution flow.
 
     The detached bundle is caller-provided advisory evidence, never proof of
@@ -133,4 +133,5 @@ def run_isolated_planned_move(*, root, database, operation_id, media_key,
         root=root, database=database, operation_id=operation_id, media_key=media_key,
         title_folder=title_folder, source_stage=source_stage,
         destination_stage=destination_stage, observed_at=observed_at,
-        fault_at=fault_at, expected_revision=revision, planned_move=bundle)
+        fault_at=fault_at, expected_revision=revision, planned_move=bundle,
+        arr_sync_request=arr_sync_request)

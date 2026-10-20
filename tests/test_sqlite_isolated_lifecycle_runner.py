@@ -379,3 +379,18 @@ def test_named_move_crash_retains_bound_paths_and_clock(tmp_path):
             root=root, database=database, operation_id="again", media_key=key,
             title_folder=folder, observed_at=datetime(2026, 1, 1))
     assert database.read_bytes() == before
+
+
+def test_existing_arr_queue_blocks_move_before_new_intent(tmp_path):
+    root, database = lab(tmp_path)
+    store = GuardedSQLiteStateStore(database)
+    state, revision = store.load_with_revision()
+    state["arr_sync_pending"]["Movie"] = {"stage": "keep", "root": "/old", "monitored": True}
+    store.save_if_revision(state, revision)
+    before = database.read_bytes()
+    with pytest.raises(RuntimeError, match="Existing Arr queue entry"):
+        run(root, database, arr_sync_request={
+            "service": "radarr", "title_id": 42, "root": "/arr/holding", "monitored": False})
+    assert database.read_bytes() == before
+    assert (root / "transient" / "Movie").is_dir()
+    assert not (root / "holding" / "Movie").exists()

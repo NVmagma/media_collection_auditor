@@ -44,6 +44,10 @@ def deliver_isolated_arr_request(*, root, database, operation_id, media_key,
                 or type(queued.get("monitored")) is not bool
                 or queued["monitored"] != request["monitored"]):
             raise RuntimeError("Arr request does not match persistent queue")
+        if any(field in queued and (type(queued[field]) is not type(request[field])
+                                    or queued[field] != request[field])
+               for field in ("service", "title_id")):
+            raise RuntimeError("Arr request stable identity differs from persistent queue")
         stage = queued["stage"]
         clock = STAGES[stage]
         if (media_key not in state[clock]

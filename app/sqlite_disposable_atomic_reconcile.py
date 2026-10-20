@@ -17,6 +17,7 @@ from app.sqlite_lifecycle_checkpoint_plan import CLOCKS, TRANSITIONS
 from app.sqlite_operation_coordinator import INTENTS_KEY
 from app.state_store import GuardedSQLiteStateStore
 from app.sqlite_title_identity import validate_title_folder
+from app.sqlite_arr_queue_plan import planned_arr_queue_entry
 
 STAGE_NAMES = {"transient": "Waiting", "holding": "Holding",
                "removal": "Removal", "keep": "Keep"}
@@ -26,7 +27,7 @@ def reconcile_witnessed_disposable_rename(*, root, database, operation_id,
                                           media_key, source_stage,
                                           destination_stage, observed_at,
                                           witness_fd, require_clock_binding=False,
-                                          title_folder="Movie"):
+                                          title_folder="Movie", arr_sync_request=None):
     """Commit clock and intent clearance in one guarded snapshot transaction.
 
     Requires a live, independently opened pre-rename directory descriptor.
@@ -105,6 +106,17 @@ def reconcile_witnessed_disposable_rename(*, root, database, operation_id,
     if ((require_clock_binding or "lifecycle_clock_binding" in intent["details"])
             and binding != expected_binding):
         raise RuntimeError("Persisted lifecycle clock binding mismatch")
+    queue_entry = None
+    if arr_sync_request is not None or "arr_sync_request" in intent["details"]:
+        if arr_sync_request is None or intent["details"].get("arr_sync_request") != arr_sync_request:
+            raise RuntimeError("Persisted Arr queue request binding mismatch")
+        queue_entry = planned_arr_queue_entry(
+            request=arr_sync_request, media_key=media_key,
+            title_folder=title_folder, destination_stage=destination_stage)
+        if media_key in persisted["arr_sync_pending"]:
+            raise RuntimeError("Existing Arr queue entry; reconciliation blocked")
+    if queue_entry is not None:
+        session.state["arr_sync_pending"][media_key] = queue_entry
     session.state[source_clock].pop(media_key)
     session.state[destination_clock][media_key] = observed_at.isoformat()
     session.state.pop(INTENTS_KEY)

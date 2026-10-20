@@ -25,7 +25,8 @@ STAGES = {"Waiting": "transient", "Holding": "holding", "Removal": "removal", "K
 def run_collected_isolated_move(*, root, database, operation_id, media_key,
                                 title_folder, jellyfin_type, thresholds, fetch,
                                 favorites_trigger_keep=True, maximum_age_seconds=60,
-                                clock=datetime.now, timer=monotonic, fault_at=None):
+                                clock=datetime.now, timer=monotonic, fault_at=None,
+                                arr_sync_request=None):
     """Collect twice under the runner lock; require unchanged complete signals.
 
     Time budget covers both scans and intervening planning. This establishes a
@@ -99,4 +100,5 @@ def run_collected_isolated_move(*, root, database, operation_id, media_key,
             title_folder=folder, source_stage=source, destination_stage=destination,
             observed_at=started, planned_move=bundle, expected_revision=revision,
             fault_at=fault_at, _use_directory_handles=True,
-            _verify_runner_binding=verify_binding, _before_intent_review=refresh_before_intent)
+            _verify_runner_binding=verify_binding, _before_intent_review=refresh_before_intent,
+            arr_sync_request=arr_sync_request)
