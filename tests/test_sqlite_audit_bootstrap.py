@@ -127,3 +127,53 @@ def test_arr_retry_stage_roundtrip_preserves_tracking_and_legacy(tmp_path, stage
     assert restarted.state["legacy"] == original["legacy"]
     assert restarted.state["first_seen"] == original["first_seen"]
     assert source.read_bytes() == backup.read_bytes()
+
+
+@pytest.mark.parametrize("kind", ["move", "arr_sync"])
+@pytest.mark.parametrize("phase", ["intent_recorded", "applied_pending_reconciliation"])
+def test_bootstrap_blocks_unresolved_operation_after_restart(tmp_path, kind, phase):
+    """Neither a pending filesystem move nor an Arr call permits new bootstrap."""
+    from app.sqlite_operation_coordinator import SQLiteOperationCoordinator
+    from app.sqlite_audit_session import RevisionedAuditSession
+    from app.state_store import GuardedSQLiteStateStore
+
+    source, backup, database, original = _setup(tmp_path)
+    session = open_isolated_sqlite_audit(source, backup, database)
+    coordinator = SQLiteOperationCoordinator(session)
+    coordinator.begin("disposable-pending", kind, {"media": "DISPOSABLE/Example"})
+    if phase == "applied_pending_reconciliation":
+        coordinator.mark_applied("disposable-pending")
+    before = RevisionedAuditSession(GuardedSQLiteStateStore(database))
+    before_revision = before.revision
+    before_state = before.read_verified_snapshot()[0]
+
+    with pytest.raises(RuntimeError, match="already modified"):
+        open_isolated_sqlite_audit(source, backup, database)
+
+    after = RevisionedAuditSession(GuardedSQLiteStateStore(database))
+    assert after.revision == before_revision
+    assert after.state == before_state
+    assert after.state["sqlite_pending_operations"]["phase"] == phase
+    assert source.read_bytes() == backup.read_bytes()
+    assert original["first_seen"] == after.state["first_seen"]
+
+
+def test_bootstrap_refuses_diverged_database_without_mutating_artifacts(tmp_path):
+    """Parity is a prerequisite, not permission to overwrite changed SQLite state."""
+    from app.sqlite_audit_session import RevisionedAuditSession
+    from app.state_store import GuardedSQLiteStateStore
+
+    source, backup, database, _ = _setup(tmp_path)
+    session = open_isolated_sqlite_audit(source, backup, database)
+    session.state["keep_seen"]["DISPOSABLE/Example"] = "2025-01-01T00:00:00"
+    session.checkpoint()
+    before = RevisionedAuditSession(GuardedSQLiteStateStore(database))
+    before_state, before_revision = before.read_verified_snapshot()
+
+    with pytest.raises(RuntimeError):
+        open_isolated_sqlite_audit(source, backup, database)
+
+    after = RevisionedAuditSession(GuardedSQLiteStateStore(database))
+    assert after.revision == before_revision
+    assert after.state == before_state
+    assert source.read_bytes() == backup.read_bytes()
