@@ -77,3 +77,29 @@ require operational controls; this barrier does not authorize live cutover.
 The production-visible change is additional refusal of unsafe lock files.
 Normal JSON state format, backend selection and lifecycle behavior are unchanged.
 No SQLite activation, restore or permanent deletion is enabled.
+
+## Single synthetic cutover/restart rehearsal
+
+Run `python -B scripts/sqlite_disposable_cutover_rehearsal.py --root /absolute/new-lab`
+with the checkout on `PYTHONPATH`. The directory must not exist; aliases and
+existing directories are refused. The command creates only its own private
+synthetic state fixtures. It accepts no existing JSON, database, media paths or
+service credentials.
+
+The rehearsal performs backup-first migration with exact snapshot parity,
+advances lifecycle/Arr/unknown-field tracking through two SQLite checkpoints,
+rejects the now-stale earlier JSON export, exports the current revision, and
+loads/saves/reloads a separate disposable JSON copy in fresh processes using the
+actual application functions. Original JSON, original backup, SQLite bytes and
+the latest export must remain unchanged by the JSON restart. Network requests
+are forbidden in child processes. All failed artifacts remain for investigation.
+A sanitized failure exits 2; a successful advisory report exits 0 and still
+explicitly denies production restore/activation. Revision 2 is synthetic tracking
+history, not evidence that any media was moved or remote request was delivered.
+
+Consolidated server validation should cover this workflow, shared-lock safety
+and separate-process contention, offline migration/rollback, current JSON
+persistence, and portable-copy regressions on both filesystem access paths.
+These tests do not require production media/appdata mounts or image builds.
+Gate 10 still needs an accepted operational restore procedure, noncooperating
+writer controls, final release verification and explicit activation approval.

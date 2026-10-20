@@ -321,3 +321,14 @@ Production JSON writes gain stricter lock-file validation; backend selection
 and media behavior are unchanged. This improves gate 10's cooperating-writer
 barrier but does not exclude noncooperating writers, authorize cutover/rollback,
 or complete any gate. Consolidated Unraid validation is still pending.
+
+### Consolidated synthetic cutover/restart milestone
+
+A new exclusive-directory rehearsal connects original JSON backup, actual
+migration, two advanced SQLite checkpoints, stale candidate rejection, fresh
+export and actual JSON load/save/fresh-process restart in one retained fixture.
+It takes no production data/configuration, performs no media actions, and never
+restores the original JSON. Failed artifacts remain and reports deny activation.
+Consolidated Unraid validation is now appropriate for rollback, shared-lock
+hardening and portable-copy integration together. Gates remain unchanged until
+server/operational/release acceptance criteria are met.
