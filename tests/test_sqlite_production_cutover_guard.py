@@ -2,6 +2,8 @@
 
 from copy import deepcopy
 
+import pytest
+
 from app.sqlite_production_cutover_guard import assess_sqlite_cutover
 from app.sqlite_snapshot_writer import write_offline_snapshot
 from app.sqlite_state import SECTIONS
@@ -74,3 +76,35 @@ def test_missing_database_does_not_create_new_state(tmp_path):
     result = assess(db, state, roots)
     assert "sqlite_snapshot_unavailable_or_invalid" in result["blockers"]
     assert not db.exists()
+
+
+@pytest.mark.parametrize("outer,inner", [("transient", "holding"),
+                                         ("keep", "removal")])
+def test_nested_stage_roots_block_in_either_order_without_writes(tmp_path, outer, inner):
+    db, state, roots = lab(tmp_path)
+    nested = roots[outer] / "nested"
+    nested.mkdir()
+    roots[inner] = nested
+    before = db.read_bytes()
+    result = assess(db, state, roots, jellyfin_protection_available=True,
+                    external_integrations_verified=True)
+    assert "stage_roots_overlap" in result["blockers"]
+    assert result["authorization"] == "not_authorized"
+    assert db.read_bytes() == before
+    assert nested.is_dir()
+
+
+def test_same_stage_directory_blocks(tmp_path):
+    db, state, roots = lab(tmp_path)
+    roots["holding"] = roots["transient"]
+    assert "stage_roots_overlap" in assess(db, state, roots)["blockers"]
+
+
+def test_similar_sibling_names_are_not_nested_roots(tmp_path):
+    db, state, roots = lab(tmp_path)
+    sibling = tmp_path / "transient-extra"
+    sibling.mkdir()
+    roots["holding"] = sibling
+    result = assess(db, state, roots, jellyfin_protection_available=True,
+                    external_integrations_verified=True)
+    assert result["blockers"] == ["sqlite_production_activation_not_approved"]

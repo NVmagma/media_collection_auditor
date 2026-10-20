@@ -38,7 +38,9 @@ def assess_sqlite_cutover(*, database, json_state, stage_roots,
                 resolved.append(path.resolve())
             except (OSError, ValueError, TypeError):
                 blockers.append(f"stage_root_unavailable:{stage}")
-        if len(resolved) != len(set(resolved)):
+        if any(left == right or left in right.parents or right in left.parents
+               for index, left in enumerate(resolved)
+               for right in resolved[index + 1:]):
             blockers.append("stage_roots_overlap")
     try:
         sqlite_state, revision = GuardedSQLiteStateStore(database).load_with_revision()
