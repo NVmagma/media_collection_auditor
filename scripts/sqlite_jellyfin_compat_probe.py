@@ -77,8 +77,22 @@ def probe(fetch):
                         summary["favorite_boolean"] &= type(ud.get("IsFavorite")) is bool
                         summary["played_boolean"] &= type(ud.get("Played")) is bool
                         summary["play_count_integer"] &= type(ud.get("PlayCount")) is int
-    except (requests.RequestException, ValueError, TypeError):
+    except requests.HTTPError as exc:
         summary["request_failed"] = True
+        code = getattr(getattr(exc, "response", None), "status_code", None)
+        summary["failure_category"] = ("http_" + str(code) if type(code) is int else "http_error")
+    except requests.Timeout:
+        summary["request_failed"] = True
+        summary["failure_category"] = "timeout"
+    except requests.ConnectionError:
+        summary["request_failed"] = True
+        summary["failure_category"] = "connection_error"
+    except requests.RequestException:
+        summary["request_failed"] = True
+        summary["failure_category"] = "request_error"
+    except (ValueError, TypeError):
+        summary["request_failed"] = True
+        summary["failure_category"] = "invalid_json_or_response"
     return summary
 
 
