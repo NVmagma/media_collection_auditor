@@ -165,3 +165,20 @@ observation from the reviewed, isolated Python lab image and confirm its
 identity and non-production mount set. Do not relax the root check based on
 an unverified root string. FUSE persistence and directory fsync behavior
 also require an actual host rehearsal; CI cannot establish Unraid durability.
+
+## Read-only mount probe
+
+Before executing any disposable phase, run the isolated Compose service's
+read-only probe (after verifying the host preflight and a reviewed pinned
+Python image):
+
+```sh
+docker compose -f docker-compose.sqlite-lab.yaml --profile sqlite-lab run --rm sqlite-lab -m scripts.sqlite_lab_mount_probe
+```
+
+The probe reads only `/proc/self/mountinfo`. It reports the container's
+`/lab` mount root, filesystem type, read-only status, and current guard
+verdict; it intentionally omits mount source devices and other host paths.
+It never grants permission to move files. A non-root mount root continues to
+return `blocked` until reviewed; do not bypass the guard. Running the probe
+does not require an empty lab, but the later `prepare` phase does.
