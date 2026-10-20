@@ -93,3 +93,40 @@ def test_items_failure_stage_is_redacted():
     assert result["failure_stage"] == "items"
     assert result["failure_category"] == "connection_error"
     assert "private" not in repr(result)
+
+
+def test_main_uses_mediabrowser_authorization_without_leaking_token(monkeypatch, capsys):
+    import json
+    from scripts import sqlite_jellyfin_compat_probe as module
+
+    monkeypatch.setenv("JELLYFIN_HOST_URL", "http://127.0.0.1:8096")
+    monkeypatch.setenv("JELLYFIN_API_TOKEN", "private-test-token")
+    seen = []
+
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return [{"Id": "user-id"}]
+
+    class FakeSession:
+        def __init__(self):
+            self.headers = {}
+            self.trust_env = True
+
+        def get(self, url, params=None, timeout=None):
+            seen.append((url, dict(self.headers), self.trust_env))
+            return FakeResponse()
+
+    monkeypatch.setattr(module.requests, "Session", FakeSession)
+    assert module.main() == 0
+    assert seen
+    assert seen[0][0].endswith("/Users")
+    assert seen[0][2] is False
+    assert seen[0][1]["Authorization"].startswith("MediaBrowser ")
+    assert "Token=private-test-token" in seen[0][1]["Authorization"]
+    assert "X-Emby-Token" not in seen[0][1]
+    output = capsys.readouterr().out
+    assert "private-test-token" not in output
+    assert json.loads(output)["production_authorized"] is False
