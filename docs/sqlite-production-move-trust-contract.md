@@ -156,3 +156,27 @@ mount equivalence or a full external-writer exclusion mechanism.
 
 The user's SSH known_hosts replacement warning did not prevent the reported
 fast-forward pull. No SSH configuration changes are part of SQLite development.
+
+
+## Persistent lab result: required rename rejected
+
+The fresh persistent Unraid lab run reported 1,125 passed and 34 failed. The
+failure inventory consists of 21 direct unsupported-rename errors and 13 later-
+phase assertions whose actual error is the same unsupported rename. The kernel
+returned EINVAL for RENAME_NOREPLACE on both path-based and descriptor-relative
+calls. The same application/syscall contract passed earlier tmpfs fixtures.
+
+Linux requires underlying filesystem support for this flag and documents EINVAL
+when a filesystem does not support a requested flag:
+[rename(2)](https://www.man7.org/linux/man-pages/man2/renameat2.2.html).
+The observed access path therefore fails the first execution model. Matching
+mount/device observations cannot waive that failure.
+
+Next collect read-only host findmnt metadata for the lab, media roots, and any
+existing native lab share paths. A direct-filesystem candidate may permit a
+separate disposable capability test, but that is not permission to change
+production mounts or substitute /mnt/disk paths for /mnt/user paths. Do not mix
+user-share and native paths within one move. A new candidate requires reviewed
+mapping, same-mount checks, no-replace tests and the full relevant suite before
+any release claim. Retain failed fixtures; do not reset pending operations just
+to rerun the suite in the same directory. No unsafe fallback is introduced.

@@ -11,7 +11,7 @@ A gate is complete only when its acceptance criteria are verified.
 | 3. Guarded checkpoints | Compare-and-swap, stale-writer rejection, uncertain checkpoint quarantine | Complete: isolated tests |
 | 4. Lifecycle decision parity | Representative movie/season clocks and read-only rehearsal | Complete: isolated tests |
 | 5. Restart and failure rehearsals | Pending intents persist, crashes fail closed, no automatic replay | Complete: disposable Unraid tests |
-| 6. Trusted move verification | Bind identity and paths, independently prove the moved object, reject races and ambiguous outcomes | In progress: cooperating-runner lock, held-parent rename, root/marker/database bindings and adversarial substitution tests pass on Unraid. Source-entry races, external-writer ownership and production crash trust remain open |
+| 6. Trusted move verification | Bind identity and paths, independently prove the moved object, reject races and ambiguous outcomes | In progress: cooperating-runner lock, held-parent rename, root/marker/database bindings and adversarial substitution tests pass on Unraid. Persistent Unraid lab run rejects required no-replace rename (EINVAL); source-entry races, external-writer ownership and production crash trust also remain open |
 | 7. Atomic lifecycle reconciliation | Verified move clock change and intent clearance commit together; failure injection proves all-or-nothing | In progress: Unraid tests verify one transaction for destination clock, stable Arr queue entry and move-intent clearance, including pre/post-commit uncertainty. Completion still depends on gate 6 and production integration |
 | 8. Production lifecycle integration | Real Waiting/Holding/Keep/Removal moves use guarded ordering; existing JSON path unaffected until cutover | Not wired: named, plan-bound, collected-signal isolated execution exists, but production audit paths still reject SQLite |
 | 9. External integrations | Arr uncertain outcomes, Jellyfin protection, dashboard authoritative reads, TV-season behavior | In progress: 539-title live advisory coverage verified; bounded two-scan protection and one-shot Arr unknown outcomes tested on Unraid. Remote Arr identity/outcome verification, dashboard authority and TV-season execution remain open |
@@ -198,3 +198,21 @@ No new gate is marked complete; production still rejects SQLite.
 All 1,153 SQLite tests passed on Unraid through `641144b`. Next gate 6 work moves
 from fixture validation to read-only deployment mount/writer discovery. The
 inventory is evidence for review, not proof of ownership or activation approval.
+
+
+## Persistent-storage blocker discovered
+
+The full suite on a fresh dedicated `/mnt/user/sql_test` lab directory produced
+**1,125 passed and 34 failed** (one Requests warning) through `f7c3cde`. All 34
+failures reach the required no-replace rename and receive EINVAL, or are expected
+later-crash assertions blocked by that same syscall rejection. This differs from
+the passing `/tmp` suite. No SQLite storage/transaction failure was reported in
+that run; this does not establish long-term durability or production readiness.
+
+The required flag is unsupported on the tested access path. Its filesystem type
+and native backing paths still need read-only inspection; do not infer a specific
+Unraid/FUSE cause without that evidence. Same mount ID/device does not prove
+rename-flag capability. Gate 6 has a concrete deployment blocker, not a reason to
+fall back to overwriting rename, copy/delete, or skip the failing tests. Preserve
+the failed fixture directory and pending intents. No production mount changes
+or activation are authorized by these test results.
