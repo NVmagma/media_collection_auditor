@@ -250,3 +250,44 @@ runner, including a clear expiry policy and title/observation binding. A plan's
 stored time or successful report must not be relabeled as independently verified
 freshness. Season-level behavior, Arr outcomes, dashboard authority and actual
 production cutover remain separate open requirements.
+
+
+## Collected protection in the isolated runner
+
+The user reported **1,101 SQLite tests passed on Unraid** through `57fd06b`.
+The next increment adds `run_collected_isolated_move`, a callable experimental
+entry point with a trusted caller-supplied GET transport. It holds the existing
+lab lock, checks pending intents before network requests, collects a complete
+unambiguous title observation, and builds the candidate from the real lifecycle
+decision/plan functions. Movie/Series type, folder and standard tracking key must
+agree. Thresholds are detached from caller mutation.
+
+Immediately before durable intent creation, a callback collects the title again
+without reusing the first scan's response cache. Both observations must have the
+same logical item ID/path and identical aggregate signals. Missing user/title
+coverage, ambiguous identities, request errors or any changed signal stop before
+intent and require a new invocation. Source/destination stage choice comes from
+the collected candidate; it is not an arbitrary caller destination.
+
+A 1–60 second budget covers the first scan, planning and second scan. Both a
+monotonic elapsed-time check and local-clock checks enforce the budget and reject
+clock reversal. The second scan must finish within that window. Root binding
+and held parents are checked again after the callback, and coordinator revision
+verification catches state changes during refresh before intent creation. No
+failed observation is converted into an all-false signal set.
+
+New fixture tests cover changed protection/favorites, identity replacement,
+disappearing titles, transport failure, expiry during either scan, timer reversal,
+pending-intent precedence, state changes during refresh, and two successful scans
+before an injected post-intent crash. Linux tests execute unprotected Holding
+and keep-forever Keep candidates using disposable payloads. Related local tests:
+**104 passed, 12 Linux-only skipped**. New Unraid validation is pending; expected
+collection size is 1,115 tests.
+
+This is a bounded experimental collection policy, **not** proof of independently
+verified production freshness. The trusted transport could itself cache or lie;
+Jellyfin can change after the last response and there is no server transaction
+spanning the move. External filesystem writer exclusion remains unresolved.
+No live moving CLI, production activation, Arr request, season pruning or
+permanent deletion is added. The Docker regression command uses fake transport
+and disposable media, with no Jellyfin credentials or production mounts.

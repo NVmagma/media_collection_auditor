@@ -140,3 +140,10 @@ All 1,086 SQLite tests passed on Unraid through `7509b86`. The following increme
 adds a named plan-bound isolated entry point that shares the strict candidate
 validator and revalidates decisions under the runner's lock before intent.
 It still uses caller-provided signals and does not complete production integration.
+
+
+All 1,101 SQLite tests passed on Unraid through `57fd06b`. The following increment
+collects and refreshes Jellyfin signals inside the isolated runner's operation
+window before intent creation. It connects existing collector and planner code
+in disposable execution but does not establish independent production freshness
+or external-writer exclusion. No production gate is newly complete.
