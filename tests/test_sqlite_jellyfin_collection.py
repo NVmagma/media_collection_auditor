@@ -87,3 +87,29 @@ def test_empty_users_fail_closed():
 def test_duplicate_items_across_pages_fail_closed():
     pages = {"u1": [item(), item()], "u2": []}
     assert collect(transport(pages))["status"] == "blocked"
+
+
+def test_boxset_does_not_block_valid_movie_or_match_title():
+    boxset = item("collection", "/media/Movies/Movie/file.mkv")
+    boxset["Type"] = "BoxSet"
+    movie = item("real-movie", "/media/Movies/Movie/file.mkv", ["keep-forever"])
+    movie["Type"] = "Movie"
+    result = collect(transport({"u1": [boxset, movie], "u2": [boxset, movie]}))
+    assert result["status"] == "shape_valid_untrusted"
+    assert result["signals"]["protected"] is True
+    assert result["authorization"] == "not_authorized"
+
+
+def test_boxset_only_never_counts_as_matching_movie():
+    boxset = item("collection", "/media/Movies/Movie/file.mkv")
+    boxset["Type"] = "BoxSet"
+    result = collect(transport({"u1": [boxset], "u2": [boxset]}))
+    assert result["status"] == "blocked"
+    assert "jellyfin_title_unmatched" in result["blockers"]
+
+
+def test_unexpected_episode_still_blocks_movie_collection():
+    episode = item("episode", "/media/Movies/Movie/file.mkv")
+    episode["Type"] = "Episode"
+    result = collect(transport({"u1": [episode], "u2": [episode]}))
+    assert result["status"] == "blocked"
