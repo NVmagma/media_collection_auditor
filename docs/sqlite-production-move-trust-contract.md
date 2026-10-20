@@ -132,3 +132,27 @@ used to restart the running container. Local diagnostic tests: **16 passed,
 1 Linux-only test skipped**, including secret-output exclusion, override
 selection, unavailable/different mounts, path aliases and read-only inspection.
 New deployment results are pending. Production gate 6 remains open.
+
+## Auditor namespace stage-path result
+
+The read-only deployment probe through `5b346cc` observed all eight candidate
+movie/show stage directories. Within that auditor namespace they reported one
+mount ID and device, and the declared Arr stage strings matched the default
+`/media` layout. Web configuration was readable. Configuration authority and
+writer exclusion correctly remained unverified; no production change followed.
+
+The next environmental acceptance test uses the existing dedicated
+`/mnt/user/sql_test` lab share. Earlier regression runs placed disposable
+fixtures on container `/tmp`; they did not establish SQLite locking, directory
+sync and no-replace behavior on this persistent Unraid lab storage.
+
+Create a new unique rehearsal directory with mktemp, mount only it at `/lab`,
+and direct pytest's basetemp to a previously nonexistent child. Keep virtualenv,
+dependency downloads and temporary runtime files on tmpfs. Do not mount production
+media or appdata. Preserve the rehearsal directory after both success and
+failure; never point pytest's basetemp at an existing data directory, since pytest
+owns/removes its fixture tree. This tests persistent lab storage, not production
+mount equivalence or a full external-writer exclusion mechanism.
+
+The user's SSH known_hosts replacement warning did not prevent the reported
+fast-forward pull. No SSH configuration changes are part of SQLite development.
