@@ -35,6 +35,7 @@ def probe(fetch):
         "scan_complete": False,
         "production_authorized": False,
     }
+    stage = "users"
     try:
         users = fetch("/Users", None)
         if not isinstance(users, list) or not users:
@@ -47,6 +48,7 @@ def probe(fetch):
         summary["users_have_ids"] = True
         for uid in ids:
             for kind in ("Movie", "Series"):
+                stage = "items"
                 data = fetch(f"/Users/{uid}/Items", {
                     "Recursive": "true", "IncludeItemTypes": kind,
                     "Fields": "Path,Tags", "StartIndex": 0, "Limit": 10,
@@ -78,19 +80,24 @@ def probe(fetch):
                         summary["played_boolean"] &= type(ud.get("Played")) is bool
                         summary["play_count_integer"] &= type(ud.get("PlayCount")) is int
     except requests.HTTPError as exc:
+        summary["failure_stage"] = stage
         summary["request_failed"] = True
         code = getattr(getattr(exc, "response", None), "status_code", None)
         summary["failure_category"] = ("http_" + str(code) if type(code) is int else "http_error")
     except requests.Timeout:
+        summary["failure_stage"] = stage
         summary["request_failed"] = True
         summary["failure_category"] = "timeout"
     except requests.ConnectionError:
+        summary["failure_stage"] = stage
         summary["request_failed"] = True
         summary["failure_category"] = "connection_error"
     except requests.RequestException:
+        summary["failure_stage"] = stage
         summary["request_failed"] = True
         summary["failure_category"] = "request_error"
     except (ValueError, TypeError):
+        summary["failure_stage"] = stage
         summary["request_failed"] = True
         summary["failure_category"] = "invalid_json_or_response"
     return summary
@@ -105,6 +112,8 @@ def main():
         print("Jellyfin host and token must be supplied through environment variables.", file=sys.stderr)
         return 2
     session = requests.Session()
+    # Do not inherit host proxy settings for the explicitly configured Jellyfin URL.
+    session.trust_env = False
     session.headers.update({"X-Emby-Token": token})
 
     def fetch(path, params):
