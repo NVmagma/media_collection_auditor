@@ -15,7 +15,7 @@ A gate is complete only when its acceptance criteria are verified.
 | 7. Atomic lifecycle reconciliation | Verified move clock change and intent clearance commit together; failure injection proves all-or-nothing | In progress: Unraid tests verify one transaction for destination clock, stable Arr queue entry and move-intent clearance, including pre/post-commit uncertainty. Completion still depends on gate 6 and production integration |
 | 8. Production lifecycle integration | Real Waiting/Holding/Keep/Removal moves use guarded ordering; existing JSON path unaffected until cutover | Not wired: named, plan-bound, collected-signal isolated execution exists, but production audit paths still reject SQLite |
 | 9. External integrations | Arr uncertain outcomes, Jellyfin protection, dashboard authoritative reads, TV-season behavior | In progress: 539-title live advisory coverage verified; bounded two-scan protection and one-shot Arr unknown outcomes tested on Unraid. Remote Arr identity/outcome verification, dashboard authority and TV-season execution remain open |
-| 10. Deployment and rollback | Disposable Unraid end-to-end tests, full CI, Docker build, backup/rollback, explicit activation approval | Incomplete: disposable Unraid suite passes (1,140 tests through ac9ae6d). Final release CI/image, rollback after advanced SQLite state and explicit activation approval remain open |
+| 10. Deployment and rollback | Disposable Unraid end-to-end tests, full CI, Docker build, backup/rollback, explicit activation approval | Incomplete: consolidated migration/advanced rollback/portable-copy validation passed 185 tests and 11 subtests on each Unraid filesystem through 6bad439. Accepted operational restore, final release CI/image and explicit activation approval remain open |
 
 ## Current decision
 
@@ -332,3 +332,18 @@ restores the original JSON. Failed artifacts remain and reports deny activation.
 Consolidated Unraid validation is now appropriate for rollback, shared-lock
 hardening and portable-copy integration together. Gates remain unchanged until
 server/operational/release acceptance criteria are met.
+
+## Consolidated Unraid evidence through `6bad439`
+
+The user confirmed 185 tests and 11 subtests passed on shfs and again on native
+Btrfs. This covers advanced-state rollback, actual JSON restart compatibility,
+shared-lock hardening/process contention, migration and portable-copy regressions.
+The Requests warning was non-failing. This is targeted integration evidence, not
+a final full-suite/release run or permission to activate/restore production.
+
+Next gate 9 work binds pending isolated Arr delivery to two fresh GET-only
+readbacks, stable queue identity, exact destination folder/root/monitoring and
+an unchanged SQLite/local binding. Reports remain non-authorizing; no retry,
+queue removal or intent clearance is implemented. See
+[the isolated Arr readback contract](sqlite-isolated-arr-readback.md). Synthetic
+HTTP regressions do not assert a live Arr test occurred. No gate is completed.
