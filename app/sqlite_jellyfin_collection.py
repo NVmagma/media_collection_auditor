@@ -56,7 +56,8 @@ def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
                 items = data.get("Items")
                 if (total < 0 or not isinstance(items, list) or
                         len(items) > page_size or start + len(items) > total or
-                        (start < total and not items)):
+                        (start < total and not items) or
+                        (start < total and len(items) != min(page_size, total - start))):
                     raise ValueError("Incomplete Jellyfin page")
                 for item in items:
                     if not isinstance(item, dict):
@@ -72,7 +73,10 @@ def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
                             or not isinstance(user_data, dict)
                             or type(user_data.get("IsFavorite")) is not bool
                             or type(user_data.get("Played")) is not bool
-                            or type(user_data.get("PlayCount")) is not int):
+                            or type(user_data.get("PlayCount")) is not int
+                            or user_data["PlayCount"] < 0
+                            or (item.get("Type") is not None
+                                and item["Type"] != jellyfin_type)):
                         raise ValueError("Missing or inconsistent Jellyfin item fields")
                     seen_ids.add(item_id)
                     pure = PurePosixPath(path)
