@@ -153,3 +153,10 @@ adds a one-shot disposable Arr delivery boundary with durable intent and
 persistent unknown/acknowledged-but-unverified outcomes. Automatic retry and
 clearance are refused. Atomic queue creation after a move and independently
 verified remote identity/outcome are still open; gate 9 remains in progress.
+
+
+All 1,130 SQLite tests passed on Unraid through `df44671`. The following increment
+atomically enqueues a bound Arr notification with the verified disposable move's
+clock update and intent clearance. Stable queued IDs are checked before delivery.
+Remote identity verification and production integration remain open; no new gate
+is marked complete.

@@ -331,3 +331,43 @@ belongs to the local title, fetch the remote result, or authorize intent
 clearance. Those are remaining integration work, not implied by a send callback
 return value. It does not change the production JSON retry implementation.
 No real service requests or production mounts are used by regression tests.
+
+
+## Atomic move-to-Arr handoff
+
+The user reported **1,130 SQLite tests passed on Unraid** through `df44671`.
+The next increment accepts an optional non-secret `arr_sync_request` in the
+isolated/planned/collected move flow. The request is validated against the media
+key, folder, service and destination stage and detached before execution. An
+existing queue entry blocks the move before intent rather than being replaced.
+The durable move intent carries the request alongside path and clock bindings.
+
+After witnessed rename, reconciliation requires the request to exactly match the
+persisted intent. One revision-checked transaction changes the stage clock,
+adds `arr_sync_pending[media_key]`, and clears the move intent. The queue entry
+contains stage, service, title_id, root and monitored. Those extra stable identity
+fields are preserved by the existing snapshot contract. Arr delivery checks them
+when present; legacy queue entries without stable IDs retain their earlier
+experimental handling. A supplied ID is still not independently verified title
+identity merely because it is persisted.
+
+The commit never sends an Arr notification. The separate one-shot delivery
+runner consumes the queue after the move commit and still leaves every outcome
+pending verification. A crash between move commit and delivery preserves the
+queued work. A crash/uncertainty at final move commit requires reopening state:
+either the old clock and move intent remain, or the new clock and queue exist
+with no move intent. No automatic move replay is authorized in either case.
+
+New portable tests prove the queue/clock/clearance share exactly one revision,
+pre- and post-commit errors never create a partial handoff, changed or missing
+bound requests cannot clear intent, and existing queues cannot be overwritten.
+They also reject queued Arr ID substitution and block moves with preexisting
+notification work. A Linux end-to-end fixture collects protection, moves a named
+title to Keep, verifies atomic queue creation, then performs one fake Arr send
+that remains acknowledged-but-unverified. Related local validation: **94 passed,
+13 Linux-only skipped**. Unraid validation is pending; expected suite size 1,140.
+
+No actual Arr HTTP integration, independently fetched remote identity/outcome,
+production runner, season pruning or deletion is introduced. Request omission
+means no new queue is created, preserving existing fixture behavior; production
+integration must explicitly select and verify its external-sync policy.
