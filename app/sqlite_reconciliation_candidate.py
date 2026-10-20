@@ -28,7 +28,13 @@ def plan_atomic_move_reconciliation(session, *, operation_id, media_key,
     if (not isinstance(observed_at, datetime) or observed_at.tzinfo is not None
             or observed_at > datetime.now()):
         return {**BLOCKED, "reason": "invalid_observation_time"}
-    if (source_stage, destination_stage) not in TRANSITIONS:
+    stage_to_lifecycle = {
+        "transient": "Waiting", "holding": "Holding",
+        "removal": "Removal", "keep": "Keep",
+    }
+    transition = (stage_to_lifecycle.get(source_stage),
+                  stage_to_lifecycle.get(destination_stage))
+    if transition not in TRANSITIONS:
         return {**BLOCKED, "reason": "unsupported_lifecycle_transition"}
     try:
         original, revision = session.read_verified_snapshot()
@@ -40,8 +46,8 @@ def plan_atomic_move_reconciliation(session, *, operation_id, media_key,
         return {**BLOCKED, "reason": "persisted_intent_missing"}
     if pending.get("phase") not in ("intent_recorded", "applied_pending_reconciliation"):
         return {**BLOCKED, "reason": "invalid_intent_phase"}
-    source_clock = CLOCKS[source_stage]
-    destination_clock = CLOCKS[destination_stage]
+    source_clock = CLOCKS[transition[0]]
+    destination_clock = CLOCKS[transition[1]]
     if media_key not in original[source_clock]:
         return {**BLOCKED, "reason": "source_clock_missing"}
     if any(media_key in original[section] for section in CLOCKS.values()
