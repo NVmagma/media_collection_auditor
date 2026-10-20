@@ -17,8 +17,9 @@ FIELDS = ("played", "favorite", "disliked", "keep", "keep_all", "protected")
 
 def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
                               page_size=PAGE_SIZE):
-    if jellyfin_type not in ("Movie", "Series") or not isinstance(folder, str) or not folder:
-        raise ValueError("Movie/Series and folder required")
+    if (jellyfin_type not in ("Movie", "Series") or not isinstance(folder, str)
+            or not folder or folder in (".", "..") or "/" in folder or "\\\" in folder):
+        raise ValueError("Movie/Series and single folder name required")
     if not callable(fetch) or type(page_size) is not int or page_size < 1 or page_size > 1000:
         raise ValueError("Invalid Jellyfin collection configuration")
     if not isinstance(now, datetime) or now.tzinfo is not None:
@@ -44,6 +45,9 @@ def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
                 })
                 if not isinstance(data, dict) or type(data.get("TotalRecordCount")) is not int:
                     raise ValueError("Pagination metadata missing")
+                if ("StartIndex" in data and
+                        (type(data["StartIndex"]) is not int or data["StartIndex"] != start)):
+                    raise ValueError("Jellyfin page offset mismatch")
                 total = data["TotalRecordCount"]
                 if expected_total is None:
                     expected_total = total
@@ -61,6 +65,8 @@ def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
                     tags, user_data = item.get("Tags"), item.get("UserData")
                     if (not isinstance(item_id, str) or not item_id or item_id in seen_ids
                             or not isinstance(path, str) or not path.startswith("/")
+                            or any(part in (".", "..") for part in path.split("/"))
+                            or "//" in path or "\\\\" in path
                             or not isinstance(tags, list)
                             or any(not isinstance(tag, str) for tag in tags)
                             or not isinstance(user_data, dict)
