@@ -36,6 +36,7 @@ def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
         for uid in ids:
             start = 0
             seen_ids = set()
+            expected_total = None
             while True:
                 data = fetch(f"/Users/{uid}/Items", {
                     "Recursive": "true", "IncludeItemTypes": jellyfin_type,
@@ -44,6 +45,10 @@ def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
                 if not isinstance(data, dict) or type(data.get("TotalRecordCount")) is not int:
                     raise ValueError("Pagination metadata missing")
                 total = data["TotalRecordCount"]
+                if expected_total is None:
+                    expected_total = total
+                elif total != expected_total:
+                    raise ValueError("Jellyfin result count changed during pagination")
                 items = data.get("Items")
                 if (total < 0 or not isinstance(items, list) or
                         len(items) > page_size or start + len(items) > total or
