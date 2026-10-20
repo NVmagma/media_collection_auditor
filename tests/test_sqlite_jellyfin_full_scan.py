@@ -151,7 +151,7 @@ def test_unknown_type_never_leaks_raw_value():
     assert "secret" not in repr(result)
 
 
-def test_full_scan_requests_boxset_exclusion_but_does_not_trust_it():
+def test_full_scan_counts_boxset_without_classifying_as_movie():
     seen = []
     def fetch(path, params):
         if path == "/Users":
@@ -165,6 +165,20 @@ def test_full_scan_requests_boxset_exclusion_but_does_not_trust_it():
     result = scan(fetch)
     assert seen[0]["IncludeItemTypes"] == "Movie"
     assert seen[0]["ExcludeItemTypes"] == "BoxSet"
-    assert result["scan_complete"] is False
-    assert result["returned_item_type"] == "BoxSet"
+    assert result["scan_complete"] is True
+    assert result["boxset_items_skipped"] == 1
+    assert result["movie_items_checked"] == 0
     assert result["production_authorized"] is False
+
+
+def test_unexpected_episode_still_blocks_full_scan():
+    def fetch(path, params):
+        if path == "/Users":
+            return [{"Id": "private"}]
+        bad = item(0)
+        bad["Type"] = "Episode"
+        return {"TotalRecordCount": 1, "Items": [bad]}
+    result = scan(fetch)
+    assert result["scan_complete"] is False
+    assert result["returned_item_type"] == "Episode"
+    assert result["validation_failure"] == "item_type"
