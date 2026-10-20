@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 
 from app.sqlite_disposable_atomic_reconcile import reconcile_witnessed_disposable_rename
+from app.sqlite_noreplace_rename import rename_directory_noreplace
 from app.sqlite_disposable_move_runner import STAGES
 from app.sqlite_audit_session import RevisionedAuditSession
 from app.sqlite_operation_coordinator import SQLiteOperationCoordinator
@@ -83,7 +84,7 @@ def execute_disposable_lifecycle_move(*, root, database, operation_id, media_key
             raise RuntimeError("Injected crash after intent")
         # The persisted intent is durable before this external operation.
         try:
-            os.rename(source, destination)
+            rename_directory_noreplace(source, destination)
         except OSError as exc:
             if exc.errno == errno.EXDEV:
                 raise RuntimeError("Cross-device move blocked; intent retained") from exc
