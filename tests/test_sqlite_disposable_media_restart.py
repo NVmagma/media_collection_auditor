@@ -90,3 +90,30 @@ def test_arr_sync_pending_restart_blocks_new_operations(tmp_path, phase):
     fresh = RevisionedAuditSession(GuardedSQLiteStateStore(database))
     assert fresh.revision == before_revision
     assert fresh.state == before_state
+
+
+def test_concurrent_arr_intents_preserve_first_committed_operation(tmp_path):
+    """A stale session cannot replace a durable, unresolved Arr intent."""
+    database = tmp_path / "state.db"
+    write_offline_snapshot({section: {} for section in SECTIONS}, database)
+    first = RevisionedAuditSession(GuardedSQLiteStateStore(database))
+    stale = RevisionedAuditSession(GuardedSQLiteStateStore(database))
+
+    SQLiteOperationCoordinator(first).begin(
+        "first-arr", "arr_sync", {"media": "DISPOSABLE/First", "stage": "keep"}
+    )
+    with pytest.raises(RuntimeError, match="stale"):
+        SQLiteOperationCoordinator(stale).begin(
+            "second-arr", "arr_sync", {"media": "DISPOSABLE/Second", "stage": "keep"}
+        )
+
+    reopened = RevisionedAuditSession(GuardedSQLiteStateStore(database))
+    assert reopened.state[INTENTS_KEY]["id"] == "first-arr"
+    assert reopened.state[INTENTS_KEY]["phase"] == "intent_recorded"
+    with pytest.raises(RuntimeError, match="Unresolved"):
+        SQLiteOperationCoordinator(reopened).begin(
+            "third-arr", "arr_sync", {"media": "DISPOSABLE/Third"}
+        )
+    verified = RevisionedAuditSession(GuardedSQLiteStateStore(database))
+    assert verified.state[INTENTS_KEY]["id"] == "first-arr"
+    assert verified.revision == first.revision
