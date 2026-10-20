@@ -19,6 +19,7 @@ from app.sqlite_disposable_parent_witness import (pinned_stage_directories,
 from app.sqlite_disposable_move_runner import STAGES
 from app.sqlite_audit_session import RevisionedAuditSession
 from app.sqlite_operation_coordinator import SQLiteOperationCoordinator
+from app.sqlite_lifecycle_checkpoint_plan import CLOCKS
 from app.sqlite_recovery_fingerprint import capture_directory_fingerprint
 from app.state_store import GuardedSQLiteStateStore
 
@@ -95,6 +96,17 @@ def _perform_pinned_move(root, database, operation_id, media_key,
     session = RevisionedAuditSession(GuardedSQLiteStateStore(database))
     if expected_revision is not None and session.revision != expected_revision:
         raise RuntimeError("Stale disposable plan revision; no intent or move performed")
+    # Refuse an invalid source clock before persisting intent or renaming.
+    # Reconciliation performs the same check again after the witnessed move.
+    stage_name = {"transient": "Waiting", "holding": "Holding",
+                  "removal": "Removal", "keep": "Keep"}[source_stage]
+    source_clock = CLOCKS[stage_name]
+    persisted, _ = session.read_verified_snapshot()
+    if media_key not in persisted[source_clock]:
+        raise RuntimeError("Source lifecycle clock unavailable; move blocked")
+    if any(media_key in persisted[section] for section in CLOCKS.values()
+           if section != source_clock):
+        raise RuntimeError("Conflicting lifecycle clocks; move blocked")
     coordinator = SQLiteOperationCoordinator(session)
     coordinator.begin_move_with_evidence(
         operation_id, {"media_key": media_key,
