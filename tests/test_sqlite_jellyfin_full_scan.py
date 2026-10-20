@@ -149,3 +149,22 @@ def test_unknown_type_never_leaks_raw_value():
     result = scan(fetch)
     assert result["returned_item_type"] == "other_or_invalid"
     assert "secret" not in repr(result)
+
+
+def test_full_scan_requests_boxset_exclusion_but_does_not_trust_it():
+    seen = []
+    def fetch(path, params):
+        if path == "/Users":
+            return [{"Id": "private-user"}]
+        seen.append(dict(params))
+        if params["IncludeItemTypes"] == "Movie":
+            bad = item(0)
+            bad["Type"] = "BoxSet"
+            return {"TotalRecordCount": 1, "Items": [bad]}
+        return {"TotalRecordCount": 0, "Items": []}
+    result = scan(fetch)
+    assert seen[0]["IncludeItemTypes"] == "Movie"
+    assert seen[0]["ExcludeItemTypes"] == "BoxSet"
+    assert result["scan_complete"] is False
+    assert result["returned_item_type"] == "BoxSet"
+    assert result["production_authorized"] is False
