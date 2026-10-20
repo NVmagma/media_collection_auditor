@@ -69,7 +69,18 @@ def preview_with_collected_jellyfin(*, database, now, thresholds, requests,
         "titles": coverage_rows,
     }
     coverage["complete"] = coverage["blocked_titles"] == 0
+    # Counts describe validated observations, not authorization or title state.
+    # Unknown coverage must never look like zero protected titles.
+    protection_counts = {
+        field: (sum(signals[key][field] for key in tracked)
+                if coverage["complete"] else None)
+        for field in ("protected", "keep_all", "keep", "favorite")
+    }
     return {
+        "protection_summary": {
+            "available": coverage["complete"],
+            "counts": protection_counts,
+        },
         "coverage": coverage,
         "status": "blocked" if (any(value["status"] == "blocked"
                                     for value in observations.values())

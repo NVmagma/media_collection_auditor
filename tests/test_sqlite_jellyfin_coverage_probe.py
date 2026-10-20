@@ -177,3 +177,36 @@ def test_invalid_json_is_reported_without_response_body():
         fetch_readonly(Session(), "http://private-host", "/Users", None)
     assert error.value.category == "invalid_json"
     assert "sensitive-response" not in str(error.value)
+
+
+def test_live_summary_counts_titles_once_across_users(tmp_path):
+    path = db(tmp_path, ["One"])
+    before = path.read_bytes()
+    def fetch(endpoint, params):
+        if endpoint == "/Users":
+            return [{"Id": "u1"}, {"Id": "u2"}]
+        record = item("One", tags=["keep-forever", "keep"])
+        record["UserData"]["IsFavorite"] = True
+        return {"TotalRecordCount": 1, "Items": [record]}
+    result = probe_coverage(path, fetch, now=NOW)
+    assert result["protection_summary"] == {
+        "available": True,
+        "counts": {"protected": 1, "keep_all": 1, "keep": 1, "favorite": 1},
+    }
+    assert path.read_bytes() == before
+    assert "One" not in json.dumps(result)
+    assert result["production_authorized"] is False
+
+
+def test_revision_change_makes_protection_unknown(tmp_path, monkeypatch):
+    import app.sqlite_jellyfin_coverage_probe as module
+    path = db(tmp_path, ["One"])
+    original = module.preview_with_collected_jellyfin
+    def changed(**kwargs):
+        result = original(**kwargs)
+        result["preview"]["revision"] += 1
+        return result
+    monkeypatch.setattr(module, "preview_with_collected_jellyfin", changed)
+    report = probe_coverage(path, transport({"Movie": [item("One", tags=["keep-forever"])]}, []), now=NOW)
+    assert report["protection_summary"]["available"] is False
+    assert all(value is None for value in report["protection_summary"]["counts"].values())

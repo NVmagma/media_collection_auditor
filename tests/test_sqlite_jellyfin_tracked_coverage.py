@@ -134,3 +134,30 @@ def test_empty_collection_does_not_hide_unresolved_operation(tmp_path):
     assert result["coverage"]["complete"] is True
     assert result["preview"]["status"] == "blocked"
     assert result["status"] == "blocked"
+
+
+def test_protection_counts_exclude_untracked_requests_and_include_keep_forever(tmp_path):
+    db = database(tmp_path, {"queued": ["Movie"], "keep_seen": ["TV/Show"]})
+    movie = item(tags=["keep-forever", "keep", "not-at-all"])
+    movie["UserData"]["IsFavorite"] = True
+    result = preview(db, {"Movie": request(), "TV/Show": request("Show", "Series"),
+                          "Other": request("Other")}, {
+        "Movie": [movie, item("other", "/media/Other/file.mkv", ["keep-forever"])],
+        "Series": [item("show", "/media/Show", ["keep-all-seasons"])],
+    })
+    assert result["protection_summary"] == {
+        "available": True,
+        "counts": {"protected": 1, "keep_all": 2, "keep": 1, "favorite": 1},
+    }
+
+
+@pytest.mark.parametrize("requests,records", [
+    ({}, {}),
+    ({"Movie": request()}, {"Movie": []}),
+    ({"Movie": request()}, {"Movie": [item(), item("second", "/other/Movie/f.mkv")]}),
+])
+def test_incomplete_coverage_never_reports_zero_protection(tmp_path, requests, records):
+    db = database(tmp_path, {"queued": ["Movie"]})
+    summary = preview(db, requests, records)["protection_summary"]
+    assert summary["available"] is False
+    assert all(value is None for value in summary["counts"].values())

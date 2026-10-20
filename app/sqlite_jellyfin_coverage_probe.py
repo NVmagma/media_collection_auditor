@@ -69,7 +69,14 @@ def probe_coverage(database, fetch, *, now=None):
     reasons = Counter(reason for row in coverage["titles"] for reason in row["blockers"])
     if changed:
         reasons["sqlite_revision_changed"] += 1
+    protection_summary = result["protection_summary"]
+    if changed:
+        protection_summary = {
+            "available": False,
+            "counts": {field: None for field in protection_summary["counts"]},
+        }
     return {
+        "protection_summary": protection_summary,
         "status": "blocked" if changed or result["status"] == "blocked" else "advisory_only",
         "coverage_complete": coverage["complete"] and not changed,
         "tracked_titles": coverage["tracked_titles"],
