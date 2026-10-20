@@ -9,7 +9,9 @@ import subprocess
 from scripts.sqlite_lab_preflight import check_lab_environment
 
 
-def verify_compose_layout(config: dict, lab: Path, checkout: Path,\n                          expected_image: str | None = None,\n                          expected_user: str | None = None) -> dict:
+def verify_compose_layout(config: dict, lab: Path, checkout: Path,
+                          expected_image: str | None = None,
+                          expected_user: str | None = None) -> dict:
     """Fail closed on unexpected services, mounts, privileges or networking."""
     services = config.get("services")
     if not isinstance(services, dict) or set(services) != {"sqlite-lab"}:
@@ -22,7 +24,18 @@ def verify_compose_layout(config: dict, lab: Path, checkout: Path,\n            
             or service.get("ports")
             or service.get("devices")):
         raise RuntimeError("Compose isolation settings mismatch")
-    if (service.get("security_opt") != ["no-new-privileges:true"]\n            or service.get("working_dir") != "/workspace"\n            or service.get("tmpfs") != ["/tmp:rw,nosuid,nodev,noexec,size=32m"]\n            or service.get("environment") != {\n                "PYTHONPATH": "/workspace",\n                "PYTHONDONTWRITEBYTECODE": "1",\n                "PYTHONNOUSERSITE": "1",\n            }\n            or service.get("user", expected_user) != expected_user\n            or service.get("image", expected_image) != expected_image):\n        raise RuntimeError("Compose runtime identity or security mismatch")\n    mounts = service.get("volumes")
+    if (service.get("security_opt") != ["no-new-privileges:true"]
+            or service.get("working_dir") != "/workspace"
+            or service.get("tmpfs") != ["/tmp:rw,nosuid,nodev,noexec,size=32m"]
+            or service.get("environment") != {
+                "PYTHONPATH": "/workspace",
+                "PYTHONDONTWRITEBYTECODE": "1",
+                "PYTHONNOUSERSITE": "1",
+            }
+            or service.get("user", expected_user) != expected_user
+            or service.get("image", expected_image) != expected_image):
+        raise RuntimeError("Compose runtime identity or security mismatch")
+    mounts = service.get("volumes")
     if not isinstance(mounts, list) or len(mounts) != 2:
         raise RuntimeError("Unexpected Compose mount count")
     expected = {"/lab": (lab, False), "/workspace": (checkout, True)}
@@ -60,7 +73,13 @@ def main() -> None:
          "config", "--format", "json"], check=True, capture_output=True, text=True,
         timeout=30,
     )
-    import os\n    values = os.environ\n    result = verify_compose_layout(\n        json.loads(completed.stdout), lab, checkout,\n        expected_image=values["SQLITE_LAB_IMAGE"],\n        expected_user=values["SQLITE_LAB_UID"] + ":" + values["SQLITE_LAB_GID"],\n    )
+    import os
+    values = os.environ
+    result = verify_compose_layout(
+        json.loads(completed.stdout), lab, checkout,
+        expected_image=values["SQLITE_LAB_IMAGE"],
+        expected_user=values["SQLITE_LAB_UID"] + ":" + values["SQLITE_LAB_GID"],
+    )
     print(json.dumps(result, indent=2, sort_keys=True))
 
 
