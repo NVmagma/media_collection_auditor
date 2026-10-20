@@ -94,3 +94,62 @@ dispatched. Existing workflow triggers were reviewed: the safety and Docker
 workflows do not run on pushes of these paths to `feature/sqlite`, and the
 security push workflow is limited to dependency, Dockerfile, and workflow paths.
 Do not interpret absent Actions runs as a successful Actions check.
+
+## Confirmed Unraid fixture results and live probe
+
+The user subsequently reported **102 focused tests passed** and **998 full
+SQLite tests passed** on Unraid with Python 3.12. Both runs reported a Requests
+character-detection dependency warning; neither had test failures. These results
+validate the reconciliation increment through `8de620d`, not the later live
+probe. They supersede the pending fixture-validation status above. They do not
+establish live tracked-title coverage.
+
+`scripts/sqlite_jellyfin_tracked_coverage.py --database /lab/state.db` is a new
+GET-only live probe. Mount an existing disposable lab database directory at
+`/lab` read-only; do not mount production appdata or media. Set
+`JELLYFIN_HOST_URL` and `JELLYFIN_API_TOKEN` in the calling shell and pass them by
+environment name to Docker. Do not put the token in command arguments or share it
+in output. The transport rejects redirects and disables environment proxies.
+The database must already exist; this command never migrates or initializes it.
+
+The probe uses the standard state-key convention: bare movie folder keys and
+`TV/` followed by a single series folder. Other formats remain uncovered. It
+caches users and item pages only within one invocation, including transport
+failures, so title count does not multiply live HTTP requests. There is a hard
+10,000 unique request budget. Matching still runs through the tested collector
+and bridge. Revision changes between request mapping and preview invalidate all
+coverage. The output contains only aggregate counts and fixed blocker labels.
+
+This is a coverage check, not a lifecycle action preview: threshold-zero internal
+decisions are discarded. A zero exit code means tracked coverage is complete;
+it does not authorize operations. Removal or pending intents can still make
+`status` blocked with complete coverage. Zero tracked titles means no titles were
+validated. Freshness remains independently unverified, and cached pages are not
+a transactional Jellyfin snapshot. The probe does not alter tracking state,
+clear intents, invoke Arr, refresh Jellyfin, or activate production.
+
+Full read-only Docker command (set `SQLITE_COVERAGE_LAB_DIR` to the dedicated lab
+directory containing the existing `state.db`; keep its SQLite WAL/SHM companions
+alongside it if present):
+
+```sh
+cd /mnt/user/sqlite_lab_checkout
+[ "$(git branch --show-current)" = "feature/sqlite" ] || exit 1
+git pull --ff-only origin feature/sqlite
+docker run --rm --pull=never --read-only \
+  --cap-drop ALL --security-opt no-new-privileges \
+  --tmpfs /tmp:rw,nosuid,nodev,size=256m \
+  --mount type=bind,src="$PWD",dst=/workspace,readonly \
+  --mount type=bind,src="${SQLITE_COVERAGE_LAB_DIR:?Set your disposable SQLite lab directory}",dst=/lab,readonly \
+  -w /workspace \
+  -e PYTHONDONTWRITEBYTECODE=1 -e PYTHONPATH=/workspace \
+  -e JELLYFIN_HOST_URL -e JELLYFIN_API_TOKEN \
+  --entrypoint sh \
+  "${SQLITE_LAB_IMAGE:?Set your reviewed Python lab image digest}" \
+  -c 'python -m venv /tmp/testenv &&
+      /tmp/testenv/bin/python -m pip install --no-cache-dir -r requirements.txt &&
+      /tmp/testenv/bin/python scripts/sqlite_jellyfin_tracked_coverage.py --database /lab/state.db'
+```
+
+The live probe is locally fixture-tested; its new code still requires Unraid
+validation. No Docker build or GitHub Actions dispatch is required.
