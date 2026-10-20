@@ -69,22 +69,27 @@ def scan(fetch):
                         path = item.get("Path")
                         tags = item.get("Tags")
                         data = item.get("UserData")
-                        if (not isinstance(item_id, str) or not item_id or
-                                item_id in seen or
-                                not isinstance(path, str) or
-                                not path.startswith("/") or
-                                "//" in path or chr(92) in path or
-                                any(p in (".", "..") for p in path.split("/")) or
-                                not isinstance(tags, list) or
-                                any(not isinstance(tag, str) for tag in tags) or
-                                not isinstance(data, dict) or
-                                type(data.get("IsFavorite")) is not bool or
-                                type(data.get("Played")) is not bool or
-                                type(data.get("PlayCount")) is not int or
-                                data["PlayCount"] < 0 or
-                                (item.get("Type") is not None and
-                                 item["Type"] != kind)):
-                            raise ValueError("item_fields")
+                        if not isinstance(item_id, str) or not item_id:
+                            raise ValueError("item_id")
+                        if item_id in seen:
+                            raise ValueError("duplicate_item_id")
+                        if not isinstance(path, str) or not path.startswith("/"):
+                            raise ValueError("item_path")
+                        if ("//" in path or chr(92) in path or
+                                any(part in (".", "..") for part in path.split("/"))):
+                            raise ValueError("unsafe_item_path")
+                        if not isinstance(tags, list) or any(not isinstance(tag, str) for tag in tags):
+                            raise ValueError("item_tags")
+                        if not isinstance(data, dict):
+                            raise ValueError("user_data")
+                        if type(data.get("IsFavorite")) is not bool:
+                            raise ValueError("favorite_field")
+                        if type(data.get("Played")) is not bool:
+                            raise ValueError("played_field")
+                        if type(data.get("PlayCount")) is not int or data["PlayCount"] < 0:
+                            raise ValueError("play_count_field")
+                        if item.get("Type") is not None and item["Type"] != kind:
+                            raise ValueError("item_type")
                         seen.add(item_id)
                     count = len(items)
                     report["items_checked"] += count
@@ -108,7 +113,9 @@ def scan(fetch):
         report["failure_category"] = "invalid_or_incomplete_response"
         # Only fixed internal labels are permitted; never echo exception text.
         allowed = {"users_shape", "page_shape", "pagination_metadata",
-                   "page_length", "item_fields"}
+                   "page_length", "item_fields", "item_id", "duplicate_item_id",
+                   "item_path", "unsafe_item_path", "item_tags", "user_data",
+                   "favorite_field", "played_field", "play_count_field", "item_type"}
         report["validation_failure"] = (str(exc) if type(exc) is ValueError
                                         and str(exc) in allowed else "unexpected_shape")
     if not report["scan_complete"]:
