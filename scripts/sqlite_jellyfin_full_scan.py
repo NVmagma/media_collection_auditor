@@ -31,7 +31,7 @@ def scan(fetch):
         if (len(ids) != len(users) or
                 any(not isinstance(uid, str) or not uid for uid in ids) or
                 len(set(ids)) != len(ids)):
-            raise ValueError("users")
+            raise ValueError("users_shape")
         report["users_checked"] = len(ids)
         for uid in ids:
             for kind in ("Movie", "Series"):
@@ -84,7 +84,7 @@ def scan(fetch):
                                 data["PlayCount"] < 0 or
                                 (item.get("Type") is not None and
                                  item["Type"] != kind)):
-                            raise ValueError("item")
+                            raise ValueError("item_fields")
                         seen.add(item_id)
                     count = len(items)
                     report["items_checked"] += count
