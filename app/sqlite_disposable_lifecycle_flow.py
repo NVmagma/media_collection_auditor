@@ -20,6 +20,7 @@ from app.sqlite_disposable_move_runner import STAGES
 from app.sqlite_audit_session import RevisionedAuditSession
 from app.sqlite_operation_coordinator import SQLiteOperationCoordinator
 from app.sqlite_lifecycle_checkpoint_plan import CLOCKS
+from app.sqlite_stale_plan_review import review_plan_again
 from app.sqlite_recovery_fingerprint import capture_directory_fingerprint
 from app.state_store import GuardedSQLiteStateStore
 
@@ -32,7 +33,8 @@ TRANSITIONS = {
 def execute_disposable_lifecycle_move(*, root, database, operation_id, media_key,
                                       source_stage="transient",
                                       destination_stage="holding",
-                                      observed_at=None, fault_at=None, expected_revision=None):
+                                      observed_at=None, fault_at=None, expected_revision=None,
+                                      planned_move=None):
     """Persist intent, rename with live witness, checkpoint clocks and intent.
 
     fault_at is test-only: after_intent, after_rename, after_applied.
@@ -40,6 +42,9 @@ def execute_disposable_lifecycle_move(*, root, database, operation_id, media_key
     """
     if expected_revision is not None and (type(expected_revision) is not int or expected_revision < 0):
         raise ValueError("Invalid expected SQLite revision")
+    if planned_move is not None:
+        if not isinstance(planned_move, dict) or expected_revision is None:
+            raise ValueError("Disposable planned move requires expected revision")
     root, database = Path(root), Path(database)
     if (not root.is_absolute() or root.is_symlink() or not root.is_dir()
             or root.resolve() != root or database != root / "state.db"
@@ -82,13 +87,13 @@ def execute_disposable_lifecycle_move(*, root, database, operation_id, media_key
         return _perform_pinned_move(root, database, operation_id, media_key,
                                     source_stage, destination_stage, observed_at,
                                     fault_at, source, destination, fd, parents,
-                                    expected_revision)
+                                    expected_revision, planned_move)
 
 
 def _perform_pinned_move(root, database, operation_id, media_key,
                          source_stage, destination_stage, observed_at,
                          fault_at, source, destination, fd, parents,
-                         expected_revision):
+                         expected_revision, planned_move):
     original = os.fstat(fd)
     current = os.stat(source, follow_symlinks=False)
     if (original.st_dev, original.st_ino) != (current.st_dev, current.st_ino):
@@ -96,6 +101,32 @@ def _perform_pinned_move(root, database, operation_id, media_key,
     session = RevisionedAuditSession(GuardedSQLiteStateStore(database))
     if expected_revision is not None and session.revision != expected_revision:
         raise RuntimeError("Stale disposable plan revision; no intent or move performed")
+    if planned_move is not None:
+        try:
+            original_plan = planned_move["plan"]
+            thresholds = planned_move["thresholds"]
+            signals = planned_move["signals_by_key"]
+            planned_at = planned_move["now"]
+        except (KeyError, TypeError) as exc:
+            raise ValueError("Incomplete disposable planned move") from exc
+        if original_plan.get("source_revision") != expected_revision:
+            raise RuntimeError("Disposable plan revision binding mismatch")
+        review = review_plan_again(
+            database=database, original_plan=original_plan,
+            now=planned_at, thresholds=thresholds, signals_by_key=signals,
+            favorites_trigger_keep=planned_move.get("favorites_trigger_keep", True))
+        if review["status"] != "unchanged_advisory_only":
+            raise RuntimeError("Disposable plan changed; no intent or move performed")
+        mapping = {"transient": "Waiting", "holding": "Holding",
+                   "removal": "Removal", "keep": "Keep"}
+        matching = [row for row in original_plan["rows"]
+                    if row["media_key"] == media_key]
+        if (len(matching) != 1
+                or matching[0]["source_stage"] != mapping[source_stage]
+                or matching[0]["destination_stage"] != mapping[destination_stage]
+                or matching[0]["status"] != "candidate_requires_verification"):
+            raise RuntimeError("Disposable plan does not match requested move")
+        # This is parity rehearsal only: supplied Jellyfin data is not trusted.
     # Refuse an invalid source clock before persisting intent or renaming.
     # Reconciliation performs the same check again after the witnessed move.
     stage_name = {"transient": "Waiting", "holding": "Holding",
