@@ -8,7 +8,7 @@ from scripts.sqlite_lab_host_inspect import verify_compose_layout
 def config():
     return {"services": {"sqlite-lab": {
         "network_mode": "none", "read_only": True, "cap_drop": ["ALL"],
-        "entrypoint": ["python"],
+        "entrypoint": ["python"],\n        "security_opt": ["no-new-privileges:true"],\n        "working_dir": "/workspace",\n        "tmpfs": ["/tmp:rw,nosuid,nodev,noexec,size=32m"],\n        "environment": {"PYTHONPATH": "/workspace", "PYTHONDONTWRITEBYTECODE": "1", "PYTHONNOUSERSITE": "1"},\n        "user": "99:100", "image": "python:3.12-slim@sha256:" + "a" * 64,
         "volumes": [
             {"type": "bind", "source": "/mnt/user/sqlite_lab_test",
              "target": "/lab", "read_only": False,
@@ -22,7 +22,7 @@ def config():
 
 def verify(value):
     return verify_compose_layout(value, Path("/mnt/user/sqlite_lab_test"),
-                                 Path("/mnt/user/sqlite_lab_checkout"))
+                                 Path("/mnt/user/sqlite_lab_checkout"),\n                                 expected_image="python:3.12-slim@sha256:" + "a" * 64,\n                                 expected_user="99:100")
 
 
 def test_expected_layout_is_only_advisory():
@@ -56,3 +56,11 @@ def test_unexpected_compose_configuration_blocks(change):
         service["volumes"].pop()
     with pytest.raises(RuntimeError):
         verify(value)
+
+
+@pytest.mark.parametrize("key,value", [("user", "0:0"), ("image", "python:latest"), ("security_opt", []), ("tmpfs", []), ("environment", {}), ("working_dir", "/")])
+def test_runtime_identity_changes_block(key, value):
+    candidate = config()
+    candidate["services"]["sqlite-lab"][key] = value
+    with pytest.raises(RuntimeError):
+        verify(candidate)
