@@ -44,4 +44,10 @@ def inspect_pending_operation(state: dict[str, Any]) -> dict[str, str]:
             "observation": "external_state_unverified",
             "decision": "manual_reconciliation_required",
         }
+    if kind == "copy_stage":
+        copy_phase = details.get("copy_phase")
+        if copy_phase not in ("prepared", "verified_source_retained"):
+            raise RuntimeError("Malformed copy staging phase")
+        return {"id": operation_id, "kind": kind, "phase": phase,
+                "observation": copy_phase, "decision": "manual_reconciliation_required"}
     raise RuntimeError("Unsupported SQLite recovery operation")

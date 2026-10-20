@@ -1,7 +1,8 @@
 """Portable copy/verification building block for marked disposable labs.
 
-No renameat2, filesystem-name policy, source removal, tracking checkpoint,
-notification, promotion, automatic retry or production caller.
+No renameat2, filesystem-name policy, source removal, lifecycle checkpoint,
+notification, promotion, automatic retry or production caller. A separate
+wrapper records durable copy intents without clearing them.
 """
 import hashlib
 import json
@@ -11,7 +12,8 @@ import stat
 
 from app.sqlite_isolated_lifecycle_runner import isolated_runner_lock
 from app.sqlite_title_identity import validate_title_folder
-from app.sqlite_operation_coordinator import INTENTS_KEY
+from app.sqlite_operation_coordinator import INTENTS_KEY, SQLiteOperationCoordinator
+from app.sqlite_audit_session import RevisionedAuditSession
 from app.state_store import GuardedSQLiteStateStore
 
 FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
@@ -143,6 +145,19 @@ def _copy_tree(source_fd, destination_fd):
 
 
 def stage_disposable_verified_copy(*, root, title_folder, operation_id):
+    """Primitive-only fixture tool; no intent or lifecycle state changes."""
+    return _stage_copy(root=root, title_folder=title_folder, operation_id=operation_id)
+
+
+def stage_disposable_copy_with_intent(*, root, title_folder, media_key, operation_id,
+                                    fault_at=None):
+    """Durable copy rehearsal; always retains source and pending intent."""
+    return _stage_copy(root=root, title_folder=title_folder, media_key=media_key,
+                       operation_id=operation_id, persist_intent=True, fault_at=fault_at)
+
+
+def _stage_copy(*, root, title_folder, operation_id, media_key=None,
+                persist_intent=False, fault_at=None):
     """Create an exclusive hidden staged copy; retain source and tracking state.
 
     Requires trusted local transport primitives (exclusive create, fsync, reads).
@@ -151,8 +166,13 @@ def stage_disposable_verified_copy(*, root, title_folder, operation_id):
     root = Path(root)
     folder = validate_title_folder(title_folder)
     operation = validate_title_folder(operation_id)
+    if persist_intent and media_key not in (folder, "TV/" + folder):
+        raise ValueError("Copy folder and tracking key mismatch")
+    if fault_at not in (None, "after_intent", "after_copy", "after_verified_checkpoint"):
+        raise ValueError("Invalid copy rehearsal fault boundary")
     with isolated_runner_lock(root) as verify_binding:
-        state, _ = GuardedSQLiteStateStore(root / "state.db").load_with_revision()
+        session = RevisionedAuditSession(GuardedSQLiteStateStore(root / "state.db"))
+        state, _ = session.read_verified_snapshot()
         if INTENTS_KEY in state:
             raise RuntimeError("Unresolved operation; copy staging stopped")
         source_parent = root / "transient"
@@ -167,6 +187,25 @@ def stage_disposable_verified_copy(*, root, title_folder, operation_id):
             original_source = os.fstat(source_fd)
             before, identities = _manifest(source_fd)
             stage_parent = root / ".sqlite_copy_staging"
+            staged_path = stage_parent / operation
+            if staged_path.exists() or staged_path.is_symlink():
+                raise FileExistsError("Copy staging slot occupied")
+            if persist_intent:
+                if (media_key not in state["first_seen"]
+                        or any(media_key in state[section] for section in ("queued", "in_removal", "keep_seen"))):
+                    raise RuntimeError("Copy source tracking clock missing or conflicting")
+                manifest_digest = hashlib.sha256(json.dumps(
+                    before, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")).hexdigest()
+                verify_binding()
+                SQLiteOperationCoordinator(session).begin(operation, "copy_stage", {
+                    "media_key": media_key, "source": str(source_path),
+                    "staging": str(staged_path), "copy_phase": "prepared",
+                    "source_timestamp": state["first_seen"][media_key],
+                    "manifest_sha256": manifest_digest,
+                })
+                verify_binding()
+                if fault_at == "after_intent":
+                    raise RuntimeError("Injected copy crash after intent")
             if not stage_parent.exists():
                 stage_parent.mkdir(mode=0o700)
             if stage_parent.is_symlink() or not stage_parent.is_dir():
@@ -177,6 +216,8 @@ def stage_disposable_verified_copy(*, root, title_folder, operation_id):
             stage_fd = os.open(operation, FLAGS, dir_fd=stage_parent_fd)
             original_stage = os.fstat(stage_fd)
             _copy_tree(source_fd, stage_fd)
+            if fault_at == "after_copy":
+                raise RuntimeError("Injected copy crash after copy")
             after, after_identities = _manifest(source_fd)
             copied, _ = _manifest(stage_fd)
             if before != after or identities != after_identities or copied != before:
@@ -196,10 +237,22 @@ def stage_disposable_verified_copy(*, root, title_folder, operation_id):
             finally:
                 os.close(root_fd)
             verify_binding()
-            return {"status": "staged_copy_verified", "source_retained": True,
+            if persist_intent:
+                session.read_verified_snapshot()
+                intent = session.state[INTENTS_KEY]
+                intent["details"]["copy_phase"] = "verified_source_retained"
+                intent["phase"] = "applied_pending_reconciliation"
+                session.checkpoint()
+                if fault_at == "after_verified_checkpoint":
+                    raise RuntimeError("Injected copy crash after verified checkpoint")
+            result = {"status": "copy_verified_pending_review" if persist_intent else "staged_copy_verified", "source_retained": True,
                     "files_verified": sum(entry[0] == "file" for entry in before.values()),
                     "tracking_committed": False, "promotion_authorized": False,
                     "production_activation": "disabled"}
+            if persist_intent:
+                result["intent_persisted"] = True
+                result["lifecycle_committed"] = False
+            return result
         finally:
             if stage_fd is not None:
                 os.close(stage_fd)

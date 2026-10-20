@@ -61,10 +61,18 @@ def inspect_pending_recovery_status(database: str | Path) -> dict[str, Any]:
         pending.get("id"), pending.get("kind"), pending.get("phase")
     )
     if (not isinstance(operation_id, str) or not operation_id
-            or kind not in ("move", "arr_sync")
+            or kind not in ("move", "arr_sync", "copy_stage")
             or phase not in ("intent_recorded", "applied_pending_reconciliation")
             or not isinstance(pending.get("details"), dict)):
         raise RuntimeError("Pending recovery operation invalid")
+    if kind == "copy_stage":
+        copy_phase = pending["details"].get("copy_phase")
+        if copy_phase not in ("prepared", "verified_source_retained"):
+            raise RuntimeError("Pending copy phase invalid")
+        session.read_verified_snapshot()
+        return {**base, "status": "blocked", "operation_id": operation_id,
+                "operation_kind": kind, "operation_phase": phase,
+                "copy_phase": copy_phase, "blocker": "portable_copy_recovery_not_authorized"}
     return {
         **base, "status": "blocked",
         "operation_id": operation_id,
