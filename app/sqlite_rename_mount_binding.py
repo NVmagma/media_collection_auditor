@@ -78,8 +78,6 @@ def capture_rename_mount_binding(source_parent_fd, destination_parent_fd, witnes
     if len({entry["mount_id"] for entry in entries}) != 1 or len({entry["device"] for entry in entries}) != 1:
         raise RuntimeError("Rename requires one observed mount and device")
     filesystem = read_mount_filesystem(entries[0]["mount_id"])
-    if filesystem == "fuse.shfs":
-        raise RuntimeError("fuse.shfs blocked: required no-replace rename unsupported on verified deployment")
     return {"filesystem": filesystem,
             "namespace_device": namespace_device, "namespace_inode": namespace_inode,
             "directories": entries}

@@ -75,9 +75,9 @@ def test_missing_ambiguous_or_malformed_filesystem_blocks(contents):
         module.parse_mount_filesystem(contents, 8)
 
 
-def test_observed_shfs_policy_blocks_held_rename(directories, monkeypatch):
+def test_filesystem_label_is_observation_not_global_policy(directories, monkeypatch):
     monkeypatch.setattr(module, "read_mount_namespace_identity", lambda: (1, 2))
     monkeypatch.setattr(module, "read_fd_mount_id", lambda fd: 10)
     monkeypatch.setattr(module, "read_mount_filesystem", lambda mount_id: "fuse.shfs")
-    with pytest.raises(RuntimeError, match="fuse.shfs blocked"):
-        module.capture_rename_mount_binding(*directories)
+    binding = module.capture_rename_mount_binding(*directories)
+    assert binding["filesystem"] == "fuse.shfs"
