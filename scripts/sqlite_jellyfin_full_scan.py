@@ -112,7 +112,7 @@ def scan(fetch):
 
 def main():
     url = os.environ.get("JELLYFIN_HOST_URL", "").rstrip("/")
-    token = os.environ.get("JELLYFIN_API_TOKEN", "").strip().strip("'\\"")
+    token = os.environ.get("JELLYFIN_API_TOKEN", "").strip()
     parsed = urlparse(url)
     if (parsed.scheme not in ("http", "https") or not parsed.hostname or
             parsed.username or parsed.password or not token):
