@@ -211,3 +211,42 @@ The next integration step is binding named execution to a revalidated advisory
 lifecycle candidate, while retaining the existing revision, path and intent
 checks. Arbitrary caller-supplied success or protection flags remain insufficient
 for production operations.
+
+## Plan-bound named entry point
+
+The user reported **1,086 SQLite tests passed on Unraid** through `7509b86`.
+The next increment adds `run_isolated_planned_move`, a stricter named execution
+entry point. The manual isolated runner remains a lower-level fixture tool.
+Neither entry point is connected to production.
+
+The shared disposable candidate validator is reused by both the earlier strict
+rehearsal entry point and the new isolated planned runner. It requires a
+non-authorizing advisory plan, an integer source revision, exactly one matching
+media-key row, matching source/destination stages, candidate status and the full
+required-check list. It does not mark those checks as independently satisfied.
+The new entry point detaches the plan bundle, requires a naive plan clock and
+uses that clock for the tracking update; an explicitly different observation
+time requires replanning. It carries the plan revision into locked execution,
+where current SQLite revision and unresolved-intent checks retain precedence.
+
+The existing executor recomputes the lifecycle plan from the detached time,
+thresholds and caller-supplied signals before durable intent or rename. Changed
+candidate rows, candidate counts or revisions block execution. No-op, unavailable
+protection or unplanned destinations cannot become move candidates. Named folder
+binding, root/marker/database/lock checks, held parents, live witness and durable
+clock binding all remain in force. A plan is still advisory evidence, not a
+fresh Jellyfin observation or proof of exclusive external-writer ownership.
+
+New tests cover absent/malformed plans, changed protection/threshold inputs,
+stale revisions, required-check tampering, duplicate rows, unplanned destinations
+and mismatched plan clocks. A portable injected-crash test proves a named plan
+creates durable bound intent and a subsequent run refuses replay. Linux tests
+execute matching Holding and protected Keep candidates on disposable payloads.
+Related local tests: **60 passed, 10 Linux-only skipped, 1 known Linux move test
+deselected**. Unraid validation is pending; expected collection size is 1,101.
+
+Next integration work is live signal collection/revalidation for the planned
+runner, including a clear expiry policy and title/observation binding. A plan's
+stored time or successful report must not be relabeled as independently verified
+freshness. Season-level behavior, Arr outcomes, dashboard authority and actual
+production cutover remain separate open requirements.

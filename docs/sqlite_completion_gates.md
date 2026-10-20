@@ -135,3 +135,8 @@ All 1,071 SQLite tests passed on Unraid through `ddd71c4`. The following increme
 supports explicitly named disposable title folders bound to standard movie/show
 tracking keys. It removes the single-title fixture limitation without connecting
 production execution, season pruning, or activation. Gates 6–10 remain open.
+
+All 1,086 SQLite tests passed on Unraid through `7509b86`. The following increment
+adds a named plan-bound isolated entry point that shares the strict candidate
+validator and revalidates decisions under the runner's lock before intent.
+It still uses caller-provided signals and does not complete production integration.
