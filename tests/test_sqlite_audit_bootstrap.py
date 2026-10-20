@@ -147,7 +147,7 @@ def test_bootstrap_blocks_unresolved_operation_after_restart(tmp_path, kind, pha
     before_revision = before.revision
     before_state = before.read_verified_snapshot()[0]
 
-    with pytest.raises(RuntimeError, match="already modified"):
+    with pytest.raises(RuntimeError, match="SQLite snapshot differs from JSON backup"):
         open_isolated_sqlite_audit(source, backup, database)
 
     after = RevisionedAuditSession(GuardedSQLiteStateStore(database))
