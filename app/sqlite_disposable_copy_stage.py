@@ -241,7 +241,18 @@ def _stage_copy(*, root, title_folder, operation_id, media_key=None,
                         "source_revision": session.revision, "source_stage": "transient",
                         "destination_stage": planned_destination,
                         "observed_at": planned_move["now"].isoformat()}}
+                # Advisory review can be slow. Do not persist an intent against
+                # the earlier source observation if an external writer changed it.
+                current_manifest, current_identities = _manifest(source_fd)
+                if before != current_manifest or identities != current_identities:
+                    raise RuntimeError("Copy source changed before intent")
+                current_source = os.stat(source_path, follow_symlinks=False)
+                if (source_path.resolve() != source_path
+                        or (current_source.st_dev, current_source.st_ino)
+                        != (original_source.st_dev, original_source.st_ino)):
+                    raise RuntimeError("Copy source binding changed before intent")
                 verify_binding()
+                session.read_verified_snapshot()
                 SQLiteOperationCoordinator(session).begin(operation, "copy_stage", {
                     "media_key": media_key, "source": str(source_path),
                     "staging": str(staged_path), "copy_phase": "prepared",

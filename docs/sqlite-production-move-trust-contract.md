@@ -408,3 +408,18 @@ to promote/clear/clean up. No production execution changed.
 
 Unraid confirmed plan-bound staging through `ca7b0e7`: 45 tests passed on each
 of shfs and native Btrfs. Durable transition binding awaits its own server test.
+
+### Source revalidation at the copy intent boundary
+
+After advisory review and before the durable intent, copy staging repeats the
+held-source manifest and metadata observation, checks the current source path
+against the held directory, rejects aliases, and rechecks the SQLite snapshot.
+Tests change file content, substitute a title directory, alias the source parent,
+and advance SQLite during review; each stops before staging/intent creation.
+This adds another complete source read in durable staging. It narrows an
+observable review window but does not prevent changes after the last check or
+exclude external writers. Existing post-copy verification and pending-intent
+failure behavior remain required. No production move/cleanup is enabled.
+
+Unraid confirmed durable transition binding through `56810b7`: 52 tests passed
+on shfs and 52 on native Btrfs. Intent-boundary revalidation awaits server tests.

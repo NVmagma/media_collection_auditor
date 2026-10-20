@@ -266,3 +266,8 @@ cleanup or production lifecycle reconciliation; no gate is newly complete.
 Plan-bound staging through `ca7b0e7` passed 45 tests per filesystem on Unraid.
 Its durable intent now retains the proposed transition and plan revision/time,
 validated on inspection without granting recovery authority. Gates unchanged.
+
+Durable transition binding through `56810b7` passed 52 tests on each Unraid
+filesystem. Copy staging now rechecks held source content/path and the SQLite
+snapshot after advisory review, before intent. This detects observed changes;
+it does not establish external-writer exclusion or complete gate 6.

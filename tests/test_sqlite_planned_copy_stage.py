@@ -72,3 +72,38 @@ def test_invalid_persisted_plan_binding_blocks_inspection(tmp_path, monkeypatch,
     monkeypatch.setattr(module, "_observe", lambda *args: pytest.fail("invalid binding must not read content"))
     with pytest.raises(RuntimeError, match="Pending copy plan"):
         module.inspect_disposable_copy(root=root)
+
+
+@pytest.mark.parametrize("change", ["content", "title_replacement", "parent_alias", "revision"])
+def test_changes_during_review_stop_before_intent(tmp_path, monkeypatch, change):
+    import app.sqlite_stale_plan_review as review_module
+    root, database, bundle = lab(tmp_path)
+    original = review_module.review_plan_again
+    def review(**kwargs):
+        result = original(**kwargs)
+        source = root / "transient" / FOLDER
+        if change == "content":
+            (source / "payload").write_text("external writer changed bytes")
+        elif change == "title_replacement":
+            source.rename(root / "retained-original")
+            source.mkdir()
+            (source / "payload").write_text("disposable")
+        elif change == "parent_alias":
+            (root / "transient").rename(root / "retained-parent")
+            (root / "transient").symlink_to(root / "retained-parent", target_is_directory=True)
+        else:
+            other = RevisionedAuditSession(GuardedSQLiteStateStore(database))
+            other.checkpoint()
+        return result
+    monkeypatch.setattr(review_module, "review_plan_again", review)
+    before = database.read_bytes()
+    with pytest.raises(RuntimeError, match="before intent|session is stale"):
+        stage(root, bundle)
+    state, _ = GuardedSQLiteStateStore(database).load_with_revision()
+    assert "sqlite_pending_operations" not in state
+    assert not (root / ".sqlite_copy_staging").exists()
+    if change != "revision":
+        assert database.read_bytes() == before
+    else:
+        assert GuardedSQLiteStateStore(database).load_with_revision()[1] == 1
+    assert FOLDER in state["first_seen"] and not state["queued"]
