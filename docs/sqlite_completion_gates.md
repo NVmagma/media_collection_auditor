@@ -282,3 +282,20 @@ Collected-copy integration through `e4e0942` passed 65 tests per filesystem on
 Unraid. Whole-show portable staging now has explicit TV-key, nested-season and
 refreshed protection regression coverage. This does not implement season pruning,
 production TV execution or complete gate 9; gate states remain unchanged.
+
+## Advanced-state rollback candidate milestone
+
+Unraid confirmed whole-show portable copy coverage through `bf57739`: 72 tests
+passed on each filesystem. Stop requesting one server run per small follow-up;
+use local checks and request consolidated Unraid validation at meaningful
+integration boundaries.
+
+A new [disposable advanced-state rollback workflow](sqlite-disposable-advanced-rollback.md)
+exports current SQLite history into a fresh private JSON candidate, verifies
+parity, rejects unresolved operations and detects later divergence. Tests also
+re-import the candidate into a separate offline database and preserve queued Arr
+work and unknown fields. This addresses the stale-backup data-loss scenario in
+an isolated workflow. It does not authorize restoration, prove production JSON
+loader compatibility, establish writer exclusion or complete gate 10. Production
+remains JSON-authoritative; no restore, activation, media move or deletion occurs.
+Server validation and final release/rollback verification remain outstanding.
