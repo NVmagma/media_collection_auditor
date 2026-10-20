@@ -207,3 +207,87 @@ def test_source_entry_substitution_never_clears_intent(tmp_path, monkeypatch):
     assert "Movie" in state["first_seen"]
     assert "Movie" not in state["queued"]
     assert (root / "transient" / "OriginalMovie" / "fixture.txt").read_text() == "disposable media"
+
+
+@pytest.mark.parametrize("name", ["state.db", ".sqlite_disposable_rehearsal", ".sqlite_runner.lock"])
+def test_replaced_binding_detected_while_lock_held(tmp_path, name):
+    root, _ = lab(tmp_path)
+    with pytest.raises(RuntimeError, match="binding changed"):
+        with module.isolated_runner_lock(root) as verify:
+            replacement = root / "replacement"
+            replacement.write_bytes((root / name).read_bytes())
+            os.replace(replacement, root / name)
+            verify()
+
+
+def test_marker_content_change_detected_without_inode_change(tmp_path):
+    root, _ = lab(tmp_path)
+    with pytest.raises(RuntimeError, match="marker contents changed"):
+        with module.isolated_runner_lock(root) as verify:
+            (root / ".sqlite_disposable_rehearsal").write_text("NOT A LAB\n")
+            verify()
+
+
+def test_database_replaced_during_load_stops_before_executor(tmp_path, monkeypatch):
+    root, database = lab(tmp_path)
+    original_load = module.GuardedSQLiteStateStore.load_with_revision
+    def replacing_load(self):
+        state, revision = original_load(self)
+        replacement = root / "replacement.db"
+        replacement.write_bytes(database.read_bytes())
+        os.replace(replacement, database)
+        return state, revision
+    monkeypatch.setattr(module.GuardedSQLiteStateStore, "load_with_revision", replacing_load)
+    monkeypatch.setattr(module, "execute_disposable_lifecycle_move",
+                        lambda **kwargs: pytest.fail("executor must not run"))
+    with pytest.raises(RuntimeError, match="binding changed: state.db"):
+        run(root, database)
+    assert (root / "transient" / "Movie").is_dir()
+    assert not (root / "holding" / "Movie").exists()
+
+
+def test_root_replaced_at_open_is_rejected_before_lock_creation(tmp_path, monkeypatch):
+    root, _ = lab(tmp_path)
+    original_open = module.os.open
+    def replacing_open(path, flags, *args, **kwargs):
+        if path == root:
+            root.rename(tmp_path / "original_lab")
+            root.mkdir()
+        return original_open(path, flags, *args, **kwargs)
+    monkeypatch.setattr(module.os, "open", replacing_open)
+    with pytest.raises(RuntimeError, match="root changed while opening"):
+        with module.isolated_runner_lock(root):
+            pytest.fail("replacement root accepted")
+    assert not (root / ".sqlite_runner.lock").exists()
+    assert not (tmp_path / "original_lab" / ".sqlite_runner.lock").exists()
+
+
+def test_hardlinked_database_rejected_before_lock_creation(tmp_path):
+    root, database = lab(tmp_path)
+    os.link(database, tmp_path / "alias.db")
+    before = database.read_bytes()
+    with pytest.raises(RuntimeError, match="Unsafe disposable marker or database"):
+        run(root, database)
+    assert database.read_bytes() == before
+    assert not (root / ".sqlite_runner.lock").exists()
+
+
+def test_binding_check_after_intent_blocks_rename_on_lock_replacement(tmp_path, monkeypatch):
+    import app.sqlite_disposable_lifecycle_flow as flow
+    root, database = lab(tmp_path)
+    original_begin = flow.SQLiteOperationCoordinator.begin_move_with_evidence
+    def replacing_begin(self, *args, **kwargs):
+        original_begin(self, *args, **kwargs)
+        new_lock = root / "replacement.lock"
+        new_lock.write_text("")
+        os.replace(new_lock, root / ".sqlite_runner.lock")
+    monkeypatch.setattr(flow.SQLiteOperationCoordinator, "begin_move_with_evidence", replacing_begin)
+    monkeypatch.setattr(flow, "rename_directory_noreplace_at",
+                        lambda *args: pytest.fail("rename must not run"))
+    with pytest.raises(RuntimeError, match="binding changed: .sqlite_runner.lock"):
+        run(root, database)
+    state, _ = GuardedSQLiteStateStore(database).load_with_revision()
+    assert "sqlite_pending_operations" in state
+    assert "Movie" in state["first_seen"]
+    assert "Movie" not in state["queued"]
+    assert (root / "transient" / "Movie").is_dir()

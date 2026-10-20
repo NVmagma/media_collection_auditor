@@ -35,7 +35,8 @@ def execute_disposable_lifecycle_move(*, root, database, operation_id, media_key
                                       source_stage="transient",
                                       destination_stage="holding",
                                       observed_at=None, fault_at=None, expected_revision=None,
-                                      planned_move=None, _use_directory_handles=False):
+                                      planned_move=None, _use_directory_handles=False,
+                                      _verify_runner_binding=None):
     """Persist intent, rename with live witness, checkpoint clocks and intent.
 
     fault_at is test-only: after_intent, after_rename, after_applied.
@@ -88,13 +89,16 @@ def execute_disposable_lifecycle_move(*, root, database, operation_id, media_key
         return _perform_pinned_move(root, database, operation_id, media_key,
                                     source_stage, destination_stage, observed_at,
                                     fault_at, source, destination, fd, parents,
-                                    expected_revision, planned_move, _use_directory_handles)
+                                    expected_revision, planned_move, _use_directory_handles,
+                                    _verify_runner_binding)
 
 
 def _perform_pinned_move(root, database, operation_id, media_key,
                          source_stage, destination_stage, observed_at,
                          fault_at, source, destination, fd, parents,
-                         expected_revision, planned_move, use_directory_handles):
+                         expected_revision, planned_move, use_directory_handles, verify_runner_binding):
+    if verify_runner_binding is not None:
+        verify_runner_binding()
     original = os.fstat(fd)
     current = os.stat(source, follow_symlinks=False)
     if (original.st_dev, original.st_ino) != (current.st_dev, current.st_ino):
@@ -139,11 +143,15 @@ def _perform_pinned_move(root, database, operation_id, media_key,
     if any(media_key in persisted[section] for section in CLOCKS.values()
            if section != source_clock):
         raise RuntimeError("Conflicting lifecycle clocks; move blocked")
+    if verify_runner_binding is not None:
+        verify_runner_binding()
     coordinator = SQLiteOperationCoordinator(session)
     coordinator.begin_move_with_evidence(
         operation_id, {"media_key": media_key,
                        "source": str(source), "destination": str(destination)})
     assert_stage_directories_unchanged(root, parents)
+    if verify_runner_binding is not None:
+        verify_runner_binding()
     if fault_at == "after_intent":
         raise RuntimeError("Injected crash after intent")
     # The persisted intent is durable before this external operation.
@@ -161,12 +169,16 @@ def _perform_pinned_move(root, database, operation_id, media_key,
             raise RuntimeError("Cross-device move blocked; intent retained") from exc
         raise
     assert_stage_directories_unchanged(root, parents)
+    if verify_runner_binding is not None:
+        verify_runner_binding()
     if fault_at == "after_rename":
         raise RuntimeError("Injected crash after rename")
     coordinator.mark_applied(operation_id)
     if fault_at == "after_applied":
         raise RuntimeError("Injected crash after applied checkpoint")
     assert_stage_directories_unchanged(root, parents)
+    if verify_runner_binding is not None:
+        verify_runner_binding()
     return reconcile_witnessed_disposable_rename(
         root=root, database=database, operation_id=operation_id,
         media_key=media_key, source_stage=source_stage,
