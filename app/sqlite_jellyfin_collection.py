@@ -41,6 +41,7 @@ def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
             while True:
                 data = fetch(f"/Users/{uid}/Items", {
                     "Recursive": "true", "IncludeItemTypes": jellyfin_type,
+                    "ExcludeItemTypes": "BoxSet",
                     "Fields": "Path,Tags", "StartIndex": start, "Limit": page_size,
                 })
                 if not isinstance(data, dict) or type(data.get("TotalRecordCount")) is not int:
@@ -75,10 +76,16 @@ def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
                             or type(user_data.get("Played")) is not bool
                             or type(user_data.get("PlayCount")) is not int
                             or user_data["PlayCount"] < 0
-                            or (item.get("Type") is not None
-                                and item["Type"] != jellyfin_type)):
+                            ):
                         raise ValueError("Missing or inconsistent Jellyfin item fields")
                     seen_ids.add(item_id)
+                    # Jellyfin can return BoxSet collections despite type filters.
+                    # Never match these as media titles; all fields above must
+                    # still be valid or the entire observation fails closed.
+                    if item.get("Type") == "BoxSet":
+                        continue
+                    if item.get("Type") is not None and item["Type"] != jellyfin_type:
+                        raise ValueError("Unexpected Jellyfin media type")
                     pure = PurePosixPath(path)
                     name = pure.parent.name if jellyfin_type == "Movie" else pure.name
                     if name == folder:
