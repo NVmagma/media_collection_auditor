@@ -371,3 +371,23 @@ No actual Arr HTTP integration, independently fetched remote identity/outcome,
 production runner, season pruning or deletion is introduced. Request omission
 means no new queue is created, preserving existing fixture behavior; production
 integration must explicitly select and verify its external-sync policy.
+
+## Held-descriptor mount binding increment
+
+The user reported **1,140 SQLite tests passed on Unraid** through `ac9ae6d`.
+The documentation-only gate assessment `d3598a4` changed no executable code.
+The next increment requires matching Linux mount IDs and devices for the held
+source parent, destination parent and source witness in descriptor-bound
+execution. Namespace/directory observations are persisted in intent for
+inspection but never authorize restart recovery. Checks repeat before intent,
+after refresh, after intent/rename and before reconciliation.
+
+Portable tests cover malformed/duplicate mount fields, same-device/different-
+mount rejection, namespace/mount changes, unavailable mount data before intent,
+and changed mount binding after intent blocking rename. A Linux test reads the
+actual kernel descriptor records. Related local tests: **67 passed, 14 Linux-only
+skipped**. Unraid validation is pending; expected suite size 1,153 tests.
+
+See [the blocked production trust contract](sqlite-production-move-trust-contract.md)
+for the supported first execution model, external-writer requirements and crash
+policy. No ownership flag or persisted mount witness can bypass those blockers.

@@ -188,3 +188,9 @@ candidate, consistent with the request to avoid repeated expensive builds.
 This assessment/documentation update changes no executable code and requires no
 new Unraid regression run. Production remains JSON-only; no SQLite activation,
 container update, automatic uncertain-operation replay or deletion is authorized.
+
+The next gate 6 increment checks Linux mount IDs and namespace identity for held
+rename descriptors before intent and across operation boundaries. The supported
+single-mount model and unresolved ownership/recovery requirements are now
+collected in [the blocked production move trust contract](sqlite-production-move-trust-contract.md).
+No new gate is marked complete; production still rejects SQLite.
