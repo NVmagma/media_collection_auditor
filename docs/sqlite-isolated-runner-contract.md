@@ -46,9 +46,9 @@ path. Uncertain outcomes propagate without retry or replay.
   writers using another lock inode are not excluded. Production must establish
   writer ownership for all relevant stage directories before trusting clearance.
 - Holding directory handles and comparing identity detects some substitutions;
-  it does not make path-based rename immune to races. Descriptor-relative
-  source/destination operations and a reviewed mount/path isolation model are
-  still required before any production promotion.
+  the isolated runner now uses descriptor-relative source/destination rename.
+  Source-entry substitution and a reviewed mount/path isolation model remain
+  unresolved before any production promotion.
 - Same-device no-replace rename is the only executable move model. No EXDEV
   copy/delete fallback exists. Unraid share/mount behavior must be verified
   against the intended deployment; path names alone cannot establish this.
@@ -80,3 +80,40 @@ parent substitution at the actual syscall boundary. Keep this within the marked
 lab runner until external-writer ownership and crash trust are resolved. Do not
 rename this module as production-ready or remove the JSON backend gate merely
 because its fixture tests pass. Gates 6–8 remain open.
+
+
+## Descriptor-relative rename increment
+
+The user reported **1,036 SQLite tests passed on Unraid** through `70e0eaf`,
+validating the isolated-lock baseline. The next increment changes only the
+isolated runner to request descriptor-relative rename. Legacy rehearsal entry
+points retain their previous default behavior for regression compatibility.
+Both rename entry points share the same Linux `renameat2` call, no-replace flag,
+unsupported-filesystem rejection and lack of EXDEV fallback.
+
+The descriptor primitive accepts existing directory handles and single safe
+entry names only. The executor compares the source entry's identity against the
+held witness immediately before invoking it. The kernel resolves the rename
+against the held parents, so replacing their visible paths cannot redirect it
+into replacement parent directories. Existing post-rename checks stop clock
+updates and retain the intent when parent substitution is detected.
+
+This does **not** make source identity checking and rename one atomic operation.
+A writer can replace the source entry between them. A new race test deliberately
+does so: the replacement may be renamed, but its identity fails the held-witness
+check, tracking clocks remain unchanged and the intent remains pending. The
+original witnessed fixture stays preserved. This is evidence of the remaining
+writer-isolation requirement, not proof that production side effects are safe.
+
+New Linux tests exercise successful descriptor rename, destination no-overwrite,
+replacement of either held parent, unsafe entry names, and pending-intent
+retention after parent/source substitution. Portable syscall-contract tests
+verify the actual descriptor arguments and no fallback for unsupported kernels
+or EXDEV. Local related checks: **63 passed, 17 Linux-only tests skipped** on
+macOS. New Unraid validation is pending. Production activation stays disabled.
+
+Next work: make startup and per-operation writer-ownership assumptions explicit
+and bind verified state/path context throughout the runner. Until unrelated
+writers can be excluded under a reviewed operational model, this runner must
+remain disposable-only. No persisted fingerprint is sufficient to clear a
+crashed move automatically.

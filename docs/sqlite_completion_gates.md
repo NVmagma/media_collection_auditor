@@ -112,3 +112,10 @@ with startup pending-intent precedence and stale-revision rejection. See
 [the isolated runner contract](sqlite-isolated-runner-contract.md) for its threat
 model, ordering and remaining production blockers. This advances cooperating
 writer isolation but does not complete a gate or enable production execution.
+
+
+The isolated-lock increment subsequently passed all 1,036 SQLite tests on
+Unraid. The following descriptor-relative rename increment advances parent-path
+binding in that runner, with adversarial substitution tests; source-entry races
+and external-writer ownership remain unresolved. No production gate is newly
+complete and no production behavior changes.
