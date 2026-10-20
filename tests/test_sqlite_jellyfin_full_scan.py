@@ -123,3 +123,29 @@ def test_specific_bad_path_fails_closed():
     result = scan(fetch)
     assert result["validation_failure"] == "unsafe_item_path"
     assert result["production_authorized"] is False
+
+
+def test_type_mismatch_reports_only_allowlisted_type():
+    def fetch(path, params):
+        if path == "/Users":
+            return [{"Id": "private-user"}]
+        bad = item(0)
+        bad["Type"] = "Episode"
+        return {"TotalRecordCount": 1, "Items": [bad]}
+    result = scan(fetch)
+    assert result["validation_failure"] == "item_type"
+    assert result["requested_item_type"] == "Movie"
+    assert result["returned_item_type"] == "Episode"
+    assert "private" not in repr(result)
+
+
+def test_unknown_type_never_leaks_raw_value():
+    def fetch(path, params):
+        if path == "/Users":
+            return [{"Id": "private-user"}]
+        bad = item(0)
+        bad["Type"] = "private-secret-type"
+        return {"TotalRecordCount": 1, "Items": [bad]}
+    result = scan(fetch)
+    assert result["returned_item_type"] == "other_or_invalid"
+    assert "secret" not in repr(result)
