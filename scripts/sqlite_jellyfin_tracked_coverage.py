@@ -8,7 +8,30 @@ from urllib.parse import urlparse
 
 import requests
 
-from app.sqlite_jellyfin_coverage_probe import probe_coverage
+from app.sqlite_jellyfin_coverage_probe import CoverageFetchError, probe_coverage
+
+
+def fetch_readonly(session, url, path, params):
+    """Return JSON or a sanitized transport category; never follow redirects."""
+    try:
+        response = session.get(url + path, params=params, timeout=20,
+                               allow_redirects=False)
+    except requests.exceptions.SSLError:
+        raise CoverageFetchError("tls_error") from None
+    except requests.Timeout:
+        raise CoverageFetchError("timeout") from None
+    except requests.ConnectionError:
+        raise CoverageFetchError("connection_error") from None
+    except requests.RequestException:
+        raise CoverageFetchError("request_error") from None
+    if 300 <= response.status_code < 400:
+        raise CoverageFetchError("redirect_rejected", response.status_code)
+    if not 200 <= response.status_code < 300:
+        raise CoverageFetchError("http_error", response.status_code)
+    try:
+        return response.json()
+    except ValueError:
+        raise CoverageFetchError("invalid_json") from None
 
 
 def main():
@@ -30,12 +53,7 @@ def main():
                 "DeviceId=sqlite-coverage-readonly, Version=1.0, Token=" + token)})
 
             def fetch(path, params):
-                response = session.get(url + path, params=params, timeout=20,
-                                       allow_redirects=False)
-                if 300 <= response.status_code < 400:
-                    raise ValueError("Redirect rejected")
-                response.raise_for_status()
-                return response.json()
+                return fetch_readonly(session, url, path, params)
 
             report = probe_coverage(args.database, fetch)
     except Exception:

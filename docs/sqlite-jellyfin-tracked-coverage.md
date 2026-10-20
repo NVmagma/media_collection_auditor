@@ -153,3 +153,24 @@ docker run --rm --pull=never --read-only \
 
 The live probe is locally fixture-tested; its new code still requires Unraid
 validation. No Docker build or GitHub Actions dispatch is required.
+
+### First live probe: blocked before user enumeration
+
+The first Unraid live run against the verified lab copy reported 539 tracked
+keys, zero covered keys, 539 blocked keys, and one request. This establishes a
+failure before successful `/Users` collection; it does not establish that the
+539 titles are absent from Jellyfin. The original probe hid the transport cause.
+
+The diagnostic update adds `transport_failure_counts`, `http_status_counts`, and
+`failure_stages`. They count unique attempted request failures, not cached
+replays per title. Fixed categories distinguish HTTP errors, rejected redirects,
+timeouts, connection/TLS errors, request errors, invalid JSON, and otherwise
+unclassified transport errors. HTTP codes are numeric only. No response bodies,
+exception messages, URLs, tokens, users, or media identities are printed.
+For example, `http_status_counts: {"401": 1}` at `failure_stages: ["users"]`
+identifies a rejected users request without exposing authentication details.
+An HTTP 200 JSON response with an invalid users shape still fails closed in the
+collector; an empty transport-failure report does not mean a valid response.
+
+The update leaves caching, protection validation, read-only mounts and production
+activation unchanged. All 119 focused tests pass locally; Unraid rerun pending.

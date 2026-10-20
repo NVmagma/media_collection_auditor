@@ -119,3 +119,61 @@ def test_revision_change_invalidates_all_coverage(tmp_path, monkeypatch):
     assert report["covered_titles"] == 0
     assert report["blocked_titles"] == 1
     assert report["blocker_counts"]["sqlite_revision_changed"] == 1
+
+
+@pytest.mark.parametrize("code,category", [(401, "http_error"), (403, "http_error"),
+    (404, "http_error"), (500, "http_error"), (302, "redirect_rejected")])
+def test_http_diagnostics_count_failed_request_once_without_identifiers(tmp_path, code, category):
+    from scripts.sqlite_jellyfin_tracked_coverage import fetch_readonly
+    class Response:
+        status_code = code
+        def json(self):
+            pytest.fail("must not parse error bodies")
+    class Session:
+        def get(self, url, **kwargs):
+            assert kwargs["allow_redirects"] is False
+            return Response()
+    path = db(tmp_path, ["PrivateOne", "PrivateTwo"])
+    report = probe_coverage(path, lambda endpoint, params: fetch_readonly(
+        Session(), "http://private-host", endpoint, params), now=NOW)
+    assert report["request_count"] == 1
+    assert report["transport_failure_counts"] == {category: 1}
+    assert report["http_status_counts"] == {str(code): 1}
+    assert report["failure_stages"] == ["users"]
+    assert report["blocked_titles"] == 2
+    assert report["coverage_complete"] is False
+    assert "private-host" not in json.dumps(report)
+    assert "PrivateOne" not in json.dumps(report)
+
+
+@pytest.mark.parametrize("exception,category", [
+    ("SSLError", "tls_error"), ("Timeout", "timeout"),
+    ("ConnectionError", "connection_error"), ("RequestException", "request_error"),
+])
+def test_transport_exceptions_never_echo_sensitive_text(exception, category):
+    import requests
+    from app.sqlite_jellyfin_coverage_probe import CoverageFetchError
+    from scripts.sqlite_jellyfin_tracked_coverage import fetch_readonly
+    class Session:
+        def get(self, *args, **kwargs):
+            raise getattr(requests.exceptions, exception)("sensitive-token")
+    with pytest.raises(CoverageFetchError) as error:
+        fetch_readonly(Session(), "http://private-host", "/Users", None)
+    assert error.value.category == category
+    assert "sensitive-token" not in str(error.value)
+
+
+def test_invalid_json_is_reported_without_response_body():
+    from app.sqlite_jellyfin_coverage_probe import CoverageFetchError
+    from scripts.sqlite_jellyfin_tracked_coverage import fetch_readonly
+    class Response:
+        status_code = 200
+        def json(self):
+            raise ValueError("sensitive-response")
+    class Session:
+        def get(self, *args, **kwargs):
+            return Response()
+    with pytest.raises(CoverageFetchError) as error:
+        fetch_readonly(Session(), "http://private-host", "/Users", None)
+    assert error.value.category == "invalid_json"
+    assert "sensitive-response" not in str(error.value)

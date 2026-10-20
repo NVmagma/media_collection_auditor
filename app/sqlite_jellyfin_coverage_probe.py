@@ -7,6 +7,19 @@ from app.sqlite_lifecycle_checkpoint_plan import CLOCKS
 from app.state_store import GuardedSQLiteStateStore
 
 
+class CoverageFetchError(RuntimeError):
+    """Fixed transport labels only; never include server or exception text."""
+    CATEGORIES = frozenset({"http_error", "redirect_rejected", "timeout",
+                            "connection_error", "tls_error", "request_error",
+                            "invalid_json", "transport_error"})
+
+    def __init__(self, category, http_status=None):
+        self.category = category if category in self.CATEGORIES else "transport_error"
+        self.http_status = (http_status if type(http_status) is int and
+                            100 <= http_status <= 599 else None)
+        super().__init__("Jellyfin scan unavailable")
+
+
 def probe_coverage(database, fetch, *, now=None):
     """Map standard bare movie / TV-prefixed keys, using one cached scan.
 
@@ -24,6 +37,9 @@ def probe_coverage(database, fetch, *, now=None):
 
     cache = {}
     failures = set()
+    failure_counts = Counter()
+    http_status_counts = Counter()
+    failure_stages = set()
 
     def cached_fetch(path, params):
         key = (path, tuple(sorted((params or {}).items())))
@@ -34,8 +50,13 @@ def probe_coverage(database, fetch, *, now=None):
                 raise RuntimeError("Jellyfin scan request budget exceeded")
             try:
                 cache[key] = fetch(path, params)
-            except Exception:
+            except Exception as exc:
                 failures.add(key)
+                category = exc.category if isinstance(exc, CoverageFetchError) else "transport_error"
+                failure_counts[category] += 1
+                if isinstance(exc, CoverageFetchError) and exc.http_status is not None:
+                    http_status_counts[str(exc.http_status)] += 1
+                failure_stages.add("users" if path == "/Users" else "items")
                 raise RuntimeError("Jellyfin scan unavailable") from None
         return cache[key]
 
@@ -55,6 +76,9 @@ def probe_coverage(database, fetch, *, now=None):
         "covered_titles": 0 if changed else coverage["covered_titles"],
         "blocked_titles": coverage["tracked_titles"] if changed else coverage["blocked_titles"],
         "blocker_counts": dict(sorted(reasons.items())),
+        "transport_failure_counts": dict(sorted(failure_counts.items())),
+        "http_status_counts": dict(sorted(http_status_counts.items())),
+        "failure_stages": sorted(failure_stages),
         "request_count": len(cache) + len(failures),
         "read_only": True,
         "production_authorized": False,
