@@ -4,17 +4,21 @@ No database creation, state migration, or lifecycle decisions are performed.
 """
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
+from app.sqlite_json import parse_unique_json
 from app.sqlite_state import SECTIONS, read_snapshot, validate_snapshot
 
 
 def compare_tracking_snapshots(json_path: Path, sqlite_path: Path) -> dict:
     """Compare complete snapshots without exposing media keys or values."""
     try:
-        with Path(json_path).open("r", encoding="utf-8") as handle:
-            original = json.load(handle)
+        original = parse_unique_json(Path(json_path).read_bytes())
+        if not isinstance(original, dict):
+            raise RuntimeError("JSON state is not an object")
+        original = dict(original)
+        for section in SECTIONS:
+            original.setdefault(section, {})
         validate_snapshot(original)
         converted = read_snapshot(sqlite_path)
     except (OSError, ValueError, TypeError, RuntimeError) as exc:
