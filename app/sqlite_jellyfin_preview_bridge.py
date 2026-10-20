@@ -22,6 +22,7 @@ def preview_with_collected_jellyfin(*, database, now, thresholds, requests,
         raise ValueError("Title requests mapping required")
     signals = {}
     observations = {}
+    identities = {}
     for media_key, details in requests.items():
         if not isinstance(media_key, str) or not media_key or not isinstance(details, dict):
             raise ValueError("Invalid title collection request")
@@ -34,14 +35,46 @@ def preview_with_collected_jellyfin(*, database, now, thresholds, requests,
         }
         if result["status"] == "shape_valid_untrusted":
             signals[media_key] = result["signals"]
+            item_id, path = result["identity"]
+            for identity in (("id", item_id), ("path", path)):
+                identities.setdefault(identity, []).append(media_key)
+    # A logical Jellyfin title cannot establish coverage for two state keys.
+    for keys in identities.values():
+        if len(keys) > 1:
+            for key in keys:
+                signals.pop(key, None)
+                observations[key] = {
+                    "status": "blocked",
+                    "blockers": ["jellyfin_identity_shared_by_state_keys"],
+                }
     preview = preview_collection(
         database=database, now=now, thresholds=thresholds,
         signals_by_key=signals,
         favorites_trigger_keep=favorites_trigger_keep)
+    tracked = {row["media_key"] for row in preview["decisions"]}
+    coverage_rows = []
+    for key in sorted(tracked):
+        observation = observations.get(key)
+        coverage_rows.append({
+            "media_key": key,
+            "status": "covered" if key in signals else "blocked",
+            "blockers": (list(observation["blockers"]) if observation else
+                         ["jellyfin_title_request_missing"]),
+        })
+    coverage = {
+        "tracked_titles": len(tracked),
+        "covered_titles": sum(row["status"] == "covered" for row in coverage_rows),
+        "blocked_titles": sum(row["status"] == "blocked" for row in coverage_rows),
+        "untracked_request_count": len(set(requests) - tracked),
+        "titles": coverage_rows,
+    }
+    coverage["complete"] = coverage["blocked_titles"] == 0
     return {
+        "coverage": coverage,
         "status": "blocked" if (any(value["status"] == "blocked"
                                     for value in observations.values())
-                                or preview["blocked_titles"]) else "advisory_only",
+                                or preview["blocked_titles"]
+                                or preview["status"] == "blocked") else "advisory_only",
         "observations": observations,
         "preview": preview,
         "authorization": "not_authorized",

@@ -68,7 +68,7 @@ def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
                     if (not isinstance(item_id, str) or not item_id or item_id in seen_ids
                             or not isinstance(path, str) or not path.startswith("/")
                             or any(part in (".", "..") for part in path.split("/"))
-                            or "//" in path or "\\\\" in path
+                            or "//" in path or chr(92) in path
                             or not isinstance(tags, list)
                             or any(not isinstance(tag, str) for tag in tags)
                             or not isinstance(user_data, dict)
@@ -100,6 +100,8 @@ def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
     if not matched:
         blockers.append("jellyfin_title_unmatched")
     if matched:
+        if {uid for uid, *_ in matched} != set(ids):
+            blockers.append("jellyfin_title_user_coverage_incomplete")
         # One logical Jellyfin item may appear for multiple users. Distinct
         # item IDs or paths are ambiguous, even if folder names match.
         identities = {(item_id, path) for _, item_id, path, _, _ in matched}
@@ -128,6 +130,7 @@ def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
         "status": "blocked" if blockers or contract["blockers"] else "shape_valid_untrusted",
         "blockers": blockers + contract["blockers"],
         "signals": contract["signals"] if not blockers else None,
+        "identity": (matched[0][1], matched[0][2]) if not blockers else None,
         "authorization": "not_authorized",
         "production_activation": "disabled",
         "read_only": True,

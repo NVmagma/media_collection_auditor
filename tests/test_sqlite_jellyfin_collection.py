@@ -113,3 +113,18 @@ def test_unexpected_episode_still_blocks_movie_collection():
     episode["Type"] = "Episode"
     result = collect(transport({"u1": [episode], "u2": [episode]}))
     assert result["status"] == "blocked"
+
+
+def test_title_missing_for_one_user_is_unknown_even_after_protected_match():
+    result = collect(transport({"u1": [item(tags=["keep-forever"])], "u2": []}))
+    assert result["status"] == "blocked"
+    assert "jellyfin_title_user_coverage_incomplete" in result["blockers"]
+    assert result["signals"] is None
+    assert result["identity"] is None
+
+
+def test_single_backslash_in_path_blocks():
+    result = collect(transport({"u1": [item(path="/media/Movies/Movie/a" + chr(92) + "b.mkv")],
+                                "u2": [item()]}))
+    assert result["status"] == "blocked"
+    assert result["signals"] is None
