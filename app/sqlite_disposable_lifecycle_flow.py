@@ -11,6 +11,7 @@ from copy import deepcopy
 from datetime import datetime
 import errno
 import os
+import sys
 from pathlib import Path
 
 from app.sqlite_disposable_atomic_reconcile import reconcile_witnessed_disposable_rename
@@ -27,6 +28,8 @@ from app.sqlite_recovery_fingerprint import capture_directory_fingerprint
 from app.state_store import GuardedSQLiteStateStore
 from app.sqlite_title_identity import validate_title_folder
 from app.sqlite_arr_queue_plan import planned_arr_queue_entry
+from app.sqlite_rename_mount_binding import (capture_rename_mount_binding,
+                                            assert_rename_mount_binding)
 
 TRANSITIONS = {
     ("transient", "holding"), ("transient", "keep"),
@@ -115,6 +118,18 @@ def _perform_pinned_move(root, database, operation_id, media_key,
     if verify_runner_binding is not None:
         verify_runner_binding()
     original = os.fstat(fd)
+    mount_binding = None
+    # Non-Linux hosts cannot perform the later no-replace syscall at all.
+    # Linux isolated executions require proc-derived mount binding before intent.
+    if use_directory_handles and sys.platform == "linux":
+        mount_binding = capture_rename_mount_binding(
+            parents[source_stage], parents[destination_stage], fd)
+
+    def verify_mount_binding():
+        if mount_binding is not None:
+            assert_rename_mount_binding(mount_binding, parents[source_stage],
+                                        parents[destination_stage], fd)
+
     current = os.stat(source, follow_symlinks=False)
     if (original.st_dev, original.st_ino) != (current.st_dev, current.st_ino):
         raise RuntimeError("Source changed before intent")
@@ -172,15 +187,20 @@ def _perform_pinned_move(root, database, operation_id, media_key,
     if before_intent_review is not None:
         before_intent_review()
         assert_stage_directories_unchanged(root, parents)
+        verify_mount_binding()
         if verify_runner_binding is not None:
             verify_runner_binding()
+    verify_mount_binding()
     coordinator = SQLiteOperationCoordinator(session)
     details = {"media_key": media_key, "source": str(source),
                "destination": str(destination), "lifecycle_clock_binding": clock_binding}
+    if mount_binding is not None:
+        details["rename_mount_binding"] = mount_binding
     if arr_sync_request is not None:
         details["arr_sync_request"] = arr_sync_request
     coordinator.begin_move_with_evidence(operation_id, details)
     assert_stage_directories_unchanged(root, parents)
+    verify_mount_binding()
     if verify_runner_binding is not None:
         verify_runner_binding()
     if fault_at == "after_intent":
@@ -200,6 +220,7 @@ def _perform_pinned_move(root, database, operation_id, media_key,
             raise RuntimeError("Cross-device move blocked; intent retained") from exc
         raise
     assert_stage_directories_unchanged(root, parents)
+    verify_mount_binding()
     if verify_runner_binding is not None:
         verify_runner_binding()
     if fault_at == "after_rename":
@@ -208,6 +229,7 @@ def _perform_pinned_move(root, database, operation_id, media_key,
     if fault_at == "after_applied":
         raise RuntimeError("Injected crash after applied checkpoint")
     assert_stage_directories_unchanged(root, parents)
+    verify_mount_binding()
     if verify_runner_binding is not None:
         verify_runner_binding()
     return reconcile_witnessed_disposable_rename(

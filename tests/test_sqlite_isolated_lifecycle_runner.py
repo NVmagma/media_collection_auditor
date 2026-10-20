@@ -394,3 +394,37 @@ def test_existing_arr_queue_blocks_move_before_new_intent(tmp_path):
     assert database.read_bytes() == before
     assert (root / "transient" / "Movie").is_dir()
     assert not (root / "holding" / "Movie").exists()
+
+
+def test_unavailable_mount_binding_stops_before_intent(tmp_path, monkeypatch):
+    import app.sqlite_disposable_lifecycle_flow as flow
+    root, database = lab(tmp_path)
+    before = database.read_bytes()
+    monkeypatch.setattr(flow.sys, "platform", "linux")
+    def unavailable(*args):
+        raise RuntimeError("Rename mount binding unavailable")
+    monkeypatch.setattr(flow, "capture_rename_mount_binding", unavailable)
+    with pytest.raises(RuntimeError, match="mount binding unavailable"):
+        run(root, database)
+    assert database.read_bytes() == before
+    assert (root / "transient" / "Movie").is_dir()
+
+
+def test_changed_mount_after_intent_blocks_rename_and_retains_intent(tmp_path, monkeypatch):
+    import app.sqlite_disposable_lifecycle_flow as flow
+    root, database = lab(tmp_path)
+    monkeypatch.setattr(flow.sys, "platform", "linux")
+    monkeypatch.setattr(flow, "capture_rename_mount_binding", lambda *args: {"fixture": "mount"})
+    def changed_after_intent(*args):
+        state, _ = GuardedSQLiteStateStore(database).load_with_revision()
+        if "sqlite_pending_operations" in state:
+            raise RuntimeError("Rename mount binding changed")
+    monkeypatch.setattr(flow, "assert_rename_mount_binding", changed_after_intent)
+    monkeypatch.setattr(flow, "rename_directory_noreplace_at",
+                        lambda *args: pytest.fail("rename must not run"))
+    with pytest.raises(RuntimeError, match="mount binding changed"):
+        run(root, database)
+    state, _ = GuardedSQLiteStateStore(database).load_with_revision()
+    assert "sqlite_pending_operations" in state
+    assert "Movie" in state["first_seen"]
+    assert (root / "transient" / "Movie").is_dir()
