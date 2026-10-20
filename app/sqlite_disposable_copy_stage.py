@@ -50,10 +50,20 @@ def _identity(info):
     return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns
 
 
+def _directory_names(directory_fd):
+    # openat(".") creates an independent open file description/cursor. dup()
+    # would share the held descriptor's directory offset across scan passes.
+    scan_fd = os.open(".", FLAGS, dir_fd=directory_fd)
+    try:
+        return sorted(os.listdir(scan_fd))
+    finally:
+        os.close(scan_fd)
+
+
 def _manifest(directory_fd, prefix=""):
     content, identities = {}, {}
     identities[prefix] = _identity(os.fstat(directory_fd))
-    for name in sorted(os.listdir(directory_fd)):
+    for name in _directory_names(directory_fd):
         relative = prefix + name
         info = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
         if stat.S_ISDIR(info.st_mode):
@@ -89,7 +99,7 @@ def _manifest(directory_fd, prefix=""):
 
 
 def _copy_tree(source_fd, destination_fd):
-    for name in sorted(os.listdir(source_fd)):
+    for name in _directory_names(source_fd):
         info = os.stat(name, dir_fd=source_fd, follow_symlinks=False)
         if stat.S_ISDIR(info.st_mode):
             source_child = os.open(name, FLAGS, dir_fd=source_fd)

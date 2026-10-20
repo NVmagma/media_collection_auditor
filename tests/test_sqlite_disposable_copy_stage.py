@@ -137,3 +137,47 @@ def test_mismatch_diagnostics_identify_incomplete_copy():
     assert error.diagnostics["source_metadata_unchanged"] is True
     assert error.diagnostics["destination_content_matches"] is False
     assert error.diagnostics["destination_entries"] == 0
+
+
+def test_enumeration_never_uses_the_held_directory_cursor(tmp_path, monkeypatch):
+    import os
+    directory = tmp_path / "source"
+    directory.mkdir()
+    (directory / "file").write_text("fixture")
+    held = os.open(directory, module.FLAGS)
+    original_listdir = os.listdir
+    calls = []
+    def independent_only(fd):
+        assert fd != held, "enumeration must not consume the held source cursor"
+        calls.append(fd)
+        return original_listdir(fd)
+    monkeypatch.setattr(module.os, "listdir", independent_only)
+    try:
+        assert module._directory_names(held) == ["file"]
+        assert module._directory_names(held) == ["file"]
+        assert len(calls) == 2
+        assert os.fstat(held).st_ino == os.stat(directory).st_ino
+    finally:
+        os.close(held)
+
+
+def test_copy_and_manifest_are_independent_of_prior_enumeration(tmp_path):
+    import os
+    source, destination = tmp_path / "source", tmp_path / "destination"
+    source.mkdir()
+    destination.mkdir()
+    (source / "file").write_bytes(b"fixture")
+    source_fd = os.open(source, module.FLAGS)
+    destination_fd = os.open(destination, module.FLAGS)
+    try:
+        before, identities = module._manifest(source_fd)
+        module._manifest(source_fd)
+        module._copy_tree(source_fd, destination_fd)
+        copied, _ = module._manifest(destination_fd)
+        after, after_identities = module._manifest(source_fd)
+        assert before == after == copied
+        assert identities == after_identities
+        assert (destination / "file").read_bytes() == b"fixture"
+    finally:
+        os.close(source_fd)
+        os.close(destination_fd)
