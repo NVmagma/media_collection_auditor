@@ -310,3 +310,14 @@ forbid network requests. This advances gate 10's compatibility evidence, but
 actual production restore, stopped-writer cutover, server durability, final
 release verification and activation approval remain unverified. No gate is
 newly complete and no production implementation changes.
+
+### Cooperating cutover lock hardening
+
+The shared JSON/migration lock now refuses symlinks, hardlinks and nonregular
+files and checks held-inode binding, including before nested audit saves.
+Separate-process regressions verify actual JSON saves are blocked by migration
+and actual migration is blocked by audit, then succeed after lock release.
+Production JSON writes gain stricter lock-file validation; backend selection
+and media behavior are unchanged. This improves gate 10's cooperating-writer
+barrier but does not exclude noncooperating writers, authorize cutover/rollback,
+or complete any gate. Consolidated Unraid validation is still pending.

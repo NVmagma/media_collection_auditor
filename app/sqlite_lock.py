@@ -1,7 +1,7 @@
 """Exclusive advisory lock for offline migration coordination.
 
-This lock only coordinates cooperating migration processes. Production JSON
-writers do not acquire it, so stop all auditor instances before migration.
+Current JSON writers and offline migration share this advisory lock. Older
+instances and external writers may not cooperate: stop them before migration.
 """
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ from contextlib import contextmanager
 import os
 from contextvars import ContextVar
 from pathlib import Path
+import stat
 
 try:
     import fcntl
@@ -26,23 +27,39 @@ def migration_lock(source: str | Path):
     lock_path = source.with_name(source.name + ".migration.lock")
     if not source.is_file():
         raise RuntimeError("Source JSON state is missing; refusing migration")
-    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+    with _exclusive_lock(lock_path, "Another offline migration holds the state lock"):
+        yield
+
+
+@contextmanager
+def _exclusive_lock(lock_path, contention_message):
+    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
     try:
+        held = os.fstat(fd)
+        if not stat.S_ISREG(held.st_mode) or held.st_nlink != 1:
+            raise RuntimeError("Unsafe state lock file")
+        def verify():
+            current = os.stat(lock_path, follow_symlinks=False)
+            pinned = os.fstat(fd)
+            if (not stat.S_ISREG(current.st_mode) or current.st_nlink != 1
+                    or pinned.st_nlink != 1
+                    or (current.st_dev, current.st_ino) != (held.st_dev, held.st_ino)):
+                raise RuntimeError("State lock binding changed")
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as exc:
-            raise RuntimeError("Another offline migration holds the state lock") from exc
+            raise RuntimeError(contention_message) from exc
         try:
-            yield
+            verify()
+            yield verify
+            verify()
         finally:
             fcntl.flock(fd, fcntl.LOCK_UN)
     finally:
         os.close(fd)
 
 
-_held_state_locks: ContextVar[frozenset[str]] = ContextVar(
-    "held_state_locks", default=frozenset()
-)
+_held_state_locks: ContextVar[dict] = ContextVar("held_state_locks", default={})
 
 
 @contextmanager
@@ -52,8 +69,8 @@ def audit_run_lock(source: str | Path):
     key = str(source.resolve())
     if key in _held_state_locks.get():
         raise RuntimeError("Nested auditor runs are not permitted")
-    with state_writer_lock(source):
-        token = _held_state_locks.set(_held_state_locks.get() | {key})
+    with state_writer_lock(source) as verify:
+        token = _held_state_locks.set({**_held_state_locks.get(), key: verify})
         try:
             yield
         finally:
@@ -70,19 +87,12 @@ def state_writer_lock(source: str | Path):
     if fcntl is None:
         raise RuntimeError("JSON state locking requires POSIX flock")
     source = Path(source)
-    if str(source.resolve()) in _held_state_locks.get():
-        yield  # The current audit already holds the same exclusive lock.
+    held_check = _held_state_locks.get().get(str(source.resolve()))
+    if held_check is not None:
+        held_check()
+        yield held_check  # The current audit already holds this exclusive lock.
+        held_check()
         return
     lock_path = source.with_name(source.name + ".migration.lock")
-    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
-    try:
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as exc:
-            raise RuntimeError("JSON state write blocked by another state operation") from exc
-        try:
-            yield
-        finally:
-            fcntl.flock(fd, fcntl.LOCK_UN)
-    finally:
-        os.close(fd)
+    with _exclusive_lock(lock_path, "JSON state write blocked by another state operation") as verify:
+        yield verify
