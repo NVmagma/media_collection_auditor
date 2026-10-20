@@ -148,3 +148,33 @@ source entry with the witness. Neither this increment nor the marker/lock checks
 satisfy production ownership, mount-isolation or recovery-clearance requirements.
 The runner is still restricted to marked disposable fixtures; production remains
 JSON-only with activation and permanent deletion disabled.
+
+
+## Lifecycle clock request binding
+
+The user reported **1,062 SQLite tests passed on Unraid** through `c3ee114`.
+The next increment closes a pre-move validation gap: an invalid observation time
+previously reached reconciliation only after a rename. The disposable executor
+now rejects non-datetimes, timezone-aware values, future observations and times
+predating the recorded source clock before intent creation. Omitted times still
+use the current local clock. Source-clock equality is allowed.
+
+Each flow-created durable intent records a lifecycle clock binding: source and
+destination stage, original source timestamp and proposed destination timestamp.
+The flow requires reconciliation to match that binding against both its request
+and the current persisted source clock. An absent or mismatched required binding
+leaves the intent unresolved and tracking clocks unchanged. Standalone legacy
+rehearsal reconciliation remains callable without a binding only when its caller
+does not require one; if a binding is present, it is always checked. This is
+backward compatibility for disposable tests, not a production recovery route.
+
+Tests prove invalid request times cannot create intent or invoke rename, missing
+or changed required bindings cannot clear an intent, and a matching binding
+commits the stage-clock change and intent removal in one revision. The broad
+macOS run produced 1,032 passed, 21 Linux-only skips and the same 18 failures at
+the existing Linux-only rename guard. No guard was weakened. New Unraid
+validation is pending; the expected collection size is 1,071 tests.
+
+This binds a request to its tracking update; it does not prove a fresh Jellyfin
+observation, exclude unrelated filesystem writers, or authorize production
+activation. Those remain separate unresolved integration requirements.

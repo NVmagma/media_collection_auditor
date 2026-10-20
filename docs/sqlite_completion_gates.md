@@ -124,3 +124,8 @@ The descriptor-relative runner passed all 1,054 SQLite tests on Unraid through
 `a2d58ba`. The following increment binds root/marker/database/lock observations
 across startup and execution boundaries and stops on substitution. Uncooperative
 writer isolation and trusted crash clearance remain open; no new gate is claimed.
+
+
+All 1,062 SQLite tests passed on Unraid through `c3ee114`. The next increment
+moves observation-time validation ahead of intent/rename and binds lifecycle
+clock reconciliation to the durable request. Production gates remain unchanged.
