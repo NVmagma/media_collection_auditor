@@ -240,3 +240,10 @@ writer ownership and recovery rather than mandate native Btrfs.
 read-only integration API for Homarr, Homepage and other clients. It must use the
 active authoritative snapshot and remain independent of SQLite activation. API
 implementation is planned separately; no live routes or configuration changed.
+
+
+Portable staging now passes 11 tests on both shfs and native Btrfs through
+`c771de8`. The following increment adds durable copy-stage intents and redacted
+blocked recovery status; no source cleanup, promotion or lifecycle commit is
+authorized. Portability is progressing without a filesystem-name requirement;
+no new production gate is marked complete.

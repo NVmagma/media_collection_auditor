@@ -294,3 +294,39 @@ verify that repeated manifests do not prevent a later complete copy. Related
 local checks: **61 passed, 9 Linux-only skipped**. Fresh shfs and Btrfs reruns are
 needed to confirm the correction on the observed failing access path. A local
 pass alone is not claimed as proof of the Btrfs root cause being resolved.
+
+
+## Portable copy intent durability
+
+The user confirmed **11 copy tests passed on shfs and 11 on native Btrfs** through
+`c771de8`. This resolves the observed empty-copy failure after independent cursor
+isolation. It validates staging, not a completed move backend.
+
+The next increment adds `stage_disposable_copy_with_intent` alongside the
+primitive-only fixture helper. The durable wrapper requires a matching standard
+tracking key and unique Waiting/source clock. Under the same lab lock it records
+a distinct `copy_stage` intent before creating the private staging slot. Intent
+contains source/staging bindings, source timestamp and content-manifest digest;
+these are diagnostic bindings, not restart-clearance authority.
+
+Successful copy verification checkpoints phase `applied_pending_reconciliation`
+and detail `copy_phase: verified_source_retained`. Before completion it remains
+`intent_recorded` with `copy_phase: prepared`. Every outcome keeps intent and
+source. The wrapper reports intent persistence separately from lifecycle commit;
+no clocks, Arr work, promotion or source removal are committed. Restart refuses
+any new copy while any intent is pending. Partial slots are never overwritten.
+
+Recovery status/inspection now recognizes the distinct copy kind and produces a
+redacted manual-review report. It cannot be treated as a rename or remote Arr
+success, does not call services, and does not authorize replay or clearance.
+The existing HTTP recovery route does not accept copy-stage operations.
+
+Tests cover intent-before-copy, crashes after intent/copy/verified checkpoint,
+intent-checkpoint failure, partial copying, uncertain verified checkpoint both
+before and after commit, restart refusal and safe read-only reporting. Related
+local tests: **59 passed**. Fresh dual-filesystem validation is pending.
+
+Durable phases do not yet implement resumable copying, completed publication,
+metadata/permission preservation, guarded source cleanup or lifecycle/Arr commit.
+Those remain the next portable protocol stages. Production and permanent
+filesystem deletion remain disabled. API work stays on the product roadmap.
