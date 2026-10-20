@@ -103,3 +103,12 @@ pass the overlap check. The guard now treats identical and ancestor/descendant
 roots as overlapping, while accepting similarly named siblings. This is a
 read-only diagnostic check, not trusted move-time path verification: it does not
 prevent later mount/path changes or grant intent-clearance authority.
+
+### Isolated single-writer runner increment
+
+The full 1,025-test Unraid baseline through `6f348bc` passed. The next increment
+introduces a lock around the entire existing disposable move/checkpoint flow,
+with startup pending-intent precedence and stale-revision rejection. See
+[the isolated runner contract](sqlite-isolated-runner-contract.md) for its threat
+model, ordering and remaining production blockers. This advances cooperating
+writer isolation but does not complete a gate or enable production execution.
