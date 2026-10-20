@@ -62,3 +62,70 @@ checkpoint ordering are implemented and reviewed.
 Run local disposable-media failure injection and full tests, then manually
 verify GitHub Actions and Docker build before recommending deployment.
 Keep production JSON authoritative and permanent deletion disabled.
+
+
+## Production integration readiness review (October 2026)
+
+**Decision: NOT READY for SQLite activation.** Cross-process experiments
+demonstrate durable intent persistence and conservative recovery review, but
+do not provide a trusted, atomic bridge between media side effects and
+checkpoint clearance.
+
+### Proposed per-move execution order
+
+1. Hold the existing single-writer audit lock. Validate state, all relevant
+   media paths and fresh Jellyfin protections before preparing any operation.
+2. Capture pre-move evidence and persist a unique SQLite move intent using
+   revision-checked, read-back-verified checkpointing. If that fails, do not
+   perform the move.
+3. Execute at most one external move. A timeout, crash, ambiguous destination,
+   or failed post-move verification must leave the intent unresolved and stop
+   further side effects for that media.
+4. Independently observe source and destination, reject duplicates and unsafe
+   paths, and verify that the observed media identity corresponds to the
+   recorded intent. Existing inode/device fingerprints and unique location
+   observations are advisory, **not** sufficient identity proof.
+5. Only after trusted verification exists, persist the new stage clock and
+   clear the matching intent in one revision-checked transaction. A restart
+   must never infer completion merely from a destination folder or caller
+   success flag.
+6. Treat Arr notification as a separate side effect with its own durable
+   retry/unknown-outcome handling; do not replay uncertain requests blindly.
+
+**Important:** steps 4 and 5 are *not implemented*. Existing
+`SQLiteOperationCoordinator.reconcile()` deliberately refuses clearance.
+The experimental planner also refuses checkpoint authorization. Neither
+component should be connected to live moves until a reviewed verification
+contract and crash-injection tests are in place.
+
+### Production code touchpoints and order of work
+
+| Priority | Production area | Required change before cutover |
+| --- | --- | --- |
+| 1 | `run_once()` and `_run_once_locked()` | Keep JSON-only backend gate until explicit approval; design isolated SQLite run session and fail-closed startup checks |
+| 2 | `move_or_report()`, `move_to_holding()`, `audit_transient()`, `audit_holding()` | Establish intent-before-move and verified checkpoint-after-move; preserve clocks and action caps |
+| 3 | `reconcile_moved_titles()`, `reconcile_untracked_keep()` | Never reconcile or reset clocks past an unresolved intent; handle duplicates and unavailable media safely |
+| 4 | `sync_arr()`, `retry_pending_arr_sync()` | Persist retry requests and handle ambiguous remote outcomes without duplicate actions |
+| 5 | `audit_removal()`, `audit_keep_seasons()` | Preserve Jellyfin fail-closed checks and show/season protection; do not enable deletion |
+| 6 | Dashboard, migration, deployment | Read one authoritative snapshot, back up JSON, prove rollback and run disposable Unraid tests |
+
+### Immediate next implementation milestone
+
+Introduce a **read-only production integration preflight** that inspects
+configuration, existing tracking data, and unresolved SQLite intents without
+changing `run_once()`, moving media, or activating SQLite. Its result must
+remain non-authorizing, even if all checks pass. Add tests for invalid backend
+selection, absent or mismatched snapshots, pending intents, and no writes.
+
+### Release gate checklist
+
+- [ ] Trusted independent move verification and atomic intent clearance
+- [ ] Crash-injection tests at every move/checkpoint boundary
+- [ ] Arr unknown-outcome and restart tests
+- [ ] Fresh Jellyfin protection checks and season-wide invariants
+- [ ] Read-only dashboard parity and persistent-state rollback rehearsal
+- [ ] Full local test suite and disposable-media Unraid validation
+- [ ] Manually triggered GitHub Actions and Docker image verification
+- [ ] Explicit approval for SQLite production activation
+
+No permanent filesystem deletion approval is implied by SQLite activation.
