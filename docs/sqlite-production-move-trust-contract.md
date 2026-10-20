@@ -273,3 +273,24 @@ A fresh native-only targeted rerun is needed to identify which comparison fails;
 filesystem behavior is not yet the established root cause. The shfs pass remains
 valid evidence for the prior portable component; repeating the full unrelated
 suite is not necessary for this diagnostic step. Preserve the existing artifacts.
+
+## Cursor isolation correction for portable staging
+
+The native diagnostic rerun through `cafd88a` reported 2 failed and 7 passed.
+Both failures showed unchanged source content (four entries), unchanged source
+metadata/identity and zero destination entries. This rules out metadata drift
+as the reported failure and points to an empty copy traversal.
+
+The next correction opens `.` relative to each held directory descriptor for
+every enumeration and closes that independent scanning descriptor afterwards.
+It does not enumerate the held source handle directly or use dup (which shares
+an open-file description/cursor). This removes reliance on cursor effects from
+prior manifest/enumeration passes. All original content and identity checks
+remain mandatory; source retention, exclusive creation and tracking immutability
+are unchanged. It is a traversal correction, not a filesystem-specific exception.
+
+New regressions require enumeration to leave the held cursor untouched and
+verify that repeated manifests do not prevent a later complete copy. Related
+local checks: **61 passed, 9 Linux-only skipped**. Fresh shfs and Btrfs reruns are
+needed to confirm the correction on the observed failing access path. A local
+pass alone is not claimed as proof of the Btrfs root cause being resolved.
