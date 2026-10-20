@@ -92,3 +92,43 @@ shell access and privileged/mount-administration actors remain outside this
 inventory. No pause/stop or mount-mode changes should occur during discovery.
 Once paths are known, inspect their backing mounts and propose a concrete
 writer-ownership model before production integration or approval.
+
+## First deployment inventory findings
+
+The supplied Unraid Docker inventory shows active writable media mounts in the
+auditor, Radarr, Sonarr and Jellyfin. Jellyfin also has writable nested Movie/TV
+bind mounts. Other stopped containers retain writable media mappings and could
+become writers if started. Containers with Docker socket access also need to be
+considered in the administrative trust model; a read-only socket bind is not an
+API authorization policy. Host/share writers remain outside Docker inventory.
+
+The host paths include both `/mnt/user/...` and `/mnt/media/...` forms. Their
+backing relationship has not been established; matching relative names or device
+numbers must not be used as proof. The raw complete user inventory is not copied
+into the repository. No mount modes or running containers were changed.
+
+`scripts/sqlite_deployment_path_probe.py` is a standard-library-only diagnostic
+that can run through stdin in the existing auditor container. It imports no app
+modules, starts no audit, reads no tracking database, lists no title contents and
+calls no services. It selects only known path environment settings and the web
+configuration's MEDIA_PATH field. It reports candidate stage paths and their
+read-only directory metadata plus descriptor mount IDs when available. Missing
+or aliased paths remain unavailable; unknown mount data is never reported as
+same-mount evidence. It does not dump environment/config values or exceptions.
+
+These are candidate defaults/overrides observed in a new diagnostic process,
+not proof of the running audit subprocess's effective configuration (including
+any dotenv or per-run changes). Config and writer exclusion remain explicitly
+unverified. Remote Arr paths are declared strings, not verified mappings.
+
+Run from the Unraid checkout after a clean fast-forward on feature/sqlite:
+
+```sh
+docker exec -i media_collection_auditor python -B - < scripts/sqlite_deployment_path_probe.py
+```
+
+The code is streamed into a separate diagnostic process, not installed into or
+used to restart the running container. Local diagnostic tests: **16 passed,
+1 Linux-only test skipped**, including secret-output exclusion, override
+selection, unavailable/different mounts, path aliases and read-only inspection.
+New deployment results are pending. Production gate 6 remains open.
