@@ -59,6 +59,55 @@ def verify_compose_layout(config: dict, lab: Path, checkout: Path,
             "mounts": sorted(observed)}
 
 
+
+def compare_unraid_mount_evidence(
+    docker_mounts: list, probe: dict, lab: Path, checkout: Path,
+) -> dict[str, str]:
+    """Read-only comparison of snapshots; never grants write authorization.
+
+    Caller must independently obtain Docker inspect and container mount probe.
+    These snapshots are not cryptographically authenticated or atomic.
+    """
+    blocked = {"status": "blocked", "authorization": "not_authorized"}
+    expected = {"/lab": (str(lab), True),
+                "/workspace": (str(checkout), False)}
+    try:
+        if (not isinstance(docker_mounts, list) or len(docker_mounts) != 2
+                or not isinstance(probe, dict)
+                or lab.name != "sqlite_lab_test"
+                or checkout.name != "sqlite_lab_checkout"
+                or str(lab) != "/mnt/user/sqlite_lab_test"
+                or str(checkout) != "/mnt/user/sqlite_lab_checkout"):
+            raise ValueError("unexpected lab identity")
+        seen = set()
+        for mount in docker_mounts:
+            target = mount["Destination"]
+            if (target not in expected or target in seen
+                    or mount["Type"] != "bind"
+                    or mount["Source"] != expected[target][0]
+                    or mount["RW"] is not expected[target][1]):
+                raise ValueError("unexpected Docker mount")
+            seen.add(target)
+        if seen != set(expected):
+            raise ValueError("missing Docker mount")
+        records = probe["lab_mounts"]
+        if (probe["lab_mount_count"] != 1 or len(records) != 1
+                or probe["authorization"] != "not_authorized"
+                or probe["production_media_inspected"] is not False
+                or probe["status"] != "blocked"
+                or probe["reason"] != "lab_mount_root_unverified"):
+            raise ValueError("unexpected probe verdict")
+        record = records[0]
+        if (record["target"] != "/lab"
+                or record["root"] != "/sqlite_lab_test"
+                or record["filesystem"] != "fuse.shfs"
+                or record["read_only"] is not False):
+            raise ValueError("unexpected mountinfo")
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return {**blocked, "reason": "mount_evidence_mismatch"}
+    return {"status": "review_required", "authorization": "not_authorized",
+            "reason": "untrusted_snapshots_match"}
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--compose", default="docker-compose.sqlite-lab.yaml")
