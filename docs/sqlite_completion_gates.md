@@ -299,3 +299,14 @@ an isolated workflow. It does not authorize restoration, prove production JSON
 loader compatibility, establish writer exclusion or complete gate 10. Production
 remains JSON-authoritative; no restore, activation, media move or deletion occurs.
 Server validation and final release/rollback verification remain outstanding.
+
+### Actual JSON save/restart compatibility
+
+Advanced-state rollback candidates now have process-isolated regressions against
+the real JSON load/save functions, followed by a fresh-process reload. Fixtures
+cover all lifecycle clocks, movie/TV keys, queued Radarr/Sonarr metadata and
+unknown Unicode/nested fields. Tests copy only disposable candidate data and
+forbid network requests. This advances gate 10's compatibility evidence, but
+actual production restore, stopped-writer cutover, server durability, final
+release verification and activation approval remain unverified. No gate is
+newly complete and no production implementation changes.

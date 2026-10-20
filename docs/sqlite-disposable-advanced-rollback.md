@@ -42,7 +42,16 @@ automatically restored, and no newer state is discarded.
 
 Local tests advance SQLite history, preserve queued work and unknown Unicode
 fields, export fresh JSON, re-import it into a separate offline SQLite database,
-and verify complete snapshot parity. This verifies the data conversion, not
-production JSON-loader compatibility, an approved release rollback, or host
-filesystem durability. A consolidated Unraid rehearsal remains required before
-claiming server evidence for this workflow.
+and verify complete snapshot parity. Additional restart regressions copy the
+candidate into a separate disposable JSON directory, then run the actual
+`collection_auditor.load_state()` and `save_state()` in fresh Python processes.
+They verify full snapshot parity before saving, immediately after saving, and
+after another process restart. Fixtures cover advanced lifecycle clocks, movie
+and TV keys, Radarr/Sonarr queue metadata, Unicode and unknown fields. Network
+requests are forbidden and service credentials are not inherited by the child
+processes. Original JSON, SQLite bytes and the exported candidate stay unchanged.
+
+This proves compatibility for the tested fixture states and current loader. It
+does not exercise an audit run, authorize a production restore, establish writer
+exclusion, or prove host filesystem durability. A consolidated Unraid rehearsal
+remains required before claiming server evidence for this workflow.
