@@ -174,3 +174,38 @@ collector; an empty transport-failure report does not mean a valid response.
 
 The update leaves caching, protection validation, read-only mounts and production
 activation unchanged. All 119 focused tests pass locally; Unraid rerun pending.
+
+### Confirmed live coverage and protection summary increment
+
+The user reported a successful live Unraid run through `e931e92`: **539 tracked,
+539 covered, zero blocked, 13 requests**, no transport failures, and
+`status: advisory_only`. The initial connection failure was resolved when the
+user reran the probe with Docker `--network host`. The lab database was the
+verified revision-zero JSON copy at `/mnt/user/sql_test/coverage.lOoRS9/state.db`.
+This validates matching for that lab snapshot against the collected responses;
+freshness remains independently unverified. The Requests dependency warning was
+still present. Production activation remained disabled.
+
+The next increment adds `protection_summary` to the bridge and aggregate live
+probe. Its `counts` fields describe distinct tracked titles with validated
+signals, OR-aggregated across users:
+
+- `protected`: `keep-forever`.
+- `keep_all`: `keep-all-seasons` or the implication from `keep-forever`.
+- `keep`: the explicit `keep` signal.
+- `favorite`: any user's favorite signal, irrespective of the policy toggle.
+
+Counts overlap; do not add them to obtain a unique protected-title total.
+Favorites and tag counts are observations, not proposed moves. Counting does not
+change lifecycle precedence, season retention, state, or authorization. If any
+tracked title has incomplete coverage, `available` is false and **all counts
+are null**, rather than misleading zeros. A revision mismatch also invalidates
+the entire summary. Empty coverage can yield zeros, but validates no titles.
+Complete coverage does not override deletion blocks or unresolved operations.
+
+All 125 focused tests pass locally for this increment. Tests cover cross-user
+counting, exclusion of untracked requests, protection implications, missing and
+ambiguous matches, revision changes, privacy and database byte preservation.
+The new summary requires another Unraid fixture/live run. Use the existing live
+command with `--network host` immediately after `docker run`; preserve both
+read-only mounts. No image rebuild or production container update is needed.
