@@ -330,3 +330,22 @@ Durable phases do not yet implement resumable copying, completed publication,
 metadata/permission preservation, guarded source cleanup or lifecycle/Arr commit.
 Those remain the next portable protocol stages. Production and permanent
 filesystem deletion remain disabled. API work stays on the product roadmap.
+
+### Portable copy restart content inspection
+
+`inspect_disposable_copy(root=...)` inspects only a marked disposable lab with
+an existing durable copy intent. It validates the stored paths, tracking clock,
+operation identifier and manifest digest before descriptor-relative content
+reads. Parent symlinks are refused; two manifests and held-directory bindings
+check for observable changes. Reports contain aggregate statuses, never title
+names, paths or content digests. Inspection writes no SQLite state, copies no
+files, clears no intent and authorizes no promotion, cleanup or recovery.
+The existing cooperating-runner lock still applies; it does not exclude external
+writers. Matching bytes are explicitly unverified historical identity and do not
+establish fresh Jellyfin protections. Hashing complete retained copies is an
+explicit diagnostic operation, unsuitable for ordinary dashboard/API polling.
+
+Unraid confirmed the preceding durable-copy tests through `8c80c74`: 20 passed
+on shfs and 20 on native Btrfs. Detailed restart inspection still requires its
+own Unraid validation. Production remains JSON-authoritative and disabled for
+SQLite activation; no completion gate advances from these results alone.

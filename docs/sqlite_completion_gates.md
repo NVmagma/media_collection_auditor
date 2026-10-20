@@ -247,3 +247,8 @@ Portable staging now passes 11 tests on both shfs and native Btrfs through
 blocked recovery status; no source cleanup, promotion or lifecycle commit is
 authorized. Portability is progressing without a filesystem-name requirement;
 no new production gate is marked complete.
+
+Portable-copy follow-up: Unraid durable-copy tests passed on both shfs and native
+Btrfs (20 each through `8c80c74`). Added non-authorizing disposable restart content
+inspection; pending intents remain pending even when both content manifests
+match. Writer exclusion, production recovery and activation gates remain open.
