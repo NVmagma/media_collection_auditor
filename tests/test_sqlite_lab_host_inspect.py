@@ -71,3 +71,45 @@ def test_runtime_identity_changes_block(key, value):
     candidate["services"]["sqlite-lab"][key] = value
     with pytest.raises(RuntimeError):
         verify(candidate)
+
+
+def test_unraid_mount_evidence_is_review_only():
+    from scripts.sqlite_lab_host_inspect import compare_unraid_mount_evidence
+    mounts = [
+        {"Type": "bind", "Source": "/mnt/user/sqlite_lab_test",
+         "Destination": "/lab", "RW": True},
+        {"Type": "bind", "Source": "/mnt/user/sqlite_lab_checkout",
+         "Destination": "/workspace", "RW": False},
+    ]
+    probe = {"status": "blocked", "reason": "lab_mount_root_unverified",
+             "authorization": "not_authorized", "production_media_inspected": False,
+             "lab_mount_count": 1,
+             "lab_mounts": [{"target": "/lab", "root": "/sqlite_lab_test",
+                             "filesystem": "fuse.shfs", "read_only": False}]}
+    lab = Path("/mnt/user/sqlite_lab_test")
+    checkout = Path("/mnt/user/sqlite_lab_checkout")
+    result = compare_unraid_mount_evidence(mounts, probe, lab, checkout)
+    assert result["status"] == "review_required"
+    assert result["authorization"] == "not_authorized"
+    for change in ("wrong_source", "writable_checkout", "extra_mount",
+                   "wrong_root", "nested_mount", "missing_probe"):
+        changed_mounts = copy.deepcopy(mounts)
+        changed_probe = copy.deepcopy(probe)
+        if change == "wrong_source":
+            changed_mounts[0]["Source"] = "/mnt/user/media"
+        elif change == "writable_checkout":
+            changed_mounts[1]["RW"] = True
+        elif change == "extra_mount":
+            changed_mounts.append({"Type": "bind", "Source": "/media",
+                                   "Destination": "/media", "RW": True})
+        elif change == "wrong_root":
+            changed_probe["lab_mounts"][0]["root"] = "/media"
+        elif change == "nested_mount":
+            changed_probe["lab_mount_count"] = 2
+        else:
+            changed_probe = {}
+        result = compare_unraid_mount_evidence(changed_mounts, changed_probe,
+                                               lab, checkout)
+        assert result["status"] == "blocked", change
+        assert result["authorization"] == "not_authorized", change
+
