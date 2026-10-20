@@ -1,15 +1,15 @@
 """Explicitly isolated SQLite move rehearsal. NEVER use on production media.
 
-The runner performs a same-device directory rename only under a fresh,
+The runner performs a no-replace directory rename only under a fresh,
 caller-created disposable root. It records an intent first and never clears it.
 No production backend selection, Arr/Jellyfin calls, or deletion operations.
 """
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
+from app.sqlite_noreplace_rename import rename_directory_noreplace
 from app.sqlite_audit_session import RevisionedAuditSession
 from app.sqlite_operation_coordinator import SQLiteOperationCoordinator
 from app.sqlite_recovery_fingerprint import capture_directory_fingerprint
@@ -67,7 +67,7 @@ def rehearse_disposable_move(*, root, database, operation_id, media_key,
         after_intent()
     # The durable intent now exists. Any exception from here on must NOT
     # cause an automatic retry or rollback; recovery must inspect the intent.
-    os.rename(source, destination)
+    rename_directory_noreplace(source, destination)
     if after_rename is not None:
         after_rename()
     coordinator.mark_applied(operation_id)
