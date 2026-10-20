@@ -18,7 +18,7 @@ FIELDS = ("played", "favorite", "disliked", "keep", "keep_all", "protected")
 def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
                               page_size=PAGE_SIZE):
     if (jellyfin_type not in ("Movie", "Series") or not isinstance(folder, str)
-            or not folder or folder in (".", "..") or "/" in folder or "\\\" in folder):
+            or not folder or folder in (".", "..") or "/" in folder or chr(92) in folder):
         raise ValueError("Movie/Series and single folder name required")
     if not callable(fetch) or type(page_size) is not int or page_size < 1 or page_size > 1000:
         raise ValueError("Invalid Jellyfin collection configuration")
