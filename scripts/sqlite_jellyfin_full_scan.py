@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Read-only full Jellyfin response contract scan. No identifying output.
 
-Request exclusion of BoxSet collection records, but still fail closed if the
-server returns an unexpected type. No media is moved or modified.
+Count BoxSet collection records separately when returned despite exclusion.
+Other unexpected types fail closed. No media is moved or modified.
 """
 from __future__ import annotations
 
@@ -22,7 +22,8 @@ def scan(fetch):
         "scan_complete": False, "production_authorized": False,
         "read_only": True, "users_checked": 0, "pages_checked": 0,
         "items_checked": 0, "movie_items_checked": 0,
-        "series_items_checked": 0, "failure_stage": None,
+        "series_items_checked": 0, "boxset_items_skipped": 0,
+        "failure_stage": None,
         "failure_category": None,
     }
     stage = "users"
@@ -70,6 +71,7 @@ def scan(fetch):
                         expected = total
                     if len(items) != min(PAGE_SIZE, total - start):
                         raise ValueError("page_length")
+                    accepted_count = 0
                     for item in items:
                         if not isinstance(item, dict):
                             raise ValueError("item_fields")
@@ -96,6 +98,12 @@ def scan(fetch):
                             raise ValueError("played_field")
                         if type(data.get("PlayCount")) is not int or data["PlayCount"] < 0:
                             raise ValueError("play_count_field")
+                        if item.get("Type") == "BoxSet":
+                            # A collection is not a Movie or Series. Count it
+                            # for visibility; never classify it as title media.
+                            report["boxset_items_skipped"] += 1
+                            seen.add(item_id)
+                            continue
                         if item.get("Type") is not None and item["Type"] != kind:
                             value = item["Type"]
                             returned_kind = (value if type(value) is str and
@@ -105,10 +113,11 @@ def scan(fetch):
                                                        "MusicVideo"} else "other_or_invalid")
                             raise ValueError("item_type")
                         seen.add(item_id)
+                        accepted_count += 1
                     count = len(items)
-                    report["items_checked"] += count
+                    report["items_checked"] += accepted_count
                     report["movie_items_checked" if kind == "Movie"
-                           else "series_items_checked"] += count
+                           else "series_items_checked"] += accepted_count
                     start += count
                     if start == total:
                         break
