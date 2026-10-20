@@ -11,11 +11,11 @@ A gate is complete only when its acceptance criteria are verified.
 | 3. Guarded checkpoints | Compare-and-swap, stale-writer rejection, uncertain checkpoint quarantine | Complete: isolated tests |
 | 4. Lifecycle decision parity | Representative movie/season clocks and read-only rehearsal | Complete: isolated tests |
 | 5. Restart and failure rehearsals | Pending intents persist, crashes fail closed, no automatic replay | Complete: disposable Unraid tests |
-| 6. Trusted move verification | Bind identity and paths, independently prove the moved object, reject races and ambiguous outcomes | In progress: live directory witnesses and no-replace rename verified in disposable tests; concurrent-writer isolation and crash trust remain open |
-| 7. Atomic lifecycle reconciliation | Verified move clock change and intent clearance commit together; failure injection proves all-or-nothing | In progress: witnessed disposable rename uses a single revision-checked reconciliation checkpoint; injected pre/post-commit failures tested. Production trust and integration remain open |
-| 8. Production lifecycle integration | Real Waiting/Holding/Keep/Removal moves use guarded ordering; existing JSON path unaffected until cutover | Not implemented |
-| 9. External integrations | Arr uncertain outcomes, Jellyfin protection, dashboard authoritative reads, TV-season behavior | In progress: live read-only title coverage and protection summary verified on Unraid; production freshness, Arr/dashboard/TV-season execution remain open |
-| 10. Deployment and rollback | Disposable Unraid end-to-end tests, full CI, Docker build, backup/rollback, explicit activation approval | Not completed |
+| 6. Trusted move verification | Bind identity and paths, independently prove the moved object, reject races and ambiguous outcomes | In progress: cooperating-runner lock, held-parent rename, root/marker/database bindings and adversarial substitution tests pass on Unraid. Source-entry races, external-writer ownership and production crash trust remain open |
+| 7. Atomic lifecycle reconciliation | Verified move clock change and intent clearance commit together; failure injection proves all-or-nothing | In progress: Unraid tests verify one transaction for destination clock, stable Arr queue entry and move-intent clearance, including pre/post-commit uncertainty. Completion still depends on gate 6 and production integration |
+| 8. Production lifecycle integration | Real Waiting/Holding/Keep/Removal moves use guarded ordering; existing JSON path unaffected until cutover | Not wired: named, plan-bound, collected-signal isolated execution exists, but production audit paths still reject SQLite |
+| 9. External integrations | Arr uncertain outcomes, Jellyfin protection, dashboard authoritative reads, TV-season behavior | In progress: 539-title live advisory coverage verified; bounded two-scan protection and one-shot Arr unknown outcomes tested on Unraid. Remote Arr identity/outcome verification, dashboard authority and TV-season execution remain open |
+| 10. Deployment and rollback | Disposable Unraid end-to-end tests, full CI, Docker build, backup/rollback, explicit activation approval | Incomplete: disposable Unraid suite passes (1,140 tests through ac9ae6d). Final release CI/image, rollback after advanced SQLite state and explicit activation approval remain open |
 
 ## Current decision
 
@@ -160,3 +160,31 @@ atomically enqueues a bound Arr notification with the verified disposable move's
 clock update and intent clearance. Stable queued IDs are checked before delivery.
 Remote identity verification and production integration remain open; no new gate
 is marked complete.
+
+
+## Gate assessment after the 1,140-test Unraid result
+
+The user reported **1,140 passed, one non-failing Requests warning** on Unraid
+through `ac9ae6d`. This verifies the atomic move-to-Arr handoff increment. The
+summary table above has been updated to reflect the actual implemented evidence,
+not just the earlier prototypes. No production gate is newly complete: **gates
+1–5 complete, gates 6–7 and 9 in progress, gate 8 not wired, gate 10 incomplete**.
+
+The recent work is substantive: an isolated named-title runner now combines
+process locking, held parent directories, bound lifecycle plans/clocks, bounded
+Jellyfin refresh and atomic notification handoff. What is missing is acceptance
+of its production trust model and full production integration, rather than the
+SQLite transaction engine itself. An increasing fixture-test count does not
+resolve those missing acceptance criteria.
+
+Priority is still closing gate 6's operational writer/mount ownership and
+recovery contract before production clearance. After that, gate 7 can be
+assessed against the accepted verifier, and the existing isolated flow can be
+wired through every production lifecycle touchpoint for gate 8. Remote Arr
+verification, dashboard consistency and season retention must then complete
+gate 9. Final CI/Docker verification is intentionally deferred until a release
+candidate, consistent with the request to avoid repeated expensive builds.
+
+This assessment/documentation update changes no executable code and requires no
+new Unraid regression run. Production remains JSON-only; no SQLite activation,
+container update, automatic uncertain-operation replay or deletion is authorized.
