@@ -37,11 +37,22 @@ final commit is inspected by reopening SQLite; it is never retried. A committed
 transaction contains the new clock, Arr queue/retention record and no intent,
 while an uncommitted one retains old tracking plus the durable retirement intent.
 
-The bounded observation window covers staging, hashing, publication, refreshes
-and completion. Large fixtures can expire and stop with retained data/pending
-state. This prototype has no approved asynchronous long-copy/fresh-replan model;
-do not treat a tiny-fixture pass as large-library production readiness. External
-writers are not excluded and concurrent changes may force manual review.
+The completion rehearsal starts a new bounded observation window after staging
+and its content verification finish. Two new complete observations must match
+the original title identity and every protection signal before publication. Both
+wall and monotonic clocks must remain nondecreasing across the transfer; renewal
+cannot conceal a reversal. The configured 1–60 second limit remains unchanged.
+This renewal exists only in the same live invocation, under its held lab lock;
+persisted pending intents cannot be resumed. The original plan, source clock,
+revision checks and conservative lifecycle timestamp remain bound throughout.
+
+Initial pre-intent hashing must still fit its original window. Publication and
+completion hashing/checkpoints must fit the renewed window. Deadline checks run
+immediately before publication and source-quarantine renames, and before the
+completion checkpoint. Slow hashing or checks can still stop with retained data
+and a pending intent. Arbitrarily long hashing, asynchronous fresh replanning
+and production writer exclusion remain unresolved. A tiny-fixture pass does not
+establish large-library production readiness.
 
 This is an isolated workflow for the optional atomic no-replace strategy. It does
 not implement a safe publication alternative on unsupported filesystems, source

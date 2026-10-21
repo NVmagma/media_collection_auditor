@@ -64,7 +64,7 @@ def test_actual_completion_and_crashes_never_drop_source_bytes(tmp_path, fault, 
     original = root / ".sqlite_retained_sources" / "complete-copy" if retired else root / "transient" / FOLDER
     assert (original / "payload").read_text() == "fixture"
     assert (root / "holding" / FOLDER / "payload").read_text() == "fixture"
-    assert calls.count("/Users") == 4
+    assert calls.count("/Users") == 5
     if not cleared:
         report = inspect_disposable_copy(root=root)
         assert report["status"] == "blocked"
@@ -116,10 +116,10 @@ def test_changed_refresh_blocks_before_publication_and_quarantine(tmp_path):
 @pytest.mark.skipif(sys.platform != "linux", reason="Actual publication before final fresh check required")
 def test_protection_change_before_quarantine_retains_public_source(tmp_path):
     root, database = lab(tmp_path)
-    fetch, calls = transport([[item()], [item()], [item()], [item(["keep-forever"])]])
+    fetch, calls = transport([[item()], [item()], [item()], [item()], [item(["keep-forever"])]])
     with pytest.raises(RuntimeError, match="changed"):
         run(root, database, fetch)
-    assert calls.count("/Users") == 4
+    assert calls.count("/Users") == 5
     assert (root / "transient" / FOLDER / "payload").read_text() == "fixture"
     assert (root / "holding" / FOLDER / "payload").read_text() == "fixture"
     state = GuardedSQLiteStateStore(database).load_with_revision()[0]
@@ -157,7 +157,7 @@ def test_whole_show_completion_retains_every_original_season(tmp_path):
         operation_id="series-complete", media_key=KEY, title_folder=FOLDER,
         jellyfin_type="Series", thresholds=LIMITS, fetch=fetch, clock=lambda: NOW,
         arr_sync_request={"service": "sonarr", "title_id": 99, "root": "/fixture/tv_hold", "monitored": True})
-    assert result["original_bytes_retained"] and calls.count("/Users") == 4
+    assert result["original_bytes_retained"] and calls.count("/Users") == 5
     for parent in (root / "holding" / FOLDER, root / ".sqlite_retained_sources" / "series-complete"):
         for season in ("Season 00", "Season 01", "Season 02"):
             assert (parent / season / "episode.mkv").read_bytes() == b"disposable episode"
@@ -221,3 +221,79 @@ def test_reused_retention_identifier_stops_before_publication(tmp_path):
     assert "publication" not in state["sqlite_pending_operations"]["details"]
     assert not (root / "holding" / FOLDER).exists()
     assert (root / "transient" / FOLDER / "payload").read_text() == "fixture"
+
+
+@pytest.mark.parametrize("scenario", ["long_transfer", "changed", "changed_second_scan", "slow_refresh", "timer_reversed", "clock_reversed"])
+def test_transfer_renewal_requires_fresh_unchanged_bounded_observations(tmp_path, monkeypatch, scenario):
+    from datetime import timedelta
+    import app.sqlite_disposable_copy_stage as stage
+    root, database = lab(tmp_path)
+    elapsed = 0
+    original = stage._stage_copy
+    def long_stage(**kwargs):
+        nonlocal elapsed
+        result = original(**kwargs)
+        elapsed = -1 if scenario in ("timer_reversed", "clock_reversed") else 600
+        return result
+    monkeypatch.setattr(stage, "_stage_copy", long_stage)
+    base_fetch, calls = transport([[item()], [item()],
+        [item(["keep-forever"])] if scenario == "changed" else [item()],
+        [item(["keep-forever"])] if scenario == "changed_second_scan" else [item()]])
+    def fetch(*args, **kwargs):
+        nonlocal elapsed
+        response = base_fetch(*args, **kwargs)
+        if scenario == "slow_refresh" and calls.count("/Users") >= 3:
+            elapsed += 61
+        return response
+    def invoke():
+        return run_collected_isolated_copy_completion(root=root, database=database,
+            operation_id="complete-copy", media_key=FOLDER, title_folder=FOLDER,
+            jellyfin_type="Movie", thresholds=LIMITS, fetch=fetch,
+            clock=lambda: NOW + timedelta(seconds=elapsed if scenario != "timer_reversed" else 0),
+            timer=lambda: elapsed if scenario != "clock_reversed" else 0)
+    if scenario == "long_transfer":
+        try:
+            report = invoke()
+        except RuntimeError as exc:
+            assert str(exc) in ("Atomic no-replace rename requires Linux", "Atomic no-replace rename unsupported")
+            state = GuardedSQLiteStateStore(database).load_with_revision()[0]
+            assert state["sqlite_pending_operations"]["details"]["publication"]["phase"] == "prepared"
+            assert calls.count("/Users") == 4
+        else:
+            assert report["lifecycle_committed"] and report["original_bytes_retained"]
+            assert calls.count("/Users") == 5
+        return
+    with pytest.raises(RuntimeError, match="changed" if scenario in ("changed", "changed_second_scan") else "window expired"):
+        invoke()
+    state = GuardedSQLiteStateStore(database).load_with_revision()[0]
+    assert "publication" not in state["sqlite_pending_operations"]["details"]
+    assert FOLDER in state["first_seen"] and not state["queued"]
+    assert (root / "transient" / FOLDER / "payload").read_text() == "fixture"
+    assert not (root / "holding" / FOLDER).exists()
+
+
+@pytest.mark.parametrize("boundary", ["publication", "quarantine"])
+def test_checkpoint_delay_expires_before_directory_action(tmp_path, monkeypatch, boundary):
+    if boundary == "quarantine" and sys.platform != "linux":
+        pytest.skip("Actual Linux publication required before quarantine guard")
+    root, database = lab(tmp_path)
+    elapsed = 0
+    writes = 0
+    original = GuardedSQLiteStateStore.save_if_revision
+    def delayed_checkpoint(self, state, revision):
+        nonlocal elapsed, writes
+        result = original(self, state, revision)
+        writes += 1
+        if writes == (3 if boundary == "publication" else 5):
+            elapsed = 61
+        return result
+    monkeypatch.setattr(GuardedSQLiteStateStore, "save_if_revision", delayed_checkpoint)
+    fetch, _ = transport([[item()]])
+    with pytest.raises(RuntimeError, match="window expired"):
+        run(root, database, fetch, timer=lambda: elapsed)
+    state = GuardedSQLiteStateStore(database).load_with_revision()[0]
+    details = state["sqlite_pending_operations"]["details"]
+    assert details["publication"]["phase"] == ("prepared" if boundary == "publication" else "published_source_retained")
+    assert (root / "transient" / FOLDER / "payload").read_text() == "fixture"
+    assert not (root / ".sqlite_retained_sources" / "complete-copy").exists()
+    assert FOLDER in state["first_seen"] and not state["queued"] and not state["arr_sync_pending"]

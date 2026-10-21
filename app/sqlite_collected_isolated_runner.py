@@ -50,7 +50,8 @@ def _run_collected_isolated_operation(*, root, database, operation_id, media_key
 
     Time budget covers both scans and intervening planning. This establishes a
     bounded experimental observation window, not transactional protection or
-    independent production freshness. Expiry/change requires a new invocation.
+    independent production freshness. Completion alone renews after staging,
+    requiring two unchanged observations; later expiry/change stops the flow.
     """
     if completion_fault_at is not None and not _complete_copy:
         raise ValueError("Completion faults require the completion rehearsal")
@@ -75,11 +76,23 @@ def _run_collected_isolated_operation(*, root, database, operation_id, media_key
         if not isinstance(started, datetime) or started.tzinfo is not None:
             raise ValueError("Naive collection clock required")
 
-        def check_window():
-            elapsed = timer() - tick
-            current = clock()
+        window_started, window_tick = started, tick
+        last_time, last_tick = started, tick
+
+        def sample_time():
+            nonlocal last_time, last_tick
+            current, current_tick = clock(), timer()
             if (not isinstance(current, datetime) or current.tzinfo is not None
-                    or current < started or (current - started).total_seconds() > maximum_age_seconds
+                    or current < last_time or not current_tick >= last_tick):
+                raise RuntimeError("Jellyfin observation window expired; replan required")
+            last_time, last_tick = current, current_tick
+            return current, current_tick
+
+        def check_window():
+            current, current_tick = sample_time()
+            elapsed = current_tick - window_tick
+            if (not isinstance(current, datetime) or current.tzinfo is not None
+                    or current < window_started or (current - window_started).total_seconds() > maximum_age_seconds
                     or not 0 <= elapsed <= maximum_age_seconds):
                 raise RuntimeError("Jellyfin observation window expired; replan required")
 
@@ -139,6 +152,12 @@ def _run_collected_isolated_operation(*, root, database, operation_id, media_key
                 _before_intent_check=check_window)
             if not _complete_copy:
                 return result
+            # Transfer and its content checks may outlast the initial scan.
+            # Only this live completion flow can start a new window. The next
+            # two complete scans must still match the original identity/signals;
+            # persisted pending operations never acquire restart permission.
+            window_started, window_tick = sample_time()
+            refresh_before_intent()
             from app.sqlite_disposable_copy_publication import _publish_disposable_copy
             return _publish_disposable_copy(root=root, _held_binding=verify_binding,
                 _completion={"observed_at": started, "refresh": refresh_before_intent,

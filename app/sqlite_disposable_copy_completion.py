@@ -88,6 +88,7 @@ def complete_live_copy(*, root, root_fd, parents, source_fd, copy_fd,
             raise RuntimeError("Injected completion crash after retirement intent")
         verify_published()
         verify_archive()
+        config["check_window"]()
         rename_directory_noreplace_at(parents["transient"], folder, archive_fd, operation)
         if fault == "after_source_quarantine":
             raise RuntimeError("Injected completion crash after source quarantine")

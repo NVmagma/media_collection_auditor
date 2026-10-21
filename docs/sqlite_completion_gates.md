@@ -444,3 +444,17 @@ Production writer ownership, unsupported publication alternatives, long-copy
 freshness, recovery, live wiring and final activation remain unresolved; no gate
 is newly complete. The cutover guard's portable-completion blocker explicitly
 refers to production, not this isolated rehearsal.
+
+
+## Completion Unraid evidence through `61a6a51`
+
+The user confirmed 324 tests plus 11 subtests passed on shfs and 338 plus 11
+subtests on native storage. Native completion, crash, full-show and uncertain
+transaction cases passed. The shfs result exercises retained blocked outcomes
+where the required atomic publication syscall is unsupported.
+
+The next increment permits a long staging transfer followed by two unchanged,
+bounded observations in the same live completion invocation. Deadline checks
+also guard both renames after durable checkpoints. Pre-intent and later hashing
+remain bounded; asynchronous completion, production writer exclusion, restart
+clearance and activation remain unfinished. No gate changes status.

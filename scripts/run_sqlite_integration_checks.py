@@ -64,7 +64,9 @@ def main(argv=None):
                 "test_real_capability_preserves_original_bytes_in_all_supported_outcomes",
                 "test_changed_refresh_blocks_before_publication_and_quarantine",
                 "test_invalid_queue_request_stops_before_copy_intent",
-                "test_reused_retention_identifier_stops_before_publication"))
+                "test_reused_retention_identifier_stops_before_publication",
+                "test_transfer_renewal_requires_fresh_unchanged_bounded_observations",
+                "test_checkpoint_delay_expires_before_directory_action[publication]"))
     return subprocess.run(
         [sys.executable, "-B", "-m", "pytest", "-p", "no:cacheprovider",
          "--basetemp=" + str(base), *targets,

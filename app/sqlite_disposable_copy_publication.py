@@ -116,6 +116,8 @@ def _publish_disposable_copy(*, root, fault_at=None, _held_binding=None, _comple
             if fault_at == "after_intent":
                 raise RuntimeError("Injected publication crash after intent")
             verify_bindings()
+            if _completion is not None:
+                _completion["check_window"]()
             rename_directory_noreplace_at(parents[".sqlite_copy_staging"], operation,
                                           parents[destination], folder)
             if fault_at == "after_publication":
