@@ -491,3 +491,21 @@ operations remain intact and later titles are never attempted after failure.
 This advances isolated orchestration for gate 8, not production wiring. Native
 multi-title, mixed Holding/Keep, Arr queue, checkpoint-uncertainty and unexpected
 writer cases require Unraid validation. Gate states remain unchanged.
+
+
+## Capped-batch Unraid evidence through `3a6a50c`
+
+The user confirmed 367 tests plus 11 subtests passed on shfs and 402 tests plus
+11 subtests on native storage. Batch caps, mixed movie/show completions, typed
+Arr queues, lock contention, revision chaining and uncertain checkpoints passed.
+The Requests warning remained non-failing. No production behavior changed.
+
+The next increment extends source-retaining copy completion to the existing
+Holding-to-Keep and Holding-to-Removal decisions. A shared stage/clock mapping
+binds inspection, paths, held descriptors and final atomic reconciliation.
+Removal remains a non-deleting lifecycle move with original bytes retained.
+Waiting/Holding may be mixed within the existing attempt cap; Keep/Removal
+sources, season pruning and deletion stay excluded. Native Holding crashes,
+uncertain commits and whole-show cases require Unraid validation. Gates 6–10
+remain open; external writer control and production orchestration are not solved
+by these isolated transitions.

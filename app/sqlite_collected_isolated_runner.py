@@ -11,6 +11,7 @@ from pathlib import Path
 from time import monotonic
 
 from app.sqlite_collection_decision_preview import preview_collection
+from app.sqlite_copy_stage_binding import TRANSITIONS
 from app.sqlite_disposable_lifecycle_flow import execute_disposable_lifecycle_move
 from app.sqlite_disposable_planned_executor import validate_disposable_move_candidate
 from app.sqlite_guarded_move_plan import plan_guarded_moves
@@ -152,8 +153,9 @@ def _run_collected_isolated_operation(*, root, database, operation_id, media_key
 
         verify_binding()
         if _copy_stage:
-            if source != "transient" or destination not in ("holding", "keep"):
-                raise RuntimeError("Portable staging requires a Waiting source candidate")
+            if ((source, destination) not in TRANSITIONS
+                    or (not _complete_copy and source != "transient")):
+                raise RuntimeError("Portable staging requires a Waiting source candidate; completion also supports Holding")
             if arr_sync_request is not None and not _complete_copy:
                 raise ValueError("Copy staging cannot deliver or queue Arr requests")
             if _complete_copy and media_key in state["arr_sync_pending"]:
@@ -170,7 +172,8 @@ def _run_collected_isolated_operation(*, root, database, operation_id, media_key
                 _held_binding=verify_binding,
                 _before_intent_review=None if _complete_copy else refresh_before_intent,
                 _before_intent_check=check_window,
-                _refresh_after_hash=renew_copy_window if _complete_copy else None)
+                _refresh_after_hash=renew_copy_window if _complete_copy else None,
+                _source_stage=source)
             if not _complete_copy:
                 return result
             from app.sqlite_disposable_copy_publication import _publish_disposable_copy

@@ -14,6 +14,7 @@ from pathlib import Path
 import stat
 
 from app.sqlite_isolated_lifecycle_runner import isolated_runner_lock
+from app.sqlite_copy_stage_binding import CLOCKS, TRANSITIONS
 from app.sqlite_title_identity import validate_title_folder
 from app.sqlite_operation_coordinator import INTENTS_KEY, SQLiteOperationCoordinator
 from app.sqlite_audit_session import RevisionedAuditSession
@@ -182,7 +183,7 @@ def stage_planned_disposable_copy(*, root, title_folder, media_key, operation_id
 def _stage_copy(*, root, title_folder, operation_id, media_key=None,
                 persist_intent=False, fault_at=None, planned_move=None, planned_destination=None,
                 _held_binding=None, _before_intent_review=None, _before_intent_check=None,
-                _refresh_after_hash=None):
+                _refresh_after_hash=None, _source_stage="transient"):
     """Create an exclusive hidden staged copy; retain source and tracking state.
 
     Requires trusted local transport primitives (exclusive create, fsync, reads).
@@ -191,6 +192,15 @@ def _stage_copy(*, root, title_folder, operation_id, media_key=None,
     root = Path(root)
     folder = validate_title_folder(title_folder)
     operation = validate_title_folder(operation_id)
+    if _source_stage not in ("transient", "holding"):
+        raise ValueError("Unsupported copy source stage")
+    if _source_stage != "transient":
+        if not persist_intent or planned_move is None or (_source_stage, planned_destination) not in TRANSITIONS:
+            raise ValueError("Plan-bound non-deleting copy transition required")
+        from app.sqlite_disposable_planned_executor import validate_disposable_move_candidate
+        validate_disposable_move_candidate(planned_move=planned_move, media_key=media_key,
+            source_stage=_source_stage, destination_stage=planned_destination)
+    source_clock = CLOCKS[_source_stage]
     if persist_intent and media_key not in (folder, "TV/" + folder):
         raise ValueError("Copy folder and tracking key mismatch")
     if fault_at not in (None, "after_intent", "after_copy", "after_verified_checkpoint"):
@@ -203,7 +213,7 @@ def _stage_copy(*, root, title_folder, operation_id, media_key=None,
             raise RuntimeError("Unresolved operation; copy staging stopped")
         if planned_move is not None and session.revision != planned_move["plan"]["source_revision"]:
             raise RuntimeError("Stale copy plan revision; staging stopped")
-        source_parent = root / "transient"
+        source_parent = root / _source_stage
         if source_parent.is_symlink() or not source_parent.is_dir():
             raise RuntimeError("Safe disposable source stage required")
         source_path = source_parent / folder
@@ -212,7 +222,7 @@ def _stage_copy(*, root, title_folder, operation_id, media_key=None,
         root_fd = os.open(root, FLAGS)
         try:
             verify_binding()
-            source_parent_fd = os.open("transient", FLAGS, dir_fd=root_fd)
+            source_parent_fd = os.open(_source_stage, FLAGS, dir_fd=root_fd)
         except BaseException:
             os.close(root_fd)
             raise
@@ -228,7 +238,7 @@ def _stage_copy(*, root, title_folder, operation_id, media_key=None,
             original_source_parent = os.fstat(source_parent_fd)
 
             def verify_source_binding(boundary):
-                current_parent = os.stat("transient", dir_fd=root_fd, follow_symlinks=False)
+                current_parent = os.stat(_source_stage, dir_fd=root_fd, follow_symlinks=False)
                 current_source = os.stat(folder, dir_fd=source_parent_fd, follow_symlinks=False)
                 if (not stat.S_ISDIR(current_parent.st_mode)
                         or (current_parent.st_dev, current_parent.st_ino)
@@ -245,8 +255,8 @@ def _stage_copy(*, root, title_folder, operation_id, media_key=None,
             if staged_path.exists() or staged_path.is_symlink():
                 raise FileExistsError("Copy staging slot occupied")
             if persist_intent:
-                if (media_key not in state["first_seen"]
-                        or any(media_key in state[section] for section in ("queued", "in_removal", "keep_seen"))):
+                if (media_key not in state[source_clock]
+                        or any(media_key in state[section] for section in CLOCKS.values() if section != source_clock)):
                     raise RuntimeError("Copy source tracking clock missing or conflicting")
                 manifest_digest = hashlib.sha256(json.dumps(
                     before, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")).hexdigest()
@@ -265,10 +275,10 @@ def _stage_copy(*, root, title_folder, operation_id, media_key=None,
                     session.read_verified_snapshot()
                 plan_binding = {}
                 if planned_move is not None:
-                    if planned_move["now"] < datetime.fromisoformat(state["first_seen"][media_key]):
+                    if planned_move["now"] < datetime.fromisoformat(state[source_clock][media_key]):
                         raise RuntimeError("Copy observation predates source clock")
                     plan_binding = {"plan_binding": {
-                        "source_revision": session.revision, "source_stage": "transient",
+                        "source_revision": session.revision, "source_stage": _source_stage,
                         "destination_stage": planned_destination,
                         "observed_at": planned_move["now"].isoformat()}}
                 if _before_intent_review is not None:
@@ -291,7 +301,7 @@ def _stage_copy(*, root, title_folder, operation_id, media_key=None,
                 SQLiteOperationCoordinator(session).begin(operation, "copy_stage", {
                     "media_key": media_key, "source": str(source_path),
                     "staging": str(staged_path), "copy_phase": "prepared",
-                    "source_timestamp": state["first_seen"][media_key],
+                    "source_timestamp": state[source_clock][media_key],
                     "manifest_sha256": manifest_digest, **plan_binding,
                 })
                 verify_binding()

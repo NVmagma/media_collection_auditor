@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 
 from app.sqlite_disposable_copy_stage import FLAGS, _manifest
+from app.sqlite_copy_stage_binding import CLOCKS, TRANSITIONS
 from app.sqlite_isolated_lifecycle_runner import isolated_runner_lock
 from app.sqlite_audit_session import RevisionedAuditSession
 from app.sqlite_operation_coordinator import INTENTS_KEY
@@ -70,23 +71,28 @@ def inspect_disposable_copy(*, root, _held_binding=None):
             raise RuntimeError("Pending copy key invalid")
         folder = validate_title_folder(key[3:] if key.startswith("TV/") else key)
         digest = details.get("manifest_sha256")
-        if (details.get("source") != str(root / "transient" / folder)
+        plan_binding = details.get("plan_binding")
+        if "plan_binding" in details and not isinstance(plan_binding, dict):
+            raise RuntimeError("Pending copy plan binding invalid")
+        source_stage = plan_binding.get("source_stage") if plan_binding is not None else "transient"
+        if source_stage not in ("transient", "holding"):
+            raise RuntimeError("Pending copy plan source stage invalid")
+        source_clock = CLOCKS[source_stage]
+        if (details.get("source") != str(root / source_stage / folder)
                 or details.get("staging") != str(root / ".sqlite_copy_staging" / operation)
                 or not isinstance(digest, str) or len(digest) != 64
                 or any(c not in "0123456789abcdef" for c in digest)
-                or key not in state["first_seen"]
+                or key not in state[source_clock]
                 or not isinstance(details.get("source_timestamp"), str)
-                or state["first_seen"].get(key) != details.get("source_timestamp")
-                or any(key in state[section] for section in ("queued", "in_removal", "keep_seen"))):
+                or state[source_clock].get(key) != details.get("source_timestamp")
+                or any(key in state[section] for section in CLOCKS.values() if section != source_clock)):
             raise RuntimeError("Pending copy binding invalid")
-        plan_binding = details.get("plan_binding")
         if "plan_binding" in details:
             if (not isinstance(plan_binding, dict)
                     or set(plan_binding) != {"source_revision", "source_stage", "destination_stage", "observed_at"}
                     or type(plan_binding.get("source_revision")) is not int
                     or not 0 <= plan_binding["source_revision"] < revision
-                    or plan_binding.get("source_stage") != "transient"
-                    or plan_binding.get("destination_stage") not in ("holding", "keep")):
+                    or (source_stage, plan_binding.get("destination_stage")) not in TRANSITIONS):
                 raise RuntimeError("Pending copy plan binding invalid")
             try:
                 observed = datetime.fromisoformat(plan_binding["observed_at"])
@@ -110,7 +116,7 @@ def inspect_disposable_copy(*, root, _held_binding=None):
                     or retirement.get("phase") != "prepared"
                     or retirement.get("retained_source") != str(root / ".sqlite_retained_sources" / operation)):
                 raise RuntimeError("Pending copy retirement binding invalid")
-        source = _observe(root, "transient", folder, digest)
+        source = _observe(root, source_stage, folder, digest)
         staging = _observe(root, ".sqlite_copy_staging", operation, digest)
         published = (_observe(root, plan_binding["destination_stage"], folder, digest)
                      if publication is not None else "not_requested")
@@ -123,6 +129,7 @@ def inspect_disposable_copy(*, root, _held_binding=None):
                 "publication_phase": publication["phase"] if publication else None,
                 "published_status": published, "retained_source_status": retained,
                 "plan_binding_available": plan_binding is not None,
+                "proposed_source_stage": source_stage,
                 "proposed_destination_stage": plan_binding["destination_stage"] if plan_binding else None,
                 "recovery_authorized": False, "promotion_authorized": False,
                 "production_activation": "disabled", "storage_authority": "json"}

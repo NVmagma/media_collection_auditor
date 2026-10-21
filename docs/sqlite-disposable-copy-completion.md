@@ -78,3 +78,31 @@ commit uncertainty. General capability tests run on both paths and accept only
 successful source-retaining completion or explicit kernel unsupported outcomes.
 The maintained runner includes those general cases by default;
 `--publication-supported` additionally requires the actual syscall/crash cases.
+
+
+## Holding-source transitions
+
+The same live completion path now supports Holding-to-Keep rescue and
+Holding-to-Removal, in addition to Waiting-to-Holding/Keep. One shared mapping
+binds source and destination stage names to tracking clock sections. Source
+paths, hashing descriptors, plan bindings, inspection, quarantine and final CAS
+all use that source stage; Holding uses `queued`, never `first_seen`. The final
+checkpoint removes only the bound source clock and writes only the planned
+destination clock. The retained-source ledger also preserves the original
+source stage and timestamp for review, without granting restore authority.
+
+The existing production decision function controls these candidates. Protected,
+keep-tagged or favorite Holding titles rescue to Keep (subject to the existing
+favorites setting); expired unprotected titles may move to Removal. A fresh
+protection/identity change aborts the old plan rather than silently switching
+its destination. Recent/conflicting clocks fail closed. Removal here is a
+lifecycle directory, not permanent deletion: the public copy and quarantined
+original both remain. All TV seasons are copied intact. Keep/Removal sources,
+season pruning and deletion remain unsupported. Existing stage-only helpers
+still require Waiting sources; no production audit caller is added.
+
+Unplanned legacy copy intents continue to bind only to the Waiting source.
+Plan-bound intents must specify one of the four explicit non-deleting
+transitions. Read-only inspection reports the proposed source stage and retains
+all previous pending/recovery restrictions. Matching content never authorizes
+restart completion.

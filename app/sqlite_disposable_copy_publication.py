@@ -7,6 +7,7 @@ from pathlib import Path
 
 from app.sqlite_audit_session import RevisionedAuditSession
 from app.sqlite_disposable_copy_inspection import inspect_disposable_copy
+from app.sqlite_copy_stage_binding import CLOCKS
 from app.sqlite_disposable_copy_stage import FLAGS, _manifest
 from app.sqlite_isolated_lifecycle_runner import isolated_runner_lock
 from app.sqlite_noreplace_rename import rename_directory_noreplace_at
@@ -48,6 +49,7 @@ def _publish_disposable_copy(*, root, fault_at=None, _held_binding=None, _comple
                 or reviewed["staging_status"] != "content_matches_unverified"):
             raise RuntimeError("Verified plan-bound retained copy required")
         destination = reviewed["proposed_destination_stage"]
+        source_stage = reviewed["proposed_source_stage"]
         operation = pending["id"]
         key = details["media_key"]
         folder = key[3:] if key.startswith("TV/") else key
@@ -63,9 +65,9 @@ def _publish_disposable_copy(*, root, fault_at=None, _held_binding=None, _comple
             root_fd = opening(root)
             verify_root()
             parents = {name: opening(name, root_fd)
-                       for name in ("transient", ".sqlite_copy_staging", destination)}
+                       for name in (source_stage, ".sqlite_copy_staging", destination)}
             parent_ids = {name: (os.fstat(fd).st_dev, os.fstat(fd).st_ino) for name, fd in parents.items()}
-            source_fd = opening(folder, parents["transient"])
+            source_fd = opening(folder, parents[source_stage])
             copy_fd = opening(operation, parents[".sqlite_copy_staging"])
             source_id = (os.fstat(source_fd).st_dev, os.fstat(source_fd).st_ino)
             copy_id = (os.fstat(copy_fd).st_dev, os.fstat(copy_fd).st_ino)
@@ -77,12 +79,12 @@ def _publish_disposable_copy(*, root, fault_at=None, _held_binding=None, _comple
                     if (current.st_dev, current.st_ino) != identity:
                         raise RuntimeError("Publication parent binding changed")
                 if not source_retired:
-                    current = os.stat(folder, dir_fd=parents["transient"], follow_symlinks=False)
+                    current = os.stat(folder, dir_fd=parents[source_stage], follow_symlinks=False)
                     if (current.st_dev, current.st_ino) != source_id:
                         raise RuntimeError("Publication source binding changed")
                 else:
                     try:
-                        os.stat(folder, dir_fd=parents["transient"], follow_symlinks=False)
+                        os.stat(folder, dir_fd=parents[source_stage], follow_symlinks=False)
                     except FileNotFoundError:
                         pass
                     else:
@@ -98,7 +100,9 @@ def _publish_disposable_copy(*, root, fault_at=None, _held_binding=None, _comple
             if _digest(source_manifest) != digest or _digest(copy_manifest) != digest:
                 raise RuntimeError("Publication content differs from recorded copy")
             def verify_destinations_absent():
-                for stage in ("holding", "keep", "removal"):
+                for stage in CLOCKS:
+                    if stage == source_stage:
+                        continue
                     stage_fd = parents.get(stage)
                     if stage_fd is None:
                         stage_fd = opening(stage, root_fd)
@@ -150,7 +154,7 @@ def _publish_disposable_copy(*, root, fault_at=None, _held_binding=None, _comple
                 from app.sqlite_disposable_copy_completion import complete_live_copy
                 return complete_live_copy(root=root, root_fd=root_fd, parents=parents,
                     source_fd=source_fd, copy_fd=copy_fd, source_identity=source_id,
-                    operation=operation, key=key, folder=folder, destination=destination,
+                    operation=operation, key=key, folder=folder, destination=destination, source_stage=source_stage,
                     digest=digest, session=session,
                     verify_published=lambda **kwargs: verify_bindings(published=True, **kwargs), config=_completion)
             return {"status": "published_source_retained_pending_review", "source_retained": True,

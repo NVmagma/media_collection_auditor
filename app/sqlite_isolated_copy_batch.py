@@ -10,6 +10,7 @@ from pathlib import Path
 from time import monotonic
 
 from app.sqlite_arr_queue_plan import planned_arr_queue_entry
+from app.sqlite_copy_stage_binding import CLOCKS
 from app.sqlite_collected_isolated_runner import _run_collected_isolated_operation
 from app.sqlite_isolated_lifecycle_runner import isolated_runner_lock
 from app.sqlite_operation_coordinator import INTENTS_KEY
@@ -72,9 +73,10 @@ def run_isolated_copy_batch(*, root, database, jobs, expected_revision,
         if not isinstance(retained, dict) or operations.intersection(retained):
             raise RuntimeError("Retained source operation already recorded or invalid")
         for key in keys:
-            if (key not in state["first_seen"] or key in state["arr_sync_pending"]
-                    or any(key in state[section] for section in ("queued", "in_removal", "keep_seen"))):
-                raise RuntimeError("Batch requires unambiguous Waiting clocks and no queued Arr work")
+            locations = [stage for stage, section in CLOCKS.items() if key in state[section]]
+            if (len(locations) != 1 or locations[0] not in ("transient", "holding")
+                    or key in state["arr_sync_pending"]):
+                raise RuntimeError("Batch requires unambiguous Waiting/Holding clocks and no queued Arr work")
         report = {"status": "cap_reached" if len(jobs) > max_actions_per_run else "completed",
                   "selected_titles": len(jobs), "attempted_titles": 0,
                   "confirmed_completed_titles": 0, "unattempted_titles": len(jobs),

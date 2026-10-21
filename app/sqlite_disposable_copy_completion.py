@@ -11,6 +11,7 @@ import os
 
 from app.sqlite_arr_queue_plan import planned_arr_queue_entry
 from app.sqlite_copy_live_verification import refresh_hashed_copy, verify_hashed_metadata
+from app.sqlite_copy_stage_binding import CLOCKS, TRANSITIONS
 from app.sqlite_disposable_copy_stage import FLAGS, _manifest
 from app.sqlite_noreplace_rename import rename_directory_noreplace_at
 from app.sqlite_operation_coordinator import INTENTS_KEY
@@ -43,8 +44,10 @@ def validate_completion(state, details, folder, destination, config):
 
 def complete_live_copy(*, root, root_fd, parents, source_fd, copy_fd,
                        source_identity, operation, key, folder, destination,
-                       digest, session, verify_published, config):
+                       digest, session, verify_published, config, source_stage="transient"):
     """Quarantine original with a live witness, then one atomic state checkpoint."""
+    if (source_stage, destination) not in TRANSITIONS:
+        raise ValueError("Unsupported non-deleting copy transition")
     fault = config.get("fault_at")
     if fault not in (None, "after_retirement_intent", "after_source_quarantine", "after_completion_checkpoint"):
         raise ValueError("Invalid completion fault boundary")
@@ -95,12 +98,12 @@ def complete_live_copy(*, root, root_fd, parents, source_fd, copy_fd,
         verify_published()
         verify_archive()
         config["check_window"]()
-        rename_directory_noreplace_at(parents["transient"], folder, archive_fd, operation)
+        rename_directory_noreplace_at(parents[source_stage], folder, archive_fd, operation)
         if fault == "after_source_quarantine":
             raise RuntimeError("Injected completion crash after source quarantine")
         # Source path must be absent. A recreated entry makes the outcome ambiguous.
         try:
-            os.stat(folder, dir_fd=parents["transient"], follow_symlinks=False)
+            os.stat(folder, dir_fd=parents[source_stage], follow_symlinks=False)
         except FileNotFoundError:
             pass
         else:
@@ -123,7 +126,7 @@ def complete_live_copy(*, root, root_fd, parents, source_fd, copy_fd,
         if (after != before or published != before or stable_metadata != stable_after
                 or metadata[""][:-1] != after_metadata[""][:-1]):
             raise RuntimeError("Retained content changed; completion blocked")
-        for fd in (archive_fd, parents["transient"], parents[destination], root_fd):
+        for fd in (archive_fd, parents[source_stage], parents[destination], root_fd):
             os.fsync(fd)
         verify_retained()
         verify_published(source_retired=True)
@@ -131,7 +134,7 @@ def complete_live_copy(*, root, root_fd, parents, source_fd, copy_fd,
                             refresh=config["refresh"], check_window=config["check_window"])
         verify_retained()
         verify_published(source_retired=True)
-        for stage in ("holding", "keep", "removal"):
+        for stage in CLOCKS:
             if stage == destination:
                 continue
             stage_fd = os.open(stage, FLAGS, dir_fd=root_fd)
@@ -150,14 +153,15 @@ def complete_live_copy(*, root, root_fd, parents, source_fd, copy_fd,
         verify_published(source_retired=True)
         config["check_window"]()
         state = session.state
-        if state["first_seen"].get(key) != details["source_timestamp"]:
+        if state[CLOCKS[source_stage]].get(key) != details["source_timestamp"]:
             raise RuntimeError("Copy completion clock binding changed")
-        state["first_seen"].pop(key)
-        state["queued" if destination == "holding" else "keep_seen"][key] = retirement["observed_at"]
+        state[CLOCKS[source_stage]].pop(key)
+        state[CLOCKS[destination]][key] = retirement["observed_at"]
         if queue_entry is not None:
             state["arr_sync_pending"][key] = queue_entry
         state.setdefault(RETAINED_KEY, {})[operation] = {
-            "media_key": key, "retained_source": retirement["retained_source"],
+            "media_key": key, "source_stage": source_stage, "source_timestamp": details["source_timestamp"],
+            "retained_source": retirement["retained_source"],
             "destination": str(root / destination / folder), "manifest_sha256": digest,
             "completed_at": retirement["observed_at"]}
         state.pop(INTENTS_KEY)

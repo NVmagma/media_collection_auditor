@@ -12,7 +12,7 @@ Each job specifies operation ID, media key, title folder, Movie/Series type and
 optionally the existing validated Arr queue request. The complete selection is
 deep-copied and validated before collection, even jobs beyond the cap. Duplicate
 keys, operation IDs and physical folders, unsafe names, unexpected fields,
-invalid Arr identities, ambiguous Waiting clocks, selected queued Arr work,
+invalid Arr identities, ambiguous Waiting/Holding clocks, selected queued Arr work,
 reused retained-source operations and unresolved intents stop preflight.
 
 One existing cooperating-runner lock remains held for the entire batch. The
@@ -44,3 +44,10 @@ that failure stops execution rather than producing a trusted batch outcome.
 Native tests require actual atomic no-replace publication and quarantine. On
 unsupported paths the general capability case requires a prepared pending
 publication intent with the original retained and later titles untouched.
+
+
+Holding sources can now be selected alongside Waiting sources. Each title is
+still selected only once per batch: a newly held Waiting title is not processed
+again into Removal during the same invocation. Holding candidates follow the
+existing protected rescue/age policy; the batch cap also counts those attempts.
+Removal/Keep sources remain excluded, and no deletion action exists.
