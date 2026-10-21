@@ -11,10 +11,10 @@ A gate is complete only when its acceptance criteria are verified.
 | 3. Guarded checkpoints | Compare-and-swap, stale-writer rejection, uncertain checkpoint quarantine | Complete: isolated tests |
 | 4. Lifecycle decision parity | Representative movie/season clocks and read-only rehearsal | Complete: isolated tests |
 | 5. Restart and failure rehearsals | Pending intents persist, crashes fail closed, no automatic replay | Complete: disposable Unraid tests |
-| 6. Trusted move verification | Bind identity and paths, independently prove the moved object, reject races and ambiguous outcomes | In progress: cooperating-runner lock, held-parent rename, root/marker/database bindings and adversarial substitution tests pass on Unraid. Persistent Unraid lab run rejects required no-replace rename (EINVAL); source-entry races, external-writer ownership and production crash trust also remain open |
-| 7. Atomic lifecycle reconciliation | Verified move clock change and intent clearance commit together; failure injection proves all-or-nothing | In progress: Unraid tests verify one transaction for destination clock, stable Arr queue entry and move-intent clearance, including pre/post-commit uncertainty. Completion still depends on gate 6 and production integration |
-| 8. Production lifecycle integration | Real Waiting/Holding/Keep/Removal moves use guarded ordering; existing JSON path unaffected until cutover | Not wired: named, plan-bound, collected-signal isolated execution exists, but production audit paths still reject SQLite |
-| 9. External integrations | Arr uncertain outcomes, Jellyfin protection, dashboard authoritative reads, TV-season behavior | In progress: 539-title live advisory coverage verified; bounded two-scan protection and one-shot Arr unknown outcomes tested on Unraid. Remote Arr identity/outcome verification, dashboard authority and TV-season execution remain open |
+| 6. Trusted move verification | Bind identity and paths, independently prove the moved object, reject races and ambiguous outcomes | In progress: native Unraid tests verify live source-retaining Waiting/Holding completion, held paths, fresh protections and failure retention. shfs rejects no-replace publication and retains source/intent. External-writer ownership, atomic source-entry fencing and production crash trust remain open |
+| 7. Atomic lifecycle reconciliation | Verified move clock change and intent clearance commit together; failure injection proves all-or-nothing | In progress: Unraid verifies atomic Waiting/Holding destination clocks, stable Arr queue, retained-original ledger and intent clearance, including uncertain commits. Production completion still depends on gate 6 and live integration |
+| 8. Production lifecycle integration | Real Waiting/Holding/Keep/Removal moves use guarded ordering; existing JSON path unaffected until cutover | Not wired: capped, revision-chained isolated batches support Waiting/Holding decisions and stop on uncertainty; production audit paths still reject SQLite |
+| 9. External integrations | Arr uncertain outcomes, Jellyfin protection, dashboard authoritative reads, TV-season behavior | In progress: 539-title live advisory coverage, bounded fresh protection scans, one-shot Arr uncertainty, and whole-show copy preservation are verified. Production Arr verification, dashboard authority and season-pruning execution remain open |
 | 10. Deployment and rollback | Disposable Unraid end-to-end tests, full CI, Docker build, backup/rollback, explicit activation approval | Incomplete: full native Unraid suite passed 1,452 tests and 22 subtests through ac5d4a7; targeted integration passed on both access paths. Accepted operational restore, final release CI/image and explicit activation approval remain open |
 
 ## Current decision
@@ -509,3 +509,27 @@ sources, season pruning and deletion stay excluded. Native Holding crashes,
 uncertain commits and whole-show cases require Unraid validation. Gates 6–10
 remain open; external writer control and production orchestration are not solved
 by these isolated transitions.
+
+
+## Holding-transition Unraid evidence through `f37cb39`
+
+The user confirmed 380 tests plus 11 subtests passed on shfs and 432 tests plus
+11 subtests on native storage. Holding rescue, non-deleting Removal copies,
+whole-show season preservation, source-clock binding, mixed-stage batches,
+late protection failures and uncertain final checkpoints passed. The Requests
+warning remained non-failing. No production behavior changed or gate closed.
+
+The top-level gate assessment now reflects these verified isolated behaviors.
+The previous full-suite Unraid baseline is still 1,452 tests and 22 subtests at
+`ac5d4a7`; it does not validate later changes. Refresh the complete native suite
+at the current revision before extending production orchestration. This requires
+only disposable fixture storage, no production mounts, image build, CI dispatch,
+container update or backend activation. Retain the full-suite lab for review.
+
+
+Full local macOS regression through `f37cb39`: 1,483 passed, 82 skipped,
+18 failed, and 22 subtests passed. All 18 failures stopped at the explicit
+`Atomic no-replace rename requires Linux` guard, including crash tests that
+could not reach their injected boundary. The skips also require Linux. This is
+not a full-suite pass; no guard or test was weakened to hide platform limits.
+The native Unraid run must exercise all 1,583 collected cases at this revision.
