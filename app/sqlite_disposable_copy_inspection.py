@@ -94,12 +94,24 @@ def inspect_disposable_copy(*, root):
                     raise ValueError("Invalid plan time")
             except (ValueError, TypeError):
                 raise RuntimeError("Pending copy plan time invalid") from None
+        publication = details.get("publication")
+        if "publication" in details:
+            if (not isinstance(publication, dict) or plan_binding is None
+                    or set(publication) != {"phase", "destination_stage", "destination"}
+                    or publication.get("phase") not in ("prepared", "published_source_retained")
+                    or publication.get("destination_stage") != plan_binding["destination_stage"]
+                    or publication.get("destination") != str(root / plan_binding["destination_stage"] / folder)):
+                raise RuntimeError("Pending copy publication binding invalid")
         source = _observe(root, "transient", folder, digest)
         staging = _observe(root, ".sqlite_copy_staging", operation, digest)
+        published = (_observe(root, plan_binding["destination_stage"], folder, digest)
+                     if publication is not None else "not_requested")
         verify_binding()
         session.read_verified_snapshot()
         return {"status": "blocked", "revision": revision, "copy_phase": details["copy_phase"],
                 "source_status": source, "staging_status": staging, "read_only": True,
+                "publication_phase": publication["phase"] if publication else None,
+                "published_status": published,
                 "plan_binding_available": plan_binding is not None,
                 "proposed_destination_stage": plan_binding["destination_stage"] if plan_binding else None,
                 "recovery_authorized": False, "promotion_authorized": False,

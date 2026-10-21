@@ -32,3 +32,12 @@ rename guard, 30 skipped and 22 subtests passed on macOS. The 18 are not recorde
 as passes or silently skipped. A full Unraid/Linux run is required to execute
 them. New packaging tests pass independently. Final CI/image verification and
 activation approval remain separate outstanding release gates.
+
+`--publication-supported` adds the actual Linux copy-publication crash/race
+cases to the targeted set. Use it only on a disposable access path already
+verified to support atomic no-replace rename. The default targeted set still
+performs an actual capability attempt: success must preserve source/tracking;
+explicit unsupported capability must preserve staging/prepared intent. Other
+errors fail the test. Full-suite mode includes all publication cases and is
+therefore also a capability-requiring run. No flag changes application runtime
+behavior, syscall safeguards or production authority.

@@ -4,7 +4,7 @@ from copy import deepcopy
 
 import pytest
 
-from app.sqlite_production_cutover_guard import assess_sqlite_cutover
+from app.sqlite_production_cutover_guard import assess_sqlite_cutover, IMPLEMENTATION_BLOCKERS
 from app.sqlite_snapshot_writer import write_offline_snapshot
 from app.sqlite_state import SECTIONS
 
@@ -36,7 +36,8 @@ def test_parity_still_never_authorizes_cutover(tmp_path):
     assert result["status"] == "blocked"
     assert result["production_activation"] == "disabled"
     assert result["authorization"] == "not_authorized"
-    assert result["blockers"] == ["sqlite_production_activation_not_approved"]
+    assert result["blockers"] == ["sqlite_production_activation_not_approved", *IMPLEMENTATION_BLOCKERS]
+    assert result["activation_supported"] is False
     assert result["read_only"] is True
     assert db.read_bytes() == before
 
@@ -107,4 +108,28 @@ def test_similar_sibling_names_are_not_nested_roots(tmp_path):
     roots["holding"] = sibling
     result = assess(db, state, roots, jellyfin_protection_available=True,
                     external_integrations_verified=True)
-    assert result["blockers"] == ["sqlite_production_activation_not_approved"]
+    assert result["blockers"] == ["sqlite_production_activation_not_approved", *IMPLEMENTATION_BLOCKERS]
+    assert result["activation_supported"] is False
+
+
+@pytest.mark.parametrize("pending", [{}, None, False])
+def test_empty_or_malformed_pending_marker_still_blocks(tmp_path, pending):
+    from app.sqlite_audit_session import RevisionedAuditSession
+    from app.state_store import GuardedSQLiteStateStore
+    db, state, roots = lab(tmp_path)
+    session = RevisionedAuditSession(GuardedSQLiteStateStore(db))
+    session.state["sqlite_pending_operations"] = pending
+    session.checkpoint()
+    result = assess(db, session.state, roots)
+    assert "sqlite_unresolved_operations" in result["blockers"]
+
+
+@pytest.mark.parametrize("value", ["true", "false", 1, [], {}])
+def test_truthy_inputs_cannot_claim_integration_verification(tmp_path, value):
+    db, state, roots = lab(tmp_path)
+    result = assess(db, state, roots, jellyfin_protection_available=value,
+                    external_integrations_verified=value)
+    assert "jellyfin_protection_unverified" in result["blockers"]
+    assert "arr_dashboard_tv_integration_unverified" in result["blockers"]
+    assert set(IMPLEMENTATION_BLOCKERS) <= set(result["blockers"])
+    assert result["activation_supported"] is False

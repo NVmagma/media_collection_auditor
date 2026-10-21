@@ -488,3 +488,32 @@ Full Unraid baseline through `ac5d4a7`: 1,452 passed and 22 subtests passed on t
 native disposable lab, with one non-failing Requests warning. The descriptor
 increment requires its own targeted validation on both access paths; another
 full run is not needed merely to repeat that unchanged baseline.
+
+### Optional no-overwrite publication of retained lab copies
+
+`publish_disposable_copy` accepts only an existing verified, plan-bound copy
+intent in a marked lab. It rechecks the same SQLite revision, source/staging
+content digest, held directory bindings and absent lifecycle destinations. A
+publication marker is durably checkpointed before the kernel no-replace rename
+of staging into the planned Holding/Keep directory. There is no ordinary rename
+fallback. Unsupported capability or any uncertainty retains the source, copy
+artifacts, original clocks and prepared publication marker; a second attempt is
+blocked even after a known unsupported result.
+
+After a successful rename, the live staging descriptor must match the published
+entry. Source content/metadata and copy content are rechecked, parent directories
+are fsynced and publication phase becomes `published_source_retained`. The source
+is never retired, lifecycle tracking never advances, no Arr work is enqueued,
+and the copy intent remains pending. This is an optional publication phase, not
+a complete portable move backend. Other filesystems remain blocked at publication
+until a separate safe strategy exists; no label whitelist is introduced.
+
+Read-only copy inspection now validates publication metadata and reports the
+published content status, including uncertain crashes after the rename but before
+the phase checkpoint. Matching bytes do not clear the intent or authorize
+recovery. Tests cover occupied destinations, prepared-intent crashes, unsupported
+capability retention and actual Linux publication/uncertain checkpoints. The
+capability test accepts only success or explicit kernel unsupported errors, never
+an arbitrary failure as a pass. Actual publication crash cases require the
+previously verified rename-capable native lab; the general retention/capability
+checks run on both paths. No production caller or publication CLI is added.

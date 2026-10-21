@@ -35,6 +35,8 @@ def main(argv=None):
     parser.add_argument("--basetemp", required=True, help="New absolute fixture directory inside a disposable lab")
     parser.add_argument("--full-suite", action="store_true",
                         help="Run all tests; requires Linux no-replace rename support for move regressions")
+    parser.add_argument("--publication-supported", action="store_true",
+                        help="Include actual publication crash tests; requires no-replace rename support")
     args = parser.parse_args(argv)
     base = Path(args.basetemp)
     if (not base.is_absolute() or base.resolve() != base or not base.parent.is_dir()
@@ -45,6 +47,18 @@ def main(argv=None):
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     env.setdefault("WEB_SESSION_SECRET", secrets.token_urlsafe(32))
     targets = [str(repo / "tests")] if args.full_suite else [str(repo / "tests" / (name + ".py")) for name in TESTS]
+    if not args.full_suite:
+        publication = str(repo / "tests" / "test_sqlite_disposable_copy_publication.py")
+        if args.publication_supported:
+            targets.append(publication)
+        else:
+            targets.extend(publication + "::" + name for name in (
+                "test_unsupported_atomic_publication_retains_source_and_staging",
+                "test_destination_is_never_overwritten",
+                "test_publication_intent_crash_is_not_replayed",
+                "test_actual_capability_either_publishes_or_preserves_prepared_copy",
+                "test_changed_staged_bytes_do_not_create_publication_marker",
+                "test_missing_plan_binding_is_not_permission_to_publish"))
     return subprocess.run(
         [sys.executable, "-B", "-m", "pytest", "-p", "no:cacheprovider",
          "--basetemp=" + str(base), *targets,

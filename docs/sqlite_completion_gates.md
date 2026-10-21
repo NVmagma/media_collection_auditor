@@ -396,3 +396,33 @@ checkpoint or redirecting staging writes. Prepared intents and source artifacts
 remain retained on failure. Tests cover parent/title aliases, parent replacement,
 root substitution and descriptor cleanup. No new gate is complete; external
 writer ownership, portable promotion/retirement and production wiring remain open.
+
+## Copy parent follow-up accepted as regression evidence
+
+Through `4421fce`, 77 focused portable-copy tests passed on shfs and on native
+Btrfs. The Requests warning remains non-failing. Root/source-parent pinning is
+verified in fixtures; it does not provide exclusive external-writer ownership.
+
+The [production acceptance plan](sqlite-production-acceptance-plan.md) now states
+the remaining implementation work explicitly. The read-only cutover assessment
+also reports missing verifier, writer control, portable completion, lifecycle
+wiring, restart-clearance and release-image verification, even when snapshots
+match and caller integration flags are true. Any pending marker blocks, including
+empty/malformed values; non-boolean integration claims remain unverified.
+This corrects misleading readiness reporting without enabling production or
+completing another gate. No new filesystem/server action requires validation
+for this report-only increment; continue implementation before the next
+consolidated Unraid milestone.
+
+### First lab publication phase
+
+Verified plan-bound lab copies can now be published to the planned Holding/Keep
+path only using actual atomic no-replace rename, with a durable publication
+marker beforehand and held-descriptor/content verification afterward. Every
+outcome preserves source, original lifecycle clocks and a pending intent. There
+is no cleanup, Arr notification, repeat attempt or production caller. Unsupported
+publication remains blocked; no filesystem label selects a weaker fallback.
+Source retirement, a safe alternative for unsupported publication capabilities,
+writer control and production orchestration remain unfinished. Gate states do
+not change. Linux publication/crash tests require server validation; report-only
+cutover guard checks and the new phases are consolidated in the maintained runner.
