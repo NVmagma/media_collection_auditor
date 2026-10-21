@@ -26,12 +26,15 @@ TESTS = (
     "test_sqlite_isolated_arr_readback_cli", "test_dashboard_tracking_snapshot",
     "test_dashboard_snapshot_parity", "test_dashboard_state_errors", "test_dashboard_inventory",
     "test_dashboard_lifecycle_visibility", "test_sqlite_dashboard_integration",
+    "test_docker_runtime_context",
 )
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--basetemp", required=True, help="New absolute fixture directory inside a disposable lab")
+    parser.add_argument("--full-suite", action="store_true",
+                        help="Run all tests; requires Linux no-replace rename support for move regressions")
     args = parser.parse_args(argv)
     base = Path(args.basetemp)
     if (not base.is_absolute() or base.resolve() != base or not base.parent.is_dir()
@@ -41,9 +44,10 @@ def main(argv=None):
     env = dict(os.environ)
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     env.setdefault("WEB_SESSION_SECRET", secrets.token_urlsafe(32))
+    targets = [str(repo / "tests")] if args.full_suite else [str(repo / "tests" / (name + ".py")) for name in TESTS]
     return subprocess.run(
         [sys.executable, "-B", "-m", "pytest", "-p", "no:cacheprovider",
-         "--basetemp=" + str(base), *[str(repo / "tests" / (name + ".py")) for name in TESTS],
+         "--basetemp=" + str(base), *targets,
          "-q", "--tb=short"], cwd=repo, env=env).returncode
 
 

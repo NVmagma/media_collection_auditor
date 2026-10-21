@@ -365,3 +365,20 @@ real inventory/health functions. Concurrent changes and pending operations fail
 closed. Live backend selection remains JSON; stricter damaged-state validation
 is the production-visible change. Gate 9 remains in progress; server validation
 for this increment is pending.
+
+## Consolidated Unraid evidence through `ef76a45`
+
+Both filesystem access paths passed 298 tests and 11 subtests, including the
+validated dashboard snapshot boundary and real inventory/health parity checks.
+The non-failing Requests warning persists. These are targeted regressions, not
+full release verification or permission to switch production storage.
+
+A wider review found missing Docker COPY dependencies for the new dashboard
+snapshot reader. The recipe now includes its three required modules; isolated
+runtime-context smoke tests run outside repository imports without building an
+image. The full local suite passed 1,404 tests and 22 subtests, with 30 skips and
+18 failures caused by the existing Linux-only rename guard on macOS. A full
+Unraid run on a rename-capable disposable lab is now required, using the runner's
+explicit `--full-suite` mode. No guard has been removed or weakened to pass.
+See [runtime packaging evidence](sqlite-runtime-packaging-validation.md).
+Gate states and production backend selection remain unchanged.
