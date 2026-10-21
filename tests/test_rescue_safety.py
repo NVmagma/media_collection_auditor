@@ -37,6 +37,7 @@ class RescueSafetyTests(unittest.TestCase):
             (removal / "Example").mkdir()
             library = {"name": "Movies", "removal": str(removal), "keep": str(keep)}
             auditor = SimpleNamespace(
+                STATE_FILE=str(Path(root) / "state.json"),
                 build_libraries=lambda: [library],
                 is_within=lambda path, base: os.path.commonpath((os.path.realpath(path), os.path.realpath(base))) == os.path.realpath(base),
                 load_state=lambda: {"in_removal": {"Example": "2026-01-01"}},
@@ -64,6 +65,8 @@ class RescueSafetyTests(unittest.TestCase):
                 path.mkdir()
             (removal / "Example").symlink_to(outside, target_is_directory=True)
             auditor = SimpleNamespace(
+                STATE_FILE=str(Path(root) / "state.json"),
+                DRY_RUN=True,
                 build_libraries=lambda: [{"name": "Movies", "removal": str(removal), "keep": str(keep)}],
                 is_within=lambda *args: True,
             )

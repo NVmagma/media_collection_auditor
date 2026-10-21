@@ -73,3 +73,11 @@ def test_smoke_context_exposes_missing_runtime_dependency(tmp_path):
     result = probe(runtime, "{}")
     assert result.returncode != 0
     assert "dashboard_tracking_snapshot" in result.stderr
+
+
+def test_smoke_context_exposes_missing_backend_gate_dependency(tmp_path):
+    runtime = context(tmp_path)
+    (runtime / "sqlite_backend_gate.py").unlink()
+    result = probe(runtime, "{}")
+    assert result.returncode != 0
+    assert "sqlite_backend_gate" in result.stderr

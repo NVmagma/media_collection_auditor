@@ -15,7 +15,7 @@ A gate is complete only when its acceptance criteria are verified.
 | 7. Atomic lifecycle reconciliation | Verified move clock change and intent clearance commit together; failure injection proves all-or-nothing | In progress: Unraid verifies atomic Waiting/Holding destination clocks, stable Arr queue, retained-original ledger and intent clearance, including uncertain commits. Production completion still depends on gate 6 and live integration |
 | 8. Production lifecycle integration | Real Waiting/Holding/Keep/Removal moves use guarded ordering; existing JSON path unaffected until cutover | Not wired: capped, revision-chained isolated batches support Waiting/Holding decisions and stop on uncertainty; production audit paths still reject SQLite |
 | 9. External integrations | Arr uncertain outcomes, Jellyfin protection, dashboard authoritative reads, TV-season behavior | In progress: 539-title live advisory coverage, bounded fresh protection scans, one-shot Arr uncertainty, and whole-show copy preservation are verified. Production Arr verification, dashboard authority and season-pruning execution remain open |
-| 10. Deployment and rollback | Disposable Unraid end-to-end tests, full CI, Docker build, backup/rollback, explicit activation approval | Incomplete: full native Unraid suite passed 1,452 tests and 22 subtests through ac5d4a7; targeted integration passed on both access paths. Accepted operational restore, final release CI/image and explicit activation approval remain open |
+| 10. Deployment and rollback | Disposable Unraid end-to-end tests, full CI, Docker build, backup/rollback, explicit activation approval | Incomplete: full native Unraid suite passed 1,583 tests and 22 subtests through fff83c0; targeted integration passed on both access paths. Accepted operational restore, final release CI/image and explicit activation approval remain open |
 
 ## Current decision
 
@@ -533,3 +533,33 @@ Full local macOS regression through `f37cb39`: 1,483 passed, 82 skipped,
 could not reach their injected boundary. The skips also require Linux. This is
 not a full-suite pass; no guard or test was weakened to hide platform limits.
 The native Unraid run must exercise all 1,583 collected cases at this revision.
+
+
+## Full-suite Unraid baseline through `fff83c0`
+
+The user confirmed **1,583 passed and 22 subtests passed** on native disposable
+storage, with the existing single non-failing Requests warning. This supersedes
+the earlier 1,452-test full-suite baseline for source through `f37cb39` (the next
+commit changed documentation only). It validates the combined isolated flows;
+it does not establish production writer exclusion or close gates 6–10.
+
+The next concrete writer-control fix makes manual JSON rescue share the audit/
+migration process lock. Its previous in-memory guard did not exclude a rescue
+in another process during migration or audit. The rescue now checks the JSON
+backend before and after auditor import, holds the shared lock around its full
+operation, and verifies binding before move/save/notification. The runtime
+recipe also includes the backend gate dependency. See
+[writer coordination](sqlite-writer-coordination.md) for scope and remaining
+external-writer requirements. No Arr/share/host writer exclusion is claimed;
+production SQLite activation and deletion remain disabled.
+
+
+Local validation for the cooperating-writer increment: the focused command
+passed 113 tests and 19 subtests, including real child-process contention and
+configuration-drift guards. The broader maintained regression set passed 422
+tests and 19 subtests before the final configuration-binding checks were added;
+the focused set was rerun after those checks. Runtime imports were verified from
+COPY inputs only; no Docker build or production container update was performed.
+Use `--writer-coordination-only` on both persistent lab paths for the next server
+validation; another complete native-suite repeat is not required for this
+focused acceptance step. External-writer exclusion remains unverified.

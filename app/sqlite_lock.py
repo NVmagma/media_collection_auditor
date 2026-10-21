@@ -18,6 +18,10 @@ except ImportError:  # pragma: no cover - Unraid runs Linux
     fcntl = None
 
 
+class StateLockBusy(RuntimeError):
+    """A cooperating process already owns the shared state lock."""
+
+
 @contextmanager
 def migration_lock(source: str | Path):
     """Hold an exclusive nonblocking lock adjacent to the JSON state file."""
@@ -48,7 +52,7 @@ def _exclusive_lock(lock_path, contention_message):
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as exc:
-            raise RuntimeError(contention_message) from exc
+            raise StateLockBusy(contention_message) from exc
         try:
             verify()
             yield verify
@@ -72,7 +76,7 @@ def audit_run_lock(source: str | Path):
     with state_writer_lock(source) as verify:
         token = _held_state_locks.set({**_held_state_locks.get(), key: verify})
         try:
-            yield
+            yield verify
         finally:
             _held_state_locks.reset(token)
 

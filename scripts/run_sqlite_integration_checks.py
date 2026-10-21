@@ -29,17 +29,30 @@ TESTS = (
     "test_docker_runtime_context", "test_sqlite_copy_source_parent_binding",
     "test_sqlite_copy_live_verification", "test_sqlite_isolated_copy_batch",
     "test_sqlite_holding_copy_completion",
+    "test_rescue_safety", "test_rescue_process_lock", "test_web_security",
+)
+
+
+WRITER_TESTS = (
+    "test_rescue_process_lock", "test_rescue_safety", "test_sqlite_lock",
+    "test_sqlite_migration", "test_sqlite_migration_interruptions", "test_state_persistence",
+    "test_sqlite_backend_gate", "test_docker_runtime_context", "test_web_security",
 )
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--basetemp", required=True, help="New absolute fixture directory inside a disposable lab")
-    parser.add_argument("--full-suite", action="store_true",
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--full-suite", action="store_true",
                         help="Run all tests; requires Linux no-replace rename support for move regressions")
+    mode.add_argument("--writer-coordination-only", action="store_true",
+                      help="Run JSON rescue, process locking, migration, runtime and web security regressions")
     parser.add_argument("--publication-supported", action="store_true",
                         help="Include actual publication crash tests; requires no-replace rename support")
     args = parser.parse_args(argv)
+    if args.writer_coordination_only and args.publication_supported:
+        parser.error("Writer coordination checks do not use publication capability flags")
     base = Path(args.basetemp)
     if (not base.is_absolute() or base.resolve() != base or not base.parent.is_dir()
             or base.exists() or base.is_symlink()):
@@ -48,8 +61,9 @@ def main(argv=None):
     env = dict(os.environ)
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     env.setdefault("WEB_SESSION_SECRET", secrets.token_urlsafe(32))
-    targets = [str(repo / "tests")] if args.full_suite else [str(repo / "tests" / (name + ".py")) for name in TESTS]
-    if not args.full_suite:
+    names = WRITER_TESTS if args.writer_coordination_only else TESTS
+    targets = [str(repo / "tests")] if args.full_suite else [str(repo / "tests" / (name + ".py")) for name in names]
+    if not args.full_suite and not args.writer_coordination_only:
         publication = str(repo / "tests" / "test_sqlite_disposable_copy_publication.py")
         completion = str(repo / "tests" / "test_sqlite_disposable_copy_completion.py")
         if args.publication_supported:

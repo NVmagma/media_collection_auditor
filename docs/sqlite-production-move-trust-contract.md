@@ -517,3 +517,15 @@ capability test accepts only success or explicit kernel unsupported errors, neve
 an arbitrary failure as a pass. Actual publication crash cases require the
 previously verified rename-capable native lab; the general retention/capability
 checks run on both paths. No production caller or publication CLI is added.
+
+
+### Application-owned writer coordination follow-up
+
+The full native Unraid baseline now passes 1,583 tests and 22 subtests through
+`fff83c0`. Inspection of the real JSON write paths found manual rescue did not
+hold the shared audit/migration process lock. The next increment closes that
+cooperating-application gap and rejects unsupported rescue backends. See the
+[writer coordination contract](sqlite-writer-coordination.md). This does not
+establish control over Arr, share clients or privileged administrators, nor does
+the isolated SQLite root lock become a production coordination mechanism.
+Gate 6 remains open and all implementation blockers remain authoritative.
