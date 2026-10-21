@@ -599,3 +599,14 @@ No service/configuration changes or production execution were authorized or
 performed. No gate changes status; the next required input is the remaining
 host/share writer map, followed by a real enforcement backend and disposable
 controller-failure acceptance tests.
+
+### Operator clarification: manual Mac copies use NFS
+
+The operator identifies normal writers as Arr and occasional manual Mac copies
+over NFS. No scheduled host job was identified; exhaustive absence is not
+assumed. The next targeted read-only input is `exportfs -v`, retaining export
+paths, client-selector distinctions and options so overlapping exports can be
+reviewed. This does not establish ownership or authorize export/service changes.
+Gate 6 remains open pending an enforceable adapter and disposable tests of
+existing handles, reconnects and failure recovery. Other production blockers
+and deletion safeguards remain in force.

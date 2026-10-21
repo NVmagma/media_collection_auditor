@@ -154,3 +154,28 @@ integrations and their failure ordering are still unimplemented/unapproved.
 4. Only after that review, propose the concrete production entry/exit procedure
    and request approval to apply it. Existing move capability checks, blocked
    production backend and separately disabled deletion remain authoritative.
+
+### NFS route identified by the operator
+
+The operator identifies the normal writers as the Arr stack and occasional
+manual copies from a Mac laptop or Mac mini, using NFS. No scheduled host job
+has been identified; this is not evidence that every possible writer is absent.
+Write frequency does not change the ownership requirement. NFS is a deployment
+adapter requirement, not an application filesystem requirement.
+
+Before choosing that adapter, inspect the server's current export list with
+`exportfs -v` (no other flags or path arguments). This displays export options;
+it does not reload or change exports. Review parent, nested and alternate-path
+exports as well as the apparent media export. Client selectors and options must
+remain distinguishable if private hostnames/addresses are redacted. See the
+[exportfs manual](https://www.man7.org/linux/man-pages/man8/exportfs.8.html)
+and [exports manual](https://www.man7.org/linux/man-pages/man5/exports.5.html).
+
+That listing is discovery evidence, not proof of a write fence. A future entry
+procedure must drain ongoing manual transfers before establishing the protected
+checkpoint, and enforce scoped write denial through verification and handoff.
+Disposable acceptance must cover pre-existing client handles, delayed writes
+and reconnects, alongside alternate exports and local container routes. Neither
+a client promise to stop copying nor an export configuration snapshot grants
+execution authority. Export changes, client unmounts and service restarts still
+require a concrete reviewed procedure and approval; none are performed here.
