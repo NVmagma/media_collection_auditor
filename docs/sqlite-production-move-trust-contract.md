@@ -462,3 +462,29 @@ or live Jellyfin validation. Existing show retention semantics are unchanged.
 Unraid confirmed collected-copy integration through `e4e0942`: 65 tests passed
 on shfs and 65 on native Btrfs. Whole-show regression coverage awaits server
 validation. Production remains JSON-authoritative and SQLite-disabled.
+
+### Descriptor-bound portable-copy parents
+
+Portable staging now holds the lab root and source-stage parent as well as the
+title directory through the full operation. Source and private staging opens
+and staging-directory creation are relative to held descriptors. Root replacement
+cannot redirect those creates into a replacement path. The source parent's
+current root-relative entry and the title entry are rechecked before observation,
+before intent, before copying, after copying/hashing and before the verified
+checkpoint. Root fsync uses the held descriptor rather than reopening a path.
+
+Adversarial tests replace the source parent with a symlink or another directory,
+substitute a title symlink, and replace the root at staging creation. Each stops
+before a verified checkpoint, preserves original tracking and any prepared
+intent, and retains source/staging artifacts. Source-open failures close the
+held descriptors. No restoration, cleanup or retry is attempted.
+
+These are observed-boundary protections, not inode-conditional rename or atomic
+filesystem/SQLite verification. Arbitrary external writers are still not
+excluded, and no production move, portable promotion or source cleanup is
+introduced. Gate 6 remains open.
+
+Full Unraid baseline through `ac5d4a7`: 1,452 passed and 22 subtests passed on the
+native disposable lab, with one non-failing Requests warning. The descriptor
+increment requires its own targeted validation on both access paths; another
+full run is not needed merely to repeat that unchanged baseline.

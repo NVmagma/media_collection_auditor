@@ -15,7 +15,7 @@ A gate is complete only when its acceptance criteria are verified.
 | 7. Atomic lifecycle reconciliation | Verified move clock change and intent clearance commit together; failure injection proves all-or-nothing | In progress: Unraid tests verify one transaction for destination clock, stable Arr queue entry and move-intent clearance, including pre/post-commit uncertainty. Completion still depends on gate 6 and production integration |
 | 8. Production lifecycle integration | Real Waiting/Holding/Keep/Removal moves use guarded ordering; existing JSON path unaffected until cutover | Not wired: named, plan-bound, collected-signal isolated execution exists, but production audit paths still reject SQLite |
 | 9. External integrations | Arr uncertain outcomes, Jellyfin protection, dashboard authoritative reads, TV-season behavior | In progress: 539-title live advisory coverage verified; bounded two-scan protection and one-shot Arr unknown outcomes tested on Unraid. Remote Arr identity/outcome verification, dashboard authority and TV-season execution remain open |
-| 10. Deployment and rollback | Disposable Unraid end-to-end tests, full CI, Docker build, backup/rollback, explicit activation approval | Incomplete: consolidated migration/advanced rollback/portable-copy validation passed 185 tests and 11 subtests on each Unraid filesystem through 6bad439. Accepted operational restore, final release CI/image and explicit activation approval remain open |
+| 10. Deployment and rollback | Disposable Unraid end-to-end tests, full CI, Docker build, backup/rollback, explicit activation approval | Incomplete: full native Unraid suite passed 1,452 tests and 22 subtests through ac5d4a7; targeted integration passed on both access paths. Accepted operational restore, final release CI/image and explicit activation approval remain open |
 
 ## Current decision
 
@@ -382,3 +382,17 @@ Unraid run on a rename-capable disposable lab is now required, using the runner'
 explicit `--full-suite` mode. No guard has been removed or weakened to pass.
 See [runtime packaging evidence](sqlite-runtime-packaging-validation.md).
 Gate states and production backend selection remain unchanged.
+
+## Full Unraid baseline through `ac5d4a7`
+
+The user confirmed 1,452 tests and 22 subtests passed in the full native Unraid
+run. The Linux rename tests execute successfully there; the earlier macOS-only
+failures are not claimed as local passes. This establishes a full regression
+baseline, not accepted production ownership, activation or final image release.
+
+Gate 6 follow-up pins root/source-parent descriptors throughout portable staging
+and prevents source-parent/root substitution from producing a verified copy
+checkpoint or redirecting staging writes. Prepared intents and source artifacts
+remain retained on failure. Tests cover parent/title aliases, parent replacement,
+root substitution and descriptor cleanup. No new gate is complete; external
+writer ownership, portable promotion/retirement and production wiring remain open.

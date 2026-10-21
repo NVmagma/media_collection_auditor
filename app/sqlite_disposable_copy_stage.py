@@ -208,10 +208,36 @@ def _stage_copy(*, root, title_folder, operation_id, media_key=None,
         source_path = source_parent / folder
         if source_path.resolve() != source_path:
             raise RuntimeError("Source aliases refused")
-        source_fd = os.open(source_path, FLAGS)
+        root_fd = os.open(root, FLAGS)
+        try:
+            verify_binding()
+            source_parent_fd = os.open("transient", FLAGS, dir_fd=root_fd)
+        except BaseException:
+            os.close(root_fd)
+            raise
+        try:
+            source_fd = os.open(folder, FLAGS, dir_fd=source_parent_fd)
+        except BaseException:
+            os.close(source_parent_fd)
+            os.close(root_fd)
+            raise
         stage_parent_fd = stage_fd = None
         try:
             original_source = os.fstat(source_fd)
+            original_source_parent = os.fstat(source_parent_fd)
+
+            def verify_source_binding(boundary):
+                current_parent = os.stat("transient", dir_fd=root_fd, follow_symlinks=False)
+                current_source = os.stat(folder, dir_fd=source_parent_fd, follow_symlinks=False)
+                if (not stat.S_ISDIR(current_parent.st_mode)
+                        or (current_parent.st_dev, current_parent.st_ino)
+                        != (original_source_parent.st_dev, original_source_parent.st_ino)
+                        or source_path.resolve() != source_path
+                        or (current_source.st_dev, current_source.st_ino)
+                        != (original_source.st_dev, original_source.st_ino)):
+                    raise RuntimeError("Copy source binding changed " + boundary)
+
+            verify_source_binding("before observation")
             before, identities = _manifest(source_fd)
             stage_parent = root / ".sqlite_copy_staging"
             staged_path = stage_parent / operation
@@ -251,11 +277,7 @@ def _stage_copy(*, root, title_folder, operation_id, media_key=None,
                 current_manifest, current_identities = _manifest(source_fd)
                 if before != current_manifest or identities != current_identities:
                     raise RuntimeError("Copy source changed before intent")
-                current_source = os.stat(source_path, follow_symlinks=False)
-                if (source_path.resolve() != source_path
-                        or (current_source.st_dev, current_source.st_ino)
-                        != (original_source.st_dev, original_source.st_ino)):
-                    raise RuntimeError("Copy source binding changed before intent")
+                verify_source_binding("before intent")
                 verify_binding()
                 session.read_verified_snapshot()
                 if _before_intent_check is not None:
@@ -269,37 +291,39 @@ def _stage_copy(*, root, title_folder, operation_id, media_key=None,
                 verify_binding()
                 if fault_at == "after_intent":
                     raise RuntimeError("Injected copy crash after intent")
-            if not stage_parent.exists():
-                stage_parent.mkdir(mode=0o700)
-            if stage_parent.is_symlink() or not stage_parent.is_dir():
+            try:
+                os.mkdir(".sqlite_copy_staging", mode=0o700, dir_fd=root_fd)
+            except FileExistsError:
+                pass
+            stage_parent_stat = os.stat(".sqlite_copy_staging", dir_fd=root_fd, follow_symlinks=False)
+            if not stat.S_ISDIR(stage_parent_stat.st_mode):
                 raise RuntimeError("Safe private staging directory required")
-            stage_parent_fd = os.open(stage_parent, FLAGS)
+            stage_parent_fd = os.open(".sqlite_copy_staging", FLAGS, dir_fd=root_fd)
             original_stage_parent = os.fstat(stage_parent_fd)
             os.mkdir(operation, mode=0o700, dir_fd=stage_parent_fd)
             stage_fd = os.open(operation, FLAGS, dir_fd=stage_parent_fd)
             original_stage = os.fstat(stage_fd)
+            verify_binding()
+            verify_source_binding("before copying")
             _copy_tree(source_fd, stage_fd)
             if fault_at == "after_copy":
                 raise RuntimeError("Injected copy crash after copy")
+            verify_source_binding("after copying")
             after, after_identities = _manifest(source_fd)
             copied, _ = _manifest(stage_fd)
             if before != after or identities != after_identities or copied != before:
                 raise CopyVerificationError(before, after, identities, after_identities, copied)
-            source_current = os.stat(source_path, follow_symlinks=False)
+            verify_source_binding("after copying")
             stage_current = os.stat(operation, dir_fd=stage_parent_fd, follow_symlinks=False)
-            if ((source_current.st_dev, source_current.st_ino) != (original_source.st_dev, original_source.st_ino)
-                    or (stage_current.st_dev, stage_current.st_ino) != (original_stage.st_dev, original_stage.st_ino)):
+            if (stage_current.st_dev, stage_current.st_ino) != (original_stage.st_dev, original_stage.st_ino):
                 raise RuntimeError("Copy path binding changed; source retained")
-            parent_current = os.stat(stage_parent, follow_symlinks=False)
+            parent_current = os.stat(".sqlite_copy_staging", dir_fd=root_fd, follow_symlinks=False)
             if (parent_current.st_dev, parent_current.st_ino) != (original_stage_parent.st_dev, original_stage_parent.st_ino):
                 raise RuntimeError("Staging parent changed; source retained")
             os.fsync(stage_parent_fd)
-            root_fd = os.open(root, FLAGS)
-            try:
-                os.fsync(root_fd)
-            finally:
-                os.close(root_fd)
+            os.fsync(root_fd)
             verify_binding()
+            verify_source_binding("before verified checkpoint")
             if persist_intent:
                 session.read_verified_snapshot()
                 intent = session.state[INTENTS_KEY]
@@ -322,3 +346,5 @@ def _stage_copy(*, root, title_folder, operation_id, media_key=None,
             if stage_parent_fd is not None:
                 os.close(stage_parent_fd)
             os.close(source_fd)
+            os.close(source_parent_fd)
+            os.close(root_fd)
