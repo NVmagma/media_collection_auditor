@@ -27,7 +27,7 @@ TESTS = (
     "test_dashboard_snapshot_parity", "test_dashboard_state_errors", "test_dashboard_inventory",
     "test_dashboard_lifecycle_visibility", "test_sqlite_dashboard_integration",
     "test_docker_runtime_context", "test_sqlite_copy_source_parent_binding",
-    "test_sqlite_copy_live_verification",
+    "test_sqlite_copy_live_verification", "test_sqlite_isolated_copy_batch",
 )
 
 
@@ -52,7 +52,7 @@ def main(argv=None):
         publication = str(repo / "tests" / "test_sqlite_disposable_copy_publication.py")
         completion = str(repo / "tests" / "test_sqlite_disposable_copy_completion.py")
         if args.publication_supported:
-            targets.extend((publication, completion))
+            targets.extend((publication, completion, str(repo / "tests" / "test_sqlite_isolated_copy_batch_native.py")))
         else:
             targets.extend(publication + "::" + name for name in (
                 "test_unsupported_atomic_publication_retains_source_and_staging",

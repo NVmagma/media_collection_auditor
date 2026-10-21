@@ -4,6 +4,7 @@ The supplied fetch transport must be trusted. No production CLI or activation,
 automatic Arr delivery, season pruning or deletion exists here. Portable copy
 staging retains its source and never promotes or reconciles the lifecycle.
 """
+from contextlib import nullcontext
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
@@ -25,7 +26,8 @@ STAGES = {"Waiting": "transient", "Holding": "holding", "Removal": "removal", "K
 
 def run_collected_isolated_move(**kwargs):
     """Collect and refresh protections for the isolated no-replace move flow."""
-    return _run_collected_isolated_operation(_copy_stage=False, _complete_copy=False, **kwargs)
+    return _run_collected_isolated_operation(_copy_stage=False, _complete_copy=False,
+        _held_runner_binding=None, _expected_runner_revision=None, **kwargs)
 
 
 def run_collected_isolated_copy(**kwargs):
@@ -33,19 +35,22 @@ def run_collected_isolated_copy(**kwargs):
 
     No promotion, source cleanup, Arr delivery or lifecycle reconciliation.
     """
-    return _run_collected_isolated_operation(_copy_stage=True, _complete_copy=False, **kwargs)
+    return _run_collected_isolated_operation(_copy_stage=True, _complete_copy=False,
+        _held_runner_binding=None, _expected_runner_revision=None, **kwargs)
 
 
 def run_collected_isolated_copy_completion(**kwargs):
     """One live-witness lab flow; quarantine original, never delete its bytes."""
-    return _run_collected_isolated_operation(_copy_stage=True, _complete_copy=True, **kwargs)
+    return _run_collected_isolated_operation(_copy_stage=True, _complete_copy=True,
+        _held_runner_binding=None, _expected_runner_revision=None, **kwargs)
 
 
 def _run_collected_isolated_operation(*, root, database, operation_id, media_key,
                                 title_folder, jellyfin_type, thresholds, fetch,
                                 favorites_trigger_keep=True, maximum_age_seconds=60,
                                 clock=datetime.now, timer=monotonic, fault_at=None,
-                                arr_sync_request=None, _copy_stage=False, _complete_copy=False, completion_fault_at=None):
+                                arr_sync_request=None, _copy_stage=False, _complete_copy=False, completion_fault_at=None,
+                                _held_runner_binding=None, _expected_runner_revision=None):
     """Collect twice under the runner lock; require unchanged complete signals.
 
     Time budget covers both scans and intervening planning. This establishes a
@@ -69,8 +74,13 @@ def _run_collected_isolated_operation(*, root, database, operation_id, media_key
     root, database = Path(root), Path(database)
     if database != root / "state.db":
         raise RuntimeError("Disposable runner database binding mismatch")
-    with isolated_runner_lock(root) as verify_binding:
+    with (isolated_runner_lock(root) if _held_runner_binding is None
+          else nullcontext(_held_runner_binding)) as verify_binding:
+        verify_binding()
         state, revision = GuardedSQLiteStateStore(database).load_with_revision()
+        if (_expected_runner_revision is not None
+                and (type(_expected_runner_revision) is not int or revision != _expected_runner_revision)):
+            raise RuntimeError("Stale batch operation revision")
         if INTENTS_KEY in state:
             raise RuntimeError("Unresolved SQLite operation; collected runner stopped")
         started, tick = clock(), timer()

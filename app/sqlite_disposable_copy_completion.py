@@ -164,7 +164,8 @@ def complete_live_copy(*, root, root_fd, parents, source_fd, copy_fd,
         session.checkpoint()
         if fault == "after_completion_checkpoint":
             raise RuntimeError("Injected completion crash after checkpoint")
-        return {"status": "disposable_copy_reconciled_source_quarantined", "original_bytes_retained": True,
+        return {"status": "disposable_copy_reconciled_source_quarantined", "revision": session.revision,
+                "original_bytes_retained": True,
                 "lifecycle_committed": True, "intent_cleared": True, "permanent_deletion_performed": False,
                 "production_activation": "disabled", "recovery_authorized": False, "authorization": "not_authorized"}
     finally:

@@ -476,3 +476,18 @@ retained-source substitution and long simulated hashing are tested with
 synthetic fixtures. Actual Linux late-phase cases need Unraid validation.
 External-writer ownership, trusted production verification, unsupported
 publication alternatives, restart clearance and activation remain unfinished.
+
+## Hash-window Unraid evidence through `7615553`
+
+The user confirmed 345 tests plus 11 subtests passed on shfs and 371 tests plus
+11 subtests on native storage. Slow hash windows, intervening-change guards and
+native late-phase failure cases passed. The warning remained non-failing.
+Production activation/deletion stayed disabled and no gate changed status.
+
+The next [bounded batch rehearsal](sqlite-isolated-copy-batch.md) adds an explicit
+attempt cap, whole-selection preflight, one held cooperating-runner lock,
+revision chaining and stop-on-first-uncertainty semantics. Earlier committed
+operations remain intact and later titles are never attempted after failure.
+This advances isolated orchestration for gate 8, not production wiring. Native
+multi-title, mixed Holding/Keep, Arr queue, checkpoint-uncertainty and unexpected
+writer cases require Unraid validation. Gate states remain unchanged.
