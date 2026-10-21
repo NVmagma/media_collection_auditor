@@ -116,7 +116,7 @@ private paths and unrelated application configuration are not copied here.
 | Download/audio tools with writable media subdirectories | Classify actual overlap and indirect import routes before deciding which require fencing | No inference that a similarly named subtree is isolated; unrelated verified scopes need not be stopped |
 | Dashboard/container-management clients with Docker socket mounts | Review their administrative authority and prevent automation from reopening fenced writers | A read-only socket bind is not proof of a read-only Docker API |
 | Network shares | Establish effective protocol/export/access rules and deny scoped writes through the window | Existing clients/handles and reconnects cannot write; selected share settings alone do not prove this |
-| Host jobs/manual transfers | Inventory still incomplete | Names, schedulers, destinations and enforcement/restoration steps must be known |
+| Host jobs/manual transfers | Operator identifies Arr and occasional Mac copies over NFS; no scheduled host job identified | Known routes must be fenced; this statement does not establish exhaustive absence of other writers |
 
 No listed container is automatically authorized for stopping, recreation or
 mount changes. An absent added-capability list or non-privileged setting does
@@ -179,3 +179,47 @@ and reconnects, alongside alternate exports and local container routes. Neither
 a client promise to stop copying nor an export configuration snapshot grants
 execution authority. Export changes, client unmounts and service restarts still
 require a concrete reviewed procedure and approval; none are performed here.
+
+### Review of supplied NFS export evidence
+
+The supplied current export listing includes writable, world-selector exports
+for both the media share and the appdata share. Its `sec=sys`, `all_squash`,
+`anonuid=99` and `anongid=100` options map client identities; squashing is not
+write denial. Do not infer Internet reachability or successful file access from
+the selector: network reachability and server filesystem permissions remain
+separate. Unrelated share names and their raw inventory are omitted here.
+
+The appdata route expands the required boundary beyond media bytes: state,
+locks, intents and maintenance evidence must not be writable through a share
+alias by an excluded participant. A local advisory lock does not independently
+exclude a client that writes without taking it. The supplied listing shows no
+separate nested media export, but it does not prove physical alias isolation or
+exclude another protocol or subsequent configuration change.
+
+The initial adapter proposal is server-side denial of NFS writes to every
+export that overlaps the chosen media **or state/control** scope, combined with
+the container controls above. Do not implement this as a per-Mac identity
+exception: the current client selector is broad, and the configured identity
+mapping is shared. This remains a proposal, not a verified enforcement backend.
+Prefer a private, unexported control directory with restricted administrative
+write access for the maintenance journal; moving production state there is a
+separate migration requiring review, not an incidental diagnostic action.
+
+Before any production procedure, implement and test this adapter against a
+disposable NFS server/client and disposable container mounts. The acceptance
+matrix must include:
+
+| Case | Required result |
+| --- | --- |
+| Client has a file open before entry, or has a transfer in progress | Drain is explicit; after the boundary checkpoint, further scoped writes are denied |
+| Existing client reconnects, or a different permitted client connects | Scoped writes remain denied; fresh read APIs remain available |
+| Client writes state, lock or journal through an exported parent/alias | Denied independently of cooperative application locking |
+| Container uses broad, nested or native-path media access | Every overlapping route is fenced; an NFS-only change is insufficient |
+| Export/container configuration changes during ownership | Ownership becomes invalid and the worker stops before its next action; pending evidence is preserved |
+| Controller or worker exits, or commit/Arr outcome is unknown | No automatic write restoration, move replay or intent clearing |
+| Operator restores after verified outcomes | Reviewed original configuration is restored without overwriting intervening administrative changes |
+
+No additional production discovery command is needed from this listing alone.
+The next development step is the isolated controller/journal and adapter
+acceptance harness. Export mutation commands are intentionally not supplied as
+an operator action before that implementation and review.

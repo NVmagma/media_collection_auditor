@@ -610,3 +610,15 @@ reviewed. This does not establish ownership or authorize export/service changes.
 Gate 6 remains open pending an enforceable adapter and disposable tests of
 existing handles, reconnects and failure recovery. Other production blockers
 and deletion safeguards remain in force.
+
+### NFS export evidence received
+
+The supplied export list establishes a current configured NFS write route to
+both media and appdata. Squashed client identities do not establish write
+exclusion. The ownership plan now includes exported state/lock/control aliases,
+server-side scoped denial as an adapter proposal, a private control journal,
+and disposable acceptance for existing handles, reconnects, configuration
+drift and uncertain outcomes. No NFS/container configuration was changed.
+Gate 6 remains open: the enforcement controller and adapter are not implemented
+or verified. No further production inventory request follows from this result;
+isolated implementation and acceptance work must precede a production procedure.
