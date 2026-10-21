@@ -56,8 +56,8 @@ notification, effective-backend rejection, lock substitution, state-save and
 notification failures, guard release, and preservation of unknown state fields.
 The maintained test runner exposes `--writer-coordination-only` for this
 focused regression set, retaining its fresh-fixture-path and secret guards.
-No external service is called. Persistent Unraid paths still need their focused
-validation before treating this increment as server-tested.
+No external service is called. The user subsequently confirmed 113 tests and
+19 subtests passed on each persistent Unraid access path through `a15830b`.
 
 ## Next production ownership decision
 
@@ -74,3 +74,9 @@ filesystem-independent; no filesystem-name whitelist or operator boolean grants
 trust. Process crashes and unknown commits must then be rehearsed against the
 accepted model. No service stops, mount-mode changes, image build or production
 activation are authorized by this document.
+
+
+The user confirmed share/host writers exist and accepted an initial maintenance
+window requirement, without approving operational changes. The concrete
+[maintenance ownership plan](sqlite-maintenance-ownership-plan.md) defines the
+remaining enforcement and discovery work. Cooperating locks do not replace it.

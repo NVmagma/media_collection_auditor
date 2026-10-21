@@ -563,3 +563,21 @@ COPY inputs only; no Docker build or production container update was performed.
 Use `--writer-coordination-only` on both persistent lab paths for the next server
 validation; another complete native-suite repeat is not required for this
 focused acceptance step. External-writer exclusion remains unverified.
+
+
+## Cooperating-writer Unraid evidence through `a15830b`
+
+The user confirmed 113 tests and 19 subtests passed on both shfs and native
+storage, with the existing single non-failing Requests warning. Cross-process
+manual rescue/audit/migration exclusion, backend/configuration guards and runtime
+packaging checks are server-tested. This closes that application coordination
+gap, not external writer exclusion or gate 6.
+
+The user confirmed shares/host jobs can write media and accepted an explicit
+maintenance window as the initial ownership design requirement. No service or
+configuration change was authorized. The
+[maintenance ownership plan](sqlite-maintenance-ownership-plan.md) requires
+independently enforced write denial, restart control, live protection reads and
+safe recovery before any production move. Fresh deployment metadata and the
+host job/share inventory are the next inputs; a window preference is not an
+executable permit. Gate states and production activation/deletion stay unchanged.
