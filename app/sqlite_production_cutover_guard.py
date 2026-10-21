@@ -18,7 +18,7 @@ from app.state_store import GuardedSQLiteStateStore
 IMPLEMENTATION_BLOCKERS = (
     "trusted_production_move_verifier_unavailable",
     "external_writer_exclusion_unverified",
-    "portable_move_completion_unimplemented",
+    "portable_production_move_completion_unimplemented",
     "sqlite_production_lifecycle_not_wired",
     "production_restart_clearance_not_implemented",
     "release_image_verification_pending",

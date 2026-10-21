@@ -1,4 +1,5 @@
 """Explicit, potentially expensive content inspection; never copy recovery."""
+from contextlib import nullcontext
 from datetime import datetime
 import hashlib
 import json
@@ -42,14 +43,15 @@ def _observe(root, parent_name, name, digest):
                 os.close(fd)
 
 
-def inspect_disposable_copy(*, root):
+def inspect_disposable_copy(*, root, _held_binding=None):
     """Read retained lab content without clearing intents or granting authority.
 
     Matching bytes cannot establish historical identity, writer exclusion, or
     Jellyfin protection freshness. This is unsuitable for routine API polling.
     """
     root = Path(root)
-    with isolated_runner_lock(root) as verify_binding:
+    with (isolated_runner_lock(root) if _held_binding is None else nullcontext(_held_binding)) as verify_binding:
+        verify_binding()
         session = RevisionedAuditSession(GuardedSQLiteStateStore(root / "state.db"))
         state, revision = session.read_verified_snapshot()
         pending = state.get(INTENTS_KEY)
@@ -102,16 +104,24 @@ def inspect_disposable_copy(*, root):
                     or publication.get("destination_stage") != plan_binding["destination_stage"]
                     or publication.get("destination") != str(root / plan_binding["destination_stage"] / folder)):
                 raise RuntimeError("Pending copy publication binding invalid")
+        retirement = details.get("retirement")
+        if "retirement" in details:
+            if (not isinstance(retirement, dict) or publication is None
+                    or retirement.get("phase") != "prepared"
+                    or retirement.get("retained_source") != str(root / ".sqlite_retained_sources" / operation)):
+                raise RuntimeError("Pending copy retirement binding invalid")
         source = _observe(root, "transient", folder, digest)
         staging = _observe(root, ".sqlite_copy_staging", operation, digest)
         published = (_observe(root, plan_binding["destination_stage"], folder, digest)
                      if publication is not None else "not_requested")
+        retained = (_observe(root, ".sqlite_retained_sources", operation, digest)
+                    if retirement is not None else "not_requested")
         verify_binding()
         session.read_verified_snapshot()
         return {"status": "blocked", "revision": revision, "copy_phase": details["copy_phase"],
                 "source_status": source, "staging_status": staging, "read_only": True,
                 "publication_phase": publication["phase"] if publication else None,
-                "published_status": published,
+                "published_status": published, "retained_source_status": retained,
                 "plan_binding_available": plan_binding is not None,
                 "proposed_destination_stage": plan_binding["destination_stage"] if plan_binding else None,
                 "recovery_authorized": False, "promotion_authorized": False,

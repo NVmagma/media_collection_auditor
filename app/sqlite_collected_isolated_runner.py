@@ -25,7 +25,7 @@ STAGES = {"Waiting": "transient", "Holding": "holding", "Removal": "removal", "K
 
 def run_collected_isolated_move(**kwargs):
     """Collect and refresh protections for the isolated no-replace move flow."""
-    return _run_collected_isolated_operation(_copy_stage=False, **kwargs)
+    return _run_collected_isolated_operation(_copy_stage=False, _complete_copy=False, **kwargs)
 
 
 def run_collected_isolated_copy(**kwargs):
@@ -33,21 +33,31 @@ def run_collected_isolated_copy(**kwargs):
 
     No promotion, source cleanup, Arr delivery or lifecycle reconciliation.
     """
-    return _run_collected_isolated_operation(_copy_stage=True, **kwargs)
+    return _run_collected_isolated_operation(_copy_stage=True, _complete_copy=False, **kwargs)
+
+
+def run_collected_isolated_copy_completion(**kwargs):
+    """One live-witness lab flow; quarantine original, never delete its bytes."""
+    return _run_collected_isolated_operation(_copy_stage=True, _complete_copy=True, **kwargs)
 
 
 def _run_collected_isolated_operation(*, root, database, operation_id, media_key,
                                 title_folder, jellyfin_type, thresholds, fetch,
                                 favorites_trigger_keep=True, maximum_age_seconds=60,
                                 clock=datetime.now, timer=monotonic, fault_at=None,
-                                arr_sync_request=None, _copy_stage=False):
+                                arr_sync_request=None, _copy_stage=False, _complete_copy=False, completion_fault_at=None):
     """Collect twice under the runner lock; require unchanged complete signals.
 
     Time budget covers both scans and intervening planning. This establishes a
     bounded experimental observation window, not transactional protection or
     independent production freshness. Expiry/change requires a new invocation.
     """
+    if completion_fault_at is not None and not _complete_copy:
+        raise ValueError("Completion faults require the completion rehearsal")
+    if completion_fault_at not in (None, "after_retirement_intent", "after_source_quarantine", "after_completion_checkpoint"):
+        raise ValueError("Invalid completion fault boundary")
     thresholds = deepcopy(thresholds)
+    arr_sync_request = deepcopy(arr_sync_request)
     folder = validate_title_folder(title_folder)
     expected_key = folder if jellyfin_type == "Movie" else "TV/" + folder
     if jellyfin_type not in ("Movie", "Series") or media_key != expected_key:
@@ -112,15 +122,28 @@ def _run_collected_isolated_operation(*, root, database, operation_id, media_key
         if _copy_stage:
             if source != "transient" or destination not in ("holding", "keep"):
                 raise RuntimeError("Portable staging requires a Waiting source candidate")
-            if arr_sync_request is not None:
+            if arr_sync_request is not None and not _complete_copy:
                 raise ValueError("Copy staging cannot deliver or queue Arr requests")
+            if _complete_copy and media_key in state["arr_sync_pending"]:
+                raise RuntimeError("Existing Arr queue blocks copy completion")
+            if _complete_copy and arr_sync_request is not None:
+                from app.sqlite_arr_queue_plan import planned_arr_queue_entry
+                planned_arr_queue_entry(request=arr_sync_request, media_key=media_key,
+                                        title_folder=folder, destination_stage=destination)
             from app.sqlite_disposable_copy_stage import _stage_copy
-            return _stage_copy(
+            result = _stage_copy(
                 root=root, operation_id=operation_id, media_key=media_key,
                 title_folder=folder, persist_intent=True, planned_move=bundle,
                 planned_destination=destination, fault_at=fault_at,
                 _held_binding=verify_binding, _before_intent_review=refresh_before_intent,
                 _before_intent_check=check_window)
+            if not _complete_copy:
+                return result
+            from app.sqlite_disposable_copy_publication import _publish_disposable_copy
+            return _publish_disposable_copy(root=root, _held_binding=verify_binding,
+                _completion={"observed_at": started, "refresh": refresh_before_intent,
+                             "check_window": check_window, "arr_sync_request": deepcopy(arr_sync_request),
+                             "fault_at": completion_fault_at})
         return execute_disposable_lifecycle_move(
             root=root, database=database, operation_id=operation_id, media_key=media_key,
             title_folder=folder, source_stage=source, destination_stage=destination,

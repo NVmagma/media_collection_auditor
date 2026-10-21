@@ -49,8 +49,9 @@ def main(argv=None):
     targets = [str(repo / "tests")] if args.full_suite else [str(repo / "tests" / (name + ".py")) for name in TESTS]
     if not args.full_suite:
         publication = str(repo / "tests" / "test_sqlite_disposable_copy_publication.py")
+        completion = str(repo / "tests" / "test_sqlite_disposable_copy_completion.py")
         if args.publication_supported:
-            targets.append(publication)
+            targets.extend((publication, completion))
         else:
             targets.extend(publication + "::" + name for name in (
                 "test_unsupported_atomic_publication_retains_source_and_staging",
@@ -59,6 +60,11 @@ def main(argv=None):
                 "test_actual_capability_either_publishes_or_preserves_prepared_copy",
                 "test_changed_staged_bytes_do_not_create_publication_marker",
                 "test_missing_plan_binding_is_not_permission_to_publish"))
+            targets.extend(completion + "::" + name for name in (
+                "test_real_capability_preserves_original_bytes_in_all_supported_outcomes",
+                "test_changed_refresh_blocks_before_publication_and_quarantine",
+                "test_invalid_queue_request_stops_before_copy_intent",
+                "test_reused_retention_identifier_stops_before_publication"))
     return subprocess.run(
         [sys.executable, "-B", "-m", "pytest", "-p", "no:cacheprovider",
          "--basetemp=" + str(base), *targets,

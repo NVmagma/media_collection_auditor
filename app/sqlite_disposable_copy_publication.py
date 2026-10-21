@@ -1,5 +1,5 @@
 """No-overwrite publication of a verified LAB copy; source always retained."""
-from contextlib import ExitStack
+from contextlib import ExitStack, nullcontext
 import hashlib
 import json
 import os
@@ -20,6 +20,10 @@ def _digest(manifest):
 
 
 def publish_disposable_copy(*, root, fault_at=None):
+    return _publish_disposable_copy(root=root, fault_at=fault_at)
+
+
+def _publish_disposable_copy(*, root, fault_at=None, _held_binding=None, _completion=None):
     """Publish once, leaving source, clocks, queue and intent for manual review.
 
     Requires a valid plan-bound copy intent and actual atomic no-replace rename.
@@ -29,8 +33,9 @@ def publish_disposable_copy(*, root, fault_at=None):
     if fault_at not in (None, "after_intent", "after_publication", "after_checkpoint"):
         raise ValueError("Invalid publication rehearsal fault boundary")
     root = Path(root)
-    reviewed = inspect_disposable_copy(root=root)
-    with isolated_runner_lock(root) as verify_root:
+    reviewed = inspect_disposable_copy(root=root, _held_binding=_held_binding)
+    with (isolated_runner_lock(root) if _held_binding is None else nullcontext(_held_binding)) as verify_root:
+        verify_root()
         session = RevisionedAuditSession(GuardedSQLiteStateStore(root / "state.db"))
         state, revision = session.read_verified_snapshot()
         pending = state[INTENTS_KEY]
@@ -47,6 +52,10 @@ def publish_disposable_copy(*, root, fault_at=None):
         key = details["media_key"]
         folder = key[3:] if key.startswith("TV/") else key
         digest = details["manifest_sha256"]
+        if _completion is not None:
+            from app.sqlite_disposable_copy_completion import validate_completion
+            validate_completion(state, details, folder, destination, _completion)
+            _completion["refresh"]()
         with ExitStack() as stack:
             def opening(name, parent=None):
                 fd = os.open(name, FLAGS, **({"dir_fd": parent} if parent is not None else {}))
@@ -62,15 +71,23 @@ def publish_disposable_copy(*, root, fault_at=None):
             source_id = (os.fstat(source_fd).st_dev, os.fstat(source_fd).st_ino)
             copy_id = (os.fstat(copy_fd).st_dev, os.fstat(copy_fd).st_ino)
 
-            def verify_bindings(published=False):
+            def verify_bindings(published=False, source_retired=False):
                 verify_root()
                 for name, identity in parent_ids.items():
                     current = os.stat(name, dir_fd=root_fd, follow_symlinks=False)
                     if (current.st_dev, current.st_ino) != identity:
                         raise RuntimeError("Publication parent binding changed")
-                current = os.stat(folder, dir_fd=parents["transient"], follow_symlinks=False)
-                if (current.st_dev, current.st_ino) != source_id:
-                    raise RuntimeError("Publication source binding changed")
+                if not source_retired:
+                    current = os.stat(folder, dir_fd=parents["transient"], follow_symlinks=False)
+                    if (current.st_dev, current.st_ino) != source_id:
+                        raise RuntimeError("Publication source binding changed")
+                else:
+                    try:
+                        os.stat(folder, dir_fd=parents["transient"], follow_symlinks=False)
+                    except FileNotFoundError:
+                        pass
+                    else:
+                        raise RuntimeError("Retired source entry reappeared")
                 parent, name = (parents[destination], folder) if published else (parents[".sqlite_copy_staging"], operation)
                 current = os.stat(name, dir_fd=parent, follow_symlinks=False)
                 if (current.st_dev, current.st_ino) != copy_id:
@@ -117,6 +134,13 @@ def publish_disposable_copy(*, root, fault_at=None):
             session.checkpoint()
             if fault_at == "after_checkpoint":
                 raise RuntimeError("Injected publication crash after checkpoint")
+            if _completion is not None:
+                from app.sqlite_disposable_copy_completion import complete_live_copy
+                return complete_live_copy(root=root, root_fd=root_fd, parents=parents,
+                    source_fd=source_fd, copy_fd=copy_fd, source_identity=source_id,
+                    operation=operation, key=key, folder=folder, destination=destination,
+                    digest=digest, session=session,
+                    verify_published=lambda **kwargs: verify_bindings(published=True, **kwargs), config=_completion)
             return {"status": "published_source_retained_pending_review", "source_retained": True,
                     "lifecycle_committed": False, "intent_cleared": False, "retry_authorized": False,
                     "production_activation": "disabled", "authorization": "not_authorized"}

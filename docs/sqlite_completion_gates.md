@@ -426,3 +426,21 @@ Source retirement, a safe alternative for unsupported publication capabilities,
 writer control and production orchestration remain unfinished. Gate states do
 not change. Linux publication/crash tests require server validation; report-only
 cutover guard checks and the new phases are consolidated in the maintained runner.
+
+## Publication Unraid evidence through `db492e9`
+
+The user confirmed 320 tests plus 11 subtests passed on shfs and 324 plus 11
+subtests on native storage. The four native-only publication/crash/race cases
+executed successfully. Unsupported-capability retention ran on shfs; it is not
+claimed as successful shfs publication. The warning remained non-failing.
+
+The next [copy completion rehearsal](sqlite-disposable-copy-completion.md) keeps
+both live witnesses through publication and private source quarantine, then
+commits destination clock, optional Arr queue, retained-source record and intent
+clearance atomically. Original bytes remain retained and no production caller
+exists. Interrupted runs cannot resume from matching persisted metadata alone.
+Actual Linux completion/uncertain-commit/full-show cases await server tests.
+Production writer ownership, unsupported publication alternatives, long-copy
+freshness, recovery, live wiring and final activation remain unresolved; no gate
+is newly complete. The cutover guard's portable-completion blocker explicitly
+refers to production, not this isolated rehearsal.
