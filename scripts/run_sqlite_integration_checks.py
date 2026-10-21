@@ -27,6 +27,7 @@ TESTS = (
     "test_dashboard_snapshot_parity", "test_dashboard_state_errors", "test_dashboard_inventory",
     "test_dashboard_lifecycle_visibility", "test_sqlite_dashboard_integration",
     "test_docker_runtime_context", "test_sqlite_copy_source_parent_binding",
+    "test_sqlite_copy_live_verification",
 )
 
 

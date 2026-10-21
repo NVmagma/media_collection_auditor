@@ -55,7 +55,6 @@ def _publish_disposable_copy(*, root, fault_at=None, _held_binding=None, _comple
         if _completion is not None:
             from app.sqlite_disposable_copy_completion import validate_completion
             validate_completion(state, details, folder, destination, _completion)
-            _completion["refresh"]()
         with ExitStack() as stack:
             def opening(name, parent=None):
                 fd = os.open(name, FLAGS, **({"dir_fd": parent} if parent is not None else {}))
@@ -95,19 +94,26 @@ def _publish_disposable_copy(*, root, fault_at=None, _held_binding=None, _comple
 
             verify_bindings()
             source_manifest, source_metadata = _manifest(source_fd)
-            copy_manifest, _ = _manifest(copy_fd)
+            copy_manifest, copy_metadata = _manifest(copy_fd)
             if _digest(source_manifest) != digest or _digest(copy_manifest) != digest:
                 raise RuntimeError("Publication content differs from recorded copy")
-            for stage in ("holding", "keep", "removal"):
-                stage_fd = parents.get(stage)
-                if stage_fd is None:
-                    stage_fd = opening(stage, root_fd)
-                try:
-                    os.stat(folder, dir_fd=stage_fd, follow_symlinks=False)
-                except FileNotFoundError:
-                    continue
-                raise RuntimeError("Publication destination already occupied or ambiguous")
+            def verify_destinations_absent():
+                for stage in ("holding", "keep", "removal"):
+                    stage_fd = parents.get(stage)
+                    if stage_fd is None:
+                        stage_fd = opening(stage, root_fd)
+                    try:
+                        os.stat(folder, dir_fd=stage_fd, follow_symlinks=False)
+                    except FileNotFoundError:
+                        continue
+                    raise RuntimeError("Publication destination already occupied or ambiguous")
+            verify_destinations_absent()
+            if _completion is not None:
+                from app.sqlite_copy_live_verification import refresh_hashed_copy
+                refresh_hashed_copy(trees=((source_fd, source_metadata), (copy_fd, copy_metadata)),
+                                    refresh=_completion["refresh"], check_window=_completion["check_window"])
             verify_bindings()
+            verify_destinations_absent()
             session.read_verified_snapshot()
             details = session.state[INTENTS_KEY]["details"]
             details["publication"] = {"phase": "prepared", "destination_stage": destination,
@@ -117,6 +123,10 @@ def _publish_disposable_copy(*, root, fault_at=None, _held_binding=None, _comple
                 raise RuntimeError("Injected publication crash after intent")
             verify_bindings()
             if _completion is not None:
+                from app.sqlite_copy_live_verification import verify_hashed_metadata
+                verify_hashed_metadata(((source_fd, source_metadata), (copy_fd, copy_metadata)))
+                verify_bindings()
+                verify_destinations_absent()
                 _completion["check_window"]()
             rename_directory_noreplace_at(parents[".sqlite_copy_staging"], operation,
                                           parents[destination], folder)

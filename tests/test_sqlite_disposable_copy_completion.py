@@ -64,7 +64,7 @@ def test_actual_completion_and_crashes_never_drop_source_bytes(tmp_path, fault, 
     original = root / ".sqlite_retained_sources" / "complete-copy" if retired else root / "transient" / FOLDER
     assert (original / "payload").read_text() == "fixture"
     assert (root / "holding" / FOLDER / "payload").read_text() == "fixture"
-    assert calls.count("/Users") == 5
+    assert calls.count("/Users") == (7 if fault in ("after_retirement_intent", "after_source_quarantine") else 9)
     if not cleared:
         report = inspect_disposable_copy(root=root)
         assert report["status"] == "blocked"
@@ -104,7 +104,7 @@ def test_final_checkpoint_uncertainty_preserves_all_or_nothing_tracking(tmp_path
 
 def test_changed_refresh_blocks_before_publication_and_quarantine(tmp_path):
     root, database = lab(tmp_path)
-    fetch, _ = transport([[item()], [item()], [item(["keep-forever"])]])
+    fetch, _ = transport([[item()]] * 3 + [[item(["keep-forever"])]])
     with pytest.raises(RuntimeError, match="changed"):
         run(root, database, fetch)
     state = GuardedSQLiteStateStore(database).load_with_revision()[0]
@@ -116,10 +116,10 @@ def test_changed_refresh_blocks_before_publication_and_quarantine(tmp_path):
 @pytest.mark.skipif(sys.platform != "linux", reason="Actual publication before final fresh check required")
 def test_protection_change_before_quarantine_retains_public_source(tmp_path):
     root, database = lab(tmp_path)
-    fetch, calls = transport([[item()], [item()], [item()], [item()], [item(["keep-forever"])]])
+    fetch, calls = transport([[item()]] * 5 + [[item(["keep-forever"])]])
     with pytest.raises(RuntimeError, match="changed"):
         run(root, database, fetch)
-    assert calls.count("/Users") == 5
+    assert calls.count("/Users") == 6
     assert (root / "transient" / FOLDER / "payload").read_text() == "fixture"
     assert (root / "holding" / FOLDER / "payload").read_text() == "fixture"
     state = GuardedSQLiteStateStore(database).load_with_revision()[0]
@@ -157,7 +157,7 @@ def test_whole_show_completion_retains_every_original_season(tmp_path):
         operation_id="series-complete", media_key=KEY, title_folder=FOLDER,
         jellyfin_type="Series", thresholds=LIMITS, fetch=fetch, clock=lambda: NOW,
         arr_sync_request={"service": "sonarr", "title_id": 99, "root": "/fixture/tv_hold", "monitored": True})
-    assert result["original_bytes_retained"] and calls.count("/Users") == 5
+    assert result["original_bytes_retained"] and calls.count("/Users") == 9
     for parent in (root / "holding" / FOLDER, root / ".sqlite_retained_sources" / "series-complete"):
         for season in ("Season 00", "Season 01", "Season 02"):
             assert (parent / season / "episode.mkv").read_bytes() == b"disposable episode"
@@ -236,13 +236,13 @@ def test_transfer_renewal_requires_fresh_unchanged_bounded_observations(tmp_path
         elapsed = -1 if scenario in ("timer_reversed", "clock_reversed") else 600
         return result
     monkeypatch.setattr(stage, "_stage_copy", long_stage)
-    base_fetch, calls = transport([[item()], [item()],
+    base_fetch, calls = transport([[item()], [item()], [item()],
         [item(["keep-forever"])] if scenario == "changed" else [item()],
         [item(["keep-forever"])] if scenario == "changed_second_scan" else [item()]])
     def fetch(*args, **kwargs):
         nonlocal elapsed
         response = base_fetch(*args, **kwargs)
-        if scenario == "slow_refresh" and calls.count("/Users") >= 3:
+        if scenario == "slow_refresh" and calls.count("/Users") >= 4:
             elapsed += 61
         return response
     def invoke():
@@ -258,10 +258,10 @@ def test_transfer_renewal_requires_fresh_unchanged_bounded_observations(tmp_path
             assert str(exc) in ("Atomic no-replace rename requires Linux", "Atomic no-replace rename unsupported")
             state = GuardedSQLiteStateStore(database).load_with_revision()[0]
             assert state["sqlite_pending_operations"]["details"]["publication"]["phase"] == "prepared"
-            assert calls.count("/Users") == 4
+            assert calls.count("/Users") == 5
         else:
             assert report["lifecycle_committed"] and report["original_bytes_retained"]
-            assert calls.count("/Users") == 5
+            assert calls.count("/Users") == 9
         return
     with pytest.raises(RuntimeError, match="changed" if scenario in ("changed", "changed_second_scan") else "window expired"):
         invoke()
@@ -297,3 +297,51 @@ def test_checkpoint_delay_expires_before_directory_action(tmp_path, monkeypatch,
     assert (root / "transient" / FOLDER / "payload").read_text() == "fixture"
     assert not (root / ".sqlite_retained_sources" / "complete-copy").exists()
     assert FOLDER in state["first_seen"] and not state["queued"] and not state["arr_sync_pending"]
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Actual publication and quarantine required")
+@pytest.mark.parametrize("phase,failure", [
+    (phase, failure) for phase in (6, 8)
+    for failure in ("protection", "source_mutation", "copy_mutation", "revision", "slow_scan", "retained_replacement")
+    if not (phase == 6 and failure == "retained_replacement")])
+def test_fresh_phase_failure_preserves_pending_tracking_and_original_bytes(tmp_path, phase, failure):
+    root, database = lab(tmp_path)
+    elapsed = 0
+    done = False
+    base_fetch, calls = transport([[item()]] * (phase - 1) +
+        [[item(["keep-forever"])]] if failure == "protection" else [[item()]])
+    def fetch(*args, **kwargs):
+        nonlocal elapsed, done
+        result = base_fetch(*args, **kwargs)
+        if not done and calls.count("/Users") == phase:
+            done = True
+            source = root / ("transient" if phase == 6 else ".sqlite_retained_sources") / (FOLDER if phase == 6 else "complete-copy")
+            if failure == "source_mutation":
+                (source / "payload").write_text("external changed bytes")
+            elif failure == "copy_mutation":
+                (root / "holding" / FOLDER / "payload").write_text("external changed copy")
+            elif failure == "retained_replacement":
+                source.rename(root / ".sqlite_retained_sources" / "preserved-original")
+                source.mkdir()
+                (source / "payload").write_text("fixture")
+            elif failure == "revision":
+                store = GuardedSQLiteStateStore(database)
+                state, revision = store.load_with_revision()
+                state["external_writer"] = True
+                store.save_if_revision(state, revision)
+            elif failure == "slow_scan":
+                elapsed += 61
+        return result
+    with pytest.raises(RuntimeError, match="changed|stale|window expired"):
+        run(root, database, fetch, timer=lambda: elapsed)
+    state = GuardedSQLiteStateStore(database).load_with_revision()[0]
+    assert FOLDER in state["first_seen"] and not state["queued"] and not state["arr_sync_pending"]
+    assert "sqlite_pending_operations" in state and not state.get("sqlite_retained_sources")
+    assert (root / "holding" / FOLDER / "payload").exists()
+    if failure == "retained_replacement":
+        original = root / ".sqlite_retained_sources" / "preserved-original"
+    else:
+        original = root / ("transient" if phase == 6 else ".sqlite_retained_sources") / (FOLDER if phase == 6 else "complete-copy")
+    assert (original / "payload").exists()
+    if failure != "source_mutation":
+        assert (original / "payload").read_text() == "fixture"

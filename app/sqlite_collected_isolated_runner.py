@@ -50,8 +50,9 @@ def _run_collected_isolated_operation(*, root, database, operation_id, media_key
 
     Time budget covers both scans and intervening planning. This establishes a
     bounded experimental observation window, not transactional protection or
-    independent production freshness. Completion alone renews after staging,
-    requiring two unchanged observations; later expiry/change stops the flow.
+    independent production freshness. Completion alone collects two unchanged
+    observations after hashing each phase; collection and metadata checks stay
+    bounded, with deadlines checked before actions.
     """
     if completion_fault_at is not None and not _complete_copy:
         raise ValueError("Completion faults require the completion rehearsal")
@@ -131,6 +132,14 @@ def _run_collected_isolated_operation(*, root, database, operation_id, media_key
             if current["identity"] != initial["identity"] or current["signals"] != initial["signals"]:
                 raise RuntimeError("Jellyfin identity or signals changed; replan required")
 
+        def renew_copy_window():
+            nonlocal window_started, window_tick
+            # Only live completion phases use this callback. No persisted
+            # pending operation can enter the collected runner on restart.
+            window_started, window_tick = sample_time()
+            refresh_before_intent()
+            refresh_before_intent()
+
         verify_binding()
         if _copy_stage:
             if source != "transient" or destination not in ("holding", "keep"):
@@ -148,19 +157,15 @@ def _run_collected_isolated_operation(*, root, database, operation_id, media_key
                 root=root, operation_id=operation_id, media_key=media_key,
                 title_folder=folder, persist_intent=True, planned_move=bundle,
                 planned_destination=destination, fault_at=fault_at,
-                _held_binding=verify_binding, _before_intent_review=refresh_before_intent,
-                _before_intent_check=check_window)
+                _held_binding=verify_binding,
+                _before_intent_review=None if _complete_copy else refresh_before_intent,
+                _before_intent_check=check_window,
+                _refresh_after_hash=renew_copy_window if _complete_copy else None)
             if not _complete_copy:
                 return result
-            # Transfer and its content checks may outlast the initial scan.
-            # Only this live completion flow can start a new window. The next
-            # two complete scans must still match the original identity/signals;
-            # persisted pending operations never acquire restart permission.
-            window_started, window_tick = sample_time()
-            refresh_before_intent()
             from app.sqlite_disposable_copy_publication import _publish_disposable_copy
             return _publish_disposable_copy(root=root, _held_binding=verify_binding,
-                _completion={"observed_at": started, "refresh": refresh_before_intent,
+                _completion={"observed_at": started, "refresh": renew_copy_window,
                              "check_window": check_window, "arr_sync_request": deepcopy(arr_sync_request),
                              "fault_at": completion_fault_at})
         return execute_disposable_lifecycle_move(

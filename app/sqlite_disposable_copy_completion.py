@@ -10,6 +10,7 @@ import json
 import os
 
 from app.sqlite_arr_queue_plan import planned_arr_queue_entry
+from app.sqlite_copy_live_verification import refresh_hashed_copy, verify_hashed_metadata
 from app.sqlite_disposable_copy_stage import FLAGS, _manifest
 from app.sqlite_noreplace_rename import rename_directory_noreplace_at
 from app.sqlite_operation_coordinator import INTENTS_KEY
@@ -69,16 +70,18 @@ def complete_live_copy(*, root, root_fd, parents, source_fd, copy_fd,
             pass
         else:
             raise RuntimeError("Retained source slot occupied")
-        config["refresh"]()
         verify_published()
         verify_archive()
         before, metadata = _manifest(source_fd)
-        copied, _ = _manifest(copy_fd)
+        copied, copy_metadata = _manifest(copy_fd)
         actual_digest = hashlib.sha256(json.dumps(before, sort_keys=True, separators=(",", ":"),
                                                   ensure_ascii=True).encode("ascii")).hexdigest()
         if before != copied or actual_digest != digest:
             raise RuntimeError("Source and published copy differ before quarantine")
-        config["check_window"]()
+        refresh_hashed_copy(trees=((source_fd, metadata), (copy_fd, copy_metadata)),
+                            refresh=config["refresh"], check_window=config["check_window"])
+        verify_published()
+        verify_archive()
         retirement = {"phase": "prepared", "retained_source": str(root / archive_name / operation),
                       "observed_at": config["observed_at"].isoformat(), "arr_queue_entry": queue_entry}
         session.read_verified_snapshot()
@@ -86,6 +89,9 @@ def complete_live_copy(*, root, root_fd, parents, source_fd, copy_fd,
         session.checkpoint()
         if fault == "after_retirement_intent":
             raise RuntimeError("Injected completion crash after retirement intent")
+        verify_published()
+        verify_archive()
+        verify_hashed_metadata(((source_fd, metadata), (copy_fd, copy_metadata)))
         verify_published()
         verify_archive()
         config["check_window"]()
@@ -102,8 +108,14 @@ def complete_live_copy(*, root, root_fd, parents, source_fd, copy_fd,
         held = os.stat(operation, dir_fd=archive_fd, follow_symlinks=False)
         if (held.st_dev, held.st_ino) != source_identity:
             raise RuntimeError("Quarantined source does not match live witness")
+        def verify_retained():
+            verify_archive()
+            retained = os.stat(operation, dir_fd=archive_fd, follow_symlinks=False)
+            if (retained.st_dev, retained.st_ino) != source_identity:
+                raise RuntimeError("Retained source changed before completion checkpoint")
+
         after, after_metadata = _manifest(source_fd)
-        published, _ = _manifest(copy_fd)
+        published, published_metadata = _manifest(copy_fd)
         # Our directory rename can change the root ctime, but not its contents
         # or the metadata of entries within it.
         stable_metadata = {k: v for k, v in metadata.items() if k}
@@ -113,12 +125,12 @@ def complete_live_copy(*, root, root_fd, parents, source_fd, copy_fd,
             raise RuntimeError("Retained content changed; completion blocked")
         for fd in (archive_fd, parents["transient"], parents[destination], root_fd):
             os.fsync(fd)
-        verify_archive()
+        verify_retained()
         verify_published(source_retired=True)
-        retained_now = os.stat(operation, dir_fd=archive_fd, follow_symlinks=False)
-        if (retained_now.st_dev, retained_now.st_ino) != source_identity:
-            raise RuntimeError("Retained source changed before completion checkpoint")
-        config["check_window"]()
+        refresh_hashed_copy(trees=((source_fd, after_metadata), (copy_fd, published_metadata)),
+                            refresh=config["refresh"], check_window=config["check_window"])
+        verify_retained()
+        verify_published(source_retired=True)
         for stage in ("holding", "keep", "removal"):
             if stage == destination:
                 continue
@@ -133,6 +145,10 @@ def complete_live_copy(*, root, root_fd, parents, source_fd, copy_fd,
             finally:
                 os.close(stage_fd)
         session.read_verified_snapshot()
+        verify_hashed_metadata(((source_fd, after_metadata), (copy_fd, published_metadata)))
+        verify_retained()
+        verify_published(source_retired=True)
+        config["check_window"]()
         state = session.state
         if state["first_seen"].get(key) != details["source_timestamp"]:
             raise RuntimeError("Copy completion clock binding changed")

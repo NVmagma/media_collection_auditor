@@ -458,3 +458,21 @@ bounded observations in the same live completion invocation. Deadline checks
 also guard both renames after durable checkpoints. Pre-intent and later hashing
 remain bounded; asynchronous completion, production writer exclusion, restart
 clearance and activation remain unfinished. No gate changes status.
+
+
+## Transfer-window Unraid evidence through `6cfc88a`
+
+The user confirmed 331 tests and 11 subtests passed on shfs, and 346 tests and
+11 subtests on native storage. Long staging transfer renewal and deadline guards
+passed; hashing remained bounded in that revision. The Requests warning remained
+non-failing. No gate changed status or production behavior.
+
+The next live-only increment places full content hashing before paired fresh
+collection at each completion boundary, then compares exact whole-tree metadata
+with those hash observations. It retains digest verification, revision checks,
+held paths, bounded collection/action deadlines and pending-on-uncertainty.
+Source/copy changes during collection, late protection changes, revision races,
+retained-source substitution and long simulated hashing are tested with
+synthetic fixtures. Actual Linux late-phase cases need Unraid validation.
+External-writer ownership, trusted production verification, unsupported
+publication alternatives, restart clearance and activation remain unfinished.

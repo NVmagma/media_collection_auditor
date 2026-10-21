@@ -181,7 +181,8 @@ def stage_planned_disposable_copy(*, root, title_folder, media_key, operation_id
 
 def _stage_copy(*, root, title_folder, operation_id, media_key=None,
                 persist_intent=False, fault_at=None, planned_move=None, planned_destination=None,
-                _held_binding=None, _before_intent_review=None, _before_intent_check=None):
+                _held_binding=None, _before_intent_review=None, _before_intent_check=None,
+                _refresh_after_hash=None):
     """Create an exclusive hidden staged copy; retain source and tracking state.
 
     Requires trusted local transport primitives (exclusive create, fsync, reads).
@@ -277,6 +278,11 @@ def _stage_copy(*, root, title_folder, operation_id, media_key=None,
                 current_manifest, current_identities = _manifest(source_fd)
                 if before != current_manifest or identities != current_identities:
                     raise RuntimeError("Copy source changed before intent")
+                if _refresh_after_hash is not None:
+                    from app.sqlite_copy_live_verification import refresh_hashed_copy
+                    refresh_hashed_copy(trees=((source_fd, current_identities),),
+                                        refresh=_refresh_after_hash,
+                                        check_window=_before_intent_check)
                 verify_source_binding("before intent")
                 verify_binding()
                 session.read_verified_snapshot()

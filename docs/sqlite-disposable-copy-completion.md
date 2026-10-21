@@ -37,22 +37,34 @@ final commit is inspected by reopening SQLite; it is never retried. A committed
 transaction contains the new clock, Arr queue/retention record and no intent,
 while an uncommitted one retains old tracking plus the durable retirement intent.
 
-The completion rehearsal starts a new bounded observation window after staging
-and its content verification finish. Two new complete observations must match
-the original title identity and every protection signal before publication. Both
-wall and monotonic clocks must remain nondecreasing across the transfer; renewal
-cannot conceal a reversal. The configured 1–60 second limit remains unchanged.
-This renewal exists only in the same live invocation, under its held lab lock;
-persisted pending intents cannot be resumed. The original plan, source clock,
-revision checks and conservative lifecycle timestamp remain bound throughout.
+The live completion rehearsal performs expensive full content hashing before
+fresh protection collection at four boundaries: before the copy intent, before
+publication, before source quarantine, and before lifecycle reconciliation.
+Each boundary requires two complete observations matching the original identity
+and every protection signal. After those scans, a no-follow whole-tree metadata
+walk must exactly match the file/directory identities, sizes and nanosecond
+mtime/ctime observed while hashing. Hashes are still computed and compared;
+metadata is an additional race check, never a substitute for content digests or
+proof that a persisted operation completed.
 
-Initial pre-intent hashing must still fit its original window. Publication and
-completion hashing/checkpoints must fit the renewed window. Deadline checks run
-immediately before publication and source-quarantine renames, and before the
-completion checkpoint. Slow hashing or checks can still stop with retained data
-and a pending intent. Arbitrarily long hashing, asynchronous fresh replanning
-and production writer exclusion remain unresolved. A tiny-fixture pass does not
-establish large-library production readiness.
+Only this live invocation can start each bounded 1–60 second collection window.
+Both wall and monotonic clocks must remain nondecreasing across hashing and
+copying. Collection, metadata walks and revision checks must fit the fresh
+window, with the deadline checked immediately before the following action.
+Slow collection/metadata traversal or a checkpoint delay stops execution. Metadata is rechecked after the publication/retirement
+intent checkpoint and before either rename; retained-source path binding is
+also rechecked after final collection. The original plan and conservative
+lifecycle timestamp stay bound throughout. A successful completion performs
+nine complete scans: initial planning plus two for each of the four boundaries.
+
+If protection, content, metadata, path binding or SQLite revision changes after
+publication/quarantine, the intent remains pending and original bytes remain at
+the original or retained path. There is no rollback-by-copy, source deletion,
+automatic retry or restart clearance. Snapshot metadata cannot grant authority
+to resume. External writers are not excluded; privileged writers or filesystems
+that do not expose changes reliably remain outside this prototype's proof. This
+is not a reviewed production verifier, asynchronous worker or capability
+fallback for filesystems without atomic no-replace publication.
 
 This is an isolated workflow for the optional atomic no-replace strategy. It does
 not implement a safe publication alternative on unsupported filesystems, source
