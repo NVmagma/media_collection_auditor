@@ -581,3 +581,21 @@ independently enforced write denial, restart control, live protection reads and
 safe recovery before any production move. Fresh deployment metadata and the
 host job/share inventory are the next inputs; a window preference is not an
 executable permit. Gate states and production activation/deletion stay unchanged.
+
+## External-writer inventory review after `ce41179`
+
+The user supplied the requested selected-field deployment inventory. It confirms
+active broad writable media routes, nested Jellyfin routes, stopped potential
+writers, automatic restart policies, a privileged potential writer and Docker
+socket administrative routes. Share configuration observations do not establish
+effective write denial. The host job/manual-transfer inventory remains pending;
+no absence of host writers is inferred.
+
+The maintenance ownership plan now maps these roles to required controls and
+explicitly keeps Jellyfin protection reads available. Arr outcomes must be
+resolved before restoring its media write access. Passing checkout tests do
+not identify the running auditor image or make its cooperation authoritative.
+No service/configuration changes or production execution were authorized or
+performed. No gate changes status; the next required input is the remaining
+host/share writer map, followed by a real enforcement backend and disposable
+controller-failure acceptance tests.

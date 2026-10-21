@@ -99,3 +99,58 @@ names/schedulers of relevant host jobs or manual transfers. Names and their
 write destinations are sufficient for review; do not paste secrets or complete
 job command lines. These inputs let us propose specific changes and a restore
 procedure for approval before touching the running deployment.
+
+## Review of the supplied current deployment inventory
+
+The refreshed selected-field inventory is sufficient to classify container
+control requirements, but not to grant ownership. The raw container inventory,
+private paths and unrelated application configuration are not copied here.
+
+| Observed role | Proposed maintenance control to review | Required verification before moves |
+| --- | --- | --- |
+| Active auditor with writable media and tracking mounts | Fence the existing writer during cutover; allow only the approved worker to own the move scope | Deployed revision/configuration and shared lock identity; lab checkout tests do not identify the running image |
+| Active Radarr/Sonarr with broad writable media views and automatic restart policies | Deny scoped media writes and prevent uncontrolled restoration/restart | Every overlapping mount/alias and existing writer handle is covered; API path reconciliation can still be completed safely |
+| Active Jellyfin with broad and nested writable media views | Provide a reviewed read-only media profile while keeping protection API/config/cache available | Both parent and nested media views deny writes; fresh protection collection still succeeds |
+| Stopped ripper with broad media access, privileged mode and an automatic restart policy | Include it in restart/admin control; stopped state alone does not remove it from scope | It cannot start and regain scoped write or administrative access during the window |
+| Stopped music manager with a broad media view | Keep the potential write route fenced until normal restoration | Its broad view is accounted for even though its intended content differs |
+| Download/audio tools with writable media subdirectories | Classify actual overlap and indirect import routes before deciding which require fencing | No inference that a similarly named subtree is isolated; unrelated verified scopes need not be stopped |
+| Dashboard/container-management clients with Docker socket mounts | Review their administrative authority and prevent automation from reopening fenced writers | A read-only socket bind is not proof of a read-only Docker API |
+| Network shares | Establish effective protocol/export/access rules and deny scoped writes through the window | Existing clients/handles and reconnects cannot write; selected share settings alone do not prove this |
+| Host jobs/manual transfers | Inventory still incomplete | Names, schedulers, destinations and enforcement/restoration steps must be known |
+
+No listed container is automatically authorized for stopping, recreation or
+mount changes. An absent added-capability list or non-privileged setting does
+not establish complete containment. Likewise `restart=no` does not exclude
+host schedules, management tools or manual starts. Container snapshots remain
+observations, not a continuously enforced boundary.
+
+### Service availability and restoration ordering
+
+Prefer an independently verified denial of scoped media writes while required
+read APIs remain available. Jellyfin cannot simply be stopped and replaced with
+cached protection data. For Arr, any maintenance profile must also support safe
+path/monitoring reconciliation after the filesystem checkpoint. The existing
+client requests `moveFiles=false`, but that request field is not proof of service
+behavior or an independently verified Arr outcome.
+
+Do not restore Arr filesystem write access while its path outcome is unresolved:
+a restart into stale paths can reintroduce the competing writer before handoff
+is complete. Pending queue/outcome verification, fresh protection collection,
+worker ownership and restoration must be designed together. Those production
+integrations and their failure ordering are still unimplemented/unapproved.
+
+### Next implementation acceptance work
+
+1. Finish the host/share writer map and identify the exact enforcement backend
+   and administrative boundary. Do not substitute a checklist acknowledgement
+   or a period of quiet activity for write denial.
+2. Build its controller and persistent maintenance journal against disposable
+   services/storage first. It must own scope identity and restart prevention;
+   observer metadata is not an executor permit.
+3. Exercise old and new writer handles, alternate paths, queued imports, client
+   reconnects, controller/worker crashes and unknown SQLite/Arr outcomes. Loss
+   of control must preserve the fence and pending evidence, not restore access
+   automatically.
+4. Only after that review, propose the concrete production entry/exit procedure
+   and request approval to apply it. Existing move capability checks, blocked
+   production backend and separately disabled deletion remain authoritative.
