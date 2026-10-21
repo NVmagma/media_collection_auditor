@@ -43,3 +43,18 @@ class DashboardStateErrorTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_invalid_snapshot_reaches_dashboard_error_banner(tmp_path, monkeypatch):
+    path = tmp_path / "state.json"
+    path.write_text('{"first_seen":[]}')
+    monkeypatch.setattr(web, "STATE_FILE", str(path))
+    monkeypatch.setattr(web, "load_actions", lambda: [])
+    monkeypatch.setattr(web, "load_config", lambda: {"ENABLE_MOVIES": "false", "ENABLE_TV": "false"})
+    monkeypatch.setattr(web, "_dashboard_signals", lambda config: None)
+    monkeypatch.setattr(web, "read_history", lambda limit: [])
+    monkeypatch.setattr(web, "render_template", lambda *args, **kwargs: kwargs)
+    with web.app.test_request_context("/"):
+        result = web.dashboard()
+    assert "tracking state is unreadable" in result["state_error"]
+    assert result["state"] == {}

@@ -347,3 +347,21 @@ an unchanged SQLite/local binding. Reports remain non-authorizing; no retry,
 queue removal or intent clearance is implemented. See
 [the isolated Arr readback contract](sqlite-isolated-arr-readback.md). Synthetic
 HTTP regressions do not assert a live Arr test occurred. No gate is completed.
+
+## Consolidated Unraid evidence through `29c6d07`
+
+The user confirmed 267 tests and 11 subtests passed on shfs and again on native
+Btrfs, including the GET-only Arr readback milestone. Service responses in these
+regressions are synthetic; no live Arr readback or production action is implied.
+The Requests warning was non-failing. No gate is newly complete.
+
+### Dashboard snapshot consistency increment
+
+The live JSON dashboard now uses an explicit validated snapshot boundary and
+shows malformed/duplicate tracking JSON as an error. Detached consumer copies
+and an explicitly invoked revision-bound experimental SQLite reader support
+[dashboard parity rehearsals](sqlite-dashboard-snapshot-contract.md) against the
+real inventory/health functions. Concurrent changes and pending operations fail
+closed. Live backend selection remains JSON; stricter damaged-state validation
+is the production-visible change. Gate 9 remains in progress; server validation
+for this increment is pending.

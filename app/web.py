@@ -120,14 +120,9 @@ def load_actions(limit=250):
 
 
 def load_state():
-    path = Path(STATE_FILE)
-    if not path.exists():
-        return {}
-    try:
-        with path.open() as handle:
-            return json.load(handle)
-    except (OSError, json.JSONDecodeError, UnicodeError) as exc:
-        raise RuntimeError("Dashboard tracking state is unreadable; displayed lifecycle dates may be incomplete") from exc
+    from dashboard_tracking_snapshot import read_json_dashboard_snapshot
+    # The live dashboard has one authority. SQLite reads are separate rehearsals.
+    return read_json_dashboard_snapshot(STATE_FILE).state
 
 
 
