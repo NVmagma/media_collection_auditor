@@ -674,3 +674,25 @@ pass 90 tests; the new writer checks await Unraid execution.
 This harness constrains only its own cooperating writer. It does not constrain
 ordinary filesystem writes, NFS clients or containers, and supplies no production
 ownership permit. Gate 6 and all existing production blockers remain open.
+
+### Maintenance harness consolidated baseline through `1773d63`
+
+The user confirmed 90 maintenance tests pass on both Unraid lab paths (shfs
+21.40s, native 26.34s). The maintained consolidated integration suite also passes
+locally on macOS: 475 tests and 19 subtests, using the standard runner without
+publication capability flags. This exercises maintenance checks together with
+migration, recovery, lifecycle, integration, JSON rescue and runtime checks.
+It is not Linux publication evidence and does not replace a full Unraid run.
+
+This completes the current synthetic maintenance-harness increment. Further
+synthetic phase/receipt tests must not be reported as progress on independent
+external enforcement. The next gate-6 implementation milestone is a real
+deployment adapter with externally observed write denial, including existing
+clients, restart control and protection API availability. A journal record,
+fixture receipt or cooperative writer result cannot satisfy that milestone.
+
+Before advancing that adapter, consolidate the current branch on Unraid using
+the maintained suite on shfs and the full suite on the native lab path. The last
+full native baseline remains 1,583 tests/22 subtests through `fff83c0` until a
+new complete result is supplied. No production configuration/image change or
+expensive Actions/build run is needed for this consolidation.
