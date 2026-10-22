@@ -799,3 +799,22 @@ an independently enforced deployment mechanism prevents it. Review of Unraid's
 persistent NFS preference, settings apply/reload and startup paths is the next
 implementation prerequisite. No production service action or activation is
 authorized by the successful lab result.
+
+### Restart-source identity confirmed; private dispatch guard prepared
+
+The user confirmed both selected NFS preferences are enabled and all six
+installed hashes match the reviewed upstream revision. No restart mechanism
+is accepted from these observations alone.
+
+The new `--restart-guard` lab installs a deny-only guard at both service paths
+inside its private mount namespace. After controller death it attempts all
+six known dispatches at each path, then exact-hash copies of settings apply and
+network update, using private boot/spool/queue and inert unrelated services.
+The independent RPC client must still fail to complete a new fixture write,
+and journal intent must remain pending. Host service/share-config hashes are
+also compared before/after. No host guard, plugin or boot hook is installed.
+
+Local maintained checks pass 528 tests and 19 subtests. Actual private guard
+execution is pending on Unraid. Boot persistence and direct privileged bypasses
+remain unverified; production restart inhibition and writer exclusion stay
+false, with no production gate closure or activation change.

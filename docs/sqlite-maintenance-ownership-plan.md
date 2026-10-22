@@ -223,6 +223,42 @@ preserving a protected pending journal and avoiding unconditional restoration.
 Unreviewed startup/custom-script routes remain unknown. No host wrapper,
 configuration edit, plugin or boot hook is installed by this discovery step.
 
+### Installed-source confirmation and private entry-point guard
+
+The user confirmed persistent and runtime `shareNFSEnabled=yes` and matching
+hashes for all six reviewed source files through `41bd286`. That confirms
+reviewed bytes, not a continuous restart fence or complete startup inventory.
+
+`--restart-guard` extends the private client lab after controller death. Its
+deny-only guard returns 75 for every dispatch, including stop/status and unknown
+arguments, before any original helper/default sourcing. Bash privileged mode
+ignores environment startup hooks and imported functions. There is no delegation
+path, timer expiry, journal-derived allow flag or automatic restoration. Only
+the lab installs it, as read-only private bind mounts at both known rc.nfsd
+paths. The source file remains outside the client's control/data mounts.
+
+The lab independently verifies zero NFSD threads after 12 denied dispatches,
+then exercises exact-hash copies of the installed settings and network-update
+scripts. Settings writes hit private `/boot`; queue commands use a fixture
+queue and private spool; unrelated service dispatches and logger are inert
+private fixtures. The host's configuration, queue and original service file
+are not modified. The outer harness also compares host service/share-config
+hashes in addition to thread/export observations. Unknown reviewed-source hashes
+fail before any copied service code runs.
+
+After those attempts, a new independent RPC write must still be unavailable,
+fixture hashes must remain unchanged and the SQLite request must remain pending.
+Local maintained checks pass 528 tests/19 subtests, including guard environment
+and dispatch cases. Actual private entry-point acceptance awaits Unraid.
+
+This is not a host guard installer and does not establish persistent restart
+inhibition. Private mounts disappear with the lab; production boot ordering,
+upgrade/replacement, direct privileged daemon/control access and other writer
+routes remain unresolved. Production reports must keep restart inhibition and
+writer exclusion false. The guard deliberately blocks stop/status as well;
+a production enforcer would require separate reviewed pause/observation paths
+and explicit installation/restoration approval.
+
 ## Implemented disposable journal foundation
 
 `app/sqlite_disposable_maintenance_journal.py` creates only new fixture roots.

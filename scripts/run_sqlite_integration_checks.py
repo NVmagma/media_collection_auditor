@@ -14,6 +14,7 @@ import sys
 TESTS = (
     "test_sqlite_nfs_namespace_probe", "test_sqlite_nfs_thread_lab",
     "test_sqlite_nfs_rpc_client_lab", "test_sqlite_nfs_client_lab_isolation",
+    "test_sqlite_nfs_restart_probe", "test_sqlite_nfs_restart_guard",
     "test_sqlite_disposable_maintenance_journal",
     "test_sqlite_disposable_maintenance_controller",
     "test_sqlite_maintenance_scope_binding",

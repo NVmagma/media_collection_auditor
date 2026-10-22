@@ -1,23 +1,27 @@
 #!/usr/bin/env bash
 # Real NFSv3 RPC fixture; private net/PID/mount namespaces and private RPC state.
-# No host service scripts, production exports, client kernel mounts or builds.
+# No production controls, exports, client kernel mounts or builds.
+# Reviewed settings/update copies run only inside the optional private guard lab.
 # --controller-crash leaves the private server stopped and journal pending.
 set -euo pipefail
 printf '%s\n' 'production_activation=disabled' 'writer_exclusion_verified=false'
 if [ "$#" -lt 1 ] || [ "$#" -gt 2 ] || [ "$(uname -s)" != Linux ] || [ "$EUID" -ne 0 ]; then
-  printf '%s\n' 'Usage: bash scripts/sqlite_nfs_client_lab.sh EXISTING_ABSOLUTE_LAB_PARENT [--controller-crash]' >&2
+  printf '%s\n' 'Usage: bash scripts/sqlite_nfs_client_lab.sh EXISTING_ABSOLUTE_LAB_PARENT [--controller-crash|--restart-guard]' >&2
   exit 2
 fi
 scenario=restore
 if [ "$#" = 2 ]; then
-  [ "$2" = --controller-crash ] || { printf '%s\n' 'blocked=unknown_scenario' >&2; exit 2; }
-  scenario=controller-crash
+  case "$2" in
+    --controller-crash) scenario=controller-crash;;
+    --restart-guard) scenario=restart-guard;;
+    *) printf '%s\n' 'blocked=unknown_scenario' >&2; exit 2;;
+  esac
 fi
 parent=$1
 case "$parent" in /*) :;; *) exit 2;; esac
 # Restriction belongs to this shell lab's generated export syntax, not the app.
 case "$parent" in *[!a-zA-Z0-9_./-]*) printf '%s\n' 'blocked=unsupported_lab_path_characters' >&2; exit 2;; esac
-for dependency in docker nsenter unshare timeout mount umount readlink mktemp cat awk stat ip rpcbind rpc.mountd rpcinfo exportfs sha256sum cp mkdir sleep seq touch dirname tail; do
+for dependency in docker nsenter unshare timeout mount umount readlink mktemp cat awk stat ip rpcbind rpc.mountd rpcinfo exportfs sha256sum cp mkdir sleep seq touch dirname tail chmod grep; do
   command -v "$dependency" >/dev/null 2>&1 || { printf 'blocked=missing:%s\n' "$dependency" >&2; exit 2; }
 done
 [ -d "$parent" ] && [ "$(readlink -f "$parent")" = "$parent" ]
@@ -31,6 +35,8 @@ host_threads=$(cat /proc/fs/nfsd/threads)
 case "$host_threads" in ''|*[!0-9]*) exit 2;; esac
 host_exports=$(sha256sum /etc/exports | awk '{print $1}')
 host_etab=$(sha256sum /var/lib/nfs/etab | awk '{print $1}')
+host_service=$(sha256sum /usr/local/etc/rc.d/rc.nfsd | awk '{print $1}')
+host_share_config=$(sha256sum /boot/config/share.cfg | awk '{print $1}')
 lab=$(mktemp -d "$parent/nfs-client.XXXXXX")
 mkdir "$lab/control" "$lab/data" "$lab/etc"
 printf 'DISPOSABLE NFS RPC LAB\n' > "$lab/control/.disposable_nfs_rpc"
@@ -41,6 +47,18 @@ for item in netconfig services passwd group nsswitch.conf hosts; do
 done
 printf '%s 127.0.0.1(rw,sync,no_subtree_check,no_root_squash,insecure,fsid=28173)\n' "$lab/data" > "$lab/etc/exports"
 printf '[general]\nstate-directory-path=/var/lib/nfs\n' > "$lab/etc/nfs.conf"
+if [ "$scenario" = restart-guard ]; then
+  mkdir "$lab/reviewed"
+  copy_reviewed(){
+    cp -- "$1" "$lab/reviewed/$2"
+    [ "$(sha256sum "$lab/reviewed/$2" | awk '{print $1}')" = "$3" ]
+  }
+  copy_reviewed /usr/local/emhttp/plugins/dynamix/scripts/nfsSettings nfsSettings e7c0ad009544cea2cf204876acf35bb89ac3b4974d838e8a158645ac90c4532b
+  copy_reviewed /usr/local/emhttp/plugins/dynamix/scripts/reload_services reload_services e4e944ece1006bfbb1afeb79d203d374b2a37b979e4bc027787673dfe3af07a7
+  copy_reviewed /etc/rc.d/rc.runlog rc.runlog 70cb99b67bba06c3502ad071d8be13b10780d05c76c50cf2839c619846a8020d
+  cp -- "$repo/scripts/sqlite_nfs_restart_guard.sh" "$lab/restart-guard.sh"
+  chmod 0555 "$lab/restart-guard.sh"
+fi
 container_id=
 client_net_fd=
 cleanup(){
@@ -70,9 +88,10 @@ server_status=0
 timeout --kill-after=5s 100s \
   nsenter --net="/proc/self/fd/$client_net_fd" \
   unshare --mount --pid --fork --kill-child --mount-proc --propagation private \
-  bash -euo pipefail -s -- "$lab" "$host_net" "$host_mnt" "$host_control" "$client_net" "$scenario" <<'SERVER' || server_status=$?
+  bash -euo pipefail -s -- "$lab" "$host_net" "$host_mnt" "$host_control" "$client_net" "$scenario" "$repo/scripts/sqlite_nfs_restart_entrypoint_lab.sh" <<'SERVER' || server_status=$?
 lab=$1; host_net=$2; host_mnt=$3; host_control=$4; client_net=$5
 scenario=${6:-restore}
+restart_helper=${7:-}
 control=/proc/fs/nfsd
 namespaces(){
   [ "$(readlink /proc/self/ns/net)" = "$client_net" ] &&
@@ -125,6 +144,10 @@ payload_matches(){
   expected=$(printf '%s\n' "$1" | sha256sum | awk '{print $1}')
   [ "$(sha256sum "$lab/data/payload.bin" | awk '{print $1}')" = "$expected" ]
 }
+if [ "$scenario" = restart-guard ]; then
+  . "$restart_helper"
+  prepare_restart_guard
+fi
 verify
 printf '%s\n' '-4' > "$control/versions"
 versions=$(cat "$control/versions")
@@ -159,11 +182,11 @@ pause_controller(){
   verify
   [ "$(cat "$control/threads")" = 0 ]
   touch "$lab/control/server.paused"
-  if [ "$scenario" = controller-crash ]; then
+  if [ "$scenario" != restore ]; then
     while :; do sleep 1; done
   fi
 }
-if [ "$scenario" = controller-crash ]; then
+if [ "$scenario" != restore ]; then
   # Independent worker: PID-namespace init and RPC helpers stay alive when killed.
   pause_controller &
   pause_pid=$!
@@ -177,7 +200,7 @@ verify
 [ "$(cat "$control/threads")" = 0 ]
 payload_matches 'BEFORE!'
 printf '%s\n' 'paused_fixture_bytes_unchanged=true'
-if [ "$scenario" = controller-crash ]; then
+if [ "$scenario" != restore ]; then
   [ "$(readlink "/proc/$pause_pid/ns/net")" = "$client_net" ]
   kill -KILL "$pause_pid"
   pause_exit=0
@@ -186,6 +209,11 @@ if [ "$scenario" = controller-crash ]; then
   printf '%s\n' 'pause_controller_killed=true'
   touch "$lab/control/server.controller-dead"
   wait_file client.after-death-blocked
+  if [ "$scenario" = restart-guard ]; then
+    exercise_restart_entrypoints
+    touch "$lab/control/server.restart-attempts-blocked"
+    wait_file client.restart-probes-complete
+  fi
   wait_file client.complete
   verify
   [ "$(cat "$control/threads")" = 0 ]
@@ -212,9 +240,11 @@ printf 'host_threads_after=%s\n' "$after"
 docker logs "$container_id"
 if [ "$server_status" -ne 0 ] || [ "$after" != "$host_threads" ] ||
    [ "$(sha256sum /etc/exports | awk '{print $1}')" != "$host_exports" ] ||
-   [ "$(sha256sum /var/lib/nfs/etab | awk '{print $1}')" != "$host_etab" ]; then
+   [ "$(sha256sum /var/lib/nfs/etab | awk '{print $1}')" != "$host_etab" ] ||
+   [ "$(sha256sum /usr/local/etc/rc.d/rc.nfsd | awk '{print $1}')" != "$host_service" ] ||
+   [ "$(sha256sum /boot/config/share.cfg | awk '{print $1}')" != "$host_share_config" ]; then
   printf '%s\n' 'status=blocked' 'Lab artifacts retained; no host correction or write retry.'
-  for log in rpcbind mountd exportfs; do
+  for log in rpcbind mountd exportfs guard-attempts settings-apply network-update; do
     if [ -f "$lab/$log.log" ]; then
       printf 'Private lab log: %s\n' "$log"
       tail -n 12 "$lab/$log.log"
@@ -224,7 +254,9 @@ if [ "$server_status" -ne 0 ] || [ "$after" != "$host_threads" ] ||
 fi
 client_status=$(timeout 10s docker wait "$container_id")
 [ "$client_status" = 0 ]
-if [ "$scenario" = controller-crash ]; then
+if [ "$scenario" = restart-guard ]; then
+  printf '%s\n' 'status=isolated_NFSv3_restart_entrypoints_complete'
+elif [ "$scenario" = controller-crash ]; then
   printf '%s\n' 'status=isolated_NFSv3_controller_crash_complete'
 else
   printf '%s\n' 'status=isolated_NFSv3_RPC_fixture_complete'

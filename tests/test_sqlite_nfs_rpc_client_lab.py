@@ -125,7 +125,7 @@ def test_protocol_error_while_paused_is_not_reported_as_denial(tmp_path, monkeyp
     assert marks == ["client.ready"]
 
 
-def crash_fixture(monkeypatch, *, complete_crash_write=False):
+def crash_fixture(monkeypatch, *, complete_crash_write=False, complete_guard_write=False):
     events = []
     monkeypatch.setattr(client, "connect", lambda _: Socket())
     monkeypatch.setattr(client, "file_handle", lambda _: b"handle")
@@ -134,7 +134,8 @@ def crash_fixture(monkeypatch, *, complete_crash_write=False):
     def write(sock, handle, payload):
         events.append(payload)
         if payload in (b"DURING!\n", b"NEWTRY!\n") or (
-                payload == b"CRASH!!\n" and not complete_crash_write):
+                payload == b"CRASH!!\n" and not complete_crash_write) or (
+                payload == b"GUARD!!\n" and not complete_guard_write):
             raise ConnectionResetError("fixture transport unavailable")
     monkeypatch.setattr(client, "write", write)
     return events
@@ -187,4 +188,24 @@ def test_existing_crash_journal_stops_before_pause_request(tmp_path, monkeypatch
     with pytest.raises(FileExistsError):
         client.run(tmp_path, "/fixture/data", "controller-crash")
     assert "client.ready" not in events
+    assert client.pending_journal(tmp_path) == "fence_requested"
+
+
+def test_restart_guard_requires_new_independent_rpc_probe(tmp_path, monkeypatch):
+    events = crash_fixture(monkeypatch)
+    report = client.run(tmp_path, "/fixture/data", "restart-guard")
+    assert report["status"] == "fixture_restart_entrypoints_complete"
+    assert events[-4:] == ["server.restart-attempts-blocked", b"GUARD!!\n",
+                           "client.restart-probes-complete", "client.complete"]
+    assert report["pending_phase"] == "fence_requested"
+    assert report["restart_inhibition_verified"] is False
+    assert b"AFTER!!\n" not in events
+
+
+def test_completed_write_after_restart_attempts_fails_acceptance(tmp_path, monkeypatch):
+    events = crash_fixture(monkeypatch, complete_guard_write=True)
+    with pytest.raises(RuntimeError, match="guarded restart attempts"):
+        client.run(tmp_path, "/fixture/data", "restart-guard")
+    assert "client.restart-probes-complete" not in events
+    assert "client.complete" not in events
     assert client.pending_journal(tmp_path) == "fence_requested"

@@ -130,7 +130,7 @@ def file_handle(export):
 
 
 def write(sock, handle, payload):
-    if payload not in (b"BEFORE!\n", b"DURING!\n", b"NEWTRY!\n", b"AFTER!!\n", b"CRASH!!\n"):
+    if payload not in (b"BEFORE!\n", b"DURING!\n", b"NEWTRY!\n", b"AFTER!!\n", b"CRASH!!\n", b"GUARD!!\n"):
         raise ValueError("Fixed disposable payload required")
     arguments = opaque(handle) + struct.pack("!QII", 0, 8, 2) + opaque(payload)
     result = exchange(sock, 100003, 7, arguments)
@@ -174,13 +174,13 @@ def pending_journal(control):
 
 
 def run(control, export, scenario="restore"):
-    if scenario not in ("restore", "controller-crash"):
+    if scenario not in ("restore", "controller-crash", "restart-guard"):
         raise ValueError("Unknown disposable scenario")
     wait(control, "server.ready")
     handle = file_handle(export)
     with closing(connect(2049)) as old:
         write(old, handle, b"BEFORE!\n")
-        if scenario == "controller-crash":
+        if scenario != "restore":
             # Committed before client.ready allows the pause worker to act.
             # No completion is inferred from observed pause or matching bytes.
             prepare_pending_journal(control)
@@ -200,7 +200,7 @@ def run(control, export, scenario="restore"):
     else:
         raise RuntimeError("New RPC connection completed a write while paused")
     mark(control, "client.blocked")
-    if scenario == "controller-crash":
+    if scenario != "restore":
         wait(control, "server.controller-dead")
         try:
             with closing(connect(2049)) as fresh:
@@ -211,8 +211,20 @@ def run(control, export, scenario="restore"):
             raise RuntimeError("Write completed after pause-controller death")
         phase = pending_journal(control)
         mark(control, "client.after-death-blocked")
+        if scenario == "restart-guard":
+            wait(control, "server.restart-attempts-blocked")
+            try:
+                with closing(connect(2049)) as fresh:
+                    write(fresh, handle, b"GUARD!!\n")
+            except OSError:
+                pass
+            else:
+                raise RuntimeError("Write completed after guarded restart attempts")
+            phase = pending_journal(control)
+            mark(control, "client.restart-probes-complete")
         mark(control, "client.complete")
-        return {"status": "fixture_controller_crash_complete",
+        return {"status": ("fixture_restart_entrypoints_complete" if scenario == "restart-guard"
+                           else "fixture_controller_crash_complete"),
                 "pending_phase": phase, "automatic_write_retries": 0,
                 "automatic_restoration": False, "production_authorized": False,
                 "writer_exclusion_verified": False, "production_activation": "disabled",
@@ -233,7 +245,7 @@ def main():
     parser.add_argument("--control", required=True)
     parser.add_argument("--export", required=True)
     parser.add_argument("--host-netns", required=True)
-    parser.add_argument("--scenario", choices=("restore", "controller-crash"), default="restore")
+    parser.add_argument("--scenario", choices=("restore", "controller-crash", "restart-guard"), default="restore")
     args = parser.parse_args()
     control = Path(args.control)
     try:
