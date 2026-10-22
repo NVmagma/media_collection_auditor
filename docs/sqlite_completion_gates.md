@@ -649,3 +649,14 @@ and no replay after uncertain outcomes. Local focused checks pass 69 tests,
 including subprocess exit after action but before outcome and lock replacement.
 New controller checks on Unraid are pending. No real NFS/container adapter,
 production permit or gate closure is introduced.
+
+### Synthetic controller evidence and fixture scope binding
+
+The user confirmed 69 focused tests pass on both Unraid lab paths (shfs 13.68s,
+native 16.16s). The subsequent increment binds new disposable journals to their
+canonical directory and directory/database identities, rejects missing scope
+bindings, and independently verifies synthetic receipt identity/content before
+recording completion. Local focused checks pass 81 tests, including scope and
+receipt replacement failures. These new identity checks await Unraid evidence.
+No external-writer exclusion or production gate is claimed; the NFS/container
+enforcement backend remains unfinished.

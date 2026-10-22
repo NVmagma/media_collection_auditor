@@ -14,6 +14,7 @@ import sys
 TESTS = (
     "test_sqlite_disposable_maintenance_journal",
     "test_sqlite_disposable_maintenance_controller",
+    "test_sqlite_maintenance_scope_binding",
     "test_sqlite_disposable_cutover_rehearsal", "test_sqlite_cutover_process_lock",
     "test_sqlite_lock", "test_sqlite_migration", "test_sqlite_migration_interruptions",
     "test_sqlite_disposable_rollback", "test_sqlite_rollback_json_restart",

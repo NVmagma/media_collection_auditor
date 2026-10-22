@@ -93,7 +93,7 @@ def test_controller_lock_spans_action(tmp_path, monkeypatch):
     def compete(root, action):
         with pytest.raises(StateLockBusy):
             advance(root, expected_revision=1, phase="fixture_fenced")
-        original(root, action)
+        return original(root, action)
     monkeypatch.setattr(controller, "_receipt", compete)
     assert controller.fence_disposable_fixture(root, expected_revision=0)["phase"] == "fixture_fenced"
 

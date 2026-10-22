@@ -40,6 +40,9 @@ def create_disposable_journal(root):
         os.fsync(output.fileno())
     with closing(sqlite3.connect(root / "maintenance.db")) as db, db:
         db.execute("PRAGMA synchronous=FULL")
+        db.execute("CREATE TABLE fixture_binding (path TEXT NOT NULL, root_device INTEGER NOT NULL, "
+                   "root_inode INTEGER NOT NULL, db_device INTEGER NOT NULL, db_inode INTEGER NOT NULL)")
+        db.execute("INSERT INTO fixture_binding VALUES (?, ?, ?, ?, ?)", _identity(root))
         db.execute("CREATE TABLE events (revision INTEGER PRIMARY KEY, phase TEXT NOT NULL)")
         db.execute("INSERT INTO events VALUES (0, 'prepared')")
     directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
@@ -63,17 +66,42 @@ def _fixture(root):
         raise RuntimeError("Disposable fixture marker required")
 
 
+def _identity(root):
+    _root(root)
+    directory = root.lstat()
+    database = (root / "maintenance.db").lstat()
+    if (not stat.S_ISDIR(directory.st_mode) or not stat.S_ISREG(database.st_mode)
+            or database.st_nlink != 1):
+        raise RuntimeError("Unsafe disposable journal identity")
+    return (str(root), directory.st_dev, directory.st_ino, database.st_dev, database.st_ino)
+
+
+def _verify_binding(db, root):
+    try:
+        rows = db.execute("SELECT path, root_device, root_inode, db_device, db_inode "
+                          "FROM fixture_binding").fetchall()
+    except sqlite3.Error as exc:
+        raise RuntimeError("Disposable journal binding unavailable") from exc
+    if rows != [_identity(root)]:
+        raise RuntimeError("Disposable journal binding changed")
+
+
 @contextmanager
 def _database(root, *, with_verifier=False):
     root = _root(root)
     _fixture(root)
-    with _exclusive_lock(root / "controller.lock", "Disposable controller already held") as verify:
+    with _exclusive_lock(root / "controller.lock", "Disposable controller already held") as verify_lock:
         path = root / "maintenance.db"
         info = path.lstat()
         if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
             raise RuntimeError("Unsafe disposable journal")
         db = sqlite3.connect(path.as_uri() + "?mode=rw", uri=True)
         try:
+            def verify():
+                verify_lock()
+                _fixture(root)
+                _verify_binding(db, root)
+            verify()
             db.execute("PRAGMA synchronous=FULL")
             db.execute("BEGIN IMMEDIATE")
             verify()
@@ -128,7 +156,11 @@ def inspect_disposable_journal(root):
     if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
         raise RuntimeError("Unsafe disposable journal")
     with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True)) as db:
-        return _report(_history(db))
+        db.execute("BEGIN")
+        _verify_binding(db, root)
+        report = _report(_history(db))
+        _verify_binding(db, root)
+        return report
 
 
 def advance_disposable_journal(root, *, expected_revision, phase):

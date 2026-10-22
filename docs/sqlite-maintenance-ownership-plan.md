@@ -46,6 +46,25 @@ deleted; inspection does not infer recovery authority from them. A receipt is
 only a test artifact and does not deny writes. This tests action ordering, not
 external ownership or a working enforcement backend.
 
+### Fixture scope and receipt binding
+
+New journals persist the canonical fixture path and the directory/database
+device/inode identities. Inspection and controller boundaries reject missing
+bindings or copied/replaced scopes. The controller rechecks the binding and
+fixture marker before its synthetic action and before committing an outcome.
+It also independently verifies the exclusive receipt's identity, exact bytes
+and metadata; symlinks, hard links, replacement and missing receipts fail.
+An action followed by verification failure retains its durable pending request.
+
+These identities bind a disposable rehearsal to its observed scope, not to a
+filesystem brand. A filesystem that cannot preserve the required observations
+fails closed; there is no filesystem-name allowlist or identity bypass. This
+is not a proof against malicious concurrent file replacement, nor an external
+write fence. The trusted fixture-directory requirement still applies.
+Previous disposable journals without bindings are intentionally not upgraded
+or assigned a new scope automatically. Copies, relocations and changed identity
+after restart require review, not automatic reattachment or replay.
+
 ## Scope and required enforcement
 
 A maintenance window must cover the selected source and destination parents,
