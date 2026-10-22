@@ -750,3 +750,32 @@ administrator could start the stopped RW container or recreate an RW mount;
 those routes still require independent maintenance controls. All reports keep
 production authorization, restart inhibition and global writer exclusion false.
 No existing application is stopped or reconfigured, and Gate 6 stays open.
+
+### Accepted container fixture and advisory production-route review
+
+The user confirmed `caf3317` on both lab parents. Read responses remained fresh,
+media writes were denied before and after the new container restart, payload
+bytes were unchanged and the original disposable writer remained stopped.
+
+The next read-only host script enumerates existing containers before launching
+its observer, then streams only selected state/mount/restart/admin fields into
+a cached-image Python observer. The observer has no Docker socket, network,
+capabilities or writable root/source mounts. No environment, command-line or
+credential fields are requested. An end record is emitted only if every
+selected inspect succeeds; incomplete/malformed/bounded-out input is blocked.
+
+The analyzer marks source overlaps against all explicitly declared media roots
+and nested writable destination overlaps, even when a parent media mount is
+read-only. It keeps stopped containers in scope and reports administrative
+socket access regardless of a socket mount's RW flag, privileged/capability/
+device routes and writable non-bind mounts requiring review. An unrelated
+lexical prefix is not silently treated as a physical alias. Conversely, absence
+of a declared overlap never provides clearance: actual path resolution, hidden
+aliases, host/share writers, administrative restart controls and snapshot
+continuity remain unverified. These are review hints, not an enforcement plan
+or authorization to stop/reconfigure any application.
+
+For Tower, pass both `/mnt/user/media_storage` and `/mnt/media/media_storage` as
+explicit declared roots. This acknowledges the known deployment aliases without
+making them application defaults or assuming these are the only possible paths.
+The script never changes services, exports, mounts, restart policies or media.

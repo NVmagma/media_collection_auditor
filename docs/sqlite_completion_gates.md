@@ -38,11 +38,11 @@ control. More test cases alone cannot complete this gate.
 | Bind and verify disposable move evidence | Accepted path/content/source-retention tests; production verifier remains unwired |
 | Preserve uncertainty across controller failure | Accepted durable intent, boot/network checks, later-session rejection and read-only review |
 | Exercise NFS pause and known restart entry points | Accepted private NFSv3 RPC pause/crash/guard fixtures; no production restart fence |
-| Keep reads available while denying container media writes | Disposable Docker fixture implemented; actual mount/restart acceptance pending |
+| Keep reads available while denying container media writes | Accepted on shfs/native: fixture reads, EROFS media denial and container restart; live Jellyfin and full deployment controls remain unverified |
 | Enforce complete external-writer exclusion | Unimplemented for production: boot-mode restart controls, NFSv4/existing-client caches, all overlapping container/host routes and administrative bypasses need an accepted model |
 | Trust production move completion and recovery | Depends on accepted ownership controls, atomic source-entry fencing, fresh real protections and independent outcome verification; no production permit/clearance API |
 
-The next server check addresses the container read/write requirement only.
+The next server check is a selected-field mount review for overlapping deployment routes; it performs no enforcement.
 Gate 6 closes only after the production enforcement and verifier requirements
 above are implemented and their failure/recovery behavior is accepted. No
 reliable count of remaining test rounds or completion percentage is available.
@@ -931,3 +931,20 @@ acceptance is pending. Persistent host restart fencing,
 NFSv4/kernel-client behavior, complete production writer routes and live
 protection API availability remain open. These fixture results cannot remove
 any production implementation blocker or close Gate 6.
+
+
+### Container media policy accepted; deployment mount review prepared
+
+Tower confirmed `caf3317` on both shfs and native Btrfs: fixture reads remained
+available, writes failed with EROFS before/after restart, media bytes were
+unchanged and the original disposable writer remained stopped. This verifies
+the fixture mount policy, not live Jellyfin behavior or complete exclusion.
+
+An advisory selected-field Docker snapshot review now flags declared source
+aliases/ancestors, nested destination overlaps, stopped potential writers,
+sockets (including read-only socket mounts), added capabilities, privileged
+containers, device access and writable non-bind mounts. Missing/partial input
+fails closed. Paths are lexical observations; physical alias resolution and
+snapshot continuity remain unverified. No stop/remount/update commands, Docker
+socket mount or production permit are provided. Local maintained checks pass
+622 tests and 19 subtests. Gate 6 stays open.
