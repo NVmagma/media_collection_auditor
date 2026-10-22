@@ -622,3 +622,17 @@ drift and uncertain outcomes. No NFS/container configuration was changed.
 Gate 6 remains open: the enforcement controller and adapter are not implemented
 or verified. No further production inventory request follows from this result;
 isolated implementation and acceptance work must precede a production procedure.
+
+### Disposable maintenance journal foundation
+
+The new fixture-only maintenance journal persists ordered checkpoints with
+revision checks, process exclusion and explicit release ordering. Local focused
+journal, lock and production-guard checks pass (60 tests), including subprocess
+death at pending checkpoints and an uncommitted interrupted transaction.
+Read-only inspection never replays or clears pending history. Both authorization
+and external-writer verification remain false for every fixture phase.
+
+Unraid shfs/native durability verification is pending. This implements no NFS
+or container controls, grants no move permit and closes no production gate.
+The next enforcement work must bind actual controller actions and observed
+outcomes to protected scope identity and persistent history.

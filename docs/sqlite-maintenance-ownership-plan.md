@@ -6,6 +6,30 @@ permission to stop services, disable exports/jobs, remount storage, update an
 image, activate SQLite or delete media. Production remains JSON-authoritative.
 Gate 6 is open; no ownership enforcer is implemented or approved yet.
 
+## Implemented disposable journal foundation
+
+`app/sqlite_disposable_maintenance_journal.py` creates only new fixture roots.
+It records an ordered SQLite history: prepared, fence requested, fixture fenced,
+work pending, outcomes verified, release requested, released. Every advance
+requires the current integer revision and a nonblocking controller process lock.
+Skipped/replayed transitions and invalid histories fail closed. Durable commits
+use SQLite FULL synchronization; creation synchronizes the fixture directory
+and its parent. Unsupported synchronization fails rather than being ignored.
+
+Inspection opens an existing marked fixture read-only, never creates a missing
+database and never resumes/replays/releases anything. Forced process-exit tests
+retain each committed pending phase, and interrupted uncommitted changes leave
+the previous phase available for review. Records always report production
+authorization and external writer verification as false, even at completion.
+
+This is the journal foundation, not a working NFS/container controller: fixture
+phases are explicitly chosen rehearsal records and do not execute or verify
+their corresponding external action. The fixture directory must be trusted
+against unrelated writers during these tests; its marker and advisory lock are
+not a security boundary against an external process replacing files. Real
+scope binding, enforcement, administrative isolation and independently verified
+outcomes remain necessary before production integration.
+
 ## Scope and required enforcement
 
 A maintenance window must cover the selected source and destination parents,
