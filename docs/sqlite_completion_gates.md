@@ -1093,3 +1093,14 @@ or production authorization occurred. Widget rendering remains explicitly
 unverified. Next input is selected installed dashboard image metadata before
 choosing version-appropriate compatibility checks. Gate 6 and the deferred
 Tower kernel-client test boundary are unchanged.
+
+
+### Dashboard revisions received; complete Homarr import candidate
+
+Tower reports Homepage v2.6.0 at `51cc1684f9f34a7877ed462b8f94c9cc687b4dde`
+and Homarr version-label `main` at `9a38404f738f1e50e382095716cc08f3b3751182`.
+Public source at those revisions supports the relevant custom-widget features.
+A credential-free Homarr v2 import candidate now combines the template and two
+GET-only load queries, with zero request-cache duration. No upgrade or live
+configuration change was performed. Actual import/JSX validation, rendering and
+cache acceptance remain open; source review alone completes no SQLite gate.

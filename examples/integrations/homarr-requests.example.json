@@ -2,11 +2,21 @@
   "summary": {
     "source": "default",
     "method": "GET",
-    "path": "/api/v1/summary"
+    "path": "/api/v1/summary",
+    "kind": "query",
+    "trigger": "load",
+    "auth": "inherit",
+    "permission": "view",
+    "cacheSeconds": 0
   },
   "audit": {
     "source": "default",
     "method": "GET",
-    "path": "/api/v1/audit-status"
+    "path": "/api/v1/audit-status",
+    "kind": "query",
+    "trigger": "load",
+    "auth": "inherit",
+    "permission": "view",
+    "cacheSeconds": 0
   }
 }

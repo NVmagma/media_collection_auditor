@@ -3,7 +3,8 @@
 These are opt-in configuration examples, not a deployment step or a promise that
 the installed dashboards support the latest upstream format. They were checked
 against upstream documentation on October 22, 2026; no Homepage/Homarr instance
-has rendered them yet. Nothing here changes Tower's dashboards, containers,
+has rendered them yet. The [installed source review](integration-widget-version-review.md)
+confirms the relevant features at the supplied image-label revisions. Nothing here changes Tower's dashboards, containers,
 networking, NFS, media mounts or production storage authority.
 
 ## Prerequisites
@@ -50,23 +51,28 @@ Sources: [Custom API configuration](https://gethomepage.dev/widgets/services/cus
 ## Homarr with Custom Widgets v2
 
 Use these only if the installed Homarr has the documented Custom Widgets v2
-workbench. They are editor fragments, not a complete importable widget manifest.
+workbench. `examples/integrations/homarr-widget.example.json` is the complete
+import candidate; the requests/JSX files remain separate editor alternatives.
+The candidate still needs Homarr's own schema validation and preview acceptance.
 If the feature is absent, keep this integration pending rather than installing
 an unreviewed upgrade or exposing credentials through an iframe.
 
-1. Create a definition under Management → Custom Widgets. Configure an HTTP
+1. Import the complete candidate (or create a definition) under Management →
+   Custom Widgets. Configure an HTTP
    source named `default` with the auditor's base URL (without `/api/v1`). Select
    the network scope matching its address and bearer authentication. Enter the
    dedicated token in the source credential field, not in the definition/JSX.
 2. Add the named GET queries from `examples/integrations/homarr-requests.example.json`
    in the Requests editor. These use the documented default load-query behavior.
    Declare no actions and no audit/rescue/configuration requests.
-3. Paste `examples/integrations/homarr-template.example.jsx` in the JSX editor.
+3. The import already includes the JSX. For manual authoring, paste
+   `examples/integrations/homarr-template.example.jsx` in the JSX editor.
    It renders loading/errors before values and uses null-aware fallbacks. It
    shows coordinator flags separately from tracking records; neither verifies
    live media inventory or collector freshness.
 4. Use the workbench's Test/preview controls and schema validation before saving.
-   Configure a 60-second board refresh. Review any dashboard-side response cache
+   Configure a 60-second board refresh. The supplied queries request zero
+   server-cache duration. Review any other dashboard-side response cache
    settings; stale retained data must not be presented as verified current data.
 
 Source setup, bearer credentials, query paths and preview workflow follow

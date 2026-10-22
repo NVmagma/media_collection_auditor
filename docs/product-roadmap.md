@@ -34,7 +34,9 @@ Authenticated JSON tracking summary and redacted coordinator-status endpoints ar
 [API contract and disposable smoke command](integration-api.md). Readiness, version,
 verified freshness and actual vendor widget acceptance remain planned.
 [Configuration examples](integration-widgets.md) have been checked against
-upstream documentation; installed-version rendering is not yet verified.
+upstream documentation and the supplied installed image-label revisions.
+A complete credential-free Homarr import candidate is available; import/renderer
+acceptance remains open. See [version review](integration-widget-version-review.md).
 
 Initial contract proposal:
 

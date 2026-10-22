@@ -1,0 +1,38 @@
+{
+  "$schema": "homarr-custom-widget-v2",
+  "name": "Media Collection Auditor",
+  "description": "Read-only tracking records and audit coordinator observations; freshness unverified.",
+  "sources": {
+    "default": {
+      "type": "http",
+      "name": "Auditor",
+      "baseUrl": "https://auditor.example.invalid",
+      "networkScope": "private",
+      "auth": "bearer"
+    }
+  },
+  "requests": {
+    "summary": {
+      "source": "default",
+      "method": "GET",
+      "path": "/api/v1/summary",
+      "kind": "query",
+      "trigger": "load",
+      "auth": "inherit",
+      "permission": "view",
+      "cacheSeconds": 0
+    },
+    "audit": {
+      "source": "default",
+      "method": "GET",
+      "path": "/api/v1/audit-status",
+      "kind": "query",
+      "trigger": "load",
+      "auth": "inherit",
+      "permission": "view",
+      "cacheSeconds": 0
+    }
+  },
+  "options": {},
+  "template": "<Stack>\n  <Text fw={700}>Auditor tracking records</Text>\n  <Text size=\"sm\">Freshness unverified; counts are tracking records.</Text>\n  {status.summary?.loading ? (\n    <Text>Refreshing tracking records...</Text>\n  ) : !status.summary?.ok || data.summary?.schema_version !== 1 || data.summary?.status !== \"advisory_only\" || !data.summary?.tracking_counts ? (\n    <Text>Tracking records unavailable</Text>\n  ) : (\n    <Stack gap=\"xs\">\n      <Text>Waiting: {data.summary.tracking_counts.waiting ?? \"Unavailable\"}</Text>\n      <Text>Holding: {data.summary.tracking_counts.holding ?? \"Unavailable\"}</Text>\n      <Text>Keep: {data.summary.tracking_counts.keep ?? \"Unavailable\"}</Text>\n      <Text>Removal: {data.summary.tracking_counts.removal ?? \"Unavailable\"}</Text>\n      <Text>Arr pending: {data.summary.tracking_counts.arr_sync_pending ?? \"Unavailable\"}</Text>\n    </Stack>\n  )}\n  {status.audit?.loading ? (\n    <Text>Refreshing coordinator status...</Text>\n  ) : !status.audit?.ok || data.audit?.schema_version !== 1 || data.audit?.status !== \"advisory_only\" ? (\n    <Text>Coordinator status unavailable</Text>\n  ) : (\n    <Stack gap=\"xs\">\n      <Text>Running: {data.audit.running === true ? \"Yes\" : data.audit.running === false ? \"No\" : \"Unknown\"}</Text>\n      <Text>Queued: {data.audit.queued === true ? \"Yes\" : data.audit.queued === false ? \"No\" : \"Unknown\"}</Text>\n      <Text>Rescue active: {data.audit.rescuing === true ? \"Yes\" : data.audit.rescuing === false ? \"No\" : \"Unknown\"}</Text>\n      <Text>Last recorded result: {data.audit.last_result ?? \"Unknown\"}</Text>\n    </Stack>\n  )}\n</Stack>"
+}
