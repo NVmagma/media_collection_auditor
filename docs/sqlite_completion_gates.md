@@ -750,3 +750,19 @@ namespace/control identity checks, NFSv4 disabled, no exports/clients and no hos
 service commands. Ten local inert-command probe/lab tests pass, including
 startup uncertainty and binding loss; actual kernel thread-cycle results are
 pending. This is not a production pause, real client test or gate closure.
+
+### Private thread control confirmed; NFSv3 client lab prepared
+
+The user confirmed both `45be857` private cycles reach 1 running/0 stopped
+threads, with host threads staying at 8. The next lab adds actual loopback
+NFSv3 MOUNT/LOOKUP/FILE_SYNC WRITE requests from a capability-dropped cached
+Python container, with private network/PID/mount namespaces and isolated export,
+RPC socket and state paths. Fixture hashes independently check no byte changes
+while paused; restoration permits only an explicit fresh write. No kernel
+client mount/LOCALIO, production service script, build or package install is
+used. Host export hashes/thread counts must match; lab artifacts are retained.
+
+Local protocol/guard checks pass 29 tests. The maintained consolidated suite
+passes 504 tests and 19 subtests on macOS. Real NFSD/client execution awaits
+Unraid. NFSv4, queued client writeback, restart inhibition, container fencing
+and production wiring remain open; no production gate is closed by this lab.

@@ -107,6 +107,53 @@ not start a kernel server. Actual thread-cycle evidence is pending on Unraid.
 Real client denial, queued requests on restoration, NFSv4 behavior, restart
 inhibition and container fencing remain unverified and required for gate 6.
 
+### Real NFSv3 RPC client acceptance lab
+
+The user confirmed `45be857` on Tower: two private thread cycles reached one
+running thread and zero stopped threads, while host threads remained eight.
+This verifies private thread control, not client denial or a production fence.
+
+`scripts/sqlite_nfs_client_lab.sh EXISTING_ABSOLUTE_LAB_PARENT` is the next
+bounded acceptance step. It creates a new retained fixture directory and a
+read-only, capability-dropped Python container using the already-reviewed
+cached image (`--pull=never`). The container has no network interfaces except
+its private loopback and sees only the checkout read-only and fixture control
+directory; the server's data directory is not mounted into the client.
+
+The server joins that private network, then creates distinct PID and mount
+namespaces with private propagation. Before RPC helpers or exports run, it
+hides host `/etc`, `/var/lib`, `/run` and (when separate) `/var/run` behind
+private configuration/state views. It clears socket-activation variables,
+mounts a new NFSD control view, binds its identity and requires zero threads.
+Private export configuration grants only loopback access to the new fixture
+data directory. Private rpcbind/mountd run under the disposable PID namespace;
+kernel service controls and cache updates are confined to the private network.
+No host service script, Docker socket in the client, package install, image
+build or production export is used. PID namespace teardown ends lab helpers.
+
+The raw Python client implements bounded TCP RPC framing and only MOUNT,
+LOOKUP and eight-byte FILE_SYNC WRITE requests. It keeps an old RPC connection
+and file handle for the pause test and also tries a distinct new-connection
+probe. It bypasses the kernel NFS client, so LOCALIO cannot bypass NFSD in this
+test. The server independently hashes fixture bytes before/while paused and
+after an explicit fresh write following lab restoration. An uncertain paused
+transport outcome is not permanent denial and is never blindly retried. A
+malformed reply cannot be counted as successful denial.
+
+References: [NFSv3 protocol](https://www.rfc-editor.org/info/rfc1813/),
+[RPC framing](https://www.rfc-editor.org/info/rfc5531/), and
+[LOCALIO behavior](https://docs.kernel.org/filesystems/nfs/localio.html).
+The fixed payloads, loopback-only destination, bounded reply lengths/deadlines
+and namespace guard are lab constraints, not a public NFS client feature.
+
+On failure, logs/control/data are retained and no host service correction or
+write retry is attempted. Host NFSD thread count and export/etab hashes must
+match before/after. These observations supplement the namespace boundary; they
+are not standalone ownership evidence. Actual client-lab execution on Unraid
+is pending. Even a passing result will not cover NFSv4, Mac/kernel client
+writeback, all delayed requests, persistent restart inhibition or other writers.
+Those remain requirements before production ownership can be granted.
+
 ## Implemented disposable journal foundation
 
 `app/sqlite_disposable_maintenance_journal.py` creates only new fixture roots.
