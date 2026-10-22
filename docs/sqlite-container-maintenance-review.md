@@ -27,10 +27,11 @@ Unraid UI/API actions, custom jobs and changes after enumeration remain outside
 this container snapshot. The operator has accepted an initial maintenance
 window and a possible pause of all NFS shares as design choices only.
 
-Dashboard availability during that window is a pending design choice. No
-permission to pause dashboards, NFS, Arr, Jellyfin or the auditor is implied.
-Even if dashboard pause is acceptable, other administrative entry points and
-boot/restart behavior still require an accepted model.
+The user accepts temporary unavailability of both Homarr and Homepage during
+the initial maintenance window as a design choice. No permission to pause
+dashboards, NFS, Arr, Jellyfin or the auditor is implied. Dashboard pause does
+not cover other administrative entry points or boot/restart behavior; these
+still require an accepted model.
 
 ## Advisory report changes
 
@@ -49,3 +50,28 @@ snapshot cannot grant clearance.
 This refinement is covered by local regression tests. The existing Tower
 snapshot is sufficient for this design review; another server run of the same
 inventory is not required solely to accept the wording/classification change.
+
+
+## Disposable control-client pause test
+
+The private control lab uses a Unix HTTP fixture that can only increment a
+counter. It never mounts or contacts Tower's Docker API socket. The new client
+receives a read-only socket-file mount and read-only command/source mounts,
+then proves it can dispatch one fixture action. This tests socket communication
+through a read-only mount without exposing actual daemon administration.
+
+A controller process pauses only that new client container and is killed.
+The independent supervisor then requests a second fixture action, verifies
+that the private API remains responsive from another process, and requires the
+counter to remain one and the client to remain paused. The existing connection
+is retained across the pause. Cleanup kills the private endpoint before removing
+the paused client so a cleanup-time thaw cannot make the pending action execute.
+If endpoint cleanup fails, the paused client is retained and the harness fails.
+Fixture files remain for review; requests are never automatically retried.
+
+This is a bounded Docker-pause/controller-death scenario. It does not establish
+restart inhibition across Docker/host restarts, prevent explicit unpause or
+recreation by other administrators, test real dashboard behavior, or close
+Gate 6. Every production/exclusion claim remains false. Both new containers
+use the cached Python image, no external network, read-only roots, dropped
+capabilities and restart policy `no`; no existing service is targeted.

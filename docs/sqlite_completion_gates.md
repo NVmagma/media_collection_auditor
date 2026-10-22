@@ -42,9 +42,9 @@ control. More test cases alone cannot complete this gate.
 | Enforce complete external-writer exclusion | Unimplemented for production: boot-mode restart controls, NFSv4/existing-client caches, all overlapping container/host routes and administrative bypasses need an accepted model |
 | Trust production move completion and recovery | Depends on accepted ownership controls, atomic source-entry fencing, fresh real protections and independent outcome verification; no production permit/clearance API |
 
-The selected-field mount review has been received. The next design step is the
-container control matrix and dashboard availability decision; no enforcement
-has been performed.
+The selected-field mount review has been received. Dashboard pause is accepted
+for the initial design; the next server check is a private API-client pause and
+controller-death fixture. No production enforcement has been performed.
 Gate 6 closes only after the production enforcement and verifier requirements
 above are implemented and their failure/recovery behavior is accepted. No
 reliable count of remaining test rounds or completion percentage is available.
@@ -967,3 +967,21 @@ requirements. Enforcement remains unsupported and every production blocker
 remains. This report refinement needs no repeat of the same Tower inventory;
 dashboard availability is a pending maintenance-design choice. Local maintained
 checks pass 626 tests and 19 subtests.
+
+
+### Dashboard pause accepted for design; private control-client lab prepared
+
+The user accepts temporary unavailability of both Homarr and Homepage during
+the initial maintenance window. This is not service-stop authorization.
+
+A new private Unix API fixture tests action dispatch through a read-only socket
+mount, then Docker pause of its newly created client and death of the pause
+controller. The endpoint remains live, a second requested fixture action must
+not dispatch, and the client must remain paused. Cleanup ends the endpoint
+before removing the client. No real Docker socket is mounted or used for fixture
+API calls; host Docker commands target only newly created fixture IDs. Tests
+cover private identity checks, no retry/reconnect after uncertainty, and cleanup
+ordering/failure retention. Local maintained checks pass 638 tests and 19
+subtests. Actual Docker/kernel acceptance is pending on Tower.
+Restart inhibition, real dashboard behavior, administrative exclusion and every
+production blocker remain open.

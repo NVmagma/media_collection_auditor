@@ -790,3 +790,14 @@ between distinct mounts, retaining the original direct-media write warnings.
 It does not turn generic cache-volume flags into confirmed media writers.
 Dashboard availability is a pending design decision, not service-stop approval.
 No repeat inventory is needed just for this classification correction.
+
+### Dashboard design choice and private API-client pause fixture
+
+Both dashboards may be temporarily unavailable during initial maintenance,
+per the user's design choice. This does not authorize changing existing services.
+See [the container control matrix](sqlite-container-maintenance-review.md) for
+the new bounded Unix API-client pause/controller-death fixture. It uses a private
+counter-only endpoint, not a real Docker socket, and preserves a paused client
+until that endpoint is ended during cleanup. Explicit unpause/recreation,
+Docker/host restart behavior and other administrative routes remain unverified;
+no production writer-exclusion or restart permit is issued.
