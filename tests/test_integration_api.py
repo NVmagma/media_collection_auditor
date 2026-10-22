@@ -122,3 +122,59 @@ def test_disposable_smoke_command(tmp_path):
         cwd=tmp_path, capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)['status'] == 'disposable_api_smoke_passed'
+
+
+@pytest.mark.parametrize('headers,code', [({}, 401), (AUTH, 200)])
+def test_audit_status_auth_and_redaction(api, monkeypatch, headers, code):
+    client, _ = api
+    calls = []
+
+    def status():
+        calls.append(True)
+        return {'running': True, 'queued': False, 'rescuing': False,
+                'last_result': '/private/error', 'error': 'secret-token',
+                'last_started': '2026-01-01T01:00:00+01:00',
+                'last_finished': 'not-a-date-secret', 'next_run': None}
+
+    monkeypatch.setattr(web, 'snapshot', status)
+    response = client.get('/api/v1/audit-status', headers=headers)
+    assert response.status_code == code
+    assert len(calls) == (1 if code == 200 else 0)
+    assert response.headers['Cache-Control'] == 'no-store'
+    if code == 200:
+        assert response.json['running'] is True
+        assert response.json['last_started'] == '2026-01-01T00:00:00+00:00'
+        assert response.json['last_finished'] is None
+        assert response.json['last_result'] is None
+        assert 'private' not in response.text
+        assert 'secret' not in response.text
+
+
+@pytest.mark.parametrize('value', [None, {}, {'running': 'false', 'queued': False, 'rescuing': False}])
+def test_unknown_coordinator_state_is_not_idle(api, monkeypatch, value):
+    client, _ = api
+    monkeypatch.setattr(web, 'snapshot', lambda: value)
+    response = client.get('/api/v1/audit-status', headers=AUTH)
+    assert response.status_code == 503
+    assert response.json['running'] is None
+
+
+def test_coordinator_read_error_is_redacted(api, monkeypatch):
+    client, _ = api
+
+    def failure():
+        raise UnicodeError('/private/history secret')
+
+    monkeypatch.setattr(web, 'snapshot', failure)
+    response = client.get('/api/v1/audit-status', headers=AUTH)
+    assert response.status_code == 503
+    assert 'secret' not in response.text
+
+
+def test_audit_status_disabled_and_browser_session_not_sufficient(api, monkeypatch):
+    client, _ = api
+    monkeypatch.setattr(web, 'current_user', lambda: {'admin': True})
+    monkeypatch.setattr(web, 'snapshot', lambda: pytest.fail('No unauthorized reads'))
+    assert client.get('/api/v1/audit-status').status_code == 401
+    monkeypatch.delenv('INTEGRATION_API_TOKEN')
+    assert client.get('/api/v1/audit-status', headers=AUTH).status_code == 404

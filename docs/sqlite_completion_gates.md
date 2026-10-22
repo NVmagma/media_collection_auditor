@@ -1051,3 +1051,17 @@ includes its two runtime modules; copied-runtime tests exercise authorization an
 summary reads without a Docker build. See [API contract](integration-api.md).
 Tower kernel-client testing remains deferred. No gate closes and SQLite
 production activation, intent clearance and permanent deletion remain disabled.
+
+
+### Unraid summary acceptance and redacted coordinator status
+
+The user accepted the `6438482` synthetic summary smoke on Unraid:
+`disposable_api_smoke_passed`, fixture-only, no network collection or production
+authorization. Its security workflow reported success after the explicitly
+approved push. This is API fixture evidence, not a deployed endpoint/widget test.
+
+The additional authenticated `/api/v1/audit-status` projects one existing
+coordinator snapshot onto allowlisted flags, result and UTC timestamps. Missing
+flags/read failures remain unavailable; best-effort history cannot establish
+freshness. It neither changes the scheduler nor triggers work. All Gate 6
+blockers remain open; active Tower NFS-client testing stays deferred.

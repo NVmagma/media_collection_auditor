@@ -30,9 +30,9 @@ results. Gates 6–10 remain open while portable execution and integration proce
 
 User-requested roadmap feature: a documented authenticated, versioned read-only
 API for dashboard/service integration, independent of SQLite production activation.
-The first authenticated JSON tracking summary is now implemented; see the
+Authenticated JSON tracking summary and redacted coordinator-status endpoints are implemented; see the
 [API contract and disposable smoke command](integration-api.md). Readiness, version,
-audit-time reporting and verified vendor widget examples remain planned.
+verified freshness and vendor widget examples remain planned.
 
 Initial contract proposal:
 

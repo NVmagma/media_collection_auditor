@@ -56,6 +56,11 @@ else:
         "Authorization": "Bearer " + os.environ["INTEGRATION_API_TOKEN"]})
     assert response.status_code == 200
     assert response.json["tracking_counts"]["waiting"] == 1
+    audit = client.get("/api/v1/audit-status", headers={
+        "Authorization": "Bearer " + os.environ["INTEGRATION_API_TOKEN"]})
+    assert audit.status_code == 200
+    assert audit.json["source"] == "coordinator_snapshot"
+    assert audit.json["freshness_verified"] is False
     print("RUNTIME_OK")
 '''
     return subprocess.run([sys.executable, "-B", "-c", child], cwd=runtime, env=env,

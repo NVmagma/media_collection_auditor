@@ -16,6 +16,7 @@ def main():
         raw = '{"queued":{"fixture-title":"2024-01-01"}}'
         state.write_text(raw)
         os.environ['STATE_FILE'] = str(state)
+        os.environ['AUDIT_HISTORY_FILE'] = str(Path(directory) / 'history.jsonl')
         os.environ['WEB_SESSION_SECRET'] = secrets.token_urlsafe(32)
         os.environ.pop('INTEGRATION_API_TOKEN', None)
         import requests
@@ -31,6 +32,7 @@ def main():
         os.environ['INTEGRATION_API_TOKEN'] = token
         headers = {'Authorization': 'Bearer ' + token}
         assert client.get('/api/v1/summary').status_code == 401
+        assert client.get('/api/v1/audit-status').status_code == 401
         response = client.get('/api/v1/summary', headers=headers)
         assert response.status_code == 200
         assert response.json['tracking_counts']['holding'] == 1
@@ -38,6 +40,11 @@ def main():
         assert response.json['freshness_verified'] is False
         assert 'fixture-title' not in response.text
         assert response.headers['Cache-Control'] == 'no-store'
+        audit = client.get('/api/v1/audit-status', headers=headers)
+        assert audit.status_code == 200
+        assert audit.json['running'] is False
+        assert audit.json['freshness_verified'] is False
+        assert audit.json['last_result'] is None
         assert client.post('/api/run-now', headers=headers).status_code == 401
         assert client.post('/api/rescue', headers=headers).status_code == 401
         assert state.read_text() == raw

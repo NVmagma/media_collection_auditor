@@ -68,3 +68,16 @@ def test_cli_success_uses_one_captured_snapshot(tmp_path, monkeypatch, capsys):
     report = json.loads(capsys.readouterr().out)
     assert report['tracking_counts']['holding'] == 1
     assert calls == [{'require_existing': True}]
+
+
+@pytest.mark.parametrize('result', ['completed', 'failed', None, {'secret': True}, '/private/token'])
+def test_audit_projection_allowlists_results_and_preserves_unknowns(result):
+    from app.integration_status import audit_status_report
+    report = audit_status_report({'running': False, 'queued': True, 'rescuing': False,
+                                  'last_result': result, 'last_started': '2024-01-01',
+                                  'last_finished': '2024-01-01T00:00:00+00:00'})
+    assert report['queued'] is True
+    assert report['last_result'] == (result if isinstance(result, str) and result in ('completed', 'failed') else None)
+    assert report['last_started'] is None
+    assert report['last_finished'] == '2024-01-01T00:00:00+00:00'
+    assert report['freshness_verified'] is False

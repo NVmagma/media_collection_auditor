@@ -27,6 +27,25 @@ management endpoint. Changes to an environment file alone cannot modify running
 process environments. Use HTTPS for access across untrusted networks; the app
 adds no TLS termination, permissive CORS or public exposure on your behalf.
 
+## Audit coordinator status
+
+`GET /api/v1/audit-status` uses the same dedicated token and no-store policy.
+It returns one coordinator snapshot projected onto a fixed schema: `running`,
+`queued`, `rescuing`, `last_result`, `last_started`, `last_finished`, and
+`next_run`, plus schema/read-only/authorization metadata. Results are restricted
+to `completed`, `failed`, or null. Valid timezone-aware timestamps are normalized
+to UTC; naive, malformed or unavailable values become null. Unknown flags return
+HTTP 503 with null fields, never a falsely healthy idle state.
+
+The source is `coordinator_snapshot`, combining current process flags with the
+existing best-effort historical reader. Missing/unreadable historical records
+can leave last-run fields unknown even when current flags are available. This
+endpoint does not certify durable history completeness, active collectors,
+mount availability or a recent successful audit. `freshness_verified` remains
+false. A `completed` result is the coordinator's recorded outcome, not an
+independent validation of Jellyfin signals or every lifecycle operation.
+It returns no action lists, free-text errors or media details.
+
 ## Responses
 
 - HTTP 200: validated state, `status=advisory_only`; counts are tracking records,
@@ -85,3 +104,15 @@ Local validation, October 22, 2026: maintained regressions passed 680 tests and
 19 subtests on macOS, including isolated copied-image runtime imports and API
 contract tests. The synthetic smoke command passed locally. Unraid container
 smoke acceptance and final release-image verification are still pending.
+
+
+Acceptance update, October 22, 2026: the user reported
+`disposable_api_smoke_passed` on Unraid for summary commit `6438482`, with no
+network collection or production authorization. Its GitHub security workflow
+reported success. The subsequent audit-status endpoint is tested locally;
+the updated smoke script checks both routes using only synthetic state.
+
+Audit-status increment validation: maintained local regressions passed 692 tests
+and 19 subtests; copied-runtime endpoint checks passed separately (4 tests).
+The updated disposable smoke passed within local regressions. No new production
+or NFS test is required for this projection-only increment.

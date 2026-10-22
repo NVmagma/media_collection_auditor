@@ -23,7 +23,7 @@ from auth import session_key, jellyfin_login, current_user, store_token, discard
 from run_control import snapshot, request_run
 from config_store import FIELDS, KEYS, SECRETS, BOOLS, DEFAULTS, FIELD_HELP, load_config, save_config, validate, redacted_config
 from integration_api import authorize_summary
-from integration_status import read_tracking_status
+from integration_status import read_tracking_status, audit_status_report
 
 app = Flask(__name__)
 app.secret_key = session_key()
@@ -33,7 +33,7 @@ app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
 
 @app.before_request
 def require_login():
-    if request.endpoint == "integration_summary":
+    if request.endpoint in ("integration_summary", "integration_audit_status"):
         return authorize_summary(request.headers.get("Authorization"))
     if request.endpoint in ("login", "login_background", "health", "static"):
         return None
@@ -108,7 +108,7 @@ STATE_FILE = os.environ.get("STATE_FILE", "/app/logs/auditor_state.json")
 
 @app.after_request
 def integration_response_headers(response):
-    if request.path == "/api/v1/summary":
+    if request.path in ("/api/v1/summary", "/api/v1/audit-status"):
         response.headers["Cache-Control"] = "no-store"
         response.headers["Vary"] = "Authorization"
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -118,6 +118,16 @@ def integration_response_headers(response):
 @app.get("/api/v1/summary")
 def integration_summary():
     report = read_tracking_status(STATE_FILE)
+    return report, 503 if report["status"] == "unavailable" else 200
+
+
+@app.get("/api/v1/audit-status")
+def integration_audit_status():
+    try:
+        current = snapshot()
+    except (OSError, UnicodeError, ValueError, TypeError, RuntimeError):
+        current = None
+    report = audit_status_report(current)
     return report, 503 if report["status"] == "unavailable" else 200
 
 
