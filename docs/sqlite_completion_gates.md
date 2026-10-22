@@ -1104,3 +1104,15 @@ A credential-free Homarr v2 import candidate now combines the template and two
 GET-only load queries, with zero request-cache duration. No upgrade or live
 configuration change was performed. Actual import/JSX validation, rendering and
 cache acceptance remain open; source review alone completes no SQLite gate.
+
+
+### Expiring synthetic widget API on the existing bridge
+
+The user confirmed `homepage` and `homarr` are both on default Docker `bridge`.
+A launcher now creates only a new, uniquely named synthetic API container on
+that network, with a private generated credential, no published port, no real
+state/media/config mounts and a hard 15-minute lifetime. Sample/empty/unavailable
+scenarios reuse the API's authentication and redacted status helpers without
+importing an auditor worker or exposing action routes. Launcher-policy tests use
+inert Docker stubs; factory/API tests use synthetic files. No live dashboard
+change or new production permit is inferred from server readiness.

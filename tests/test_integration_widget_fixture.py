@@ -1,0 +1,107 @@
+"""Synthetic widget fixture has exactly two authenticated, read-only routes."""
+import pytest
+from scripts.integration_widget_fixture import create_fixture_app, read_fixture_token
+
+TOKEN = 'disposable_widget_token_01234567890123456789'
+AUTH = {'Authorization': 'Bearer ' + TOKEN}
+
+
+@pytest.mark.parametrize('scenario,code', [('sample', 200), ('empty', 200), ('unavailable', 503)])
+def test_fixture_scenarios_preserve_unknown_versus_zero(tmp_path, monkeypatch, scenario, code):
+    monkeypatch.setenv('INTEGRATION_API_TOKEN', TOKEN)
+    app = create_fixture_app(tmp_path, scenario)
+    client = app.test_client()
+    state = tmp_path / 'state.json'
+    before = state.read_bytes() if state.exists() else None
+    assert client.get('/api/v1/summary').status_code == 401
+    report = client.get('/api/v1/summary', headers=AUTH)
+    assert report.status_code == code
+    assert report.json['fixture_only'] is True
+    assert report.json['production_authorized'] is False
+    assert 'Fixture A' not in report.text and '/fixture/holding' not in report.text
+    if scenario == 'sample':
+        assert report.json['tracking_counts'] == {'waiting': 2, 'holding': 1, 'keep': 1,
+                                                  'removal': 1, 'arr_sync_pending': 1}
+    elif scenario == 'empty':
+        assert set(report.json['tracking_counts'].values()) == {0}
+    else:
+        assert report.json['tracking_counts'] is None
+    audit = client.get('/api/v1/audit-status', headers=AUTH)
+    assert audit.status_code == code
+    assert audit.json['freshness_verified'] is False
+    assert audit.headers['Cache-Control'] == 'no-store'
+    assert (state.read_bytes() if state.exists() else None) == before
+    assert client.head('/api/v1/summary', headers=AUTH).data == b''
+
+
+@pytest.mark.parametrize('route', ['/api/run-now', '/api/rescue', '/settings', '/login', '/api/test-connection/jellyfin'])
+def test_fixture_never_imports_or_exposes_actions(tmp_path, monkeypatch, route):
+    monkeypatch.setenv('INTEGRATION_API_TOKEN', TOKEN)
+    client = create_fixture_app(tmp_path, 'empty').test_client()
+    assert client.post(route, headers=AUTH).status_code == 404
+
+
+def test_post_and_query_token_cannot_mutate_or_authenticate(tmp_path, monkeypatch):
+    monkeypatch.setenv('INTEGRATION_API_TOKEN', TOKEN)
+    client = create_fixture_app(tmp_path, 'empty').test_client()
+    assert client.get('/api/v1/summary?token=' + TOKEN).status_code == 401
+    assert client.post('/api/v1/summary', headers=AUTH).status_code == 405
+    monkeypatch.delenv('INTEGRATION_API_TOKEN')
+    assert client.get('/api/v1/audit-status', headers=AUTH).status_code == 404
+
+
+def test_existing_fixture_state_is_never_overwritten(tmp_path):
+    state = tmp_path / 'state.json'
+    state.write_text('retained')
+    with pytest.raises(ValueError):
+        create_fixture_app(tmp_path, 'sample')
+    assert state.read_text() == 'retained'
+
+
+@pytest.mark.parametrize('raw', [b'short', b'x' * 257, b'x' * 32 + b'\n\n', b'x' * 32 + b' secret'])
+def test_credential_file_requires_valid_bounded_token(tmp_path, raw):
+    token = tmp_path / 'token'
+    token.write_bytes(raw)
+    with pytest.raises(ValueError):
+        read_fixture_token(token)
+
+
+def test_private_token_file_and_symlink_rejection(tmp_path):
+    token = tmp_path / 'token'
+    token.write_text(TOKEN + '\n')
+    token.chmod(0o600)
+    assert read_fixture_token(token) == TOKEN
+    alias = tmp_path / 'alias'
+    alias.symlink_to(token)
+    with pytest.raises(OSError):
+        read_fixture_token(alias)
+
+
+def test_container_entrypoint_installs_hard_expiry_without_starting_worker(tmp_path, monkeypatch):
+    from scripts import integration_widget_fixture as module
+    calls = []
+    monkeypatch.setattr(module.Path, 'is_file', lambda self: str(self) == '/.dockerenv')
+    monkeypatch.setattr(module, 'read_fixture_token', lambda path: TOKEN)
+    monkeypatch.setattr(module.signal, 'signal', lambda number, handler: calls.append(('handler', handler)))
+    monkeypatch.setattr(module.signal, 'alarm', lambda seconds: calls.append(('alarm', seconds)))
+    monkeypatch.setattr(module, 'serve_fixture', lambda app, seconds: calls.append(('serve', seconds)))
+    monkeypatch.setenv('INTEGRATION_API_TOKEN', '')
+    assert module.main(['--token-file', str(tmp_path / 'token')]) == 0
+    assert [item for item in calls if item[0] != 'handler'] == [('alarm', 900), ('serve', 900), ('alarm', 0)]
+
+    def exit_process(code):
+        raise SystemExit(code)
+
+    monkeypatch.setattr(module.os, '_exit', exit_process)
+    handler = next(item[1] for item in calls if item[0] == 'handler')
+    with pytest.raises(SystemExit) as expired:
+        handler(None, None)
+    assert expired.value.code == 0
+
+
+@pytest.mark.parametrize('seconds', ['0', '3601'])
+def test_unbounded_or_invalid_lifetime_refused_before_credential_read(monkeypatch, seconds):
+    from scripts import integration_widget_fixture as module
+    monkeypatch.setattr(module.Path, 'is_file', lambda self: True)
+    monkeypatch.setattr(module, 'read_fixture_token', lambda path: pytest.fail('No credential read'))
+    assert module.main(['--token-file', '/unused', '--lifetime-seconds', seconds]) == 2

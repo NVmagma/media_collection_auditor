@@ -136,3 +136,12 @@ Run on the Unraid host:
 
 This is a metadata observation, not an API/widget test or a dashboard update.
 Do not add full inspect output or secret-bearing configuration to the report.
+
+
+## Reachable synthetic API instance
+
+The user confirmed both dashboards use Docker's default `bridge`. The
+[expiring widget API lab](integration-widget-lab.md) starts a separate synthetic
+instance on that bridge, with no published port or production mounts. It does
+not update the auditor image or alter dashboard configuration. Actual widget
+import/preview remains a manual step after the new instance is ready.
