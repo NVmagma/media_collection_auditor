@@ -718,3 +718,23 @@ authorized for execution. A new read-only host probe gathers current Unraid
 version, NFSD observations and service-script identities without executing any
 service command. Actual service review, persistent restart prevention, isolated
 server/client acceptance and independent client denial checks remain required.
+
+### Host service review and possible namespace lab
+
+The supplied `7.4.0-rc.1` script executes default-file edits even for `status`,
+and its mountd-based stop branch is not independent NFSD shutdown evidence.
+The adapter must not use that status subcommand as a read-only probe or treat
+stop exit status as ownership. Sourced helpers and restart paths still require
+review. No service command was executed.
+
+The operator has no separate disposable Linux environment. A VM is not strictly
+required by Linux: NFSD control mounts are network-namespace scoped. A bounded
+namespace capability probe now creates distinct private network/mount namespaces
+and reads a new read-only NFSD control view; it starts no threads or exports.
+Local Bash syntax and non-Linux refusal checks pass; actual host capability is
+pending. This does not verify an enforcement adapter or close gate 6.
+
+Four additional local inert-command tests pass for the exact namespace probe
+child: reused network/mount namespaces are refused before mounting, only a
+new read-only control mount is observed, and unexpected threads trigger failure
+and private unmount. These tests create no namespaces or mounts themselves.

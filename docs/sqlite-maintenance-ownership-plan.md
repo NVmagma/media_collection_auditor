@@ -40,11 +40,42 @@ or an executor allowlist. The next implementation must inspect/validate the
 actual service mechanism, not guess it from historical script locations.
 
 Real NFS shutdown/restart acceptance needs an isolated disposable Linux server
-and client. Do not run privileged kernel-NFS lab controls against the production
-host kernel, host network or exported production paths merely because they are
-launched from a container. Choose and review the isolated test environment
-before executing service controls. No new container image/build is required
-for the read-only host probe.
+and client. A separate-kernel VM is one option, not a hard requirement: Linux
+keys NFSD control filesystems to network namespaces. A reviewed namespace lab
+may be possible, but an ordinary container alone does not prove correct control
+mount or network isolation. Never reuse the host NFSD control mount, host
+network or exported production paths for lab controls. Choose and verify the
+test environment before executing service controls. No new image/build is
+required for the host discovery probe.
+
+### Reviewed host service script and namespace discovery
+
+The user supplied Unraid `7.4.0-rc.1` observations: eight NFSD threads, NFSv3
+and NFSv4.1/4.2 enabled, and both candidate service paths resolving to the same
+script (SHA-256 `a2e6f7396e688a9dfbbe35e0f35c5839f1ee0a606b46ca1047bfa0b10e646fcf`).
+The supplied script sources helper/default files and edits defaults before
+dispatching its argument. Its `status` command is therefore unsuitable as a
+read-only observation. Its stop function gates shutdown on mountd detection;
+absent mountd can skip NFSD shutdown despite remaining threads. Stop completion
+and the final script exit status are not independent pause verification. The
+adapter must review sourced helpers/configuration and restart entry points too;
+the main script digest alone does not bind their behavior.
+
+The operator has no separate disposable Linux machine. Before attempting any
+real service action, `scripts/sqlite_nfs_namespace_probe.sh` checks a possible
+alternative: distinct ephemeral network and mount namespaces, private mount
+propagation, and a new read-only NFSD control mount showing zero threads.
+It never writes a control file, starts threads, invokes a service script,
+changes exports or creates a network interface. Host thread counts are observed
+before/after; a mismatch or unavailable capability blocks with no repair/retry.
+It creates and removes only its own empty temporary directory and private mount.
+This is a capability probe, not a real server/client or ownership test. Do not
+add a fallback to host controls when namespace creation fails.
+
+The kernel's [NFSD control filesystem implementation](https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux/+/88afbb21d4b36fee6acaa167641f9f0fc122f01b/fs/nfsd/nfsctl.c)
+keys the filesystem to the network namespace. Runtime observation is still
+required for the actual host; this source does not establish that any arbitrary
+container launch or namespace configuration is safe.
 
 ## Implemented disposable journal foundation
 
