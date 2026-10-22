@@ -75,6 +75,20 @@ request to copy its user identities or label every audit as completed.
 
 Delivery stages:
 
+Requested title sections: Leaving soon (Holding titles ordered by their
+scheduled transition, with unknown dates explicit) and the ten oldest Waiting
+titles ordered by entry into Waiting. Offer separate widgets so each section
+can be sized without internal scrolling; ten cards still require sufficient
+dashboard space. Define title-detail authentication and date semantics before
+adding these responses to the aggregate API.
+
+Clickable posters should open the matching movie or series in Jellyfin, following
+the auditor dashboard's existing navigation behavior. Reuse its link construction
+where suitable, with a configurable browser-reachable Jellyfin base URL. Only
+provide a link when the item identity is verified and unambiguous; otherwise
+leave the poster unlinked. Never include API credentials in navigation URLs.
+This is planned navigation, not a change to media or lifecycle state.
+
 1. Improve the existing summary widget with compact metric cards, lifecycle
    colors/icons, readable audit-status badges and a responsive layout. This can
    use the current aggregate API without exposing title details.
