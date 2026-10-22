@@ -64,3 +64,35 @@ boundary; deliver authenticated read-only status/summary endpoints and tests;
 then document widget examples. Audit triggers, configuration writes, media moves
 and deletion are outside the initial read-only API and would require a separate
 permission/design review.
+
+## Visual dashboard widgets
+
+User-requested direction (October 22, 2026): replace the initial plain-text widget
+with a polished card layout inspired by the supplied reference. Use compact,
+rounded rows, poster thumbnails, subdued backdrop artwork, clear title/year
+hierarchy and aligned status badges. The reference is visual guidance, not a
+request to copy its user identities or label every audit as completed.
+
+Delivery stages:
+
+1. Improve the existing summary widget with compact metric cards, lifecycle
+   colors/icons, readable audit-status badges and a responsive layout. This can
+   use the current aggregate API without exposing title details.
+2. Design and implement an optional authenticated read-only title/artwork
+   response for richer media rows: title/year, thumbnail/backdrop, actual
+   lifecycle stage, protection indicators where verified, and relevant dates.
+   Keep the default summary redacted. Artwork access must not expose Jellyfin
+   credentials, media paths or tokens in browser URLs; define authorization and
+   caching behavior for image delivery before implementation.
+3. Build Homarr cards using supported runtime components and provide the best
+   supported Homepage presentation. Do not promise identical layouts across
+   dashboard platforms. Preserve a compact mobile view and artwork fallbacks.
+4. Verify loading, empty, unavailable and stale displays before claiming visual
+   completion. Use explicit unknown/unverified states; color must not be the
+   only status cue. Never show retained values as a healthy current collection
+   after a failed request. No audit/move/delete controls are added by this work.
+
+The initial Homarr synthetic sample preview has passed. The unavailable and
+empty fixtures have started on Unraid, but their widget preview outcomes have
+not yet been reported. Visual polish is planned after these behavior checks;
+it does not close any SQLite production gate or resume deferred NFS testing.
