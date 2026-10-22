@@ -66,7 +66,8 @@ Poll at a modest interval such as 60 seconds; this version rereads tracking JSON
 for each authorized request. It adds no rate limiter or persistent cache. Custom
 widgets may map `tracking_counts.waiting`, `holding`, `keep`, `removal` and
 `arr_sync_pending`. Treat non-200 responses as unavailable. Vendor-specific
-Homarr/Homepage examples remain pending verification against those products.
+Homarr/Homepage [configuration examples](integration-widgets.md) are available;
+actual renderer/cache compatibility remains pending testing on installed versions.
 
 ## Disposable Unraid smoke check
 

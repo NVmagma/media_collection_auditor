@@ -32,7 +32,9 @@ User-requested roadmap feature: a documented authenticated, versioned read-only
 API for dashboard/service integration, independent of SQLite production activation.
 Authenticated JSON tracking summary and redacted coordinator-status endpoints are implemented; see the
 [API contract and disposable smoke command](integration-api.md). Readiness, version,
-verified freshness and vendor widget examples remain planned.
+verified freshness and actual vendor widget acceptance remain planned.
+[Configuration examples](integration-widgets.md) have been checked against
+upstream documentation; installed-version rendering is not yet verified.
 
 Initial contract proposal:
 

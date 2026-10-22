@@ -1065,3 +1065,13 @@ coordinator snapshot onto allowlisted flags, result and UTC timestamps. Missing
 flags/read failures remain unavailable; best-effort history cannot establish
 freshness. It neither changes the scheduler nor triggers work. All Gate 6
 blockers remain open; active Tower NFS-client testing stays deferred.
+
+
+### Dashboard widget configuration examples
+
+Homepage Custom API configuration and Homarr Custom Widgets v2 editor fragments
+are provided with primary-source references, separate credential setup and
+explicit unavailable/freshness handling. They require an API-containing image
+before use; the security scan did not publish an updated feature image. Vendor
+rendering, caching and installed-version checks remain pending. This documentation
+adds no runtime behavior and closes no SQLite gate. No Tower/NFS change occurred.
