@@ -23,7 +23,7 @@ from auth import session_key, jellyfin_login, current_user, store_token, discard
 from run_control import snapshot, request_run
 from config_store import FIELDS, KEYS, SECRETS, BOOLS, DEFAULTS, FIELD_HELP, load_config, save_config, validate, redacted_config
 from integration_api import authorize_summary, read_only_service_enabled
-from integration_status import read_tracking_status, audit_status_report
+from integration_status import read_tracking_status, audit_status_report, read_tracking_titles
 
 app = Flask(__name__)
 app.secret_key = os.urandom(32).hex() if read_only_service_enabled() else session_key()
@@ -34,9 +34,9 @@ app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
 @app.before_request
 def require_login():
     if read_only_service_enabled() and request.endpoint not in (
-            "integration_summary", "integration_audit_status", "health"):
+            "integration_summary", "integration_audit_status", "integration_titles", "health"):
         return {"status": "read_only_service"}, 404
-    if request.endpoint in ("integration_summary", "integration_audit_status"):
+    if request.endpoint in ("integration_summary", "integration_audit_status", "integration_titles"):
         return authorize_summary(request.headers.get("Authorization"))
     if request.endpoint in ("login", "login_background", "health", "static"):
         return None
@@ -111,7 +111,8 @@ STATE_FILE = os.environ.get("STATE_FILE", "/app/logs/auditor_state.json")
 
 @app.after_request
 def integration_response_headers(response):
-    if request.path in ("/api/v1/summary", "/api/v1/audit-status"):
+    if request.path in ("/api/v1/summary", "/api/v1/audit-status",
+                         "/api/v1/titles/oldest-waiting", "/api/v1/titles/leaving-soon"):
         response.headers["Cache-Control"] = "no-store"
         response.headers["Vary"] = "Authorization"
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -121,6 +122,22 @@ def integration_response_headers(response):
 @app.get("/api/v1/summary")
 def integration_summary():
     report = read_tracking_status(STATE_FILE)
+    return report, 503 if report["status"] == "unavailable" else 200
+
+
+@app.get("/api/v1/titles/oldest-waiting", defaults={"view": "oldest-waiting"})
+@app.get("/api/v1/titles/leaving-soon", defaults={"view": "leaving-soon"})
+def integration_titles(view):
+    if os.environ.get("INTEGRATION_API_TITLE_DETAILS", "false").lower() != "true":
+        return {"status": "disabled"}, 404
+    days = 7
+    if view == "leaving-soon":
+        config = load_config()
+        try:
+            days = max(1, int(config.get("HOLDING_DAYS", os.environ.get("HOLDING_DAYS", "7"))))
+        except (ValueError, TypeError):
+            days = 0
+    report = read_tracking_titles(STATE_FILE, view, holding_days=days)
     return report, 503 if report["status"] == "unavailable" else 200
 
 

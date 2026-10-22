@@ -183,3 +183,35 @@ See [candidate publishing and read-only service deployment](integration-api-depl
 An optional `READ_ONLY_API_SERVICE=true` mode starts no worker and blocks action
 routes. A separate process deliberately reports coordinator status unavailable,
 while summary reads continue from the existing authoritative JSON snapshot.
+
+## Optional title lists
+
+The next development revision adds `GET /api/v1/titles/oldest-waiting` and
+`GET /api/v1/titles/leaving-soon`. These are disabled (404) unless
+`INTEGRATION_API_TITLE_DETAILS=true`; the existing dedicated bearer credential
+is still required. Enabling this option intentionally shares title names with
+clients holding that credential. The default aggregate endpoints stay redacted.
+This revision is not in the currently deployed candidate image.
+
+Each response reads the authoritative JSON snapshot once, returns at most ten
+records, and reports `total_records` and `truncated`. No query-selected paths,
+network collection, filesystem inventory or actions are performed. Oldest waiting
+orders `first_seen` records oldest first, excluding keys also tracked in Holding,
+Keep or Removal. Leaving soon orders Holding records by their estimated Removal
+stage date using saved `HOLDING_DAYS` before the environment value (default seven).
+Equal dates sort by library and title for stable polling.
+
+Items contain only `title`, `library`, `stage`, `since`,
+`estimated_removal_stage_at` and `transition_authorized=false`. The last date is
+null for Waiting. Legacy timestamps retain local wall-time semantics without an
+invented UTC offset (`timestamp_basis=legacy_local_wall_time`). Estimates do not
+verify protections, freshness, media existence or permission for a transition;
+Jellyfin signals and all existing safeguards remain authoritative at audit time.
+There is no deletion date, artwork or Jellyfin navigation link in this revision.
+
+Empty valid state returns 200 with `items=[]`. Missing/invalid state, unsafe title
+keys or unusable date estimates return 503 with `items=null`, never an empty
+healthy list or a raw exception/path. Both routes use no-store response headers.
+The Holding list represents tracked Holding records, not a promise that protected
+or otherwise blocked titles will actually leave. Widgets must retain advisory
+wording and show unavailable states explicitly.
