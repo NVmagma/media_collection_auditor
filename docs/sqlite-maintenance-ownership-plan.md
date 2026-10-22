@@ -249,7 +249,9 @@ fail before any copied service code runs.
 After those attempts, a new independent RPC write must still be unavailable,
 fixture hashes must remain unchanged and the SQLite request must remain pending.
 Local maintained checks pass 528 tests/19 subtests, including guard environment
-and dispatch cases. Actual private entry-point acceptance awaits Unraid.
+and dispatch cases. The user confirmed private entry-point acceptance on Unraid: 12 dispatches
+were denied, both reviewed update paths left threads zero, the journal remained
+pending and host threads stayed eight.
 
 This is not a host guard installer and does not establish persistent restart
 inhibition. Private mounts disappear with the lab; production boot ordering,
@@ -556,3 +558,31 @@ No additional production discovery command is needed from this listing alone.
 The next development step is the isolated controller/journal and adapter
 acceptance harness. Export mutation commands are intentionally not supplied as
 an operator action before that implementation and review.
+
+### Cold-start source review and remaining deployment requirement
+
+At the same pinned upstream revision, `rc.M` invokes `rc.inet2` before
+`rc.local`. The NFS server startup stanza in `rc.inet2` is commented out with
+an explicit note that emhttpd brings up enabled NFS. This describes these
+reviewed shell bytes, not a verified inventory of every startup actor.
+`rc.local` installs plugins before invoking `go` (or `go.safemode`) or its
+fallback emhttp launch, but Safe Mode skips package/plugin installation.
+A plugin-only guard therefore cannot establish coverage across boot modes.
+Neither a successful normal boot rehearsal nor a retained journal can repair
+that omission. The manager's internal startup and third-party startup actors
+remain outside this source review.
+
+The read-only restart probe now hashes `rc.S`, `rc.M`, `rc.inet2` and `rc.local`
+as well. It never sources those files, reads custom go contents, invokes the
+manager or changes startup preferences. Installed matches are still required
+before applying this review to Tower. Hash agreement does not prove an early,
+persistent fence. The deployment design must deny automatic service startup
+before any writer can resume, including Safe Mode, missing/corrupt durable
+intent, upgrade/replacement and failed guard installation. Unknown boot state
+must retain pending work and require explicit recovery; it cannot automatically
+release the fence. No host installer or reboot test is supplied at this stage.
+
+Reviewed sources:
+[rc.M](https://github.com/unraid/webgui/blob/26eb1b5c1d547ddbf44a38e63956ba24f659098b/etc/rc.d/rc.M),
+[rc.inet2](https://github.com/unraid/webgui/blob/26eb1b5c1d547ddbf44a38e63956ba24f659098b/etc/rc.d/rc.inet2),
+[rc.local](https://github.com/unraid/webgui/blob/26eb1b5c1d547ddbf44a38e63956ba24f659098b/etc/rc.d/rc.local).

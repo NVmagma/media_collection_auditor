@@ -63,6 +63,11 @@ observe_source /etc/rc.d/rc.library.source cad384311906870c88adca7f7a8b4f6253ab3
 observe_source /usr/local/emhttp/plugins/dynamix/scripts/nfsSettings e7c0ad009544cea2cf204876acf35bb89ac3b4974d838e8a158645ac90c4532b
 observe_source /usr/local/emhttp/plugins/dynamix/scripts/reload_services e4e944ece1006bfbb1afeb79d203d374b2a37b979e4bc027787673dfe3af07a7
 observe_source /usr/local/emhttp/plugins/dynamix/NFS.page ec479bd125ec4eac5218a1eb4bb782d8c93aafe779fa7a0c446fca559fc477d9
+# Boot sources are hashed only; never run or source a boot script, including go.
+observe_source /etc/rc.d/rc.S 4b8b3a2c9a0319a5122567e2f434050073bf672a06d4ab4998ffab3afd92c38a
+observe_source /etc/rc.d/rc.M 77d4b4c81b5718c5a5d902667e120fca37f78d9a69c2a953bbdd48c05574b96f
+observe_source /etc/rc.d/rc.inet2 dcc7b06d06c7e6aa17949d5ef3cb0396d7f9bf9afb9eec4f090d9b406c3042f9
+observe_source /etc/rc.d/rc.local 96d61ef181addb26e8d407b4b981cd0951d8a919357441f330567296f7df5813
 printf '\n%s\n' \
   'Matching source identifies reviewed bytes; it does not establish a restart fence.' \
   'No helpers/configuration were sourced; no status/start/stop/update calls were made.' \

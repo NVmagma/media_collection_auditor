@@ -814,7 +814,15 @@ The independent RPC client must still fail to complete a new fixture write,
 and journal intent must remain pending. Host service/share-config hashes are
 also compared before/after. No host guard, plugin or boot hook is installed.
 
-Local maintained checks pass 528 tests and 19 subtests. Actual private guard
-execution is pending on Unraid. Boot persistence and direct privileged bypasses
+Local maintained checks pass 528 tests and 19 subtests. The user confirmed private guard
+execution on Unraid: all 12 dispatches denied, both reviewed update paths left
+threads zero, journal intent remained pending and host threads stayed eight. Boot persistence and direct privileged bypasses
 remain unverified; production restart inhibition and writer exclusion stay
 false, with no production gate closure or activation change.
+
+
+Cold-start review found that the reviewed `rc.local` skips plugin installation
+in Safe Mode; a plugin-only guard is insufficient. The read-only restart probe
+now compares four boot-script identities without executing them. Installed boot
+identities, manager startup behavior and an enforceable persistent guard remain
+unverified. Gate 6 stays open; no production controls or authorization changed.
