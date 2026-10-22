@@ -98,3 +98,35 @@ The separate [HTTP transport fixture](integration-api.md#disposable-http-transpo
 can verify endpoint wire behavior first without any dashboard change. Its output
 explicitly leaves widget rendering unverified; it does not substitute for the
 installed-version acceptance table above.
+
+## Read-only installed image metadata
+
+Before choosing an actual renderer test, capture only dashboard names, image
+references and selected OCI version/revision metadata. This executes no command
+inside a dashboard and reads no environment, credentials, mounts or config files.
+Image labels may be absent; a floating image tag alone does not establish the
+installed software version. The matching below uses container names/image refs
+containing Homepage or Homarr; a fully renamed/re-tagged deployment may need a
+separately supplied container name. No matching output is not proof of absence.
+
+Run on the Unraid host:
+
+```sh
+(
+  set -eu
+  docker ps -a --format '{{.Names}}\t{{.Image}}' |
+  while IFS=$'\t' read -r dashboard_name dashboard_ref; do
+    case "${dashboard_name,,} ${dashboard_ref,,}" in
+      *homepage*|*homarr*) ;;
+      *) continue ;;
+    esac
+    printf '\nDashboard: %s\nImage reference: %s\n' "$dashboard_name" "$dashboard_ref"
+    dashboard_image_id=$(docker inspect --type container --format '{{.Image}}' "$dashboard_name")
+    docker image inspect "$dashboard_image_id" --format \
+      'image_id={{.Id}} version={{index .Config.Labels "org.opencontainers.image.version"}} revision={{index .Config.Labels "org.opencontainers.image.revision"}}'
+  done
+)
+```
+
+This is a metadata observation, not an API/widget test or a dashboard update.
+Do not add full inspect output or secret-bearing configuration to the report.

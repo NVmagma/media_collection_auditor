@@ -1086,3 +1086,10 @@ no caller-specified target, no external collector, and bounded child cleanup.
 The Unraid command runs network-none with no production mounts or published
 ports. It does not establish widget rendering, cross-container reachability,
 release-image acceptance, NFS ownership or any new production permit.
+
+Unraid accepted the `dba8619` HTTP fixture: both endpoints were exercised over
+private loopback HTTP, the server process stopped, and no external collection
+or production authorization occurred. Widget rendering remains explicitly
+unverified. Next input is selected installed dashboard image metadata before
+choosing version-appropriate compatibility checks. Gate 6 and the deferred
+Tower kernel-client test boundary are unchanged.

@@ -171,3 +171,8 @@ web-security tests passed on macOS. This includes five new transport/startup
 checks. A broader run's final result was not captured after interruption and is
 not claimed as a fresh full-suite pass. Production runtime code is unchanged by
 this fixture increment; Unraid HTTP transport acceptance remains pending.
+
+Unraid HTTP acceptance: the user reported `disposable_api_http_smoke_passed`
+through `dba8619`, with `server_process_stopped=true`, no external collection,
+and production activation/authorization disabled. Real private-loopback HTTP
+transport is accepted for this fixture. Widget rendering remains unverified.
