@@ -39,7 +39,7 @@ jobs:
         run: python -m compileall -q app tests
 
       - name: Run web and rescue safety tests
-        if: github.ref == 'refs/heads/feature/unraid' || github.ref == 'refs/heads/feature/sqlite'
+        if: github.ref == 'refs/heads/feature/unraid'
         env:
           WEB_SESSION_SECRET: ci-only-session-secret
           PYTHONPATH: ${{ github.workspace }}/app
@@ -49,7 +49,7 @@ jobs:
         if: github.ref == 'refs/heads/feature/sqlite'
         env:
           PYTHONPATH: ${{ github.workspace }}
-        run: python -m pytest tests/test_sqlite_state.py tests/test_sqlite_migration.py tests/test_sqlite_snapshot_writer.py tests/test_sqlite_lock.py tests/test_sqlite_recovery.py tests/test_sqlite_json.py tests/test_sqlite_end_to_end.py tests/test_sqlite_integrity.py tests/test_sqlite_interruptions.py tests/test_sqlite_recovery_integrity.py tests/test_sqlite_restart_persistence.py tests/test_state_store.py tests/test_sqlite_store.py tests/test_sqlite_store_restart.py tests/test_sqlite_concurrency.py tests/test_sqlite_guarded_interface.py tests/test_sqlite_audit_session.py tests/test_sqlite_audit_preflight.py tests/test_sqlite_audit_bootstrap.py tests/test_sqlite_operation_coordinator.py tests/test_sqlite_move_reconciliation.py tests/test_sqlite_recovery_inspection.py tests/test_sqlite_arr_reconciliation.py tests/test_sqlite_recovery_evidence.py tests/test_sqlite_jellyfin_recovery.py tests/test_sqlite_combined_recovery.py tests/test_sqlite_session_recovery.py tests/test_sqlite_checkpoint_failure.py tests/test_sqlite_operation_crash_windows.py tests/test_sqlite_operation_precommit.py tests/test_sqlite_bootstrap_pending.py tests/test_sqlite_readiness.py tests/test_sqlite_readiness_integration.py tests/test_sqlite_offline_rollout.py tests/test_sqlite_full_rehearsal.py tests/test_sqlite_persisted_recovery.py tests/test_sqlite_fetched_recovery.py tests/test_sqlite_recovery_http.py tests/test_sqlite_recovery_multiuser.py tests/test_sqlite_recovery_season_enumeration.py tests/test_sqlite_http_recovery.py tests/test_sqlite_recovery_report.py tests/test_sqlite_recovery_cli.py tests/test_sqlite_recovery_api.py tests/test_sqlite_recovery_view.py tests/test_sqlite_dashboard_integration.py tests/test_sqlite_recovery_guidance.py tests/test_sqlite_recovery_readiness.py tests/test_sqlite_recovery_filesystem.py tests/test_sqlite_recovery_combined.py tests/test_sqlite_recovery_identity.py tests/test_sqlite_recovery_live_identity.py tests/test_sqlite_recovery_path_binding.py tests/test_sqlite_recovery_object_identity.py tests/test_sqlite_recovery_mount_binding.py tests/test_sqlite_recovery_fingerprint.py tests/test_sqlite_recovery_pre_move_evidence.py tests/test_sqlite_recovery_persisted_fingerprint.py tests/test_sqlite_recovery_offline_evidence.py tests/test_sqlite_recovery_decision_matrix.py tests/test_sqlite_recovery_json_rollback.py tests/test_sqlite_migration_interruptions.py tests/test_sqlite_restart_rehearsal.py tests/test_sqlite_disposable_media_restart.py tests/test_sqlite_lab_compose.py tests/test_sqlite_lab_preflight.py tests/test_sqlite_lab_restart_probe.py tests/test_sqlite_lab_intent_rehearsal.py tests/test_sqlite_lab_applied_rehearsal.py tests/test_sqlite_lab_ambiguous_rehearsal.py tests/test_sqlite_lab_destination_inspection.py tests/test_sqlite_lab_missing_inspection.py tests/test_sqlite_recovery_mountinfo.py tests/test_sqlite_recovery_cross_mount.py tests/test_sqlite_lab_fixture_guard.py tests/test_sqlite_disposable_rehearsal.py tests/test_sqlite_lab_mount_probe.py tests/test_sqlite_lab_host_inspect.py -v
+        run: python -B scripts/run_sqlite_integration_checks.py --full-suite --basetemp "$RUNNER_TEMP/sqlite-candidate-fixtures"
 
       - name: Run tests
         env:
@@ -60,6 +60,8 @@ jobs:
     name: Build and publish image
     needs: test
     runs-on: ubuntu-latest
+    env:
+      API_CANDIDATE_IMAGE: ghcr.io/nvmagma/media_collection_auditor:api-candidate-${{ github.sha }}
 
     steps:
       - name: Check out repository
@@ -85,7 +87,57 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Build API candidate locally
+        if: github.ref == 'refs/heads/feature/sqlite'
+        run: >-
+          docker buildx build --load --platform linux/amd64 --pull --file Dockerfile
+          --label org.opencontainers.image.revision="$GITHUB_SHA"
+          --tag "$API_CANDIDATE_IMAGE" .
+
+      - name: Scan API candidate before publication
+        if: github.ref == 'refs/heads/feature/sqlite'
+        run: |
+          docker save "$API_CANDIDATE_IMAGE" -o "$RUNNER_TEMP/api-candidate.tar"
+          docker run --rm \
+            -v "$RUNNER_TEMP:/scan:ro" \
+            aquasec/trivy:latest image \
+            --input /scan/api-candidate.tar \
+            --format table --vuln-type os,library \
+            --severity CRITICAL,HIGH --ignore-unfixed --exit-code 1
+
+      - name: Smoke actual candidate runtime with synthetic state
+        if: github.ref == 'refs/heads/feature/sqlite'
+        run: |
+          docker run --rm --network none --read-only --cap-drop ALL \
+            --security-opt no-new-privileges:true \
+            --tmpfs /tmp:rw,nosuid,nodev,size=64m \
+            --mount "type=bind,source=$GITHUB_WORKSPACE/scripts/integration_api_smoke.py,target=/fixture/smoke.py,readonly" \
+            --entrypoint python "$API_CANDIDATE_IMAGE" -B /fixture/smoke.py
+
+      - name: Smoke actual candidate in read-only service mode
+        if: github.ref == 'refs/heads/feature/sqlite'
+        run: |
+          docker run --rm --network none --read-only --cap-drop ALL \
+            --security-opt no-new-privileges:true \
+            --tmpfs /tmp:rw,nosuid,nodev,size=64m \
+            --mount "type=bind,source=$GITHUB_WORKSPACE/scripts/integration_api_smoke.py,target=/fixture/smoke.py,readonly" \
+            --entrypoint python "$API_CANDIDATE_IMAGE" -B /fixture/smoke.py --read-only-service
+
+      - name: Publish only the commit-specific API candidate tag
+        if: github.ref == 'refs/heads/feature/sqlite'
+        run: |
+          docker push "$API_CANDIDATE_IMAGE"
+          docker image inspect "$API_CANDIDATE_IMAGE" --format '{{index .RepoDigests 0}}' > "$RUNNER_TEMP/api-candidate-reference.txt"
+
+      - name: Record candidate digest reference
+        if: github.ref == 'refs/heads/feature/sqlite'
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-candidate-reference
+          path: ${{ runner.temp }}/api-candidate-reference.txt
+
       - name: Build and push
+        if: github.ref != 'refs/heads/feature/sqlite'
         uses: docker/build-push-action@v6
         with:
           context: .
