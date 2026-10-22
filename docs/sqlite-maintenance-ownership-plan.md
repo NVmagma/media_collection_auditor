@@ -77,6 +77,36 @@ keys the filesystem to the network namespace. Runtime observation is still
 required for the actual host; this source does not establish that any arbitrary
 container launch or namespace configuration is safe.
 
+### Private NFSD thread-control lab
+
+The user confirmed the namespace capability probe on Tower: distinct network
+and mount namespaces, zero private threads, and eight host threads both before
+and after. No server threads or service controls were written by that probe.
+
+`scripts/sqlite_nfs_thread_lab.sh` is the next bounded acceptance step, not a
+production pause adapter. It creates new private network/mount namespaces and
+a new writable NFSD control mount. Before writing, it requires zero private
+threads, a control identity different from the host's, the NFSD filesystem
+magic and bound thread/version-file identities. Namespace and control bindings
+are checked at action boundaries. No host service script is invoked.
+
+The lab disables NFSv4 in its private instance to avoid exercising recovery
+directory/upcall behavior in this step, then attempts two one-thread start/stop
+cycles. It launches no mountd/rpcbind, adds no exports or network interfaces,
+and mounts no clients or media. If the kernel requires additional userspace
+support, startup can fail; there is deliberately no fallback to host RPC/NFSD
+services. The bounded timeout and cleanup target only the private view. Lost
+binding prevents further control writes; namespace teardown discards the lab.
+Host thread observations must match before/after or the report stays blocked,
+without any automatic host correction. Matching samples alone are not a proof
+of external-writer exclusion.
+
+Local inert-command tests cover both cycles, reused namespaces/control views,
+nonzero initial threads, uncertain startup and lost control binding. They do
+not start a kernel server. Actual thread-cycle evidence is pending on Unraid.
+Real client denial, queued requests on restoration, NFSv4 behavior, restart
+inhibition and container fencing remain unverified and required for gate 6.
+
 ## Implemented disposable journal foundation
 
 `app/sqlite_disposable_maintenance_journal.py` creates only new fixture roots.

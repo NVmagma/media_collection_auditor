@@ -738,3 +738,15 @@ Four additional local inert-command tests pass for the exact namespace probe
 child: reused network/mount namespaces are refused before mounting, only a
 new read-only control mount is observed, and unexpected threads trigger failure
 and private unmount. These tests create no namespaces or mounts themselves.
+
+### Namespace capability confirmed; private thread cycles prepared
+
+The user confirmed `b40d7b9` capability observations on Tower: distinct private
+network/mount namespaces, zero private NFSD threads and eight host threads
+before/after. This verifies only the previously non-starting control view.
+
+A new bounded lab attempts two private one-thread start/stop cycles, with
+namespace/control identity checks, NFSv4 disabled, no exports/clients and no host
+service commands. Ten local inert-command probe/lab tests pass, including
+startup uncertainty and binding loss; actual kernel thread-cycle results are
+pending. This is not a production pause, real client test or gate closure.
