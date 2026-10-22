@@ -75,3 +75,9 @@ recreation by other administrators, test real dashboard behavior, or close
 Gate 6. Every production/exclusion claim remains false. Both new containers
 use the cached Python image, no external network, read-only roots, dropped
 capabilities and restart policy `no`; no existing service is targeted.
+
+
+The user confirmed this bounded pause scenario on Tower through `58d5ce8`:
+one fixture action, endpoint still live, client still paused after controller
+death, and no automatic restoration. This does not accept real dashboard restart
+controls or independent exclusion of other administrative routes.

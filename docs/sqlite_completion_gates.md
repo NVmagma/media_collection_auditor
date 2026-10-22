@@ -43,8 +43,9 @@ control. More test cases alone cannot complete this gate.
 | Trust production move completion and recovery | Depends on accepted ownership controls, atomic source-entry fencing, fresh real protections and independent outcome verification; no production permit/clearance API |
 
 The selected-field mount review has been received. Dashboard pause is accepted
-for the initial design; the next server check is a private API-client pause and
-controller-death fixture. No production enforcement has been performed.
+for the initial design. Its private API-client pause/controller-death fixture
+has passed on Tower. The next check observes kernel NFS-client prerequisites;
+no production enforcement has been performed.
 Gate 6 closes only after the production enforcement and verifier requirements
 above are implemented and their failure/recovery behavior is accepted. No
 reliable count of remaining test rounds or completion percentage is available.
@@ -985,3 +986,23 @@ ordering/failure retention. Local maintained checks pass 638 tests and 19
 subtests. Actual Docker/kernel acceptance is pending on Tower.
 Restart inhibition, real dashboard behavior, administrative exclusion and every
 production blocker remain open.
+
+
+### Private API pause accepted; kernel-client prerequisites next
+
+Tower confirmed `58d5ce8`: the read-only fixture socket dispatched one private
+API action, the paused actor stayed paused after controller death, the endpoint
+remained live, and its action counter stayed one with no automatic restoration.
+No real Docker socket was mounted and no existing service was changed. This
+accepts the bounded freeze scenario, not administrative restart inhibition.
+
+The next host probe only reads kernel release, filesystem registrations, selected
+LOCALIO parameters, mount-helper path/hash and selected embedded kernel-config
+fields. It never invokes a mount helper, mounts, loads modules or changes NFS
+controls. Missing parameters/configuration remain unknown, not disabled LOCALIO.
+The actual Tower build must be reviewed before a kernel-client cache fixture is
+chosen; current raw NFSv3 RPC results do not establish kernel-client behavior.
+Gate 6 and every production authorization blocker remain open.
+
+Local maintained checks for this increment pass 648 tests and 19 subtests.
+The read-only kernel-client prerequisite probe awaits Tower output.

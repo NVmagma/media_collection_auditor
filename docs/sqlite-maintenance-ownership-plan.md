@@ -801,3 +801,26 @@ counter-only endpoint, not a real Docker socket, and preserves a paused client
 until that endpoint is ended during cleanup. Explicit unpause/recreation,
 Docker/host restart behavior and other administrative routes remain unverified;
 no production writer-exclusion or restart permit is issued.
+
+### Private API pause acceptance and kernel-client capability review
+
+The user confirmed the `58d5ce8` private API pause/controller-death scenario on
+Tower, retaining the paused client and action count one while the endpoint
+remained live. No automatic restoration or real socket access was performed.
+
+The NFSv4/kernel-client cache gap now requires the actual host kernel/client
+capabilities. `sqlite_nfs_kernel_client_probe.sh` is read-only and executes no
+mount/NFS helper or module-load operation. It reports registrations separately
+from availability of configuration/parameters; missing sysfs/config observations
+cannot be promoted to a disabled-feature claim. It hashes an available mount
+helper without running it and selects only NFS-related kernel-config booleans.
+No credentials, general configuration or mount options are dumped.
+
+The upstream [Linux LOCALIO documentation](https://docs.kernel.org/filesystems/nfs/localio.html)
+explains that same-host clients can bypass network RPC for read/write/commit
+and that `localio_enabled` is a module-level control. Current upstream docs are
+not proof of Tower's kernel implementation. The probe never writes that global
+setting. Kernel-client mounts, cache recovery, bounded teardown and LOCALIO
+behavior require a reviewed fixture suited to the observed build; they are not
+accepted from raw-RPC tests or version strings alone. Production activation,
+writer exclusion and restart inhibition remain false.
