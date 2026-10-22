@@ -6,6 +6,7 @@ There is deliberately no automatic resume, replay, release or production caller.
 from contextlib import closing, contextmanager
 import os
 import re
+import secrets
 from pathlib import Path
 import sqlite3
 import stat
@@ -24,6 +25,9 @@ NEXT = {
     "release_requested": "released",
 }
 MARKER = b"DISPOSABLE MAINTENANCE JOURNAL ONLY\n"
+# Fresh on interpreter startup; never loaded from retained state or supplied by
+# a caller. PID also changes across fork, where Python module memory is copied.
+_CONTROLLER_SESSION = secrets.token_hex(32)
 
 
 def _root(path):
@@ -51,6 +55,10 @@ def _linux_boot_id():
     except (OSError, ValueError, UnicodeError) as exc:
         raise RuntimeError("Linux boot identity unavailable") from exc
     return value
+
+
+class MaintenanceControllerSessionChanged(RuntimeError):
+    """A new controller process cannot inherit a retained Linux fixture session."""
 
 
 class MaintenanceNetworkScopeChanged(RuntimeError):
@@ -89,9 +97,12 @@ def create_disposable_journal(root, *, bind_linux_boot=False):
         db.execute("PRAGMA synchronous=FULL")
         db.execute("CREATE TABLE fixture_binding (path TEXT NOT NULL, root_device INTEGER NOT NULL, "
                    "root_inode INTEGER NOT NULL, db_device INTEGER NOT NULL, db_inode INTEGER NOT NULL, "
-                   "linux_boot_id TEXT, linux_network_namespace TEXT)")
-        db.execute("INSERT INTO fixture_binding VALUES (?, ?, ?, ?, ?, ?, ?)",
-                   (*_identity(root), boot_id, network_namespace))
+                   "linux_boot_id TEXT, linux_network_namespace TEXT, "
+                   "controller_pid INTEGER, controller_session TEXT)")
+        db.execute("INSERT INTO fixture_binding VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                   (*_identity(root), boot_id, network_namespace,
+                    os.getpid() if bind_linux_boot else None,
+                    _CONTROLLER_SESSION if bind_linux_boot else None))
         db.execute("CREATE TABLE events (revision INTEGER PRIMARY KEY, phase TEXT NOT NULL)")
         db.execute("INSERT INTO events VALUES (0, 'prepared')")
     directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
@@ -125,7 +136,7 @@ def _identity(root):
     return (str(root), directory.st_dev, directory.st_ino, database.st_dev, database.st_ino)
 
 
-def _verify_binding(db, root, *, require_linux_boot=False):
+def _verify_binding(db, root, *, require_linux_boot=False, require_controller_session=False):
     try:
         rows = db.execute("SELECT path, root_device, root_inode, db_device, db_inode "
                           "FROM fixture_binding").fetchall()
@@ -150,6 +161,16 @@ def _verify_binding(db, root, *, require_linux_boot=False):
         raise RuntimeError("Disposable journal boot binding changed")
     if boot_rows[0][1] != _linux_network_namespace():
         raise MaintenanceNetworkScopeChanged("Disposable journal network namespace changed")
+    if require_controller_session:
+        try:
+            sessions = db.execute("SELECT controller_pid, controller_session FROM fixture_binding").fetchall()
+        except sqlite3.Error as exc:
+            raise RuntimeError("Disposable controller session binding unavailable") from exc
+        if (len(sessions) != 1 or type(sessions[0][0]) is not int or sessions[0][0] <= 0
+                or not isinstance(sessions[0][1], str) or len(sessions[0][1]) != 64):
+            raise RuntimeError("Disposable controller session binding invalid")
+        if sessions != [(os.getpid(), _CONTROLLER_SESSION)]:
+            raise MaintenanceControllerSessionChanged("Disposable controller session changed")
 
 
 @contextmanager
@@ -166,7 +187,7 @@ def _database(root, *, with_verifier=False):
             def verify():
                 verify_lock()
                 _fixture(root)
-                _verify_binding(db, root)
+                _verify_binding(db, root, require_controller_session=True)
             verify()
             db.execute("PRAGMA synchronous=FULL")
             db.execute("BEGIN IMMEDIATE")

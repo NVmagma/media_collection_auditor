@@ -872,3 +872,24 @@ fail closed. It never migrates/rebinds or grants resume/clearance, even with
 matching scope. Strict operational inspection and all production blockers remain
 unchanged. Local maintained checks pass 584 tests and 19 subtests. The real
 read-only Docker mount check is pending on Unraid.
+
+
+### Retained review accepted; later controllers cannot inherit Linux sessions
+
+Tower confirmed the read-only review through `f2c9238`: history valid, revision
+one / fence requested, path mismatch, no resume/clearance. Matching observed boot
+and network identifiers did not supply continuity evidence.
+
+Linux-bound fixture transitions now require the original process PID and a fresh
+in-memory process identifier, in addition to boot/network/path binding. Tests
+cover a new interpreter, simulated PID reuse and copied module memory, all
+checkpoint phases, and session drift after synthetic action. No takeover,
+metadata migration or automatic release is implemented. Detached review labels
+identifier-only comparisons and never verifies a controller session.
+
+The disposable scope harness now checks a second interpreter in the same
+container before testing another network. Both must be rejected without changing
+the pending database. Local maintained checks pass 598 tests and 19 subtests.
+Actual same-container acceptance is pending on Tower.
+This is cooperative process/restart protection, not an external-writer fence;
+Gate 6 and every production blocker remain open.

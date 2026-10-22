@@ -43,6 +43,11 @@ for attempt in $(seq 1 100); do
 done
 [ -f "$lab/control/writer.ready" ]
 before=$(sha256sum "$lab/control/maintenance-journal/maintenance.db")
+# Same container/network/path, but a new interpreter/PID cannot inherit the
+# original session. This attempts a transition only against the new lab DB.
+timeout --kill-after=5s 20s docker exec "$writer_id" \
+  python -B /src/scripts/sqlite_maintenance_scope_lab.py --role reject-other-controller
+[ "$(sha256sum "$lab/control/maintenance-journal/maintenance.db")" = "$before" ]
 checker_id=$(docker create --pull=never --network none --read-only --cap-drop ALL \
   --label media-auditor.disposable-maintenance-scope=true \
   --security-opt no-new-privileges -e PYTHONDONTWRITEBYTECODE=1 -e PYTHONPATH=/src \

@@ -87,6 +87,7 @@ def review_disposable_maintenance(root):
     content, file_identity = _snapshot(root)
     report = {"status": "review_required", "read_only": True, "fixture_only": True,
               "source": "detached_fixture_snapshot", "revision": None, "phase": None,
+              "scope_comparison": "identifiers_only", "controller_session_verified": False,
               "history_valid": False, "scope": {}, "automatic_action": "none",
               "resume_authorized": False, "clearance_authorized": False,
               "production_authorized": False, "production_activation": "disabled",

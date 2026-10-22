@@ -7,7 +7,7 @@ import sys
 import time
 
 from app.sqlite_disposable_maintenance_journal import (
-    MaintenanceNetworkScopeChanged, advance_disposable_journal,
+    MaintenanceControllerSessionChanged, MaintenanceNetworkScopeChanged, advance_disposable_journal,
     create_disposable_journal, inspect_disposable_journal,
 )
 
@@ -37,9 +37,23 @@ def reject_other_network(control):
     raise RuntimeError("Different network namespace unexpectedly accepted")
 
 
+def reject_other_controller(control):
+    # The same container, mount, boot and network deliberately match. This new
+    # Python process must still be unable to advance the original session.
+    try:
+        advance_disposable_journal(control / "maintenance-journal",
+                                   expected_revision=1, phase="fixture_fenced")
+    except MaintenanceControllerSessionChanged:
+        return {"status": "different_controller_session_rejected",
+                "transition_completed": False, "automatic_action": "none",
+                "production_activation": "disabled", "production_authorized": False,
+                "writer_exclusion_verified": False, "restart_inhibition_verified": False}
+    raise RuntimeError("Different controller session unexpectedly advanced fixture")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--role", required=True, choices=("prepare", "reject-other-network"))
+    parser.add_argument("--role", required=True, choices=("prepare", "reject-other-network", "reject-other-controller"))
     args = parser.parse_args()
     control = Path("/control")
     if (control / ".disposable_maintenance_scope").read_bytes() != MARKER:
@@ -47,7 +61,8 @@ def main():
     if args.role == "prepare":
         prepare(control)
     else:
-        print(json.dumps(reject_other_network(control), sort_keys=True), flush=True)
+        check = reject_other_network if args.role == "reject-other-network" else reject_other_controller
+        print(json.dumps(check(control), sort_keys=True), flush=True)
     return 0
 
 

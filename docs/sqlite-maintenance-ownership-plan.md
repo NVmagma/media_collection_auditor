@@ -681,3 +681,37 @@ a read-only container root, all capabilities dropped and no-new-privileges.
 Run `python -B /src/scripts/sqlite_maintenance_review.py --root /review` with
 `PYTHONPATH=/src`. A relocated path or different network is expected evidence
 for this report, not permission to resume. Gate 6 remains open.
+
+### Read-only review accepted; process-session continuity required for transitions
+
+The user confirmed retained-journal review through `f2c9238`: valid history at
+revision one / fence requested, path mismatch, and no resume or clearance.
+Boot and network identifiers matched in the later reviewing container. Such
+matching observations cannot establish that the original namespace or controller
+remained alive; identifiers may be reused. The review now explicitly reports
+`scope_comparison=identifiers_only` and `controller_session_verified=false`.
+
+New Linux-bound fixtures additionally store their creating process PID and a
+fresh in-memory identifier generated when the journal module starts. Transition
+boundaries compare both with the current process. A new interpreter cannot load
+its session identifier from the journal, and a fork cannot inherit authority
+through copied module memory because its PID differs. PID reuse alone also
+cannot transfer a session. Missing or invalid session metadata blocks operations
+without automatic migration or rebinding. Session drift after a synthetic action
+retains the committed request without recording completion. Portable path-only
+synthetic fixtures remain non-authorizing ordering rehearsals.
+
+Strict boot/network inspection and detached review remain available for reading;
+neither grants transition authority. The stored identifier is not a credential
+or a defense against a privileged/hostile process modifying Python or SQLite.
+This is an additional guard against accidental process/restart inheritance,
+not independent writer exclusion, persistent kernel ownership or permission
+for production operations. There is no automatic takeover/release API.
+
+The scope harness now also runs a second Python interpreter inside the original
+container, so boot, namespace and path identities deliberately match. Its attempt
+to advance the new disposable pending fixture must fail with the specific
+controller-session error, leaving database bytes unchanged. Only then does the
+existing separate-network read-only check run. Both original containers are
+removed by the bounded harness, and pending fixture evidence is retained. It
+executes no NFS service/export/mount or production configuration controls.
