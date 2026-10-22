@@ -1006,3 +1006,21 @@ Gate 6 and every production authorization blocker remain open.
 
 Local maintained checks for this increment pass 648 tests and 19 subtests.
 The read-only kernel-client prerequisite probe awaits Tower output.
+
+
+### Kernel prerequisite observation received; installed modules still unverified
+
+Tower reported kernel `6.18.54-Unraid`, registered nfsd but no registered nfs/nfs4
+client filesystems, an installed mount helper, and unavailable LOCALIO/config
+observations. This accepts the read-only probe, not client availability or a
+LOCALIO-disabled claim. Nothing was mounted or loaded.
+
+The same probe now reads selected `modinfo` fields for the running release,
+without invoking a loader or mount helper. The [kernel-client test plan](sqlite-kernel-client-test-plan.md)
+records module/dependency review, private namespace/resource boundaries, buffered
+write versus commit evidence, kernel retries and bounded recovery/teardown
+requirements. No active load/mount command is supplied yet. Matching metadata
+cannot remove any production blocker; Gate 6 remains open.
+
+Local maintained checks for the module-metadata increment pass 651 tests and
+19 subtests. Matching on-disk client-module observations remain pending on Tower.

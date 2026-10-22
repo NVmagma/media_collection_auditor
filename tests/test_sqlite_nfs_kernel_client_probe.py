@@ -66,3 +66,44 @@ def test_arguments_refused_before_observations():
     result = subprocess.run(["bash", str(PROBE), "mount"], text=True, capture_output=True, timeout=10)
     assert result.returncode == 2
     assert "kernel_release=" not in result.stdout
+
+
+def test_module_metadata_queries_running_release_without_loading_modules(tmp_path):
+    tool = tmp_path / "modinfo"
+    log = tmp_path / "queries"
+    tool.write_text('''#!/bin/sh
+printf '%s\\n' "$*" >> "$METADATA_QUERY_LOG"
+case "$4" in
+filename) printf '/lib/modules/6.18-fixture/kernel/fs/nfs/nfs.ko.xz\\n';;
+vermagic) printf '6.18-fixture SMP preempt mod_unload\\n';;
+depends) printf 'sunrpc,lockd,nfslocalio\\n';;
+parmtype) printf 'unselected:charp\\nlocalio_enabled:bool\\nlocalio_O_DIRECT_semantics:bool\\n';;
+*) exit 2;;
+esac
+''')
+    tool.chmod(0o755)
+    code = 'release=6.18-fixture\nmodinfo_tool=$1\n' + function("observe_module") + 'observe_module nfs\n'
+    result = subprocess.run(["bash", "-eu", "-s", "--", str(tool)], input=code,
+                            text=True, capture_output=True, timeout=10,
+                            env={**os.environ, "METADATA_QUERY_LOG": str(log)})
+    assert result.returncode == 0, result.stderr
+    assert "module_nfs_vermagic=6.18-fixture SMP preempt mod_unload" in result.stdout
+    assert "module_nfs_depends=sunrpc,lockd,nfslocalio" in result.stdout
+    assert "module_nfs_parameter=localio_enabled:bool" in result.stdout
+    assert "unselected" not in result.stdout
+    assert all(query.startswith("-k 6.18-fixture -F ") and query.endswith(" nfs")
+               for query in log.read_text().splitlines())
+
+
+@pytest.mark.parametrize("value", ["unavailable", "wrong_kernel"])
+def test_module_metadata_failure_never_becomes_a_load_or_available_claim(tmp_path, value):
+    tool = tmp_path / "modinfo"
+    body = "exit 1\n" if value == "unavailable" else "printf '/lib/modules/wrong/kernel/nfs.ko\\n'\n"
+    tool.write_text("#!/bin/sh\n" + body)
+    tool.chmod(0o755)
+    code = 'release=6.18-fixture\nmodinfo_tool=$1\n' + function("observe_module") + 'observe_module nfs\n'
+    result = subprocess.run(["bash", "-eu", "-s", "--", str(tool)], input=code,
+                            text=True, capture_output=True, timeout=10)
+    assert result.returncode == 0
+    assert "module_nfs_metadata=" + ("unavailable" if value == "unavailable" else "unverified") in result.stdout
+    assert "module_nfs_vermagic=" not in result.stdout

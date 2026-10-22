@@ -824,3 +824,15 @@ setting. Kernel-client mounts, cache recovery, bounded teardown and LOCALIO
 behavior require a reviewed fixture suited to the observed build; they are not
 accepted from raw-RPC tests or version strings alone. Production activation,
 writer exclusion and restart inhibition remain false.
+
+### Tower kernel prerequisite result and module metadata review
+
+The user confirmed kernel `6.18.54-Unraid` with nfsd registered and nfs/nfs4 not
+registered, mount helper present and LOCALIO/config observations unavailable.
+Client-module availability remains unknown. The extended read-only probe uses
+`modinfo -k` for that running release and selects only module filename, vermagic,
+depends and LOCALIO parameter types. It does not invoke a module loader or
+source loader configuration, and no global kernel parameter changes are made.
+See the [unexecuted kernel-client fixture plan](sqlite-kernel-client-test-plan.md)
+for the prerequisites and write/cache/teardown evidence needed before a mount
+fixture is chosen. Gate 6 and all production denials remain unchanged.

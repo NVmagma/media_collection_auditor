@@ -1,0 +1,58 @@
+# Kernel NFS client fixture prerequisites and test boundaries
+
+This is an unexecuted fixture design, not a module-load/mount command or a
+production enforcement adapter. Gate 6 remains open. Production authority is
+JSON; activation, deletion and clearance remain disabled.
+
+## Tower evidence received
+
+The `83b7b7e` probe observed kernel `6.18.54-Unraid`, registered `nfsd`, and no
+registered `nfs`/`nfs4` filesystems. The mount helper exists, but active LOCALIO
+parameters and embedded kernel configuration were unavailable. No module was
+loaded and no mount performed. These observations do not distinguish an
+available unloaded client module from missing client support.
+
+The extended probe queries `modinfo` for `nfs`, `nfsv4` and `nfslocalio`, scoped
+to the observed running release. It reads only filename, vermagic, dependency
+names and the two selected LOCALIO parameter types. Module files in that release's
+module tree may be hashed; other paths are not treated as verified module files.
+It never uses modprobe/insmod, executes a mount helper, or evaluates module-loader
+configuration. Missing fields are retained as unavailable/unverified. Metadata
+matches cannot grant cache/fence acceptance or production clearance.
+
+## Proposed stages requiring review before execution
+
+1. **Client capability:** review installed-module identity/dependencies for the
+   running kernel. Any future module load changes shared host-kernel capability,
+   even when subsequent mounts use private namespaces. Record existing module/
+   parameter/host-NFSD observations first. No automatic dependency unload or
+   global LOCALIO parameter change is an acceptable cleanup shortcut.
+2. **Private server/client setup:** only newly created marked export data and
+   held private namespace/control references. No production exports, paths,
+   service helpers or RPC state. Review the actual kernel's LOCALIO, NFSv4
+   state/grace and bounded client failure/teardown behavior before selecting
+   mount options. Unknown capability must block the test, not trigger an
+   implicit load, protocol fallback or a production mount.
+3. **Buffered-write evidence:** keep an existing client descriptor, record a
+   successful baseline, and distinguish write return, fsync/commit outcome and
+   independently observed server bytes. During a pause, an accepted buffered
+   write is uncertainty; an RPC timeout is also uncertainty. Neither can clear
+   intent or prove durable write denial. Kernel background retries are separate
+   from application retries and cannot be reported as zero by assumption.
+4. **Recovery/teardown:** review client quiescence, delayed writes and bounded
+   cleanup independently of application process exit. A private restart may
+   cause old buffered data to reach the fixture; preserve and report it. No
+   automatic replay, intent clearing, production restoration or host repair.
+   If teardown cannot be bounded for this environment, retain this acceptance
+   gap rather than using production resources as a substitute.
+
+A same-host kernel fixture may use LOCALIO. It must identify the actual path
+and avoid presenting direct local IO as network-RPC denial. Changing the global
+module parameter to obtain a desired test result is not part of this plan.
+
+References reviewed for the design:
+[upstream modinfo manual](https://man7.org/linux/man-pages/man8/modinfo.8.html),
+[Linux v6.18 NFS client configuration](https://github.com/torvalds/linux/blob/v6.18/fs/nfs/Kconfig),
+[Linux LOCALIO documentation](https://docs.kernel.org/filesystems/nfs/localio.html).
+These describe upstream interfaces; they do not establish Tower's installed
+module build or authorize loading it.
