@@ -145,3 +145,47 @@ The user confirmed both dashboards use Docker's default `bridge`. The
 instance on that bridge, with no published port or production mounts. It does
 not update the auditor image or alter dashboard configuration. Actual widget
 import/preview remains a manual step after the new instance is ready.
+
+## Separate title-list widgets (development revision)
+
+Two independent Homarr definitions are provided:
+
+- `examples/integrations/homarr-oldest-waiting-widget.example.json`
+- `examples/integrations/homarr-leaving-soon-widget.example.json`
+
+Each has matching `-requests.example.json` and `-template.example.jsx` fragments
+for manual entry if whole-definition import is unavailable. Set the `default`
+source's URL and bearer credential privately as for the aggregate widget. Both
+use the request ID `titles`; create separate definitions, rather than merging
+the two request objects under the same ID. No production dashboard changes are
+performed by these examples.
+
+The production API requires `INTEGRATION_API_TITLE_DETAILS=true` and a newer
+reviewed image containing the title routes. The deployed aggregate-only image
+will return 404 for these paths. Do not point these definitions at it yet or
+replace it merely to preview the UI. A private board with this credential can
+see title names; keep that exposure deliberate.
+
+Rows use the existing Stack/Text primitives with rounded borders and escaped
+text interpolation. Ten fixed slots avoid relying on new renderer iteration
+features. Dates are local wall time; Holding estimates are not deletion dates.
+There is no nested scroll container, image request, browser fetch or navigation
+link. Size each board widget to fit its rows; actual no-scroll acceptance depends
+on the installed renderer, board height and viewport, especially on mobile.
+
+For a synthetic ten-row preview, update only the checkout on `feature/sqlite`
+and run `bash scripts/integration_widget_lab.sh titles`. This uses the existing
+expiring isolated fixture launcher, not production state. It exposes both title
+routes with twelve synthetic records each, capped at ten with a truncation note.
+Use the printed temporary base URL and private token file in the new widget
+sources. Its API routes reuse the production projection and do not require a
+production title-detail setting. Existing sample/empty/unavailable scenarios
+also serve the title routes.
+
+Acceptance needed in Homarr: import or manual JSX validation, all ten rows and
+truncation message, correct date order, independent widget sizing without scroll,
+empty message, unavailable message and no stale rows after a failed refresh.
+Local JSON checks and API fixture tests do not establish renderer acceptance.
+The fixture expires after fifteen minutes; never use its URL/token as a permanent
+source. No new image build, NFS operation or production container restart is
+needed for this preview.

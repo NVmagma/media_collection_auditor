@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from flask import Flask, request
 from app.integration_api import authorize_summary
-from app.integration_status import audit_status_report, read_tracking_status
+from app.integration_status import audit_status_report, read_tracking_status, read_tracking_titles
 
 
 def read_fixture_token(path):
@@ -34,7 +34,7 @@ def read_fixture_token(path):
 
 
 def create_fixture_app(directory, scenario):
-    if scenario not in ('sample', 'empty', 'unavailable'):
+    if scenario not in ('sample', 'titles', 'empty', 'unavailable'):
         raise ValueError('Unsupported fixture scenario')
     state = Path(directory) / 'state.json'
     if state.exists() or state.is_symlink():
@@ -44,15 +44,21 @@ def create_fixture_app(directory, scenario):
               'keep_seen': {'Fixture D': '2024-01-01'},
               'in_removal': {'Fixture E': '2024-01-01'},
               'arr_sync_pending': {'Fixture C': {'stage': 'holding', 'root': '/fixture/holding'}}}
+    if scenario == 'titles':
+        sample = {
+            'first_seen': {f'Fixture Movie {n:02}': f'2024-01-{n:02}' for n in range(1, 13)},
+            'queued': {f'TV/Fixture Series {n:02}': f'2024-02-{n:02}' for n in range(1, 13)},
+        }
     if scenario != 'unavailable':
         with state.open('x') as handle:
-            json.dump(sample if scenario == 'sample' else {}, handle)
+            json.dump(sample if scenario in ('sample', 'titles') else {}, handle)
     app = Flask('auditor_widget_fixture')
     app.config.update(DEBUG=False, TESTING=False)
 
     @app.before_request
     def authorize():
-        if request.path not in ('/api/v1/summary', '/api/v1/audit-status'):
+        if request.path not in ('/api/v1/summary', '/api/v1/audit-status',
+                                '/api/v1/titles/oldest-waiting', '/api/v1/titles/leaving-soon'):
             return {'status': 'fixture_route_unavailable'}, 404
         error = authorize_summary(request.headers.get('Authorization'))
         if error is not None:
@@ -70,6 +76,13 @@ def create_fixture_app(directory, scenario):
     @app.get('/api/v1/summary')
     def summary():
         report = read_tracking_status(state)
+        report['fixture_only'] = True
+        return report, 503 if report['status'] == 'unavailable' else 200
+
+    @app.get('/api/v1/titles/oldest-waiting', defaults={'view': 'oldest-waiting'})
+    @app.get('/api/v1/titles/leaving-soon', defaults={'view': 'leaving-soon'})
+    def titles(view):
+        report = read_tracking_titles(state, view)
         report['fixture_only'] = True
         return report, 503 if report['status'] == 'unavailable' else 200
 
@@ -124,7 +137,7 @@ def serve_fixture(app, seconds):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--token-file', required=True)
-    parser.add_argument('--scenario', choices=('sample', 'empty', 'unavailable'), default='sample')
+    parser.add_argument('--scenario', choices=('sample', 'titles', 'empty', 'unavailable'), default='sample')
     parser.add_argument('--lifetime-seconds', type=int, default=900)
     args = parser.parse_args(argv)
     if not Path('/.dockerenv').is_file() or not 30 <= args.lifetime_seconds <= 3600:

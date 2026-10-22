@@ -3,11 +3,11 @@
 set -eu
 umask 077
 if [ "$#" -gt 1 ]; then
-  printf '%s\n' 'Usage: bash scripts/integration_widget_lab.sh [sample|empty|unavailable]' >&2
+  printf '%s\n' 'Usage: bash scripts/integration_widget_lab.sh [sample|titles|empty|unavailable]' >&2
   exit 2
 fi
 scenario=${1:-sample}
-case "$scenario" in sample|empty|unavailable) ;; *) exit 2 ;; esac
+case "$scenario" in sample|titles|empty|unavailable) ;; *) exit 2 ;; esac
 repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 [ "$(docker network inspect bridge --format '{{.Driver}}')" = bridge ]
 icc=$(docker network inspect bridge --format '{{index .Options "com.docker.network.bridge.enable_icc"}}')

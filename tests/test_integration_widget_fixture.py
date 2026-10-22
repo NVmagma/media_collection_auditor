@@ -1,4 +1,4 @@
-"""Synthetic widget fixture has exactly two authenticated, read-only routes."""
+"""Synthetic widget fixture exposes only authenticated, read-only integration views."""
 import pytest
 from scripts.integration_widget_fixture import create_fixture_app, read_fixture_token
 
@@ -105,3 +105,41 @@ def test_unbounded_or_invalid_lifetime_refused_before_credential_read(monkeypatc
     monkeypatch.setattr(module.Path, 'is_file', lambda self: True)
     monkeypatch.setattr(module, 'read_fixture_token', lambda path: pytest.fail('No credential read'))
     assert module.main(['--token-file', '/unused', '--lifetime-seconds', seconds]) == 2
+
+
+@pytest.mark.parametrize('scenario,code,count', [('sample', 200, 2), ('empty', 200, 0), ('unavailable', 503, None)])
+@pytest.mark.parametrize('view', ['oldest-waiting', 'leaving-soon'])
+def test_title_fixture_views_share_production_projection(tmp_path, monkeypatch, scenario, code, count, view):
+    monkeypatch.setenv('INTEGRATION_API_TOKEN', TOKEN)
+    client = create_fixture_app(tmp_path, scenario).test_client()
+    path = '/api/v1/titles/' + view
+    assert client.get(path).status_code == 401
+    assert client.post(path, headers=AUTH).status_code == 405
+    response = client.get(path, headers=AUTH)
+    assert response.status_code == code
+    report = response.json
+    assert report['fixture_only'] is True
+    assert report['production_authorized'] is False
+    assert report['freshness_verified'] is False
+    assert response.headers['Cache-Control'] == 'no-store'
+    if scenario == 'unavailable':
+        assert report['items'] is None
+    else:
+        assert len(report['items']) == (1 if scenario == 'sample' and view == 'leaving-soon' else count)
+        for item in report['items']:
+            assert item['transition_authorized'] is False
+            assert set(item) == {'title', 'library', 'stage', 'since',
+                                 'estimated_removal_stage_at', 'transition_authorized'}
+    assert '/fixture/holding' not in response.text
+
+
+@pytest.mark.parametrize('view', ['oldest-waiting', 'leaving-soon'])
+def test_dense_fixture_exercises_ten_rows_and_truncation(tmp_path, monkeypatch, view):
+    monkeypatch.setenv('INTEGRATION_API_TOKEN', TOKEN)
+    client = create_fixture_app(tmp_path, 'titles').test_client()
+    report = client.get('/api/v1/titles/' + view, headers=AUTH).json
+    assert len(report['items']) == 10
+    assert report['total_records'] == 12
+    assert report['truncated'] is True
+    assert report['items'][0]['title'].endswith('01')
+    assert report['items'][-1]['title'].endswith('10')
