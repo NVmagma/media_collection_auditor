@@ -8,6 +8,8 @@ import os
 from pathlib import Path
 import sqlite3
 import stat
+import sys
+from uuid import UUID
 
 from app.sqlite_lock import _exclusive_lock
 
@@ -30,8 +32,35 @@ def _root(path):
     return root
 
 
-def create_disposable_journal(root):
-    """Create a NEW fixture; never accept an existing state/control directory."""
+def _linux_boot_id():
+    # Linux-only capability: never substitute wall time, PID, hostname or a
+    # caller-supplied value when the kernel boot identity is unavailable.
+    if sys.platform != "linux":
+        raise RuntimeError("Linux boot identity unavailable")
+    try:
+        with open("/proc/sys/kernel/random/boot_id", "rb") as source:
+            raw = source.read(38)
+        value = raw.decode("ascii")
+        if len(value) != 37 or not value.endswith("\n"):
+            raise ValueError("Invalid boot identity length")
+        value = value[:-1]
+        parsed = UUID(value)
+        if str(parsed) != value or parsed.int == 0:
+            raise ValueError("Invalid boot identity")
+    except (OSError, ValueError, UnicodeError) as exc:
+        raise RuntimeError("Linux boot identity unavailable") from exc
+    return value
+
+
+def create_disposable_journal(root, *, bind_linux_boot=False):
+    """Create a NEW fixture; never accept an existing state/control directory.
+
+    Linux NFS fixtures require boot binding. The portable path-only mode is
+    retained for synthetic ordering tests, not external writer coordination.
+    """
+    if type(bind_linux_boot) is not bool:
+        raise ValueError("Boolean boot binding selection required")
+    boot_id = _linux_boot_id() if bind_linux_boot else None
     root = _root(root)
     root.mkdir(mode=0o700)  # Exclusive creation; preserve partial labs on error.
     with (root / ".disposable_maintenance").open("xb") as output:
@@ -41,8 +70,9 @@ def create_disposable_journal(root):
     with closing(sqlite3.connect(root / "maintenance.db")) as db, db:
         db.execute("PRAGMA synchronous=FULL")
         db.execute("CREATE TABLE fixture_binding (path TEXT NOT NULL, root_device INTEGER NOT NULL, "
-                   "root_inode INTEGER NOT NULL, db_device INTEGER NOT NULL, db_inode INTEGER NOT NULL)")
-        db.execute("INSERT INTO fixture_binding VALUES (?, ?, ?, ?, ?)", _identity(root))
+                   "root_inode INTEGER NOT NULL, db_device INTEGER NOT NULL, db_inode INTEGER NOT NULL, "
+                   "linux_boot_id TEXT)")
+        db.execute("INSERT INTO fixture_binding VALUES (?, ?, ?, ?, ?, ?)", (*_identity(root), boot_id))
         db.execute("CREATE TABLE events (revision INTEGER PRIMARY KEY, phase TEXT NOT NULL)")
         db.execute("INSERT INTO events VALUES (0, 'prepared')")
     directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
@@ -76,7 +106,7 @@ def _identity(root):
     return (str(root), directory.st_dev, directory.st_ino, database.st_dev, database.st_ino)
 
 
-def _verify_binding(db, root):
+def _verify_binding(db, root, *, require_linux_boot=False):
     try:
         rows = db.execute("SELECT path, root_device, root_inode, db_device, db_inode "
                           "FROM fixture_binding").fetchall()
@@ -84,6 +114,20 @@ def _verify_binding(db, root):
         raise RuntimeError("Disposable journal binding unavailable") from exc
     if rows != [_identity(root)]:
         raise RuntimeError("Disposable journal binding changed")
+    try:
+        boot_rows = db.execute("SELECT linux_boot_id FROM fixture_binding").fetchall()
+    except sqlite3.Error as exc:
+        # Old fixture formats are retained for offline review, never upgraded
+        # or silently treated as unbound during recovery.
+        raise RuntimeError("Disposable journal boot binding unavailable") from exc
+    if boot_rows == [(None,)]:
+        if require_linux_boot:
+            raise RuntimeError("Linux boot-bound fixture required")
+        return  # Portable path-only fixture; never used by the Linux NFS lab.
+    if len(boot_rows) != 1 or not isinstance(boot_rows[0][0], str):
+        raise RuntimeError("Disposable journal boot binding invalid")
+    if boot_rows != [(_linux_boot_id(),)]:
+        raise RuntimeError("Disposable journal boot binding changed")
 
 
 @contextmanager
@@ -147,8 +191,10 @@ def _report(rows):
             "fixture_only": True}
 
 
-def inspect_disposable_journal(root):
+def inspect_disposable_journal(root, *, require_linux_boot=False):
     """Inspect through a read-only connection; missing journals are not created."""
+    if type(require_linux_boot) is not bool:
+        raise ValueError("Boolean boot binding requirement required")
     root = _root(root)
     _fixture(root)
     path = root / "maintenance.db"
@@ -157,9 +203,9 @@ def inspect_disposable_journal(root):
         raise RuntimeError("Unsafe disposable journal")
     with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True)) as db:
         db.execute("BEGIN")
-        _verify_binding(db, root)
+        _verify_binding(db, root, require_linux_boot=require_linux_boot)
         report = _report(_history(db))
-        _verify_binding(db, root)
+        _verify_binding(db, root, require_linux_boot=require_linux_boot)
         return report
 
 

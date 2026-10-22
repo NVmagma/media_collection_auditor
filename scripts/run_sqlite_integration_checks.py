@@ -17,7 +17,7 @@ TESTS = (
     "test_sqlite_nfs_restart_probe", "test_sqlite_nfs_restart_guard",
     "test_sqlite_disposable_maintenance_journal",
     "test_sqlite_disposable_maintenance_controller",
-    "test_sqlite_maintenance_scope_binding",
+    "test_sqlite_maintenance_scope_binding", "test_sqlite_maintenance_boot_binding",
     "test_sqlite_disposable_maintenance_writer",
     "test_sqlite_disposable_cutover_rehearsal", "test_sqlite_cutover_process_lock",
     "test_sqlite_lock", "test_sqlite_migration", "test_sqlite_migration_interruptions",
@@ -47,7 +47,7 @@ WRITER_TESTS = (
 )
 
 MAINTENANCE_TESTS = (
-    "test_sqlite_disposable_maintenance_writer", "test_sqlite_maintenance_scope_binding",
+    "test_sqlite_disposable_maintenance_writer", "test_sqlite_maintenance_scope_binding", "test_sqlite_maintenance_boot_binding",
     "test_sqlite_disposable_maintenance_controller", "test_sqlite_disposable_maintenance_journal",
     "test_sqlite_production_cutover_guard", "test_sqlite_lock",
 )

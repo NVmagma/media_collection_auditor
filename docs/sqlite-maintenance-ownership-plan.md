@@ -574,8 +574,8 @@ remain outside this source review.
 
 The read-only restart probe now hashes `rc.S`, `rc.M`, `rc.inet2` and `rc.local`
 as well. It never sources those files, reads custom go contents, invokes the
-manager or changes startup preferences. Installed matches are still required
-before applying this review to Tower. Hash agreement does not prove an early,
+manager or changes startup preferences. The user confirmed all ten installed source hashes match, including the four
+boot scripts; both selected NFS preferences remain enabled. Hash agreement does not prove an early,
 persistent fence. The deployment design must deny automatic service startup
 before any writer can resume, including Safe Mode, missing/corrupt durable
 intent, upgrade/replacement and failed guard installation. Unknown boot state
@@ -586,3 +586,31 @@ Reviewed sources:
 [rc.M](https://github.com/unraid/webgui/blob/26eb1b5c1d547ddbf44a38e63956ba24f659098b/etc/rc.d/rc.M),
 [rc.inet2](https://github.com/unraid/webgui/blob/26eb1b5c1d547ddbf44a38e63956ba24f659098b/etc/rc.d/rc.inet2),
 [rc.local](https://github.com/unraid/webgui/blob/26eb1b5c1d547ddbf44a38e63956ba24f659098b/etc/rc.d/rc.local).
+
+### Linux boot binding for retained NFS fixture intent
+
+New NFS crash/guard fixtures require `bind_linux_boot=True` when creating their
+journal. The kernel boot UUID is captured before creating the fixture and
+stored with its existing path/device/inode binding. Each controller boundary
+and inspection rechecks that UUID. Missing, malformed or changed kernel identity
+blocks further transitions, synthetic actions and release; committed intent is
+retained. Reading is bounded and accepts only a nonzero canonical UUID from
+Linux's fixed `/proc/sys/kernel/random/boot_id` interface. There is no fallback
+to timestamps, hostnames or caller-supplied identifiers.
+
+The NFS client also requires a boot-bound journal when inspecting pending
+intent: a portable path-only synthetic fixture cannot satisfy acceptance.
+Its successful report identifies `journal_scope=current_linux_boot`, never a
+production permit. Portable synthetic journal tests still support path-only
+bindings. Old fixture databases without the boot-binding column are rejected
+without automatic schema migration, rebinding or replay; their files remain
+available for offline review. Always create a new lab through the harness.
+
+Regression tests simulate boot drift at every checkpoint and after a synthetic
+action, verify no completion/release or receipt is inferred, and check database
+bytes remain unchanged on rejected inspection/recovery. Simulated identities
+test the decision logic; the live Linux fixture must additionally verify the
+real kernel interface. These checks do not reboot Tower, persist a guard, stop
+startup services, prove NFSv4/kernel-client exclusion, or close Gate 6. Host
+boot fencing and any eventual production restart-clearance implementation
+remain separate requirements.

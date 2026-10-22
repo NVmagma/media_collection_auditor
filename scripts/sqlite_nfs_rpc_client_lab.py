@@ -161,13 +161,13 @@ def prepare_pending_journal(control):
     from app.sqlite_disposable_maintenance_journal import (
         create_disposable_journal, advance_disposable_journal)
     root = control / "maintenance-journal"
-    create_disposable_journal(root)
+    create_disposable_journal(root, bind_linux_boot=True)
     advance_disposable_journal(root, expected_revision=0, phase="fence_requested")
 
 
 def pending_journal(control):
     from app.sqlite_disposable_maintenance_journal import inspect_disposable_journal
-    report = inspect_disposable_journal(control / "maintenance-journal")
+    report = inspect_disposable_journal(control / "maintenance-journal", require_linux_boot=True)
     if report["phase"] != "fence_requested" or report["revision"] != 1:
         raise RuntimeError("Crash journal no longer has the unresolved request")
     return report["phase"]
@@ -225,7 +225,7 @@ def run(control, export, scenario="restore"):
         mark(control, "client.complete")
         return {"status": ("fixture_restart_entrypoints_complete" if scenario == "restart-guard"
                            else "fixture_controller_crash_complete"),
-                "pending_phase": phase, "automatic_write_retries": 0,
+                "pending_phase": phase, "journal_scope": "current_linux_boot", "automatic_write_retries": 0,
                 "automatic_restoration": False, "production_authorized": False,
                 "writer_exclusion_verified": False, "production_activation": "disabled",
                 "restart_inhibition_verified": False}

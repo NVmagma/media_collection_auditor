@@ -826,3 +826,19 @@ in Safe Mode; a plugin-only guard is insufficient. The read-only restart probe
 now compares four boot-script identities without executing them. Installed boot
 identities, manager startup behavior and an enforceable persistent guard remain
 unverified. Gate 6 stays open; no production controls or authorization changed.
+
+
+### Boot identities confirmed; NFS fixture journals bound to their Linux boot
+
+The user confirmed all ten reviewed source hashes match on Tower, including
+`rc.S`, `rc.M`, `rc.inet2` and `rc.local`; both selected NFS preferences remain
+enabled. This confirms source identity, not a persistent boot fence.
+
+New private NFS crash/guard journals now capture Linux boot identity and verify
+it on every inspection/transition. Changed/unavailable identity prevents
+continuation or release, retaining intent; path-only synthetic journals cannot
+satisfy NFS acceptance. Legacy fixtures are never automatically upgraded or
+rebound. Tests cover every phase plus drift after action. Local maintained checks pass 553 tests and 19 subtests. The live private lab
+still needs acceptance against the actual Linux interface. Production restart
+inhibition and writer exclusion remain false, and all production gate blockers
+remain intact.

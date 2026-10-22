@@ -93,6 +93,8 @@ def test_invalid_mount_authentication_or_handle_refused(monkeypatch, payload):
 
 def test_transport_failures_are_not_retried_before_explicit_restoration(tmp_path, monkeypatch):
     events = []
+    from app import sqlite_disposable_maintenance_journal as journal
+    monkeypatch.setattr(journal, "_linux_boot_id", lambda: "17998968-809c-42c5-817a-d7e652aa7b03")
     monkeypatch.setattr(client, "connect", lambda _: Socket())
     monkeypatch.setattr(client, "file_handle", lambda _: b"handle")
     monkeypatch.setattr(client, "wait", lambda control, phase: events.append(phase))
@@ -127,6 +129,8 @@ def test_protocol_error_while_paused_is_not_reported_as_denial(tmp_path, monkeyp
 
 def crash_fixture(monkeypatch, *, complete_crash_write=False, complete_guard_write=False):
     events = []
+    from app import sqlite_disposable_maintenance_journal as journal
+    monkeypatch.setattr(journal, "_linux_boot_id", lambda: "17998968-809c-42c5-817a-d7e652aa7b03")
     monkeypatch.setattr(client, "connect", lambda _: Socket())
     monkeypatch.setattr(client, "file_handle", lambda _: b"handle")
     monkeypatch.setattr(client, "wait", lambda control, phase: events.append(phase))
@@ -209,3 +213,15 @@ def test_completed_write_after_restart_attempts_fails_acceptance(tmp_path, monke
     assert "client.restart-probes-complete" not in events
     assert "client.complete" not in events
     assert client.pending_journal(tmp_path) == "fence_requested"
+
+
+def test_unbound_portable_fixture_cannot_satisfy_linux_lab_acceptance(tmp_path):
+    from app.sqlite_disposable_maintenance_journal import (
+        create_disposable_journal, advance_disposable_journal)
+    root = tmp_path / "maintenance-journal"
+    create_disposable_journal(root)
+    advance_disposable_journal(root, expected_revision=0, phase="fence_requested")
+    before = (root / "maintenance.db").read_bytes()
+    with pytest.raises(RuntimeError, match="boot-bound fixture required"):
+        client.pending_journal(tmp_path)
+    assert (root / "maintenance.db").read_bytes() == before
