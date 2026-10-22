@@ -646,3 +646,38 @@ or a production permit. Production still needs independently held enforcement
 and scope references, restart inhibition and explicit recovery. This harness
 never starts/stops NFS, mounts a kernel client, changes exports or configuration,
 reboots Tower, grants restart clearance or closes Gate 6.
+
+### Accepted namespace rejection and retained-journal review
+
+The user confirmed the two-container scope lab through `c73297a`: the new
+namespace was rejected, the physical journal bytes were unchanged and no NFS
+control/configuration was touched. This accepts the bounded scope-rejection
+scenario; it does not establish continuous namespace ownership or fencing.
+
+`app/sqlite_maintenance_review.py` and its read-only CLI support reviewing a
+retained marked fixture after its original container/namespace disappears or
+its mount path changes. This API is separate from strict operational inspection:
+operational transitions still reject binding drift. The review reports validated
+phase/revision and categorical path/boot/network observations, never raw stored
+paths, boot UUIDs or namespace identifiers. It always denies resume, clearance,
+production authorization, restart inhibition and writer exclusion, including
+when every observed binding matches or a synthetic history reached released.
+An exit code of zero means only that fixture history could be read.
+
+The source is opened read-only without following a database symlink, checked
+for a single regular-file link and stable path/file metadata, and read into a
+bounded one-MiB image. SQLite queries only that detached image in memory with
+query-only mode and memory temporary storage; it never opens the source database
+or creates a controller lock or SQLite sidecars beside it. Existing rollback,
+WAL or shared-memory sidecars block review without deletion, recovery or
+checkpointing. Unsupported detached-deserialization capability fails closed.
+Missing/unmarked/aliased roots, oversized data, source replacement and invalid
+history cannot become clearance. Old schemas can be described as unavailable
+without migration or rebinding. The original evidence is retained.
+
+On Unraid, mount only the selected retained fixture at `/review:ro` and the
+checkout at `/src:ro` in the cached Python lab image, with network disabled,
+a read-only container root, all capabilities dropped and no-new-privileges.
+Run `python -B /src/scripts/sqlite_maintenance_review.py --root /review` with
+`PYTHONPATH=/src`. A relocated path or different network is expected evidence
+for this report, not permission to resume. Gate 6 remains open.

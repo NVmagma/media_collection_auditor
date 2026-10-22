@@ -856,3 +856,19 @@ subtests, including drift at every phase and after action, plus refusal to count
 unrelated detected failures as successful rejection.
 Stored namespace identifiers do not replace held kernel references or establish
 continuous fencing. Gate 6 and all existing production blockers remain open.
+
+
+### Namespace rejection accepted; detached evidence review added
+
+The user confirmed `c73297a` on Tower: a different network namespace was rejected
+and journal bytes remained unchanged. No NFS service/export/configuration action
+was performed. That bounded fixture acceptance does not close Gate 6.
+
+A new read-only retained-journal CLI reports validated history plus categorical
+scope drift after container teardown or path relocation. It queries a bounded
+detached in-memory image, never source SQLite files; unresolved sidecars block
+review without recovery. Source replacement, invalid history and missing inputs
+fail closed. It never migrates/rebinds or grants resume/clearance, even with
+matching scope. Strict operational inspection and all production blockers remain
+unchanged. Local maintained checks pass 584 tests and 19 subtests. The real
+read-only Docker mount check is pending on Unraid.
