@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
 # Real NFSv3 RPC fixture; private net/PID/mount namespaces and private RPC state.
 # No host service scripts, production exports, client kernel mounts or builds.
+# --controller-crash leaves the private server stopped and journal pending.
 set -euo pipefail
 printf '%s\n' 'production_activation=disabled' 'writer_exclusion_verified=false'
-if [ "$#" -ne 1 ] || [ "$(uname -s)" != Linux ] || [ "$EUID" -ne 0 ]; then
-  printf '%s\n' 'Usage: bash scripts/sqlite_nfs_client_lab.sh EXISTING_ABSOLUTE_LAB_PARENT' >&2
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ] || [ "$(uname -s)" != Linux ] || [ "$EUID" -ne 0 ]; then
+  printf '%s\n' 'Usage: bash scripts/sqlite_nfs_client_lab.sh EXISTING_ABSOLUTE_LAB_PARENT [--controller-crash]' >&2
   exit 2
+fi
+scenario=restore
+if [ "$#" = 2 ]; then
+  [ "$2" = --controller-crash ] || { printf '%s\n' 'blocked=unknown_scenario' >&2; exit 2; }
+  scenario=controller-crash
 fi
 parent=$1
 case "$parent" in /*) :;; *) exit 2;; esac
@@ -47,9 +53,10 @@ container_id=$(docker run -d --pull=never --network none --read-only --cap-drop 
   --label media-auditor.disposable-nfs-client=true \
   --security-opt no-new-privileges --tmpfs /tmp:rw \
   -e PYTHONDONTWRITEBYTECODE=1 \
+  -e PYTHONPATH=/src \
   -v "$repo:/src:ro" -v "$lab/control:/control:rw" \
   "$image" python -B /src/scripts/sqlite_nfs_rpc_client_lab.py \
-  --control /control --export "$lab/data" --host-netns "$host_net")
+  --control /control --export "$lab/data" --host-netns "$host_net" --scenario "$scenario")
 client_pid=$(docker inspect --format '{{.State.Pid}}' "$container_id")
 case "$client_pid" in ''|*[!0-9]*|0) printf '%s\n' 'blocked=client_not_running' >&2; exit 2;; esac
 # Pin the namespace itself so later PID reuse cannot retarget nsenter.
@@ -63,8 +70,9 @@ server_status=0
 timeout --kill-after=5s 100s \
   nsenter --net="/proc/self/fd/$client_net_fd" \
   unshare --mount --pid --fork --kill-child --mount-proc --propagation private \
-  bash -euo pipefail -s -- "$lab" "$host_net" "$host_mnt" "$host_control" "$client_net" <<'SERVER' || server_status=$?
+  bash -euo pipefail -s -- "$lab" "$host_net" "$host_mnt" "$host_control" "$client_net" "$scenario" <<'SERVER' || server_status=$?
 lab=$1; host_net=$2; host_mnt=$3; host_control=$4; client_net=$5
+scenario=${6:-restore}
 control=/proc/fs/nfsd
 namespaces(){
   [ "$(readlink /proc/self/ns/net)" = "$client_net" ] &&
@@ -72,6 +80,7 @@ namespaces(){
     [ "$(readlink /proc/self/ns/mnt)" != "$host_mnt" ]
 }
 namespaces
+[ "$$" = 1 ]  # Supervisor must be init of the new disposable PID namespace.
 # Utilities cannot reach production exports, RPC UNIX sockets or state paths.
 mount -n --bind "$lab/etc" /etc
 mount -n -t tmpfs -o size=16m,nosuid,nodev tmpfs /var/lib
@@ -144,17 +153,49 @@ verify
 touch "$lab/control/server.ready"
 wait_file client.ready
 payload_matches 'BEFORE!'
-verify
-printf '0\n' > "$control/threads"
-verify
-[ "$(cat "$control/threads")" = 0 ]
+pause_controller(){
+  verify
+  printf '0\n' > "$control/threads"
+  verify
+  [ "$(cat "$control/threads")" = 0 ]
+  touch "$lab/control/server.paused"
+  if [ "$scenario" = controller-crash ]; then
+    while :; do sleep 1; done
+  fi
+}
+if [ "$scenario" = controller-crash ]; then
+  # Independent worker: PID-namespace init and RPC helpers stay alive when killed.
+  pause_controller &
+  pause_pid=$!
+  wait_file server.paused
+else
+  pause_controller
+fi
 started=0
-touch "$lab/control/server.paused"
 wait_file client.blocked
 verify
 [ "$(cat "$control/threads")" = 0 ]
 payload_matches 'BEFORE!'
 printf '%s\n' 'paused_fixture_bytes_unchanged=true'
+if [ "$scenario" = controller-crash ]; then
+  [ "$(readlink "/proc/$pause_pid/ns/net")" = "$client_net" ]
+  kill -KILL "$pause_pid"
+  pause_exit=0
+  wait "$pause_pid" 2>/dev/null || pause_exit=$?
+  [ "$pause_exit" = 137 ]
+  printf '%s\n' 'pause_controller_killed=true'
+  touch "$lab/control/server.controller-dead"
+  wait_file client.after-death-blocked
+  wait_file client.complete
+  verify
+  [ "$(cat "$control/threads")" = 0 ]
+  # Prove the RPC environment still exists; this is not whole-lab teardown.
+  rpcinfo -p 127.0.0.1 >/dev/null
+  payload_matches 'BEFORE!'
+  printf '%s\n' 'after_controller_death_threads=0' 'after_controller_death_bytes_unchanged=true'
+  printf '%s\n' 'automatic_restoration=false'
+  exit 0
+fi
 verify
 started=1
 printf '1\n' > "$control/threads"
@@ -183,6 +224,11 @@ if [ "$server_status" -ne 0 ] || [ "$after" != "$host_threads" ] ||
 fi
 client_status=$(timeout 10s docker wait "$container_id")
 [ "$client_status" = 0 ]
-printf '%s\n' 'status=isolated_NFSv3_RPC_fixture_complete' \
+if [ "$scenario" = controller-crash ]; then
+  printf '%s\n' 'status=isolated_NFSv3_controller_crash_complete'
+else
+  printf '%s\n' 'status=isolated_NFSv3_RPC_fixture_complete'
+fi
+printf '%s\n' \
   'Production exports/state unchanged; fixture artifacts retained.' \
   'No NFSv4, kernel-client cache, permanent denial or restart-inhibition claim.'

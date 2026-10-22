@@ -154,6 +154,38 @@ is pending. Even a passing result will not cover NFSv4, Mac/kernel client
 writeback, all delayed requests, persistent restart inhibition or other writers.
 Those remain requirements before production ownership can be granted.
 
+### Controller-death scenario with retained SQLite intent
+
+The user confirmed the ordinary NFSv3 client lab through `2f2e039`: fixture bytes
+stay unchanged while paused, a fresh explicit write succeeds after restoration,
+host threads remain eight, and production export/etab hashes match. The client
+reports uncertain paused transport outcomes and zero automatic retries. This
+establishes only that isolated NFSv3 roundtrip, not production ownership.
+
+The optional `--controller-crash` scenario creates a new disposable SQLite
+journal under the client control directory and commits `fence_requested`
+before its readiness signal allows a separate pause worker to act. The lab
+supervisor must be PID 1 of its new PID namespace. Once paused transport probes
+finish, the supervisor kills only its own pause-worker child and verifies the
+expected signal exit. RPC helpers and the namespace supervisor remain alive.
+
+After that death, an independent new RPC connection must still fail to complete
+a distinct fixture write, the private NFSD count must remain zero and the
+fixture hash must remain unchanged. The client inspects the SQLite journal and
+requires revision 1/`fence_requested`; it never advances or clears the request
+from observed bytes or pause. No restoration is attempted in this scenario.
+Artifacts remain for review after temporary lab/container teardown. The
+journal's stored path refers to its client-side `/control` fixture view; it
+must not be automatically rebound or promoted into a production recovery permit.
+
+Local tests cover actual durable journal ordering, unexpected successful RPC
+writes after death, changed/preexisting journals, and the real shell worker's
+SIGKILL behavior using regular files. The actual NFSD controller-death run is
+pending on Unraid. This is a failure-ordering rehearsal; it does not bind a
+trusted production enforcer to journal authority or prevent another trusted
+administrator/service from restarting NFSD. Persistent restart inhibition,
+NFSv4/kernel-client writeback and other writer fences remain unimplemented.
+
 ## Implemented disposable journal foundation
 
 `app/sqlite_disposable_maintenance_journal.py` creates only new fixture roots.

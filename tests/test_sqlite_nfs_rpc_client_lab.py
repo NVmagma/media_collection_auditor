@@ -123,3 +123,68 @@ def test_protocol_error_while_paused_is_not_reported_as_denial(tmp_path, monkeyp
     with pytest.raises(RuntimeError):
         client.run(tmp_path, "/fixture/data")
     assert marks == ["client.ready"]
+
+
+def crash_fixture(monkeypatch, *, complete_crash_write=False):
+    events = []
+    monkeypatch.setattr(client, "connect", lambda _: Socket())
+    monkeypatch.setattr(client, "file_handle", lambda _: b"handle")
+    monkeypatch.setattr(client, "wait", lambda control, phase: events.append(phase))
+    monkeypatch.setattr(client, "mark", lambda control, phase: events.append(phase))
+    def write(sock, handle, payload):
+        events.append(payload)
+        if payload in (b"DURING!\n", b"NEWTRY!\n") or (
+                payload == b"CRASH!!\n" and not complete_crash_write):
+            raise ConnectionResetError("fixture transport unavailable")
+    monkeypatch.setattr(client, "write", write)
+    return events
+
+
+def test_controller_crash_retains_real_journal_without_restore(tmp_path, monkeypatch):
+    events = crash_fixture(monkeypatch)
+    from app.sqlite_disposable_maintenance_journal import inspect_disposable_journal
+    def wait(control, phase):
+        if phase in ("server.paused", "server.controller-dead"):
+            assert inspect_disposable_journal(control / "maintenance-journal")["phase"] == "fence_requested"
+        events.append(phase)
+    monkeypatch.setattr(client, "wait", wait)
+    report = client.run(tmp_path, "/fixture/data", "controller-crash")
+    assert report["pending_phase"] == "fence_requested"
+    assert report["automatic_restoration"] is False
+    assert report["restart_inhibition_verified"] is False
+    assert report["production_authorized"] is False
+    assert "server.restored" not in events
+    assert b"AFTER!!\n" not in events
+    assert events[-3:] == [b"CRASH!!\n", "client.after-death-blocked", "client.complete"]
+    assert inspect_disposable_journal(tmp_path / "maintenance-journal")["revision"] == 1
+
+
+def test_live_write_after_controller_death_fails_acceptance(tmp_path, monkeypatch):
+    events = crash_fixture(monkeypatch, complete_crash_write=True)
+    with pytest.raises(RuntimeError, match="after pause-controller death"):
+        client.run(tmp_path, "/fixture/data", "controller-crash")
+    assert "client.complete" not in events
+    assert client.pending_journal(tmp_path) == "fence_requested"
+
+
+def test_changed_journal_never_gets_cleared_or_accepted(tmp_path, monkeypatch):
+    events = crash_fixture(monkeypatch)
+    from app.sqlite_disposable_maintenance_journal import advance_disposable_journal
+    def wait(control, phase):
+        if phase == "server.controller-dead":
+            advance_disposable_journal(control / "maintenance-journal", expected_revision=1,
+                                       phase="fixture_fenced")
+        events.append(phase)
+    monkeypatch.setattr(client, "wait", wait)
+    with pytest.raises(RuntimeError, match="unresolved request"):
+        client.run(tmp_path, "/fixture/data", "controller-crash")
+    assert "client.complete" not in events
+
+
+def test_existing_crash_journal_stops_before_pause_request(tmp_path, monkeypatch):
+    events = crash_fixture(monkeypatch)
+    client.prepare_pending_journal(tmp_path)
+    with pytest.raises(FileExistsError):
+        client.run(tmp_path, "/fixture/data", "controller-crash")
+    assert "client.ready" not in events
+    assert client.pending_journal(tmp_path) == "fence_requested"

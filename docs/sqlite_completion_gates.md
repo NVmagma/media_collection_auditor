@@ -766,3 +766,20 @@ Local protocol/guard checks pass 29 tests. The maintained consolidated suite
 passes 504 tests and 19 subtests on macOS. Real NFSD/client execution awaits
 Unraid. NFSv4, queued client writeback, restart inhibition, container fencing
 and production wiring remain open; no production gate is closed by this lab.
+
+### Real NFSv3 pause roundtrip confirmed; controller-death scenario added
+
+The user confirmed `2f2e039` on Tower: isolated RPC fixture completion, unchanged
+bytes during pause, verified fresh write after explicit lab restoration, eight
+host threads before/after and unchanged host export/etab hashes. The client
+reports zero automatic retries and uncertainty for paused transport failures.
+
+The new optional controller-death scenario commits a disposable SQLite pause
+request before action, kills only the pause-worker child while keeping the
+private RPC environment alive, and requires further denied transport, zero
+threads, unchanged fixture bytes and an unresolved revision-1 journal. It does
+not restore the private server or clear intent. Local focused protocol, guard,
+journal and cutover checks pass 63 tests, including real SIGKILL of the shell
+worker against regular fixture files. Actual NFSD death-scenario results await
+Unraid. Production restart inhibition/enforcer authority remain unfinished;
+all production gates and safeguards retain their previous status.
