@@ -13,6 +13,24 @@ def _overlap(left, right):
     return left == right or left in right.parents or right in left.parents
 
 
+def _control_requirements(issues, *, running):
+    required = set()
+    if "writable_declared_media_mount" in issues or "writable_destination_overlap" in issues:
+        required.update(("fence_media_write_routes", "inhibit_writer_start_or_restart"))
+        if not running:
+            required.add("keep_stopped_writer_fenced")
+    if "read_only_media_mount_unverified" in issues:
+        required.add("verify_read_only_media_routes")
+    if "socket_access_requires_review" in issues:
+        required.add("fence_administrative_api_routes")
+    if issues.intersection({"privileged_container_review_required", "added_capabilities_review_required",
+                            "host_pid_access_review_required", "device_access_review_required"}):
+        required.add("review_elevated_host_access")
+    if "non_bind_writer_requires_review" in issues:
+        required.add("resolve_non_bind_storage_scope")
+    return sorted(required)
+
+
 def review_container_mounts(records, *, media_roots):
     roots = [_path(value) for value in media_roots]
     if not roots or len(set(roots)) != len(roots) or PurePosixPath("/") in roots:
@@ -45,7 +63,7 @@ def review_container_mounts(records, *, media_roots):
             if item["Type"] == "bind" and source is None:
                 raise ValueError("Selected bind source unavailable")
             mounts.append((item, source, destination))
-        direct = [destination for _, source, destination in mounts
+        direct = [(index, destination) for index, (_, source, destination) in enumerate(mounts)
                   if source is not None and any(_overlap(source, root) for root in roots)]
         issues = set()
         observations = []
@@ -57,12 +75,13 @@ def review_container_mounts(records, *, media_roots):
             issues.add("host_pid_access_review_required")
         if record["device_count"]:
             issues.add("device_access_review_required")
-        for item, source, destination in mounts:
+        for index, (item, source, destination) in enumerate(mounts):
             reasons = []
             if source is not None and any(_overlap(source, root) for root in roots):
                 reasons.append("declared_media_source_overlap")
                 issues.add("writable_declared_media_mount" if item["RW"] else "read_only_media_mount_unverified")
-            if item["RW"] and any(_overlap(destination, media) for media in direct):
+            if item["RW"] and any(index != other and _overlap(destination, media)
+                                  for other, media in direct):
                 reasons.append("writable_destination_overlap")
                 issues.add("writable_destination_overlap")
             # Read-only access to a Docker socket still permits administrative
@@ -80,10 +99,12 @@ def review_container_mounts(records, *, media_roots):
         if issues:
             reviewed.append({"name": record["name"], "running": record["running"],
                              "paused": record["paused"], "restart": record["restart"],
-                             "issues": sorted(issues), "mounts": observations})
+                             "issues": sorted(issues), "mounts": observations,
+                             "control_requirements": _control_requirements(issues, running=record["running"])})
     return {"status": "review_required", "read_only": True, "containers_observed": len(records),
             "containers_requiring_review": reviewed, "declared_media_roots": [str(root) for root in roots],
             "path_resolution_verified": False, "snapshot_continuity_verified": False,
+            "enforcement_supported": False,
             "writer_exclusion_verified": False, "restart_inhibition_verified": False,
             "production_authorized": False, "production_activation": "disabled",
             "automatic_action": "none", "blockers": ["snapshot_never_authorizes_enforcement",

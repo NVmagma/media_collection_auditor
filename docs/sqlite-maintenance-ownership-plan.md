@@ -779,3 +779,14 @@ For Tower, pass both `/mnt/user/media_storage` and `/mnt/media/media_storage` as
 explicit declared roots. This acknowledges the known deployment aliases without
 making them application defaults or assuming these are the only possible paths.
 The script never changes services, exports, mounts, restart policies or media.
+
+### Deployment review received
+
+The `656679e` Tower report contains 22 observed containers and 11 review entries.
+See [the control matrix](sqlite-container-maintenance-review.md) for the concrete
+writer, nested-mount and administrative routes. The advisory analyzer now
+separates required control categories and counts destination overlap only
+between distinct mounts, retaining the original direct-media write warnings.
+It does not turn generic cache-volume flags into confirmed media writers.
+Dashboard availability is a pending design decision, not service-stop approval.
+No repeat inventory is needed just for this classification correction.

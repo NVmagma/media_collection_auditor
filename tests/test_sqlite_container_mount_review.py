@@ -91,3 +91,32 @@ def test_cli_requires_completion_record_without_exposing_unselected_fields(monke
     assert "must-not-be-printed" not in output
     assert result == (0 if complete else 2)
     assert json.loads(output)["production_authorized"] is False
+
+
+def test_single_rw_mount_is_not_misreported_as_another_overlapping_mount():
+    item = review(record(mount(ROOTS[0], "/media")))["containers_requiring_review"][0]
+    assert "writable_declared_media_mount" in item["issues"]
+    assert "writable_destination_overlap" not in item["issues"]
+    assert item["control_requirements"] == ["fence_media_write_routes", "inhibit_writer_start_or_restart"]
+
+
+def test_stopped_privileged_writer_requires_start_inhibition_and_access_review():
+    item = review(record(mount(ROOTS[0], "/media"), running=False,
+                         restart="always", privileged=True))["containers_requiring_review"][0]
+    assert "keep_stopped_writer_fenced" in item["control_requirements"]
+    assert "review_elevated_host_access" in item["control_requirements"]
+    assert "inhibit_writer_start_or_restart" in item["control_requirements"]
+
+
+def test_read_only_socket_requires_api_fence_without_claiming_media_write_overlap():
+    item = review(record(mount("/var/run/docker.sock", "/var/run/docker.sock", False)))[
+        "containers_requiring_review"][0]
+    assert item["control_requirements"] == ["fence_administrative_api_routes"]
+
+
+def test_cache_volume_is_a_scope_question_not_an_asserted_media_writer():
+    report = review(record(mount("/var/lib/docker/volumes/cache", "/cache", kind="volume")))
+    item = report["containers_requiring_review"][0]
+    assert item["control_requirements"] == ["resolve_non_bind_storage_scope"]
+    assert "writable_declared_media_mount" not in item["issues"]
+    assert report["enforcement_supported"] is False

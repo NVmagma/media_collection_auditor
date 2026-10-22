@@ -42,7 +42,9 @@ control. More test cases alone cannot complete this gate.
 | Enforce complete external-writer exclusion | Unimplemented for production: boot-mode restart controls, NFSv4/existing-client caches, all overlapping container/host routes and administrative bypasses need an accepted model |
 | Trust production move completion and recovery | Depends on accepted ownership controls, atomic source-entry fencing, fresh real protections and independent outcome verification; no production permit/clearance API |
 
-The next server check is a selected-field mount review for overlapping deployment routes; it performs no enforcement.
+The selected-field mount review has been received. The next design step is the
+container control matrix and dashboard availability decision; no enforcement
+has been performed.
 Gate 6 closes only after the production enforcement and verifier requirements
 above are implemented and their failure/recovery behavior is accepted. No
 reliable count of remaining test rounds or completion percentage is available.
@@ -948,3 +950,20 @@ fails closed. Paths are lexical observations; physical alias resolution and
 snapshot continuity remain unverified. No stop/remount/update commands, Docker
 socket mount or production permit are provided. Local maintained checks pass
 622 tests and 19 subtests. Gate 6 stays open.
+
+
+### Tower mount review received; concrete control requirements documented
+
+The user supplied the `656679e` selected-field report: 22 containers observed,
+11 requiring review. Jellyfin has broad and nested RW routes; both dashboards
+have Docker sockets; stopped MakeMKV/Lidarr remain potential writers. SearXNG's
+cache-volume flag alone is not confirmed media access.
+
+[The container control matrix](sqlite-container-maintenance-review.md) records
+required properties and unresolved integration/admin controls without issuing
+production commands. Advisory classification now excludes a mount overlapping
+itself, preserves distinct nested overlaps and lists categorical control
+requirements. Enforcement remains unsupported and every production blocker
+remains. This report refinement needs no repeat of the same Tower inventory;
+dashboard availability is a pending maintenance-design choice. Local maintained
+checks pass 626 tests and 19 subtests.
