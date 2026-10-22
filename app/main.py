@@ -8,6 +8,7 @@ from config_store import KEYS, load_config
 from audit_history import new_record, finish_record, summarize_actions
 from run_control import begin_run, finish_run, wait_for_run
 from web import app
+from integration_api import read_only_service_enabled
 
 WEB_PORT = int(os.environ.get("WEB_PORT", "8080"))
 BASE_ENV = {key: os.environ.get(key) for key in KEYS}
@@ -46,6 +47,9 @@ def audit_counts(path, offset):
 
 
 if __name__ == "__main__":
+    if read_only_service_enabled():
+        start_web()
+        raise SystemExit(0)
     threading.Thread(target=start_web, name="web-ui", daemon=True).start()
     auditor = None
     while True:

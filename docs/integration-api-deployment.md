@@ -1,0 +1,81 @@
+# Read-only API deployment preparation
+
+This deployment scope is the read-only integration API on `feature/sqlite`, not
+SQLite production activation. JSON remains authoritative. There is no SQLite
+migration, production media move, deletion or NFS control in this deployment.
+Gates 6–10 remain open. Temporary widget fixtures are not real-state deployment.
+
+## Candidate image
+
+The existing manually dispatched Docker workflow now treats `feature/sqlite` as
+a candidate release path. It runs the complete tests directory on Linux, builds
+an amd64 image, scans it with the existing high/critical-fixable vulnerability
+policy and smokes the actual image in both normal and read-only service modes
+before publishing a commit-specific `api-candidate-<full-sha>` tag. It records
+the repository digest as a workflow artifact. Deployment must pin that digest;
+a commit-specific tag alone is not immutable or an artifact attestation.
+
+No automatic push trigger was added for this branch. The `feature-sqlite` and
+`latest` tags are not moved by this candidate path. The existing non-SQLite
+branch publishing path is retained. No other branch is edited. The workflow is
+explicitly dispatched using its branch revision; see
+[GitHub's manual workflow documentation](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow).
+
+A workflow passing is an image acceptance step, not a production ownership
+permit. Do not substitute the previously built security-scan image or installed
+image tag for the accepted candidate digest.
+
+## Optional separate service
+
+`READ_ONLY_API_SERVICE=true` makes the shipped `main.py` entrypoint run only the
+web server and exit before starting/importing an audit worker. The web application
+allows only health and the two authenticated integration routes. Browser login,
+settings, rescue, audit trigger, poster and experimental recovery views are
+blocked. Its session key is ephemeral; it does not create a persistent key file.
+Invalid service-mode values fail instead of falling back to an audit worker.
+Default behavior is unchanged when the option is absent/false.
+
+A separate process cannot see the existing worker's in-memory coordinator.
+Accordingly `/api/v1/audit-status` returns HTTP 503 with null flags/result and
+`source=coordinator_unavailable_in_read_only_service`. It must not report idle
+or falsely reuse historical status as live running/queued information. The
+summary remains available if its authoritative JSON input is valid. The current
+Homarr template therefore displays counts plus an unavailable coordinator in
+this deployment model; this is an explicit capability limit, not healthy idle.
+
+A separate service can mount the authoritative state's parent directory at a
+separate read-only path, with STATE_FILE selecting the existing JSON filename.
+Mounting the directory rather than just one file allows atomic JSON replacements
+to remain visible. It does not create a tracking copy, write the state or gain
+media/API-service credentials. Configure a new dedicated integration bearer
+credential privately; do not reuse a fixture token or the auditor's other keys.
+
+Before choosing concrete deployment commands, confirm the desired service model,
+the actual state path/mount and selected image digest. A separate-container
+rollout can leave the existing auditor running and its image/config untouched.
+Updating the existing container instead needs a preserved image/config rollback
+and review of its effective dry-run settings because startup may schedule audits.
+
+## Rollout boundaries
+
+1. Complete local checks, publish the candidate deliberately, and verify its
+   workflow/tests/scan/smoke results and digest.
+2. Confirm authoritative JSON source and deployment choice using selected
+   read-only metadata. Do not dump environment variables or credentials.
+3. Start only the reviewed target service with the accepted digest. No default
+   image update or auditor restart is implied by publishing a candidate.
+4. Verify authenticated real-state summary and authentication failures. Observe
+   unavailable coordinator semantics if using a separate process. Point widgets
+   at it only after real-state reads are accepted.
+5. Keep rollback scoped to that target. For a new sidecar, stopping/removing only
+   that labeled container leaves the existing auditor and authoritative JSON
+   untouched; retain its private credential/configuration for deliberate review.
+
+The user was asked to choose a separate read-only container or update the existing
+container. No target service has been changed by this preparation.
+
+Local preparation validation (October 22, 2026): 739 maintained tests and 19
+subtests passed on macOS with Python 3.12.14. This includes copied-runtime
+entrypoint checks that reject worker import/session-key writes in read-only
+mode. Workflow YAML syntax was checked locally; Linux full-suite, actual image
+build/scan/smoke and publication are separate pending workflow evidence.

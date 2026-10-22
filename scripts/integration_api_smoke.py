@@ -9,6 +9,10 @@ import tempfile
 
 
 def main():
+    read_only_service = sys.argv[1:] == ['--read-only-service']
+    if sys.argv[1:] and not read_only_service:
+        raise SystemExit(2)
+    os.environ['READ_ONLY_API_SERVICE'] = 'true' if read_only_service else 'false'
     root = Path(__file__).resolve().parents[1]
     sys.path[:0] = [str(root / 'app'), str(root)]
     with tempfile.TemporaryDirectory(prefix='integration-api-fixture-') as directory:
@@ -18,6 +22,7 @@ def main():
         os.environ['STATE_FILE'] = str(state)
         os.environ['AUDIT_HISTORY_FILE'] = str(Path(directory) / 'history.jsonl')
         os.environ['WEB_SESSION_SECRET'] = secrets.token_urlsafe(32)
+        os.environ['WEB_SESSION_KEY_FILE'] = str(Path(directory) / 'must-not-create.key')
         os.environ.pop('INTEGRATION_API_TOKEN', None)
         import requests
 
@@ -41,18 +46,23 @@ def main():
         assert 'fixture-title' not in response.text
         assert response.headers['Cache-Control'] == 'no-store'
         audit = client.get('/api/v1/audit-status', headers=headers)
-        assert audit.status_code == 200
-        assert audit.json['running'] is False
+        assert audit.status_code == (503 if read_only_service else 200)
+        assert audit.json['running'] is (None if read_only_service else False)
         assert audit.json['freshness_verified'] is False
         assert audit.json['last_result'] is None
-        assert client.post('/api/run-now', headers=headers).status_code == 401
-        assert client.post('/api/rescue', headers=headers).status_code == 401
+        assert client.post('/api/run-now', headers=headers).status_code == (404 if read_only_service else 401)
+        assert client.post('/api/rescue', headers=headers).status_code == (404 if read_only_service else 401)
+        if read_only_service:
+            assert client.get('/login').status_code == 404
+            assert 'collection_auditor' not in sys.modules
+            assert not (Path(directory) / 'must-not-create.key').exists()
         assert state.read_text() == raw
         state.unlink()
         assert client.get('/api/v1/summary', headers=headers).status_code == 503
     print(json.dumps({'status': 'disposable_api_smoke_passed', 'fixture_only': True,
                       'production_authorized': False, 'production_activation': 'disabled',
-                      'network_collection_performed': False}))
+                      'network_collection_performed': False,
+                      'read_only_service': read_only_service}))
 
 
 if __name__ == '__main__':

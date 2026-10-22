@@ -1123,3 +1123,14 @@ and Queued=No. This verifies authenticated default-bridge reachability and manua
 sample-template preview on the reported Homarr revision. It is not full manifest
 import, saved-board polling, unavailable/empty/stale rendering, Homepage acceptance
 or production API deployment. Gate 6 and all production move blockers stay open.
+
+### API deployment preparation, separate from SQLite cutover
+
+An optional read-only web-service mode exits before starting the worker, blocks
+browser/action routes and reports a separate coordinator unavailable rather than
+idle. The manually dispatched feature/sqlite publisher now tests the full tests
+directory, builds/scans/smokes an API candidate and publishes only a commit-specific
+tag with a digest artifact. No branch release tag is updated by that candidate
+path, no other branch is edited, and no new automatic build trigger is added.
+The target service model is pending user choice; no Unraid service, NFS setting,
+production authority or SQLite gate status has changed.

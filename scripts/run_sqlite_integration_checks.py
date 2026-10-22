@@ -35,7 +35,7 @@ TESTS = (
     "test_sqlite_arr_outcome_http", "test_sqlite_isolated_arr_runner",
     "test_sqlite_arr_reconciliation", "test_sqlite_fetched_recovery", "test_sqlite_recovery_http",
     "test_sqlite_isolated_arr_readback_cli", "test_dashboard_tracking_snapshot",
-    "test_integration_status", "test_integration_api", "test_integration_api_http_smoke", "test_integration_widget_fixture", "test_integration_widget_lab", "test_dashboard_snapshot_parity", "test_dashboard_state_errors", "test_dashboard_inventory",
+    "test_integration_status", "test_integration_api", "test_integration_read_only_service", "test_integration_api_http_smoke", "test_integration_widget_fixture", "test_integration_widget_lab", "test_dashboard_snapshot_parity", "test_dashboard_state_errors", "test_dashboard_inventory",
     "test_dashboard_lifecycle_visibility", "test_sqlite_dashboard_integration",
     "test_docker_runtime_context", "test_sqlite_copy_source_parent_binding",
     "test_sqlite_copy_live_verification", "test_sqlite_isolated_copy_batch",

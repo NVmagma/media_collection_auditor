@@ -176,3 +176,10 @@ Unraid HTTP acceptance: the user reported `disposable_api_http_smoke_passed`
 through `dba8619`, with `server_process_stopped=true`, no external collection,
 and production activation/authorization disabled. Real private-loopback HTTP
 transport is accepted for this fixture. Widget rendering remains unverified.
+
+## Deployment scope
+
+See [candidate publishing and read-only service deployment](integration-api-deployment.md).
+An optional `READ_ONLY_API_SERVICE=true` mode starts no worker and blocks action
+routes. A separate process deliberately reports coordinator status unavailable,
+while summary reads continue from the existing authoritative JSON snapshot.

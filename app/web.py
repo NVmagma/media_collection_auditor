@@ -22,17 +22,20 @@ from manual_rescue import rescue_title
 from auth import session_key, jellyfin_login, current_user, store_token, discard_token, verify_user
 from run_control import snapshot, request_run
 from config_store import FIELDS, KEYS, SECRETS, BOOLS, DEFAULTS, FIELD_HELP, load_config, save_config, validate, redacted_config
-from integration_api import authorize_summary
+from integration_api import authorize_summary, read_only_service_enabled
 from integration_status import read_tracking_status, audit_status_report
 
 app = Flask(__name__)
-app.secret_key = session_key()
+app.secret_key = os.urandom(32).hex() if read_only_service_enabled() else session_key()
 app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
                   SESSION_COOKIE_SECURE=os.environ.get("WEB_SECURE_COOKIE", "false").lower() == "true",
                   PERMANENT_SESSION_LIFETIME=timedelta(hours=12))
 
 @app.before_request
 def require_login():
+    if read_only_service_enabled() and request.endpoint not in (
+            "integration_summary", "integration_audit_status", "health"):
+        return {"status": "read_only_service"}, 404
     if request.endpoint in ("integration_summary", "integration_audit_status"):
         return authorize_summary(request.headers.get("Authorization"))
     if request.endpoint in ("login", "login_background", "health", "static"):
@@ -123,6 +126,10 @@ def integration_summary():
 
 @app.get("/api/v1/audit-status")
 def integration_audit_status():
+    if read_only_service_enabled():
+        report = audit_status_report(None)
+        report["source"] = "coordinator_unavailable_in_read_only_service"
+        return report, 503
     try:
         current = snapshot()
     except (OSError, UnicodeError, ValueError, TypeError, RuntimeError):
@@ -638,7 +645,8 @@ def admin_authorized():
 
 # Experimental SQLite recovery views are opt-in and never select SQLite as
 # the production tracking backend. Only the literal value "true" enables them.
-if os.environ.get("EXPERIMENTAL_SQLITE_RECOVERY_VIEW", "").lower() == "true":
+if (not read_only_service_enabled()
+        and os.environ.get("EXPERIMENTAL_SQLITE_RECOVERY_VIEW", "").lower() == "true"):
     from app.sqlite_recovery_api import create_recovery_status_blueprint
     from app.sqlite_recovery_view import create_recovery_view_blueprint
 
