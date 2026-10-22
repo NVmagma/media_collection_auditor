@@ -6,6 +6,46 @@ permission to stop services, disable exports/jobs, remount storage, update an
 image, activate SQLite or delete media. Production remains JSON-authoritative.
 Gate 6 is open; no ownership enforcer is implemented or approved yet.
 
+## Selected first NFS adapter: full service pause
+
+After the complete Unraid regression baseline, the operator confirmed that all
+NFS shares may be temporarily unavailable during the initial window. This is
+a design preference, not authorization to pause the service. The first adapter
+will target a full NFS pause rather than independently rewriting export rules.
+Other deployments can provide a different adapter with the same acceptance
+contract; this is not an Unraid or filesystem restriction on storage logic.
+
+The reviewed procedure must drain transfers before the boundary checkpoint,
+persist intent in protected control storage, prevent automatic service restart,
+request shutdown using the deployment's reviewed service mechanism, and verify
+denial from a real client with both old handles and new connections. NFS pause
+must cover state exports too. Docker/host writers still need separate controls;
+Jellyfin's local read view and API must remain available. Do not enable a
+maintenance permit from a process count or successful stop command alone.
+
+Linux documents that NFSD shutdown discards server locks/state, and startup
+enters grace periods. Restoration therefore must account for client state and
+delayed requests; it is not an unconditional start in a cleanup handler. See
+[kernel NFSD administration](https://docs.kernel.org/admin-guide/nfs/nfsd-admin-interfaces.html).
+Reboot, service restart and controller/worker failure must not silently reopen
+the protected scope. Host-specific persistent restart inhibition and recovery
+remain unimplemented and must be reviewed before production use.
+
+Before selecting executable service controls, gather the actual host version,
+NFSD observations and candidate control-script identities with
+`bash scripts/sqlite_nfs_pause_probe.sh`. It only reads fixed selected files and
+hashes candidate scripts; it never sources or invokes them. Missing observations
+remain explicitly unknown. A digest is discovery evidence, not reviewed code
+or an executor allowlist. The next implementation must inspect/validate the
+actual service mechanism, not guess it from historical script locations.
+
+Real NFS shutdown/restart acceptance needs an isolated disposable Linux server
+and client. Do not run privileged kernel-NFS lab controls against the production
+host kernel, host network or exported production paths merely because they are
+launched from a container. Choose and review the isolated test environment
+before executing service controls. No new container image/build is required
+for the read-only host probe.
+
 ## Implemented disposable journal foundation
 
 `app/sqlite_disposable_maintenance_journal.py` creates only new fixture roots.

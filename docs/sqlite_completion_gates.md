@@ -15,7 +15,7 @@ A gate is complete only when its acceptance criteria are verified.
 | 7. Atomic lifecycle reconciliation | Verified move clock change and intent clearance commit together; failure injection proves all-or-nothing | In progress: Unraid verifies atomic Waiting/Holding destination clocks, stable Arr queue, retained-original ledger and intent clearance, including uncertain commits. Production completion still depends on gate 6 and live integration |
 | 8. Production lifecycle integration | Real Waiting/Holding/Keep/Removal moves use guarded ordering; existing JSON path unaffected until cutover | Not wired: capped, revision-chained isolated batches support Waiting/Holding decisions and stop on uncertainty; production audit paths still reject SQLite |
 | 9. External integrations | Arr uncertain outcomes, Jellyfin protection, dashboard authoritative reads, TV-season behavior | In progress: 539-title live advisory coverage, bounded fresh protection scans, one-shot Arr uncertainty, and whole-show copy preservation are verified. Production Arr verification, dashboard authority and season-pruning execution remain open |
-| 10. Deployment and rollback | Disposable Unraid end-to-end tests, full CI, Docker build, backup/rollback, explicit activation approval | Incomplete: full native Unraid suite passed 1,583 tests and 22 subtests through fff83c0; targeted integration passed on both access paths. Accepted operational restore, final release CI/image and explicit activation approval remain open |
+| 10. Deployment and rollback | Disposable Unraid end-to-end tests, full CI, Docker build, backup/rollback, explicit activation approval | Incomplete: full native Unraid suite passed 1,650 tests and 22 subtests through d67b7da; maintained shfs suite passed 475 tests and 19 subtests. Accepted operational restore, final release CI/image and explicit activation approval remain open |
 
 ## Current decision
 
@@ -696,3 +696,25 @@ the maintained suite on shfs and the full suite on the native lab path. The last
 full native baseline remains 1,583 tests/22 subtests through `fff83c0` until a
 new complete result is supplied. No production configuration/image change or
 expensive Actions/build run is needed for this consolidation.
+
+### Full Unraid baseline through `d67b7da`
+
+The user confirmed the consolidated maintained suite passes on shfs: 475 tests
+and 19 subtests in 155.29s. The full suite passes on native disposable storage:
+1,650 tests and 22 subtests in 424.23s. This supersedes the earlier full-suite
+baseline through `fff83c0`; prior entries remain historical evidence.
+
+The journal/controller/cooperative-writer harness increment is consolidated.
+Gate 6 still requires actual independent enforcement of external writer denial,
+including NFS and container routes, existing handles, restart control and fresh
+protection API availability. No additional synthetic harness milestone is
+required merely to increase the test count. Production remains JSON-authoritative,
+SQLite activation and deletion remain disabled, and no Actions/build/image or
+service/export changes were performed for this baseline.
+
+The operator subsequently accepted temporary unavailability of all NFS shares
+as the initial adapter design. Full-service pause is selected for review, not
+authorized for execution. A new read-only host probe gathers current Unraid
+version, NFSD observations and service-script identities without executing any
+service command. Actual service review, persistent restart prevention, isolated
+server/client acceptance and independent client denial checks remain required.
