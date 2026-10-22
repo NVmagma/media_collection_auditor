@@ -1116,3 +1116,10 @@ scenarios reuse the API's authentication and redacted status helpers without
 importing an auditor worker or exposing action routes. Launcher-policy tests use
 inert Docker stubs; factory/API tests use synthetic files. No live dashboard
 change or new production permit is inferred from server readiness.
+
+Homarr sample-preview acceptance: the user screenshot shows two successful load
+queries and the provided template's synthetic counts 2/1/1/1/1, with Running=No
+and Queued=No. This verifies authenticated default-bridge reachability and manual
+sample-template preview on the reported Homarr revision. It is not full manifest
+import, saved-board polling, unavailable/empty/stale rendering, Homepage acceptance
+or production API deployment. Gate 6 and all production move blockers stay open.

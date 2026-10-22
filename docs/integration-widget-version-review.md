@@ -59,3 +59,9 @@ Management → Custom Widgets, configure the source URL/network scope and bearer
 credential separately, then run validation/preview before placing it on a board.
 Do not import the small requests fragment as a complete widget. The current
 running auditor image has not been updated by this work.
+
+Acceptance update: the user manually entered the request configuration and JSX
+in Homarr, then supplied a successful workbench sample preview (two load queries,
+counts 2/1/1/1/1). Default-bridge reachability, authentication and sample rendering
+are now accepted for that workflow. Direct import of the complete JSON file and
+the empty/unavailable/stale/saved-board behaviors remain separately unverified.

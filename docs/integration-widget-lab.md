@@ -97,3 +97,38 @@ Local validation: 91 focused fixture, launcher-policy, API, snapshot,
 copied-runtime and web-security tests passed on macOS. Docker launcher checks
 used inert stubs, and the fixture factory used Flask's test client. First actual
 Unraid startup and subsequent Homarr import/preview remain unverified.
+
+## Accepted Unraid startup and Homarr sample preview
+
+The user reported `widget_fixture_ready=true` on the default bridge, scenario
+sample, 900-second lifetime, and production_authorized=false. Docker reported
+that memory limiting applied without swap-limit capability; no host setting was
+changed in response.
+
+The user then supplied a Homarr workbench screenshot showing two successful load
+queries and the provided template rendering Waiting=2, Holding=1, Keep=1,
+Removal=1, Arr pending=1, Running=No and Queued=No. This accepts authenticated
+bridge reachability and the manually authored sample query/template preview for
+the labeled Homarr revision. The definition was still unsaved. It does not prove
+full-file import, saved-board polling, empty/unavailable rendering or stale-value
+handling after an actual request failure. No production API deployment is inferred.
+
+Next data checks can be started together without touching the sample instance:
+
+```sh
+(
+  set -eu
+  cd /mnt/user/sqlite_lab_checkout
+  for scenario in unavailable empty; do
+    printf '\nScenario: %s\n' "$scenario"
+    bash scripts/integration_widget_lab.sh "$scenario"
+  done
+)
+```
+
+Each gets its own printed URL and private credential file. For each preview,
+update the default source URL and credential together; do not reuse another
+fixture's token. Unavailable should produce two failed load queries and explicit
+unavailable/error rendering, never healthy zero counts. Empty should produce two
+successful queries, all five counts zero, and an unknown last result. Neither
+scenario establishes fresh real collection state. Both expire after 15 minutes.
