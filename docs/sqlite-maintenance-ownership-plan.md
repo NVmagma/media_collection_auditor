@@ -65,6 +65,27 @@ Previous disposable journals without bindings are intentionally not upgraded
 or assigned a new scope automatically. Copies, relocations and changed identity
 after restart require review, not automatic reattachment or replay.
 
+### Cooperative writer acceptance harness
+
+`app/sqlite_disposable_maintenance_writer.py` opens only the fixed
+`writer.fixture` file in a marked, bound lab. Each bounded write takes the same
+controller lock and checks the durable journal before writing, including when
+its descriptor was opened before maintenance. Prepared and explicitly released
+fixtures permit writes; every pending phase denies them. File identity is
+rechecked so an old descriptor cannot silently write a replaced fixture file.
+
+Subprocess tests cover a live writer holding an old descriptor and a controller
+that exits after its synthetic action but before outcome commit. Pending
+history continues denying cooperative writes after process locks disappear.
+This is a cooperative fixture protocol only: ordinary file writes, NFS clients
+and containers do not honor it and remain unconstrained. It cannot supply the
+external ownership evidence required by gate 6. No public maintenance API or
+production writer is wired to it.
+
+The consolidated runner's `--maintenance-only` mode runs the focused journal,
+controller, scope, cooperative writer, process-lock and production-guard tests
+without publication capability flags. Use a new disposable basetemp each time.
+
 ## Scope and required enforcement
 
 A maintenance window must cover the selected source and destination parents,

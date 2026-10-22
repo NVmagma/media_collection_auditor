@@ -660,3 +660,17 @@ recording completion. Local focused checks pass 81 tests, including scope and
 receipt replacement failures. These new identity checks await Unraid evidence.
 No external-writer exclusion or production gate is claimed; the NFS/container
 enforcement backend remains unfinished.
+
+### Scope checks confirmed; cooperative writer acceptance added
+
+The user confirmed 81 focused scope/controller checks pass on both lab paths
+(shfs 12.57s, native 14.37s). A subsequent cooperative fixture writer now checks
+the durable phase for each write, including existing descriptors. Real process
+tests show pending requests deny writes after controller exit and old writer
+handles cannot bypass the fixture protocol. Explicit completed release is
+required before cooperative writes resume. Local `--maintenance-only` checks
+pass 90 tests; the new writer checks await Unraid execution.
+
+This harness constrains only its own cooperating writer. It does not constrain
+ordinary filesystem writes, NFS clients or containers, and supplies no production
+ownership permit. Gate 6 and all existing production blockers remain open.
