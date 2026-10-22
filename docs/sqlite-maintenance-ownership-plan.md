@@ -715,3 +715,38 @@ controller-session error, leaving database bytes unchanged. Only then does the
 existing separate-network read-only check run. Both original containers are
 removed by the bounded harness, and pending fixture evidence is retained. It
 executes no NFS service/export/mount or production configuration controls.
+
+### Session rejection accepted; disposable container media policy
+
+The user confirmed the expanded scope lab through `6306413`: both the later
+controller interpreter and different network were rejected, and database bytes
+were unchanged. No production/NFS configuration was changed.
+
+The next container fixture checks a different prerequisite: a running read
+service with writable application state and read-only media. The harness creates
+only new labeled containers and marked media/state directories. It first proves
+its disposable RW writer can change a fixed payload, stops that exact new
+container, and starts a replacement with the same media bind mounted read-only.
+The Python fixture service returns a synthetic keep signal and increments a
+persistent application-state read counter. Separate client calls must observe
+new responses while a single fixed media write fails specifically with EROFS;
+permission/transport errors or a successful write do not count as acceptance.
+Writes are never retried after uncertain outcomes.
+
+The harness then explicitly restarts only its new read-only container and repeats
+the API/write checks. Payload bytes must remain unchanged and the original RW
+fixture container must remain stopped. Both containers have read-only root
+filesystems, no external network, all capabilities dropped, no-new-privileges
+and restart policy `no`; no Docker socket or production paths are mounted.
+Cleanup removes only those new containers and retains fixture files. The cached
+pinned Python image is used without pulling, installing packages or building.
+The test can run on either existing shfs/native lab parent without an FS-name
+allowlist or a rename fallback.
+
+This is a synthetic HTTP service, not Jellyfin. It tests a Docker mount policy
+and fixture read availability, not live protection freshness, NFS/cache denial,
+complete overlapping production mounts or administrative exclusion. A Docker
+administrator could start the stopped RW container or recreate an RW mount;
+those routes still require independent maintenance controls. All reports keep
+production authorization, restart inhibition and global writer exclusion false.
+No existing application is stopped or reconfigured, and Gate 6 stays open.

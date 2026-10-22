@@ -27,6 +27,26 @@ used different scopes and should not be compared or treated as reliable.
 Production authority remains JSON. SQLite production activation and permanent
 filesystem deletion remain disabled.
 
+## Gate 6 current exit checklist
+
+This is the current summary; the later entries preserve the evidence history.
+A passing disposable scenario does not establish the corresponding production
+control. More test cases alone cannot complete this gate.
+
+| Requirement | Evidence / remaining work |
+| --- | --- |
+| Bind and verify disposable move evidence | Accepted path/content/source-retention tests; production verifier remains unwired |
+| Preserve uncertainty across controller failure | Accepted durable intent, boot/network checks, later-session rejection and read-only review |
+| Exercise NFS pause and known restart entry points | Accepted private NFSv3 RPC pause/crash/guard fixtures; no production restart fence |
+| Keep reads available while denying container media writes | Disposable Docker fixture implemented; actual mount/restart acceptance pending |
+| Enforce complete external-writer exclusion | Unimplemented for production: boot-mode restart controls, NFSv4/existing-client caches, all overlapping container/host routes and administrative bypasses need an accepted model |
+| Trust production move completion and recovery | Depends on accepted ownership controls, atomic source-entry fencing, fresh real protections and independent outcome verification; no production permit/clearance API |
+
+The next server check addresses the container read/write requirement only.
+Gate 6 closes only after the production enforcement and verifier requirements
+above are implemented and their failure/recovery behavior is accepted. No
+reliable count of remaining test rounds or completion percentage is available.
+
 ## Next engineering task
 
 Extend the disposable witnessed-move contract into a production-reviewed,
@@ -890,6 +910,24 @@ identifier-only comparisons and never verifies a controller session.
 The disposable scope harness now checks a second interpreter in the same
 container before testing another network. Both must be rejected without changing
 the pending database. Local maintained checks pass 598 tests and 19 subtests.
-Actual same-container acceptance is pending on Tower.
+The user confirmed same-container and separate-network rejection on Tower
+through `6306413`, with journal bytes unchanged.
 This is cooperative process/restart protection, not an external-writer fence;
 Gate 6 and every production blocker remain open.
+
+
+### Disposable container media policy and read availability
+
+A new cached-image Docker fixture tests a real read-only media bind alongside
+writable application state. Its RW baseline container is stopped, then a new
+read service must keep responding while fixed media writes fail specifically
+with EROFS. The same checks repeat after restarting the read-only fixture;
+payload bytes must remain unchanged and the original RW fixture stays stopped.
+Only new labeled containers and marked disposable directories are touched.
+This is a synthetic service, not live Jellyfin protection integration.
+
+Local maintained checks pass 609 tests and 19 subtests. Actual Docker/kernel
+acceptance is pending. Persistent host restart fencing,
+NFSv4/kernel-client behavior, complete production writer routes and live
+protection API availability remain open. These fixture results cannot remove
+any production implementation blocker or close Gate 6.
