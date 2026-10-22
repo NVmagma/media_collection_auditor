@@ -64,7 +64,7 @@ def _fixture(root):
 
 
 @contextmanager
-def _database(root):
+def _database(root, *, with_verifier=False):
     root = _root(root)
     _fixture(root)
     with _exclusive_lock(root / "controller.lock", "Disposable controller already held") as verify:
@@ -77,7 +77,7 @@ def _database(root):
             db.execute("PRAGMA synchronous=FULL")
             db.execute("BEGIN IMMEDIATE")
             verify()
-            yield db
+            yield (db, verify) if with_verifier else db
             verify()
             db.commit()
         except BaseException:
@@ -85,6 +85,19 @@ def _database(root):
             raise
         finally:
             db.close()
+
+
+def _append(db, *, expected_revision, phase):
+    rows = _history(db)
+    revision, current = rows[-1]
+    if type(expected_revision) is not int or expected_revision < 0:
+        raise ValueError("Nonnegative integer revision required")
+    if revision != expected_revision:
+        raise RuntimeError("Stale maintenance revision")
+    if not isinstance(phase, str) or NEXT.get(current) != phase:
+        raise RuntimeError("Invalid maintenance transition")
+    db.execute("INSERT INTO events VALUES (?, ?)", (revision + 1, phase))
+    return _report(_history(db))
 
 
 def _history(db):
@@ -128,12 +141,5 @@ def advance_disposable_journal(root, *, expected_revision, phase):
     if type(expected_revision) is not int or expected_revision < 0:
         raise ValueError("Nonnegative integer revision required")
     with _database(root) as db:
-        rows = _history(db)
-        revision, current = rows[-1]
-        if revision != expected_revision:
-            raise RuntimeError("Stale maintenance revision")
-        if not isinstance(phase, str) or NEXT.get(current) != phase:
-            raise RuntimeError("Invalid maintenance transition")
-        db.execute("INSERT INTO events VALUES (?, ?)", (revision + 1, phase))
-        report = _report(_history(db))
+        report = _append(db, expected_revision=expected_revision, phase=phase)
     return report

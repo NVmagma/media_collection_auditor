@@ -30,6 +30,22 @@ not a security boundary against an external process replacing files. Real
 scope binding, enforcement, administrative isolation and independently verified
 outcomes remain necessary before production integration.
 
+### Synthetic controller action ordering
+
+`app/sqlite_disposable_maintenance_controller.py` now holds one controller lock
+across a committed request, an exclusive durable fixture receipt, and its
+completion checkpoint. Fence and release are explicit separate operations;
+release requires the journal's verified-outcome phase. Lock identity is checked
+before and after the synthetic action. The module accepts no external command
+or arbitrary adapter callback and changes no export, service or media path.
+
+If the action fails, process exits after its receipt, or lock identity changes,
+the committed request remains pending. The controller refuses to replay a
+pending request even when the receipt exists. Receipts are never overwritten or
+deleted; inspection does not infer recovery authority from them. A receipt is
+only a test artifact and does not deny writes. This tests action ordering, not
+external ownership or a working enforcement backend.
+
 ## Scope and required enforcement
 
 A maintenance window must cover the selected source and destination parents,

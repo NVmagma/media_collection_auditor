@@ -636,3 +636,16 @@ Unraid shfs/native durability verification is pending. This implements no NFS
 or container controls, grants no move permit and closes no production gate.
 The next enforcement work must bind actual controller actions and observed
 outcomes to protected scope identity and persistent history.
+
+### Maintenance journal Unraid evidence and synthetic controller
+
+The user confirmed all 60 focused journal/lock/production-guard tests pass on
+both Unraid shfs and native lab paths (10.32s and 11.15s). This verifies the
+previous journal foundation on those lab filesystems, not external ownership.
+
+The next increment adds fixed synthetic controller actions: durable request
+before receipt, held lock through action/outcome, explicit release ordering,
+and no replay after uncertain outcomes. Local focused checks pass 69 tests,
+including subprocess exit after action but before outcome and lock replacement.
+New controller checks on Unraid are pending. No real NFS/container adapter,
+production permit or gate closure is introduced.
