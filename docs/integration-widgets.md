@@ -92,3 +92,9 @@ Use a disposable API instance and the actual installed widget version. Verify:
 These renderer checks remain pending. Local API tests already verify the HTTP
 status and null/count contract, but do not prove either vendor's rendering,
 credential handling, cache behavior or installed-version compatibility.
+
+
+The separate [HTTP transport fixture](integration-api.md#disposable-http-transport-check)
+can verify endpoint wire behavior first without any dashboard change. Its output
+explicitly leaves widget rendering unverified; it does not substitute for the
+installed-version acceptance table above.

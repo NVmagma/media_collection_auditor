@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Consolidated disposable regressions; no builds, services or production mounts.
+"""Consolidated disposable regressions; no builds or production services/mounts.
+Includes temporary loopback HTTP fixtures that stop their own child processes.
 
 Requires installed project requirements and pytest. The fixture path MUST NOT
 exist: pytest owns basetemp and may clear it, so never reuse a retained lab.
@@ -34,7 +35,7 @@ TESTS = (
     "test_sqlite_arr_outcome_http", "test_sqlite_isolated_arr_runner",
     "test_sqlite_arr_reconciliation", "test_sqlite_fetched_recovery", "test_sqlite_recovery_http",
     "test_sqlite_isolated_arr_readback_cli", "test_dashboard_tracking_snapshot",
-    "test_integration_status", "test_integration_api", "test_dashboard_snapshot_parity", "test_dashboard_state_errors", "test_dashboard_inventory",
+    "test_integration_status", "test_integration_api", "test_integration_api_http_smoke", "test_dashboard_snapshot_parity", "test_dashboard_state_errors", "test_dashboard_inventory",
     "test_dashboard_lifecycle_visibility", "test_sqlite_dashboard_integration",
     "test_docker_runtime_context", "test_sqlite_copy_source_parent_binding",
     "test_sqlite_copy_live_verification", "test_sqlite_isolated_copy_batch",

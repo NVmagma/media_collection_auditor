@@ -117,3 +117,57 @@ Audit-status increment validation: maintained local regressions passed 692 tests
 and 19 subtests; copied-runtime endpoint checks passed separately (4 tests).
 The updated disposable smoke passed within local regressions. No new production
 or NFS test is required for this projection-only increment.
+
+
+## Disposable HTTP transport check
+
+`scripts/integration_api_http_smoke.py` exercises both endpoints over actual
+loopback HTTP in a spawned process. It accepts no target/path arguments: state
+and history are generated in a new temporary directory, credentials are random
+fixture-only values, and the listener binds only `127.0.0.1` on an OS-selected
+port. Requests use a direct connection without proxy, redirects or retries.
+External Requests collection and action callbacks are blocked in the child.
+
+Readiness has a 10-second limit and individual requests a 3-second timeout.
+Cleanup terminates only the created child, joins for 3 seconds, then kills/joins
+that child if required. Failure reports are redacted and exit nonzero. This is
+a temporary Python WSGI reference server, not a production server configuration;
+see the [standard-library WSGI reference documentation](https://docs.python.org/3/library/wsgiref.html#module-wsgiref.simple_server).
+Its bind hook uses a fixed server name to avoid HTTPServer's reverse-DNS lookup.
+
+The test verifies real status codes/headers, success-to-unavailable transitions,
+empty versus missing/invalid tracking, historical-result redaction and denied
+action authorization. It does not render widgets or certify dashboard caches,
+TLS/reverse proxies or cross-container DNS/networking.
+
+Run on Unraid using a separate container and installed image dependencies:
+
+```sh
+(
+  set -eu
+  cd /mnt/user/sqlite_lab_checkout
+  [ "$(git branch --show-current)" = "feature/sqlite" ]
+  git pull --ff-only origin feature/sqlite
+  lab_image_id=$(docker inspect --format '{{.Image}}' media_collection_auditor)
+  docker run --rm --pull=never \
+    --network none --read-only --cap-drop ALL \
+    --security-opt no-new-privileges:true \
+    --tmpfs /tmp:rw,nosuid,nodev,size=64m \
+    --mount "type=bind,source=$PWD,target=/checkout,readonly" \
+    --workdir /checkout --entrypoint python \
+    "$lab_image_id" -B /checkout/scripts/integration_api_http_smoke.py
+)
+```
+
+Expected status: `disposable_api_http_smoke_passed`,
+`server_process_stopped=true`, and `widget_rendering_verified=false`. Container
+loopback works with `--network none`; no host port, Docker socket, production
+media/state or NFS control is exposed to this fixture. The container removes
+itself after the fixture exits. No image pull, build or package installation
+is required. The source checkout is mounted read-only.
+
+HTTP-fixture local validation: 73 focused API, HTTP, snapshot, copied-runtime and
+web-security tests passed on macOS. This includes five new transport/startup
+checks. A broader run's final result was not captured after interruption and is
+not claimed as a fresh full-suite pass. Production runtime code is unchanged by
+this fixture increment; Unraid HTTP transport acceptance remains pending.

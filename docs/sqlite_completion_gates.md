@@ -1075,3 +1075,14 @@ explicit unavailable/freshness handling. They require an API-containing image
 before use; the security scan did not publish an updated feature image. Vendor
 rendering, caching and installed-version checks remain pending. This documentation
 adds no runtime behavior and closes no SQLite gate. No Tower/NFS change occurred.
+
+
+### Disposable API HTTP transport fixture
+
+A new short-lived loopback server/client fixture exercises both authenticated
+read-only endpoints over real HTTP, including success-to-unavailable state
+transitions and historical-result redaction. It uses temporary synthetic state,
+no caller-specified target, no external collector, and bounded child cleanup.
+The Unraid command runs network-none with no production mounts or published
+ports. It does not establish widget rendering, cross-container reachability,
+release-image acceptance, NFS ownership or any new production permit.
