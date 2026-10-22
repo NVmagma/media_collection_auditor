@@ -186,6 +186,43 @@ trusted production enforcer to journal authority or prevent another trusted
 administrator/service from restarting NFSD. Persistent restart inhibition,
 NFSv4/kernel-client writeback and other writer fences remain unimplemented.
 
+### Restart entry-point review after successful controller death
+
+The user confirmed the `6fab460` death scenario: private threads remain zero,
+fixture hashes stay unchanged, intent remains pending and no restoration occurs;
+host threads/export hashes remain unchanged. The next gap is preventing other
+ordinary service controllers from reopening NFS while maintenance owns scope.
+
+Official source revision `26eb1b5c1d547ddbf44a38e63956ba24f659098b` has an
+`rc.nfsd` SHA-256 exactly matching the script supplied from Tower. This anchors
+the main-script review; it does not establish that every installed helper or
+custom startup path matches that revision. Reviewed related sources show:
+
+* [NFS settings apply](https://github.com/unraid/webgui/blob/26eb1b5c1d547ddbf44a38e63956ba24f659098b/emhttp/plugins/dynamix/scripts/nfsSettings)
+  writes the persistent defaults and can call `rc.nfsd restart` based on its
+  status response. A thread-only pause with mountd alive can leave this route
+  able to restart the server.
+* [Network-service reload](https://github.com/unraid/webgui/blob/26eb1b5c1d547ddbf44a38e63956ba24f659098b/emhttp/plugins/dynamix/scripts/reload_services)
+  can dispatch `rc.nfsd update`; the main script can then restart for changed
+  interface binding. A cooperative auditor lock does not cover this route.
+* The [NFS settings page](https://github.com/unraid/webgui/blob/26eb1b5c1d547ddbf44a38e63956ba24f659098b/emhttp/plugins/dynamix/NFS.page)
+  exposes the `shareNFSEnabled` preference. That preference is not checked by
+  the reviewed `rc.nfsd start` itself. A preference snapshot or writing `no`
+  alone is therefore not independent proof that all restart routes are denied.
+
+Before choosing a production mechanism, collect only that selected preference
+from persistent/runtime settings and installed hashes for the six reviewed
+service/UI files with `bash scripts/sqlite_nfs_restart_probe.sh`. The probe
+never sources helpers/configuration, invokes service subcommands, dumps other
+settings, changes configuration or treats matching hashes as a restart permit.
+Missing/duplicate/unrecognized preference values remain unverified.
+
+The remaining design must cover settings apply, network update, boot/array
+startup, script replacement/upgrade and permitted administrative access, while
+preserving a protected pending journal and avoiding unconditional restoration.
+Unreviewed startup/custom-script routes remain unknown. No host wrapper,
+configuration edit, plugin or boot hook is installed by this discovery step.
+
 ## Implemented disposable journal foundation
 
 `app/sqlite_disposable_maintenance_journal.py` creates only new fixture roots.

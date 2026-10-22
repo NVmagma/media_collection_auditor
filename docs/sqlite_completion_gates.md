@@ -783,3 +783,19 @@ journal and cutover checks pass 63 tests, including real SIGKILL of the shell
 worker against regular fixture files. Actual NFSD death-scenario results await
 Unraid. Production restart inhibition/enforcer authority remain unfinished;
 all production gates and safeguards retain their previous status.
+
+### NFSv3 controller-death result confirmed
+
+The user confirmed `6fab460` on Tower: only the pause controller is killed;
+the private server remains at zero threads, fixture bytes remain unchanged,
+automatic restoration is false, and the client reports the SQLite journal
+still at `fence_requested` with zero write retries. Host threads remain eight
+and export/etab hashes match. The private RPC environment remains alive during
+the post-death checks; this is not simply whole-lab teardown.
+
+This confirms the bounded NFSv3 death scenario, not persistent restart
+inhibition. Another service controller can still request NFSD startup unless
+an independently enforced deployment mechanism prevents it. Review of Unraid's
+persistent NFS preference, settings apply/reload and startup paths is the next
+implementation prerequisite. No production service action or activation is
+authorized by the successful lab result.
