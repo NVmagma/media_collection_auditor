@@ -13,6 +13,8 @@ COPY app/sqlite_backend_gate.py .
 COPY app/main.py .
 COPY app/web.py .
 COPY app/dashboard_tracking_snapshot.py .
+COPY app/integration_status.py .
+COPY app/integration_api.py .
 COPY app/sqlite_json.py .
 COPY app/sqlite_state.py .
 COPY app/lifecycle_decisions.py .

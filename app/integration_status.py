@@ -1,5 +1,8 @@
 """Offline, redacted status contract; no network endpoint or action authority."""
-from app.dashboard_tracking_snapshot import read_json_dashboard_snapshot
+if __package__:
+    from .dashboard_tracking_snapshot import read_json_dashboard_snapshot
+else:
+    from dashboard_tracking_snapshot import read_json_dashboard_snapshot
 
 
 def read_tracking_status(path):

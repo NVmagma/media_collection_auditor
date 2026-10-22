@@ -48,6 +48,14 @@ except RuntimeError:
     print("TRACKING_ERROR_VISIBLE")
 else:
     assert state == {"first_seen": {"Example": "2024-01-01T00:00:00"}}
+    import os
+    os.environ["INTEGRATION_API_TOKEN"] = "disposable_runtime_integration_token_0123456789"
+    client = web.app.test_client()
+    assert client.get("/api/v1/summary").status_code == 401
+    response = client.get("/api/v1/summary", headers={
+        "Authorization": "Bearer " + os.environ["INTEGRATION_API_TOKEN"]})
+    assert response.status_code == 200
+    assert response.json["tracking_counts"]["waiting"] == 1
     print("RUNTIME_OK")
 '''
     return subprocess.run([sys.executable, "-B", "-c", child], cwd=runtime, env=env,

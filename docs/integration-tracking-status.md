@@ -1,9 +1,10 @@
 # Offline integration tracking status
 
-This prepares the response format for the planned dashboard API. It adds no HTTP
-route, listener, token configuration, network collector or action endpoint.
+This is the offline reader and response format reused by the
+[authenticated summary endpoint](integration-api.md). The CLI itself adds no
+listener, network collector or action endpoint.
 JSON remains authoritative; SQLite environment flags cannot redirect this reader.
-Authentication and live endpoint integration remain separate unfinished work.
+Dedicated bearer authentication is documented with the endpoint.
 
 Run from a checkout with project dependencies installed:
 
@@ -30,7 +31,7 @@ is invented from file modification time. Title names, paths, credentials and raw
 exceptions are excluded. The response grants no move, restart or recovery permit;
 production_activation remains disabled and production_authorized remains false.
 
-Use this CLI only with a trusted local state path. Future network endpoints must
+Use this CLI only with a trusted local state path. Network endpoints must
 supply the configured authoritative path themselves and authenticate before
 returning detailed status; they must not expose a caller-controlled file reader.
 

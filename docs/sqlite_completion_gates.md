@@ -1040,3 +1040,14 @@ redacted tracking counts and unknown freshness, distinguishing unavailable state
 from an empty snapshot. No HTTP route, authentication setup, collector or service
 control is added. This is preparation for the separately planned read-only API,
 not a production API release or completion of any SQLite gate.
+
+
+### Authenticated summary API, independent of cutover
+
+The first `/api/v1/summary` endpoint is disabled without a dedicated valid token.
+It reads JSON tracking state without collectors, reports unknown freshness, and
+does not confer browser/action permissions. The production image COPY manifest
+includes its two runtime modules; copied-runtime tests exercise authorization and
+summary reads without a Docker build. See [API contract](integration-api.md).
+Tower kernel-client testing remains deferred. No gate closes and SQLite
+production activation, intent clearance and permanent deletion remain disabled.

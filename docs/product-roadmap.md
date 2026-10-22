@@ -29,8 +29,10 @@ results. Gates 6–10 remain open while portable execution and integration proce
 ## Integration API for Homarr, Homepage and other clients
 
 User-requested roadmap feature: a documented authenticated, versioned read-only
-API for dashboard/service integration. This is planned, not implemented by this
-roadmap update, and is independent of SQLite production activation.
+API for dashboard/service integration, independent of SQLite production activation.
+The first authenticated JSON tracking summary is now implemented; see the
+[API contract and disposable smoke command](integration-api.md). Readiness, version,
+audit-time reporting and verified vendor widget examples remain planned.
 
 Initial contract proposal:
 
