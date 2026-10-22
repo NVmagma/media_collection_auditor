@@ -4,6 +4,21 @@ This is an unexecuted fixture design, not a module-load/mount command or a
 production enforcement adapter. Gate 6 remains open. Production authority is
 JSON; activation, deletion and clearance remain disabled.
 
+## Execution deferred on Tower — October 22, 2026
+
+The user raised the risk of exercising kernel clients on the production host.
+Live client-module loading and kernel-client mounts are deferred on Tower.
+Private namespaces share the host kernel and are not a separate failure domain.
+Do not resume these operations as the automatic next step after a passing probe.
+Continue local and disposable work that does not require those operations.
+
+The extended metadata report found matching-release nfs/nfsv4 module files;
+LOCALIO capability remains unknown. No client module load or kernel-client mount
+was performed by these probes. The cached-write/retry/recovery acceptance gap
+remains open: this deferral does not close Gate 6, authorize moves or weaken any
+production blocker. Revisit execution in a separate suitable environment or
+review an alternative ownership design before claiming production exclusion.
+
 ## Tower evidence received
 
 The `83b7b7e` probe observed kernel `6.18.54-Unraid`, registered `nfsd`, and no

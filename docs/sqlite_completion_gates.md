@@ -44,8 +44,10 @@ control. More test cases alone cannot complete this gate.
 
 The selected-field mount review has been received. Dashboard pause is accepted
 for the initial design. Its private API-client pause/controller-death fixture
-has passed on Tower. The next check observes kernel NFS-client prerequisites;
-no production enforcement has been performed.
+has passed on Tower. Kernel NFS-client metadata was received; live module-load
+and kernel-client mount testing is deferred on Tower because it shares the
+production kernel. NFS-client cache/retry exclusion remains unverified.
+No production enforcement has been performed.
 Gate 6 closes only after the production enforcement and verifier requirements
 above are implemented and their failure/recovery behavior is accepted. No
 reliable count of remaining test rounds or completion percentage is available.
@@ -1024,3 +1026,17 @@ cannot remove any production blocker; Gate 6 remains open.
 
 Local maintained checks for the module-metadata increment pass 651 tests and
 19 subtests. Matching on-disk client-module observations remain pending on Tower.
+
+
+### Tower kernel testing deferred; offline integration summary
+
+The user requested avoiding risk to the production Unraid host. Active kernel
+client testing is deferred; matching module metadata does not close the ownership
+gap. See [the deferred plan](sqlite-kernel-client-test-plan.md).
+
+An offline [tracking status contract](integration-tracking-status.md) now reuses
+the JSON dashboard snapshot boundary with strict existing-file reads. It reports
+redacted tracking counts and unknown freshness, distinguishing unavailable state
+from an empty snapshot. No HTTP route, authentication setup, collector or service
+control is added. This is preparation for the separately planned read-only API,
+not a production API release or completion of any SQLite gate.
