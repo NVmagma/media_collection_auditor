@@ -95,6 +95,7 @@ def test_transport_failures_are_not_retried_before_explicit_restoration(tmp_path
     events = []
     from app import sqlite_disposable_maintenance_journal as journal
     monkeypatch.setattr(journal, "_linux_boot_id", lambda: "17998968-809c-42c5-817a-d7e652aa7b03")
+    monkeypatch.setattr(journal, "_linux_network_namespace", lambda: "net:[1001]")
     monkeypatch.setattr(client, "connect", lambda _: Socket())
     monkeypatch.setattr(client, "file_handle", lambda _: b"handle")
     monkeypatch.setattr(client, "wait", lambda control, phase: events.append(phase))
@@ -131,6 +132,7 @@ def crash_fixture(monkeypatch, *, complete_crash_write=False, complete_guard_wri
     events = []
     from app import sqlite_disposable_maintenance_journal as journal
     monkeypatch.setattr(journal, "_linux_boot_id", lambda: "17998968-809c-42c5-817a-d7e652aa7b03")
+    monkeypatch.setattr(journal, "_linux_network_namespace", lambda: "net:[1001]")
     monkeypatch.setattr(client, "connect", lambda _: Socket())
     monkeypatch.setattr(client, "file_handle", lambda _: b"handle")
     monkeypatch.setattr(client, "wait", lambda control, phase: events.append(phase))

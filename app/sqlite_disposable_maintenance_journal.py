@@ -5,6 +5,7 @@ There is deliberately no automatic resume, replay, release or production caller.
 """
 from contextlib import closing, contextmanager
 import os
+import re
 from pathlib import Path
 import sqlite3
 import stat
@@ -52,15 +53,32 @@ def _linux_boot_id():
     return value
 
 
+class MaintenanceNetworkScopeChanged(RuntimeError):
+    """A retained fixture belongs to a different Linux network namespace."""
+
+
+def _linux_network_namespace():
+    if sys.platform != "linux":
+        raise RuntimeError("Linux network namespace unavailable")
+    try:
+        value = os.readlink("/proc/self/ns/net")
+    except OSError as exc:
+        raise RuntimeError("Linux network namespace unavailable") from exc
+    if not re.fullmatch(r"net:\[[1-9][0-9]{0,19}\]", value):
+        raise RuntimeError("Linux network namespace unavailable")
+    return value
+
+
 def create_disposable_journal(root, *, bind_linux_boot=False):
     """Create a NEW fixture; never accept an existing state/control directory.
 
-    Linux NFS fixtures require boot binding. The portable path-only mode is
+    Linux NFS fixtures require boot and network binding. The portable path-only mode is
     retained for synthetic ordering tests, not external writer coordination.
     """
     if type(bind_linux_boot) is not bool:
         raise ValueError("Boolean boot binding selection required")
     boot_id = _linux_boot_id() if bind_linux_boot else None
+    network_namespace = _linux_network_namespace() if bind_linux_boot else None
     root = _root(root)
     root.mkdir(mode=0o700)  # Exclusive creation; preserve partial labs on error.
     with (root / ".disposable_maintenance").open("xb") as output:
@@ -71,8 +89,9 @@ def create_disposable_journal(root, *, bind_linux_boot=False):
         db.execute("PRAGMA synchronous=FULL")
         db.execute("CREATE TABLE fixture_binding (path TEXT NOT NULL, root_device INTEGER NOT NULL, "
                    "root_inode INTEGER NOT NULL, db_device INTEGER NOT NULL, db_inode INTEGER NOT NULL, "
-                   "linux_boot_id TEXT)")
-        db.execute("INSERT INTO fixture_binding VALUES (?, ?, ?, ?, ?, ?)", (*_identity(root), boot_id))
+                   "linux_boot_id TEXT, linux_network_namespace TEXT)")
+        db.execute("INSERT INTO fixture_binding VALUES (?, ?, ?, ?, ?, ?, ?)",
+                   (*_identity(root), boot_id, network_namespace))
         db.execute("CREATE TABLE events (revision INTEGER PRIMARY KEY, phase TEXT NOT NULL)")
         db.execute("INSERT INTO events VALUES (0, 'prepared')")
     directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
@@ -115,19 +134,22 @@ def _verify_binding(db, root, *, require_linux_boot=False):
     if rows != [_identity(root)]:
         raise RuntimeError("Disposable journal binding changed")
     try:
-        boot_rows = db.execute("SELECT linux_boot_id FROM fixture_binding").fetchall()
+        boot_rows = db.execute("SELECT linux_boot_id, linux_network_namespace FROM fixture_binding").fetchall()
     except sqlite3.Error as exc:
         # Old fixture formats are retained for offline review, never upgraded
         # or silently treated as unbound during recovery.
         raise RuntimeError("Disposable journal boot binding unavailable") from exc
-    if boot_rows == [(None,)]:
+    if boot_rows == [(None, None)]:
         if require_linux_boot:
             raise RuntimeError("Linux boot-bound fixture required")
         return  # Portable path-only fixture; never used by the Linux NFS lab.
-    if len(boot_rows) != 1 or not isinstance(boot_rows[0][0], str):
+    if (len(boot_rows) != 1 or not isinstance(boot_rows[0][0], str)
+            or not isinstance(boot_rows[0][1], str)):
         raise RuntimeError("Disposable journal boot binding invalid")
-    if boot_rows != [(_linux_boot_id(),)]:
+    if boot_rows[0][0] != _linux_boot_id():
         raise RuntimeError("Disposable journal boot binding changed")
+    if boot_rows[0][1] != _linux_network_namespace():
+        raise MaintenanceNetworkScopeChanged("Disposable journal network namespace changed")
 
 
 @contextmanager

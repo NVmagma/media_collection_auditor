@@ -11,6 +11,13 @@ BOOT_A = "17998968-809c-42c5-817a-d7e652aa7b03"
 BOOT_B = "e7ab85f6-24cb-4583-b886-c18109fe6ac9"
 
 
+@pytest.fixture(autouse=True)
+def private_network_fixture(monkeypatch):
+    # Deterministic scope for portable decision tests; live Docker checks use
+    # actual kernel namespace identities without this test replacement.
+    monkeypatch.setattr(journal, "_linux_network_namespace", lambda: "net:[1001]")
+
+
 @pytest.mark.parametrize("phase", ["prepared", *journal.NEXT.values()])
 def test_different_boot_retains_every_checkpoint_without_recovery(tmp_path, monkeypatch, phase):
     monkeypatch.setattr(journal, "_linux_boot_id", lambda: BOOT_A)

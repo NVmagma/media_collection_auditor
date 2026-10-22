@@ -609,8 +609,40 @@ available for offline review. Always create a new lab through the harness.
 Regression tests simulate boot drift at every checkpoint and after a synthetic
 action, verify no completion/release or receipt is inferred, and check database
 bytes remain unchanged on rejected inspection/recovery. Simulated identities
-test the decision logic; the live Linux fixture must additionally verify the
-real kernel interface. These checks do not reboot Tower, persist a guard, stop
+test the decision logic. The user confirmed the live Linux boot-bound guard
+fixture through `32f2490`: pending intent retained, all 12 dispatches denied,
+no restoration and host threads unchanged at eight. These checks do not reboot Tower, persist a guard, stop
 startup services, prove NFSv4/kernel-client exclusion, or close Gate 6. Host
 boot fencing and any eventual production restart-clearance implementation
 remain separate requirements.
+
+### Network namespace binding and independent read-only rejection
+
+Linux NFSD state is scoped to its network namespace. New Linux-bound fixtures
+therefore store the observed network namespace identity alongside the boot
+UUID and path/device/inode binding. Every controller boundary and inspection
+requires both identities to match. Missing/invalid identity is not replaced
+with a host name, PID or supplied flag. A changed namespace raises a distinct
+scope error before further transitions or synthetic receipts; intent remains
+pending. Older fixture formats are retained without migration or rebinding.
+Portable path-only synthetic fixtures continue to grant no external authority.
+
+`scripts/sqlite_maintenance_scope_lab.sh` checks the actual Linux interfaces
+using two new cached-image containers with separate `--network none` networks,
+read-only root filesystems and all capabilities dropped. The first creates a
+new pending boot/network-bound fixture and stays alive for a bounded interval.
+The second receives only read-only source/control mounts and must reject that
+same physical database with the specific network-scope error. Other failures
+(including boot mismatch or an unavailable database) fail the check rather than
+being reported as successful rejection. The harness verifies unchanged database
+bytes and that the first container remained alive; cleanup removes only its
+two newly created containers and retains the pending fixture.
+
+Keeping the original namespace alive prevents namespace identifier recycling
+during this check. A stored namespace identifier alone is not a durable kernel
+reference: it can be recycled after the original namespace disappears. This
+binding is an additional rejection check, never proof of continuous ownership
+or a production permit. Production still needs independently held enforcement
+and scope references, restart inhibition and explicit recovery. This harness
+never starts/stops NFS, mounts a kernel client, changes exports or configuration,
+reboots Tower, grants restart clearance or closes Gate 6.

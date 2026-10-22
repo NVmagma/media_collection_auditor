@@ -838,7 +838,21 @@ New private NFS crash/guard journals now capture Linux boot identity and verify
 it on every inspection/transition. Changed/unavailable identity prevents
 continuation or release, retaining intent; path-only synthetic journals cannot
 satisfy NFS acceptance. Legacy fixtures are never automatically upgraded or
-rebound. Tests cover every phase plus drift after action. Local maintained checks pass 553 tests and 19 subtests. The live private lab
-still needs acceptance against the actual Linux interface. Production restart
+rebound. Tests cover every phase plus drift after action. Local maintained checks pass 553 tests and 19 subtests. The user confirmed live acceptance through `32f2490`: current-boot journal
+scope, pending intent, 12 denied dispatches and host threads unchanged at eight. Production restart
 inhibition and writer exclusion remain false, and all production gate blockers
 remain intact.
+
+
+### Rejecting retained intent from another network namespace
+
+New Linux-bound maintenance fixtures also record network namespace identity and
+reject changed/unavailable scope before transitions, synthetic actions or release.
+A separate two-container lab verifies rejection of the same physical database
+from another network, with a read-only checker and the original namespace kept
+alive. It performs no NFS controls or production actions. Actual Docker/kernel
+acceptance remains pending. Local maintained checks pass 572 tests and 19
+subtests, including drift at every phase and after action, plus refusal to count
+unrelated detected failures as successful rejection.
+Stored namespace identifiers do not replace held kernel references or establish
+continuous fencing. Gate 6 and all existing production blockers remain open.
