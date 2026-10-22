@@ -45,14 +45,14 @@ def _encode(state):
                       sort_keys=True, separators=(",", ":")).encode("ascii")
 
 
-def read_json_dashboard_snapshot(path):
+def read_json_dashboard_snapshot(path, *, require_existing=False):
     """Read authoritative JSON once; preserve legacy missing-section shape."""
     path = Path(path)
     try:
         try:
             raw = path.read_bytes()
         except FileNotFoundError:
-            if path.is_symlink() or any(path.parent.glob(".auditor_state_*.tmp")):
+            if require_existing or path.is_symlink() or any(path.parent.glob(".auditor_state_*.tmp")):
                 raise RuntimeError("Interrupted or unavailable dashboard state")
             raw = b"{}"
         payload = _encode(parse_unique_json(raw))
