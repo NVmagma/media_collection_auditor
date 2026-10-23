@@ -585,3 +585,22 @@ DOCKER_ENABLED yes/no assignment is accepted, unrelated bytes stay unchanged,
 and restoration candidates reject intervening edits. These are marked lab
 artifacts only; no supported UI handler, host preference application or recovery
 approval is implemented by producing them.
+
+Tower accepted the no-host-Python runtime mechanism: Python 3.12.15, SQLite
+3.46.1, exclusive flock and synthetic SQLite checkpoint all passed with existing
+services unchanged. The swap-limit warning did not affect those assertions.
+
+The offline-service guard primitive now durably requests fencing before mounting
+fixed deny guards over canonical fake Docker/NFS dispatch paths. In the separate
+VM, both symlink aliases denied 22 commands before and after real installer
+SIGKILL; the request stayed unchanged and replacement installation rejected.
+Partial installation SIGKILL after the first bind also retained its request and
+ten Docker denials while rejecting the incomplete fence. Namespace cleanup left
+underlying inert scripts unchanged. This is one-shot installation/crash mechanism
+evidence only; actual host settings, boot integration, complete writer scope and
+production ownership-bound completion remain unimplemented/unaccepted.
+
+The next host input is a selected read-only SMB/mover/scheduler scope snapshot,
+so the actual installer covers host services beyond Docker/NFS where applicable.
+No service stop, preference application or production media test is requested by
+that snapshot. See [offline dispatch rehearsal](sqlite-offline-dispatch-rehearsal.md).

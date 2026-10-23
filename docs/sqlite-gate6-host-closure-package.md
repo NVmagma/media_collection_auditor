@@ -48,8 +48,9 @@ that UID 0 is always trusted.
 1. **Runnable host controller.** Establish a reviewed runtime that remains alive
    with the worker paused (and with Docker offline if that design is selected).
    Tower has no host Python installation; earlier Python tests ran in containers.
-   A disposable cached-image runtime export/chroot rehearsal is prepared to avoid
-   requiring a host Python installation. Tower runtime acceptance is still needed.
+   Tower accepted the disposable cached-image export/chroot runtime with Python
+   3.12.15 and SQLite 3.46.1, avoiding a host Python installation. Application
+   packaging and actual host bindings still require implementation and review.
    Bind a single durable private request, exact scope and exclusive controller
    lock before any external action. Confirm the control path is outside every
    exported/bind alias; no hard-coded Unraid pool or filesystem name is adequate.
