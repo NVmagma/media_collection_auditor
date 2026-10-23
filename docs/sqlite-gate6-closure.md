@@ -332,3 +332,12 @@ now has local rule tests; no listener, installer or daemon configuration is
 introduced. This is implementation preparation only, with native gRPC, restart,
 existing streams, host boot and NFS explicitly outside its enforcement claim.
 See the control proposal for the required separate-daemon rehearsal.
+
+
+The [local separate-daemon authorization rehearsal](sqlite-docker-authorization-rehearsal.md)
+now supplies real Engine 29.8.2 HTTP allow/deny and plugin-death failure evidence.
+It used a separate empty daemon, not Tower or a reconfigured existing daemon.
+Status observations worked, mutations/streams denied, and plugin loss denied a
+create request without creating nested containers. This advances the candidate
+Docker API control only. Native gRPC, existing writers/streams, restart/boot
+continuity, Unraid UI and NFS remain unverified; Gate 6 remains open.

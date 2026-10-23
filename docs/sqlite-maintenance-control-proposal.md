@@ -111,3 +111,19 @@ socket. A read-only image inventory found no cached Docker-in-Docker runtime.
 The existing local daemon was not reconfigured and must not be used as the
 experimental authorization target. No image was pulled or built. A separate
 daemon rehearsal remains necessary; mocked AuthZ responses are not a substitute.
+
+
+## Separate-daemon HTTP rehearsal completed
+
+The subsequent [local separate-daemon rehearsal](sqlite-docker-authorization-rehearsal.md)
+used official Engine 29.8.2 in a new network-isolated container, without
+privileged mode or host Docker/media mounts. Only that nested daemon loaded the
+private fixture endpoint. Status reads returned 200, mutation/stream requests
+returned 403 and plugin death made a create request fail with 500. All new
+fixture containers/volume were removed. This supersedes the earlier statement
+that no runtime was pulled: the official dind image was fetched for this test;
+no image was built. The host/local daemon configuration was not changed.
+
+This is bounded HTTP enforcement evidence, not complete Docker writer exclusion,
+Unraid UI compatibility, NFS coordination or restart/boot acceptance. The policy
+remains deliberately uninstalled on Tower.
