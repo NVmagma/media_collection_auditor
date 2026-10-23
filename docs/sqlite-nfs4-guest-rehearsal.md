@@ -49,3 +49,30 @@ inhibition, all administrative bypasses, concurrent workloads or the integrated
 SQLite ownership boundary. There is no automatic restoration, clearance or
 production permit. JSON remains authoritative; production activation and deletion
 remain disabled.
+
+## Real uncertain client joined to the disposable copy hold
+
+`--integrate-maintenance-hold` now connects the actual paused kernel-client case
+to the existing deny-only maintenance journal and copy runner. After network
+transmission/pending-fsync/unchanged-server-byte observations establish the
+uncertain write, the guest creates a fresh synthetic media lab beneath the export
+and records a durable client-writeback uncertainty hold before attempting any
+copy operation. The copy must reject before collection or creation of its one-shot
+attempt, with source/database/journal bytes unchanged by the rejected operation
+and detached review. The synthetic maintenance receipt remains non-authorizing.
+
+After explicit NFSD recovery, client fsync and normal unmount, the same held copy
+is checked again. Successful client recovery must not automatically clear the
+hold, adopt media work or release maintenance. This is conservative protocol
+integration, not an external ownership permit or a production clearance rule.
+The original Docker/copy observer remains separate; all writers and host routes
+still need coverage before a production adapter can authorize work.
+
+Both NFSv4.1 and NFSv4.2 accepted this integrated hold behavior on 2026-10-23,
+including live recovery-helper checks and normal client unmount. Guest package
+services that had started on guest boot were explicitly stopped in that separate
+VM to provide the fixture's required empty baseline; the fixture's refusal to
+control pre-existing actors/threads was not relaxed. Tower was not contacted.
+78 focused local checks passed with six existing macOS capability skips. Synthetic
+Docker action-boundary and NFS hold evidence was archived; the guest powered off.
+No production NFS, Docker, startup, filesystem or kernel setting changed.

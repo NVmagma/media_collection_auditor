@@ -69,7 +69,7 @@ def client(root,version):
             subprocess.run(['umount',str(target)],capture_output=True,timeout=10)
 
 
-def run(root,version):
+def run(root,version, *, integrate_hold=False):
     require_guest()
     if version not in ('4.1','4.2'): raise ValueError('Explicit NFSv4 minor required')
     for name in ('rpc.mountd','nfsdcld','rpcbind'):
@@ -147,6 +147,11 @@ def run(root,version):
                 or payload.read_bytes()!=b'BEFORE!\n' or tx_after<=tx_before):
             raise RuntimeError('Guest paused-client uncertainty not established')
         write_returned=(root/'write-returned').exists()
+        held_copy=None
+        if integrate_hold:
+            from scripts.sqlite_nfs_copy_hold_guest_lab import prepare_uncertain_copy_hold, require_hold_blocks_copy
+            held_copy=prepare_uncertain_copy_hold(root)
+            require_hold_blocks_copy(*held_copy)
         # Explicit recovery only, after independent server-byte observation.
         command(*args)
         wait_for(root/'fsync-completed',worker,60)
@@ -155,7 +160,10 @@ def run(root,version):
         if worker.returncode!=0 or payload.read_bytes()!=b'PENDING\n':
             raise RuntimeError('Guest recovery bytes/fsync mismatch')
         require_helpers_alive(mountd,cld)
-        return {'recovery_helper_alive':True,'status':'private_guest_nfs4_recovery_complete','nfs_version':version,
+        if held_copy is not None:
+            require_hold_blocks_copy(*held_copy)
+        return {'maintenance_hold_blocks_copy_before_and_after_recovery':integrate_hold,
+                'recovery_helper_alive':True,'status':'private_guest_nfs4_recovery_complete','nfs_version':version,
                 'kernel':os.uname().release,'paused_write_returned':write_returned,
                 'paused_fsync_completed':False,'paused_server_bytes_unchanged':True,
                 'client_network_tx_increased':True,'pause_controller_killed':True,
@@ -182,6 +190,7 @@ if __name__=='__main__':
     parser.add_argument('--root',required=True)
     parser.add_argument('--version',choices=('4.1','4.2'),required=True)
     parser.add_argument('--client',action='store_true')
+    parser.add_argument('--integrate-maintenance-hold',action='store_true')
     args=parser.parse_args()
     if args.client: client(args.root,args.version)
-    else: print(json.dumps(run(args.root,args.version),sort_keys=True))
+    else: print(json.dumps(run(args.root,args.version,integrate_hold=args.integrate_maintenance_hold),sort_keys=True))

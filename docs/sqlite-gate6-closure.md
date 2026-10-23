@@ -457,3 +457,11 @@ Same-controller retries and different-controller adoption were rejected for all
 four cases without changing retained bytes. 69 local checks passed with six
 platform skips; real guest action syscalls supplied the Linux component evidence.
 Full host/share ownership and continuous production enforcement remain open.
+
+
+The independent real NFSv4 client fixture now also joins observed pending writes
+to a durable disposable maintenance uncertainty hold. Copy work is denied before
+collection/attempt binding, both while fsync is pending and after explicit server
+recovery/fsync/unmount. Recovery does not clear the hold or grant release. This
+combines client uncertainty with the SQLite deny path, while leaving production
+clearance and complete Docker/NFS/host ownership integration unimplemented.
