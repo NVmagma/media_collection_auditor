@@ -169,3 +169,13 @@ restart fence. Sampling detects drift; it cannot prove continuous exclusion.
 Any failure latches the instance, and a callback retained after context closure
 rejects use. The actual SQLite identity and transaction checks remain in the copy
 wrapper. No production adapter or release permit is introduced.
+
+`python -B -m scripts.sqlite_storage_backend_guest_lab --root NEW_ABSOLUTE_PATH`
+is a separate-VM rehearsal, guarded by the dedicated guest identity check. It
+creates a private mount namespace and new synthetic paths. It accepts an initial
+stage bind mount, rejects a second bind overlay with unchanged device/inode but
+a different mount ID, checks the combined required-domain callback rejection,
+and rejects baseline mount detachment. A held baseline descriptor makes ordinary
+unmount busy, so that specific fixture loss uses lazy detachment of its newly
+created private mount. Namespace exit removes remaining fixture mounts. No host
+service, exports, kernel modules or production paths are controlled.

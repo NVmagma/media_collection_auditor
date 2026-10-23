@@ -41,6 +41,8 @@ def held_disposable_storage_observer(*, root):
             info = os.fstat(fd)
             return info.st_dev, info.st_ino, read_fd_mount_id(fd)
         expected = {name: identity(fd) for name, fd in held.items()}
+        if identity(root_fd) != expected['.']:
+            raise RuntimeError('Disposable storage root changed during capture')
         namespace = read_mount_namespace_identity()
         def sample():
             if root.resolve() != root or read_mount_namespace_identity() != namespace:

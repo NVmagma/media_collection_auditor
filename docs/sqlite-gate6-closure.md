@@ -531,3 +531,12 @@ replacement blocks before collection or durable attempt binding. Local Mac tests
 simulate only unavailable proc readers; real filesystem replacement is exercised.
 Linux mount-overlay acceptance and complete host-writer enforcement remain open.
 Production activation and writer-exclusion authorization remain disabled.
+
+Actual independent Linux VM storage acceptance completed: mixed-mount baseline
+accepted; same-device/same-inode overlay rejected by mount ID and the combined
+required-domain callback; baseline detachment rejected; failed observer remained
+blocked after restoration; original fixture bytes unchanged. Also closed a
+capture-time root replacement gap by requiring the marker's held root descriptor
+to match the captured root directory/mount. This satisfies the narrow Linux
+mount-drift acceptance item above, not host writer exclusion or production move
+admission. Full integrated host enforcement and boot/recovery closure remain open.

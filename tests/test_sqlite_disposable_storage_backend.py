@@ -67,3 +67,35 @@ def test_root_replacement(root):
         root.mkdir()
         with pytest.raises(RuntimeError):
             verify()
+
+
+def test_root_replaced_during_capture(root, monkeypatch):
+    original_open = module.os.open
+    root_opens = 0
+    def replacing_open(path, *args, **kwargs):
+        nonlocal root_opens
+        if str(path) == str(root):
+            root_opens += 1
+            if root_opens == 2:
+                root.rename(root.with_name('retained-root'))
+                root.mkdir()
+                (root / '.sqlite_disposable_rehearsal').write_bytes(b'DISPOSABLE ONLY\n')
+                for name in ('transient', 'holding', 'keep', 'removal'):
+                    (root / name).mkdir()
+        return original_open(path, *args, **kwargs)
+    monkeypatch.setattr(module.os, 'open', replacing_open)
+    with pytest.raises(RuntimeError, match='during capture'):
+        with module.held_disposable_storage_observer(root=root):
+            pytest.fail('Changed capture admitted')
+
+
+def test_guest_rehearsal_rejects_non_guest_before_creating_paths(tmp_path, monkeypatch):
+    from scripts import sqlite_storage_backend_guest_lab as lab
+    def deny():
+        raise RuntimeError('Dedicated guest required')
+    monkeypatch.setattr(lab, 'require_guest', deny)
+    monkeypatch.setattr(lab.subprocess, 'run', lambda *a, **k: pytest.fail('No mount controls'))
+    target = tmp_path / 'absent'
+    with pytest.raises(RuntimeError, match='Dedicated guest'):
+        lab.run(target)
+    assert not target.exists()
