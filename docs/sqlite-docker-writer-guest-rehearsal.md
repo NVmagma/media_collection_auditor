@@ -132,3 +132,27 @@ Its powered-off sparse overlay was expanded from 6 to 10 GiB virtual capacity,
 and a fresh run succeeded. Failed and successful fixture data were retained;
 only the independent guest disk changed. Evidence was archived and the VM shut
 down. This still does not establish host boot or full production ownership.
+
+## Native runtime negative-boundary experiment
+
+The optional `--probe-runtime-route` experiment was accepted in the independent
+VM on 2026-10-23. With Docker HTTP authorization active, a non-allowlisted memory
+update on the new synthetic container returned 403. Using the private managed
+containerd gRPC socket and cached `ctr`, a harmless metadata label on that same
+full synthetic ID was successfully written and independently read back. No media
+write, exec, start or resource change was requested through containerd. Captured
+metadata stays private; the summary contains only categorical results.
+
+This establishes an unfenced native metadata route for a caller already able to
+access that guest socket; it does not establish arbitrary unprivileged access or
+actual Tower exposure. The summary explicitly reports
+`native_runtime_route_fenced=false`. The normal selected writer was then
+restart-disabled/stopped, strict observations passed, and private daemon restart
+preserved stopped state, denied starts and unchanged synthetic bytes. All global
+production/exclusion flags remain false. No production sockets were contacted.
+
+The guest's powered-off sparse disk was expanded to 16 GiB virtual capacity to
+retain earlier fixture data while loading another isolated image store. Only its
+virtual disk changed. Evidence was archived and the VM powered off. The route is
+a required access-boundary input, not a reason to stop/remove Tower's containerd
+or shared management sockets. It cannot be resolved by another HTTP deny rule.

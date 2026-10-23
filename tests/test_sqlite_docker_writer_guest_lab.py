@@ -6,15 +6,16 @@ from scripts import sqlite_docker_writer_guest_lab as guest
 from app.sqlite_docker_quiesce_policy import authorize_quiesce_request
 
 
+@pytest.mark.parametrize('runtime_probe', [False, True])
 @pytest.mark.parametrize('platform,uid,hostname', [('darwin',501,'Mac'),('linux',0,'Tower'),('linux',1000,'mca-writer-fixture')])
-def test_other_hosts_rejected_before_files_or_process_controls(monkeypatch,tmp_path,platform,uid,hostname):
+def test_other_hosts_rejected_before_files_or_process_controls(monkeypatch,tmp_path,platform,uid,hostname,runtime_probe):
     monkeypatch.setattr(guest.sys,'platform',platform)
     monkeypatch.setattr(guest.os,'geteuid',lambda:uid)
     monkeypatch.setattr(guest.socket,'gethostname',lambda:hostname)
     monkeypatch.setattr(guest.subprocess,'run',lambda *a,**k:pytest.fail('No process operations'))
     root=tmp_path/'absent'
     with pytest.raises(RuntimeError,match='never run on Tower'):
-        guest.run(root,tmp_path/'bin',tmp_path/'image')
+        guest.run(root,tmp_path/'bin',tmp_path/'image',probe_runtime_route=runtime_probe)
     assert not root.exists()
 
 

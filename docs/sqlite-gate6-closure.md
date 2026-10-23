@@ -411,3 +411,14 @@ both services with unchanged media bytes. 85 focused local checks passed; fixtur
 units were disabled and the independent VM powered off. This is real prototype
 boot/failure evidence, not Unraid startup/management acceptance or complete writer
 exclusion. No production installer, release path or ownership permit is added.
+
+
+Tower's listener snapshot identifies Docker Unix API and managed containerd
+sockets; no named TCP listener was observed. Shared emhttp socket attribution
+is not Docker API ownership and must not be used to fence management. The
+independent guest negative-boundary experiment now confirms a native containerd
+metadata update succeeds for a socket-authorized caller while Docker denies its
+HTTP comparison mutation. `native_runtime_route_fenced=false` remains explicit.
+The selected synthetic writer still passed stop/restart acceptance. Direct
+runtime access/trusted administrative scope and prior streams therefore remain
+real closure requirements, not a missing HTTP route rule. Tower is unchanged.

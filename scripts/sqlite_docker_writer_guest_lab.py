@@ -30,7 +30,7 @@ class Client(http.client.HTTPConnection):
         self.sock.connect(str(self.endpoint))
 
 
-def run(root, binaries, image_archive):
+def run(root, binaries, image_archive, *, probe_runtime_route=False):
     if (sys.platform!='linux' or os.geteuid()!=0
             or socket.gethostname()!='mca-writer-fixture'
             or Path('/var/lib/cloud/data/instance-id').read_text().strip()!='mca-writer-fixture'):
@@ -127,6 +127,24 @@ def run(root, binaries, image_archive):
             if time.monotonic()>deadline: raise RuntimeError('Guest plugin reload not verified')
             time.sleep(.1)
         result['start_denial_verified']=True
+        if probe_runtime_route:
+            # Negative boundary experiment: only this fresh synthetic ID is
+            # touched. Native containerd metadata is outside Docker HTTP AuthZ.
+            if api('POST',route+'/update',{'Memory':67108864})[0]!=403:
+                raise RuntimeError('Fixture HTTP comparison mutation not denied')
+            runtime=[str(binaries/'ctr'),'--address',str(root/'exec/containerd/containerd.sock'),
+                     '--namespace','moby','containers']
+            changed=subprocess.run(runtime+['label',identity,'mca.disposable.native-route=observed'],
+                env=env,capture_output=True,text=True,timeout=15)
+            if changed.returncode:
+                raise RuntimeError('Private native metadata experiment failed')
+            observed=subprocess.run(runtime+['info',identity],env=env,capture_output=True,text=True,
+                timeout=15,check=True)
+            if json.loads(observed.stdout).get('Labels',{}).get('mca.disposable.native-route')!='observed':
+                raise RuntimeError('Private native metadata change not observed')
+            result['http_comparison_mutation_denied']=True
+            result['native_runtime_metadata_mutation_observed']=True
+            result['native_runtime_route_fenced']=False
         status,_=api('POST',route+'/update',{'RestartPolicy':{'Name':'no','MaximumRetryCount':0}})
         if status!=200: raise RuntimeError('Guest restart disable failed: '+str(status))
         if api('POST',route+'/stop')[0]!=204: raise RuntimeError('Guest writer stop failed')
@@ -160,5 +178,7 @@ if __name__=='__main__':
     parser.add_argument('--root',required=True)
     parser.add_argument('--docker-bin',required=True)
     parser.add_argument('--image-archive',required=True)
+    parser.add_argument('--probe-runtime-route',action='store_true',
+                        help='Negative test: label only the new synthetic ID through private containerd')
     args=parser.parse_args()
-    print(json.dumps(run(args.root,args.docker_bin,args.image_archive),sort_keys=True))
+    print(json.dumps(run(args.root,args.docker_bin,args.image_archive,probe_runtime_route=args.probe_runtime_route),sort_keys=True))

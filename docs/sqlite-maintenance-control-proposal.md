@@ -189,3 +189,37 @@ visibility, not evidence of no listener. It explicitly rejects a Docker-containe
 execution context. The host snapshot is one architecture input, never an
 ownership permit, full namespace inventory or proof that existing streams have
 been revoked. No production changes are authorized by running it.
+
+
+## Tower listener snapshot accepted (2026-10-23)
+
+The host probe returned `listener_snapshot_complete`. No TCP listener with a
+visible dockerd/containerd/buildkitd attribution was observed. This is not proof
+that every TCP or namespace route is absent. Observed Unix paths included:
+
+- `/var/run/docker.sock` attributed to dockerd;
+- `/var/run/docker/containerd/containerd.sock` and its `.ttrpc` sibling;
+- `/var/run/docker/containerd/containerd-debug.sock`;
+- Docker metrics and libnetwork sockets.
+
+The output also included `/var/run/emhttpd.socket` with many associated processes,
+including dockerd/containerd. `ss` process attribution is not exclusive service
+ownership: that shared management listener must not be classified as a Docker
+control API or fenced merely because those names appear on the row. No management
+socket change is proposed. Process IDs and per-run libnetwork identifiers are
+transient observations, not configuration bindings.
+
+Native containerd access is a separate runtime control boundary, not a route
+protected by the Docker HTTP authorization policy. Its upstream
+[security threat model](https://containerd.io/docs/main/security/threat_model/)
+treats privileged runtime socket access as root-equivalent. The
+[operator guidelines](https://containerd.io/docs/main/security/operator_guidelines/)
+call for restricted socket ownership/access. These facts do not establish Tower's
+actual permissions, ACLs, namespace/bind exposure or existing connections. Do not
+chmod/remove/rebind any observed socket based on this inventory alone.
+
+The next adapter requirement is explicit access coverage: ordinary Docker API
+clients remain subject to AuthZ, while direct runtime access and privileged host
+administration must be covered by a reviewed access/trust boundary. No plugin
+claim may silently absorb these routes. Existing client streams and administrative
+configuration changes remain separate. No listener snapshot grants ownership.
