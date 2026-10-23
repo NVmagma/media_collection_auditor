@@ -1,6 +1,6 @@
 # NFS host fence: candidate change package
 
-Status: design draft pending administrative trust decision and implementation.
+Status: administrator trust model accepted; host implementation remains a draft.
 Not an installer, approved procedure or permission to change Tower. No production
 SQLite activation, deletion, NFS configuration change or service control is added.
 
@@ -21,13 +21,15 @@ Sources at revision `26eb1b5c1d547ddbf44a38e63956ba24f659098b`:
 
 ## Administrative boundary must be explicit
 
-The candidate is conditional on trusted host administrators following the
-maintenance protocol. It does not protect against root intentionally replacing
+The user accepted trusted host administrators following the maintenance
+protocol as the initial design boundary. It does not protect against root intentionally replacing
 guards, enabling services through unreviewed routes, altering boot configuration
 or accessing native runtime sockets. This is separate from ordinary NFS clients,
 container writers and automated starts, which require real technical controls.
-The operator's design choice is pending; it is not inferred from root-owned
-socket metadata or prior permission to pause shares.
+This decision does not authorize any Tower changes. It is not inferred from
+socket ownership or previous permission to pause shares. Automated root processes
+and privileged containers are still required control routes; UID 0 alone does
+not make a process a trusted administrator.
 
 If hostile/overriding host administrators must also be excluded, do not deploy
 this application-level model as adequate. A different host security/control
@@ -79,3 +81,35 @@ implemented and tested before installation is proposed.
 No production action is requested from this draft. Do not experiment on Tower
 simply to discover whether the proposed layers work. The separate Linux VM can
 rehearse mechanisms, but cannot stand in for Unraid boot/manager acceptance.
+
+
+## Exact configuration candidates prepared
+
+`app/sqlite_nfs_config_candidate.py` now produces disabled-NFS preference bytes
+without applying them. Exactly one canonical yes/no assignment is required;
+quoted/unquoted forms and existing line endings are preserved. Missing, duplicate,
+ambiguous or executable preference values block. All unrelated bytes remain
+unchanged. Restoration candidates require the exact original-to-disabled
+transformation and byte-for-byte unchanged current content, so unrelated external
+edits cannot be overwritten. The comparison is not an atomic file replacement or
+permission to restore NFS.
+
+`app/sqlite_disposable_nfs_config_plan.py` stores exclusive 0600 before/candidate
+artifacts and a manifest in a new 0700 plan directory beneath a marked disposable
+root. It reads only the lab's share.cfg, never the host's settings. Source,
+marker, plan-directory and artifact bindings/content are checked; symlinks,
+hard links, FIFOs, drift and existing plans refuse success. Partial artifacts stay
+available for review; source bytes are never written. Files and directories are
+fsynced, but no claim of host power-loss acceptance is made.
+
+The synthetic CLI `scripts/sqlite_nfs_config_plan_lab.py` creates a new lab with
+fixed fake settings and prepares that package. Local acceptance: 87 focused
+checks passed with six existing platform skips; the actual synthetic CLI retained
+its source and generated its private review artifacts. Output exposes no raw
+configuration, shell commands or credentials. All application/restoration,
+production and ownership authority flags remain false.
+
+This implements backup/candidate preparation only. The supported Unraid settings
+operation, held-binding atomic application/recovery, runtime service fence and
+all-mode boot acceptance remain required. No raw edit of var.ini or share.cfg,
+service stop/reload, plugin installation or Tower test is requested by this step.

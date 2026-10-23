@@ -144,3 +144,13 @@ completeness, repeated snapshots do not enforce continuity, and the marker does
 not protect against privileged redirection. Production policy installation,
 control-route scope, NFS startup/restart inhibition and real host/storage ownership
 remain required. Existing production activation and release guards are unchanged.
+
+
+## Accepted administrator scope
+
+The user accepted trusted host root/Unraid administrators following maintenance
+rules until explicit recovery. This narrows the adversarial boundary; it does
+not authorize installation or excuse automated root writers, privileged container
+routes, client access or accidental service restarts from technical fencing.
+There is no runtime ignore-root switch, and this model must not be advertised as
+protection against an administrator deliberately replacing its controls.

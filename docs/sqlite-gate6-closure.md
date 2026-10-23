@@ -502,3 +502,13 @@ conditional persistent-disable/runtime-guard approach, backup/recovery requireme
 and the missing implementation/acceptance. Administrative trust scope is a pending
 design decision; no host-root bypass exclusion is silently assumed. No installer,
 configuration change, service action or production readiness is introduced.
+
+
+
+The administrator trust decision is accepted for the initial model; it is design
+scope, not Tower change approval. A new disposable configuration planner prepares
+exact original/disabled artifacts and refuses restoration candidates after any
+intervening edit. Binding/content drift, unsafe file types and plan overwrites
+block, with original source bytes retained. 87 focused checks passed with six
+platform skips and the synthetic CLI passed. This is backup/review preparation,
+not settings application, a live NFS fence or production ownership acceptance.
