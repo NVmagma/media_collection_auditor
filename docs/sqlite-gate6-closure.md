@@ -108,7 +108,8 @@ wired to production services or represented as production writer exclusion.
 Existing journals without a hold keep their synthetic behavior and grant no new
 production authority. A released fixture cannot retrospectively record an active
 hold; production release still requires an independently accepted client-state
-and ownership model. New hold acceptance on Unraid is pending.
+and ownership model. The user accepted 66 checks on each Unraid path through `ed0c919`, including
+the committed hold surviving process death and blocking release/writes.
 
 Run the focused new regression set using only disposable directories:
 
@@ -124,5 +125,17 @@ or command. The scripts mount allows the detached review CLI tests; checkout
 service changes, kernel operations or image builds are involved.
 
 Local validation for the hold increment: 72 focused checks pass and the maintained
-maintenance-only suite passes 250 checks. Actual two-path Unraid acceptance is
-pending; these results do not claim a real external-writer fence.
+maintenance-only suite passes 250 checks. The user subsequently accepted 66 focused checks on each Unraid path. These
+results do not claim a real external-writer fence.
+
+
+## One-shot maintenance/media integration prepared
+
+The [maintenance-bound copy wrapper](sqlite-maintenance-bound-copy.md) now joins
+the existing boot/session-bound journal and live copy verifier for a single
+marked disposable operation. It commits the operation/root/database binding
+before work, holds both cooperative locks, observes fresh journal state at
+verification boundaries, refuses existing holds or drift, and never replays a
+retained attempt. Only live core completion can record verified outcomes;
+maintenance is never automatically released. Actual native completion/crash
+acceptance on Unraid is pending. No external-fence claim is made from this wrapper.

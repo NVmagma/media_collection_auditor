@@ -105,6 +105,10 @@ def review_disposable_maintenance(root):
             report.update(revision=revision, phase=phase, history_valid=True)
         except (sqlite3.Error, RuntimeError):
             report["blockers"].append("fixture_history_invalid_or_unavailable")
+        if db.execute("SELECT 1 FROM sqlite_master WHERE lower(name)=? LIMIT 1",
+                      ("maintenance_copy_binding",)).fetchone():
+            report["maintenance_copy_attempt_present"] = True
+            report["blockers"].append("retained_media_attempt_requires_review")
         if journal._client_writeback_uncertain(db):
             report["client_writeback_uncertain"] = True
             report["blockers"].append("client_writeback_outcome_uncertain")

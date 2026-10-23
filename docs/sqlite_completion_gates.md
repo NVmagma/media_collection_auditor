@@ -1246,7 +1246,19 @@ The held event revision stays unchanged because uncertainty is not successful
 maintenance progress. A future external adapter must durably record the required
 request before any risky action; this fixture is not that production adapter.
 
-Local focused journal/controller/review and launcher checks pass. The next
-focused Unraid check covers only this new persistence/deny behavior on both lab
-paths, not another NFS server test. Gate 6 remains open pending real ownership
+The user accepted 66 focused checks on each Unraid path through `ed0c919`,
+covering this persistence/deny behavior without another NFS server test. Gate 6 remains open pending real ownership
 continuity, source-entry protection and integrated production-adapter recovery.
+
+
+## Maintenance-bound copy integration prepared
+
+The new [one-shot wrapper](sqlite-maintenance-bound-copy.md) binds a marked media
+root/database/operation to a boot/network/controller-bound maintenance journal
+before collection. It retains both cooperative locks and a durable attempt
+binding; boundary loss or a writeback hold prevents progress. Failed attempts
+are not replayable. Live completion alone records verified outcomes, and no
+maintenance release or external-fence permission is returned. Native publication/
+quarantine crash cases require the focused Unraid check; local Mac tests exercise
+binding/deny behavior while explicitly skipping actual Linux directory actions.
+Production ownership continuity and source-entry protection remain open.
