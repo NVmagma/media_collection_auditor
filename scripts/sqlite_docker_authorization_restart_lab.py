@@ -12,7 +12,7 @@ import time
 import uuid
 
 
-def run_lab(*, host, daemon_image, python_image):
+def run_lab(*, host, daemon_image, python_image, quiesce_probe=False):
     if not re.fullmatch(r'unix:///[^\n\r]+', host):
         raise ValueError('Explicit local Unix socket required')
     for image in (daemon_image, python_image):
@@ -45,10 +45,11 @@ def run_lab(*, host, daemon_image, python_image):
                    '-e', 'PYTHONPATH=/src']
         common = ['--pull', 'never', '--network', 'none', '--cap-drop', 'ALL',
                   '--security-opt', 'no-new-privileges', '--pids-limit', '128', '--cpus', '1']
+        quiesce_args = ['--quiesce-container-id', '0'*64] if quiesce_probe else []
         call('run', '-d', '--name', policy, '--label', label, *common,
              '--read-only', '--memory', '128m', '--user', '0', *shared, *sources,
              '--entrypoint', 'python', python_image, '-B', '-m',
-             'scripts.sqlite_docker_authorization_fixture', '--root', '/fixture/control')
+             'scripts.sqlite_docker_authorization_fixture', '--root', '/fixture/control', *quiesce_args)
         containers.append(policy)
         deadline = time.monotonic()+20
         while True:
@@ -93,6 +94,9 @@ def run_lab(*, host, daemon_image, python_image):
             return json.loads(output)
         await_ready()
         results['initial'] = probe()
+        if quiesce_probe:
+            results['quiesce_routing'] = json.loads(call('exec', active_policy, 'python',
+                '-B', '-m', 'scripts.sqlite_docker_authorization_client', '--root', '/fixture', '--quiesce-routing'))
         call('restart', daemon)
         await_ready()
         results['after_daemon_restart'] = probe()
@@ -112,6 +116,9 @@ def run_lab(*, host, daemon_image, python_image):
         containers.append(active_policy)
         await_ready()
         results['after_persisted_hold_reload'] = probe()
+        if quiesce_probe:
+            results['quiesce_routing_after_reload'] = json.loads(call('exec', active_policy, 'python',
+                '-B', '-m', 'scripts.sqlite_docker_authorization_client', '--root', '/fixture', '--quiesce-routing'))
         after_digest = call('exec', active_policy, 'python', '-c',
             "import hashlib; from pathlib import Path; print(hashlib.sha256(Path('/fixture/control/maintenance.hold').read_bytes()).hexdigest())")
         if hold_digest != after_digest:
@@ -149,6 +156,8 @@ if __name__ == '__main__':
     parser.add_argument('--outer-host', required=True)
     parser.add_argument('--daemon-image', required=True)
     parser.add_argument('--python-image', required=True)
+    parser.add_argument('--test-quiesce-routing', action='store_true')
     args = parser.parse_args()
     print(json.dumps(run_lab(host=args.outer_host, daemon_image=args.daemon_image,
-                             python_image=args.python_image), sort_keys=True))
+                             python_image=args.python_image,
+                             quiesce_probe=args.test_quiesce_routing), sort_keys=True))

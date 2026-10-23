@@ -11,6 +11,7 @@ from pathlib import Path
 import socketserver
 
 from app.sqlite_docker_maintenance_policy import authorize_maintenance_request
+from app.sqlite_docker_quiesce_policy import authorize_quiesce_request
 from app.sqlite_docker_maintenance_hold import create_disposable_hold, held_disposable_hold, _read_at
 
 LIMIT = 65536
@@ -26,7 +27,7 @@ def unique_object(pairs):
     return result
 
 
-def dispatch(path, value):
+def dispatch(path, value, *, container_ids=()):
     if path == '/Plugin.Activate':
         return {'Implements': ['authz']}
     if path in ('/AuthZPlugin.AuthZReq', '/AuthZPlugin.AuthZRes'):
@@ -36,7 +37,8 @@ def dispatch(path, value):
         normalized['RequestURI'] = normalized.pop('RequestUri')
         if 'RequestHeaders' not in normalized and 'RequestHeader' not in normalized:
             normalized['RequestHeader'] = {}  # Engine omits empty header maps.
-        return authorize_maintenance_request(normalized)
+        quiesce = authorize_quiesce_request(normalized, container_ids)
+        return quiesce if quiesce['Allow'] else authorize_maintenance_request(normalized)
     return DENY
 
 
@@ -67,7 +69,7 @@ class Handler(BaseHTTPRequestHandler):
             if verify is None:
                 raise RuntimeError('Durable hold unavailable')
             verify()
-            result = dispatch(self.path, value)
+            result = dispatch(self.path, value, container_ids=verify.quiesce_container_ids)
             verify()
         except (ValueError, TypeError, UnicodeError, TimeoutError, OSError, RuntimeError):
             result = DENY
@@ -82,6 +84,7 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', required=True)
+    parser.add_argument('--quiesce-container-id', action='append', default=[])
     parser.add_argument('--resume-fixture', action='store_true',
                         help='Reload existing deny-only hold; never release writers')
     args = parser.parse_args()
@@ -94,7 +97,9 @@ def main():
             marker.write(b'DISPOSABLE ONLY\n')
             marker.flush()
             os.fsync(marker.fileno())
-        create_disposable_hold(root)
+        create_disposable_hold(root, container_ids=args.quiesce_container_id)
+    if args.resume_fixture and args.quiesce_container_id:
+        raise RuntimeError('Reload cannot override persisted container scope')
     with held_disposable_hold(root) as verify:
         endpoint = root / 'authorization.sock'
         if os.path.lexists(endpoint):

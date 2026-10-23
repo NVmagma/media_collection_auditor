@@ -54,12 +54,43 @@ def check(root, *, plugin_available, hold_invalid=False):
             'production_authorized': False, 'restart_inhibition_verified': False}
 
 
+def check_quiesce_routing(root):
+    # Only the empty private daemon fixture is used. This deliberately absent ID
+    # tests routing after authorization, NOT a successful stop or policy update.
+    root = Path(root)
+    check(root, plugin_available=True)
+    identity = '0'*64
+    scopes = json.loads((root/'control/quiesce.json').read_bytes())
+    if scopes != [identity]:
+        raise RuntimeError('Dedicated synthetic quiesce scope required')
+    raw = b'{"RestartPolicy":{"Name":"no","MaximumRetryCount":0}}'
+    statuses=[]
+    for method, route, body, headers, expected in [
+        ('POST', f'/containers/{identity}/stop', None, {}, 404),
+        ('POST', f'/containers/{identity}/update', raw, {'Content-Type':'application/json'}, 404),
+        ('POST', f'/containers/{"1"*64}/stop', None, {}, 403),
+        ('POST', f'/containers/{identity}/start', None, {}, 403),
+        ('POST', f'/containers/{identity}/update', b'{"RestartPolicy":{"Name":"always","MaximumRetryCount":0}}', {'Content-Type':'application/json'}, 403)]:
+        client=Client(root/'engine.sock')
+        try:
+            client.request(method,route,body=body,headers=headers)
+            response=client.getresponse()
+            response.read(65537)
+            if response.status != expected:
+                raise RuntimeError('Private quiesce routing result rejected: '+str(response.status))
+            statuses.append(response.status)
+        finally: client.close()
+    return {'http_statuses':statuses, 'existing_writer_verified':False,
+            'fixture_only':True, 'production_authorized':False}
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', required=True)
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument('--plugin-unavailable', action='store_true')
     modes.add_argument('--hold-invalid', action='store_true')
+    modes.add_argument('--quiesce-routing', action='store_true')
     args = parser.parse_args()
-    print(json.dumps(check(args.root, plugin_available=not args.plugin_unavailable,
-                           hold_invalid=args.hold_invalid)))
+    print(json.dumps(check_quiesce_routing(args.root) if args.quiesce_routing else
+        check(args.root, plugin_available=not args.plugin_unavailable, hold_invalid=args.hold_invalid)))
