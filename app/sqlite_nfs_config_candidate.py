@@ -7,24 +7,28 @@ import re
 LIMIT=1024*1024
 
 
-def disabled_nfs_candidate(content):
+def _disabled_candidate(content, *, key, label):
     if not isinstance(content,bytes) or not 0<len(content)<=LIMIT or b'\0' in content:
         raise ValueError('Bounded text configuration required')
     content.decode('utf-8')
     lines=content.splitlines(keepends=True)
     indices=[index for index,line in enumerate(lines)
-             if re.match(rb'\s*(?:export\s+)?shareNFSEnabled\s*=',line)]
+             if re.match(rb'\s*(?:export\s+)?'+re.escape(key)+rb'\s*=',line)]
     if len(indices)!=1:
-        raise ValueError('Exactly one explicit NFS preference required')
+        raise ValueError('Exactly one explicit '+label+' preference required')
     index=indices[0]
     line=lines[index]
     ending=b'\r\n' if line.endswith(b'\r\n') else b'\n' if line.endswith(b'\n') else b''
     value=line[:-len(ending)] if ending else line
-    match=re.fullmatch(rb'shareNFSEnabled=("?)(yes|no)\1',value)
+    match=re.fullmatch(re.escape(key)+rb'=("?)(yes|no)\1',value)
     if not match:
-        raise ValueError('Unambiguous canonical NFS preference required')
-    lines[index]=b'shareNFSEnabled='+match[1]+b'no'+match[1]+ending
+        raise ValueError('Unambiguous canonical '+label+' preference required')
+    lines[index]=key+b'='+match[1]+b'no'+match[1]+ending
     return b''.join(lines)
+
+
+def disabled_nfs_candidate(content):
+    return _disabled_candidate(content, key=b'shareNFSEnabled', label='NFS')
 
 
 def reviewed_restore_candidate(*, original, disabled, current):

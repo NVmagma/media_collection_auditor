@@ -40,7 +40,7 @@ def _write(directory,name,content):
     finally:os.close(fd)
 
 
-def prepare_disposable_nfs_config_plan(root):
+def _prepare_disposable_config_plan(root, *, source_name, plan_name, transform, restore, status):
     root=Path(root)
     if not root.is_absolute() or root.resolve()!=root:
         raise ValueError('Canonical disposable configuration root required')
@@ -50,20 +50,20 @@ def prepare_disposable_nfs_config_plan(root):
         held=os.fstat(directory)
         marker,marker_id=_read(directory,'.disposable_host_config')
         if marker!=MARKER:raise RuntimeError('Marked disposable host configuration required')
-        original,source_id=_read(directory,'share.cfg')
-        disabled=disabled_nfs_candidate(original)
-        os.mkdir('nfs-plan',mode=0o700,dir_fd=directory)
-        plan=os.open('nfs-plan',os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=directory)
+        original,source_id=_read(directory,source_name)
+        disabled=transform(original)
+        os.mkdir(plan_name,mode=0o700,dir_fd=directory)
+        plan=os.open(plan_name,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=directory)
         _write(plan,'before.cfg',original)
         _write(plan,'disabled-candidate.cfg',disabled)
-        manifest={'schema_version':1,'fixture_only':True,'source_identity':source_id,
+        manifest={'schema_version':1,'fixture_only':True,'source_identity':source_id,'source_name':source_name,
                   'before_sha256':hashlib.sha256(original).hexdigest(),
                   'candidate_sha256':hashlib.sha256(disabled).hexdigest(),
                   'requires_change':disabled!=original,'apply_authorized':False}
         manifest_content=(json.dumps(manifest,sort_keys=True)+'\n').encode()
         _write(plan,'manifest.json',manifest_content)
         plan_stat=os.fstat(plan)
-        current_plan=os.stat('nfs-plan',dir_fd=directory,follow_symlinks=False)
+        current_plan=os.stat(plan_name,dir_fd=directory,follow_symlinks=False)
         if (not stat.S_ISDIR(current_plan.st_mode)
                 or (current_plan.st_dev,current_plan.st_ino)!=(plan_stat.st_dev,plan_stat.st_ino)
                 or _read(plan,'before.cfg')[0]!=original
@@ -73,12 +73,12 @@ def prepare_disposable_nfs_config_plan(root):
         current=root.lstat()
         if ((current.st_dev,current.st_ino)!=(held.st_dev,held.st_ino)
                 or _read(directory,'.disposable_host_config')!=(marker,marker_id)
-                or _read(directory,'share.cfg')!=(original,source_id)):
+                or _read(directory,source_name)!=(original,source_id)):
             raise RuntimeError('Configuration source binding changed; retain artifacts for review')
         os.fsync(plan);os.fsync(directory)
-        if reviewed_restore_candidate(original=original,disabled=disabled,current=disabled)!=original:
+        if restore(original=original,disabled=disabled,current=disabled)!=original:
             raise RuntimeError('Exact restoration candidate verification failed')
-        return {'status':'disposable_nfs_config_candidates_prepared','fixture_only':True,
+        return {'status':status,'fixture_only':True,
                 'source_unchanged':True,'requires_change':disabled!=original,
                 'read_only_source':True,'apply_authorized':False,'restoration_authorized':False,
                 'production_authorized':False,'production_activation':'disabled',
@@ -86,3 +86,9 @@ def prepare_disposable_nfs_config_plan(root):
     finally:
         if plan is not None:os.close(plan)
         os.close(directory)
+
+
+def prepare_disposable_nfs_config_plan(root):
+    return _prepare_disposable_config_plan(root, source_name='share.cfg', plan_name='nfs-plan',
+        transform=disabled_nfs_candidate, restore=reviewed_restore_candidate,
+        status='disposable_nfs_config_candidates_prepared')
