@@ -93,3 +93,48 @@ The Unraid web interface must stay available; this local test did not run Unraid
 or verify its UI behavior. Do not install/reload this fixture on Tower to fill
 those gaps. No maintenance permit, rollback action or recovery clearance follows
 from any result here.
+
+## Reproducible separate-daemon restart rehearsal
+
+The subsequent local rehearsal through `14a00af` used
+`scripts/sqlite_docker_authorization_restart_lab.py` and its bounded private
+client. It requires an explicit Unix outer endpoint, verifies the outer engine
+identifies itself as Docker Desktop (rejecting Tower/Unraid before resource
+creation), and accepts cached immutable image IDs only. No pull/build occurs.
+The outer daemon is only used to create/inspect/remove uniquely named private
+fixtures, never reconfigured. It is not a production installer.
+
+The launcher creates a fresh private volume, a read-only capability-free plugin
+container and a separate CHOWN/DAC_OVERRIDE-only daemon. Both have no network,
+no privileged mode and no host Docker/media/state mounts. The daemon has private
+socket/data/exec/PID paths, vfs storage and no bridge/firewall/forwarding setup.
+It restarts only that newly created daemon container; no host or daemon service
+restart is requested. Cleanup removes only the resources created by this run.
+
+| Phase | Accepted local result |
+| --- | --- |
+| Initial private daemon | Ping/version/container list 200; create/start 403 |
+| Same private daemon container restarted, plugin still available | Same 200/403 policy results |
+| Plugin container killed | Create returns explicit plugin-error 500; private container inventory empty |
+| Private daemon restarted with plugin still unavailable | Nonzero exit with plugin-validation startup failure |
+
+A first client used a 15-second timeout and timed out during the daemon's plugin
+retry interval. That supplied no explicit-denial acceptance. A bounded 35-second
+client window produced the required plugin-error response; a timeout still fails
+the test and never becomes a denial success. The final run also required the
+plugin-specific startup diagnostic, so an unrelated nonzero daemon exit cannot
+satisfy this phase. No denied application request is automatically retried.
+
+All new containers/volume were removed on completion. No plugin was restored,
+no production services were controlled and no kernel/module changes were made.
+69 local policy/transport/startup/launcher regressions passed. The orchestrator
+unit tests use fake Docker commands only to check target restrictions, resource
+isolation and cleanup; they are not the real-daemon evidence in the table.
+
+This is an empty-daemon container restart, not Docker Desktop VM reboot, Tower
+boot, power loss, persistent maintenance-state recovery or automatic restart of
+an existing writer. The plugin is always in maintenance mode; no durable hold
+loading/release or policy reconfiguration continuity is accepted. Native gRPC,
+previous streams, actual writer quiescence, Unraid UI compatibility and NFS
+remain open. `restart_inhibition_verified` and production authorization remain
+false in every result.

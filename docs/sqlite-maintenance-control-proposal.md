@@ -127,3 +127,11 @@ no image was built. The host/local daemon configuration was not changed.
 This is bounded HTTP enforcement evidence, not complete Docker writer exclusion,
 Unraid UI compatibility, NFS coordination or restart/boot acceptance. The policy
 remains deliberately uninstalled on Tower.
+
+
+The candidate's empty private daemon now additionally has local restart/plugin
+loss acceptance: policy remains active after that container restarts, and missing
+plugin validation prevents its next startup. This does not establish continuity
+while changing daemon configuration, restoring existing writers, loading a durable
+maintenance hold or booting Unraid. The launcher rejects non-Docker-Desktop outer
+engines before creating resources; do not run it on Tower.

@@ -341,3 +341,13 @@ Status observations worked, mutations/streams denied, and plugin loss denied a
 create request without creating nested containers. This advances the candidate
 Docker API control only. Native gRPC, existing writers/streams, restart/boot
 continuity, Unraid UI and NFS remain unverified; Gate 6 remains open.
+
+
+The local separate-daemon restart rehearsal through `14a00af` passed: the HTTP
+policy survived restart of that private daemon container, plugin death caused an
+explicit create-request failure, and a further restart without the plugin failed
+plugin validation. The private container inventory stayed empty. 69 local rule/
+transport/startup/launcher regressions passed; all new fixture resources were
+removed. See the separate-daemon rehearsal for failed-timeout investigation and
+exact scope. This is not host boot, automatic workload restart, durable hold or
+complete restart inhibition; those production blockers remain unchanged.
