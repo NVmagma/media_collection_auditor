@@ -154,3 +154,18 @@ not authorize installation or excuse automated root writers, privileged containe
 routes, client access or accidental service restarts from technical fencing.
 There is no runtime ignore-root switch, and this model must not be advertised as
 protection against an administrator deliberately replacing its controls.
+
+### Disposable storage observations
+
+`held_disposable_storage_observer` holds descriptors for the marked media root
+and its four stage directories. Fresh opens must retain their device, inode and
+Linux mount ID, and the mount namespace and disposable marker must remain bound.
+It can supply the required `host_storage` callback. Different stage mounts and
+filesystem types are allowed; this adds no filesystem allowlist.
+
+The observer does not acquire the runner lock (the copy wrapper already owns
+that lock), freeze directory contents, enumerate host writers or establish a
+restart fence. Sampling detects drift; it cannot prove continuous exclusion.
+Any failure latches the instance, and a callback retained after context closure
+rejects use. The actual SQLite identity and transaction checks remain in the copy
+wrapper. No production adapter or release permit is introduced.

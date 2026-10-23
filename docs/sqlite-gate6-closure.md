@@ -522,3 +522,12 @@ extracts another control-domain observer, not a Tower fence installer. The globa
 Unraid enable form is distinct from nfsSettings protocol/thread apply; no unsafe
 HTTP/configuration shortcut is added. Production settings/boot and host/storage
 ownership integration remain open.
+
+Storage-domain increment: a marked disposable descriptor observer now binds the
+root and stage paths to their Linux mount IDs and mount namespace without
+requiring one filesystem. Replacement, namespace/mount drift, marker replacement
+and closed/failed reuse reject. A combined-controller test verifies real stage
+replacement blocks before collection or durable attempt binding. Local Mac tests
+simulate only unavailable proc readers; real filesystem replacement is exercised.
+Linux mount-overlay acceptance and complete host-writer enforcement remain open.
+Production activation and writer-exclusion authorization remain disabled.
