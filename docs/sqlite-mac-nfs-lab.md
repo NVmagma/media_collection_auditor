@@ -98,3 +98,22 @@ The focused NFS set passes 50 checks. Tests use regular disposable files and
 inert commands, not actual SSH mounts or kernel NFS controls. They establish
 local protocol/isolation guards; the generated Tower/Mac run is still required
 for real buffered-write/recovery acceptance.
+
+## First Tower startup rejected; endpoint readiness corrected
+
+`nfs-mac.zzCztY` exited before readiness: the private `rpcinfo -p` registration
+dump returned AUTH_TOOWEAK (client credential too weak). The production thread
+count remained eight. No real Mac buffered-write result was obtained.
+
+Startup now uses bounded direct RPC NULL calls to private rpcbind TCP/111 and
+mountd TCP/20048, with explicit universal addresses. This avoids requiring a
+registration-table dump that is not used by the fixed-port client. Authentication
+policy is not loosened: no rpcbind insecure option or host configuration change
+is introduced. The precise installed-build reason for rejecting DUMP is not yet
+established. Readiness tests cover successful endpoint calls despite a rejected
+DUMP, unavailable endpoints that must block, and early-child-exit diagnostics.
+
+Private rpcbind debug logging and failure-line/phase diagnostics are retained.
+The launcher reports the child exit code and a bounded log excerpt without a
+misleading kill error. Use a fresh lab, not the failed directory. Actual endpoint
+startup and Mac recovery still require acceptance on Tower.

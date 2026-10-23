@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Invoked only by the launcher inside its new net/mount/PID namespaces.
-set -euo pipefail
+set -Eeuo pipefail
 [ "$#" = 5 ] || exit 2
 lab=$1; host_net=$2; host_mnt=$3; host_control=$4; private_net=$5
 verify_namespaces(){
@@ -9,6 +9,22 @@ verify_namespaces(){
   [ "$(readlink /proc/self/ns/mnt)" != "$host_mnt" ] && [ "$$" = 1 ]
 }
 verify_namespaces
+trap 'printf "private_server_failed_line=%s\n" "$LINENO" >&2' ERR
+# Fixed-port NULL calls test only the endpoints this fixture needs. DUMP may be
+# restricted independently; never relax RPC authentication to make it succeed.
+wait_rpc(){
+  local name=$1 address=$2 program=$3 version=$4 attempt
+  for attempt in $(seq 1 20); do
+    if timeout --kill-after=1s 1s rpcinfo -a "$address" -T tcp "$program" "$version" > "$lab/$name-probe.log" 2>&1; then
+      printf 'private_rpc_ready=%s\n' "$name"
+      return 0
+    fi
+    sleep 0.1
+  done
+  printf 'private_rpc_unavailable=%s\n' "$name" >&2
+  tail -n 4 "$lab/$name-probe.log" >&2
+  return 2
+}
 mount -n --bind "$lab/etc" /etc
 mount -n -t tmpfs -o size=16m,nosuid,nodev tmpfs /var/lib
 mount -n -t tmpfs -o size=8m,nosuid,nodev tmpfs /run
@@ -43,20 +59,14 @@ case " $versions " in *' +4'*|*' +2'*) exit 2;; esac
 case " $versions " in *' +3 '*) :;; *) exit 2;; esac
 # Existing Docker bridge interface only; no host interface/routing changes.
 ip link set lo up
-rpcbind -f > "$lab/rpcbind.log" 2>&1 &
-for attempt in $(seq 1 50); do
-  if rpcinfo -p 127.0.0.1 >/dev/null 2>&1; then break; fi
-  sleep 0.1
-done
-rpcinfo -p 127.0.0.1 >/dev/null
+printf '%s\n' 'private_server_stage=rpcbind'
+rpcbind -f -d > "$lab/rpcbind.log" 2>&1 &
+wait_rpc rpcbind 127.0.0.1.0.111 100000 2
 verify
 exportfs -ra > "$lab/exportfs.log" 2>&1
+printf '%s\n' 'private_server_stage=mountd'
 rpc.mountd -F -N 4 -p 20048 -s /var/lib/nfs > "$lab/mountd.log" 2>&1 &
-for attempt in $(seq 1 50); do
-  if rpcinfo -n 20048 -t 127.0.0.1 100005 3 >/dev/null 2>&1; then break; fi
-  sleep 0.1
-done
-rpcinfo -n 20048 -t 127.0.0.1 100005 3 >/dev/null
+wait_rpc mountd 127.0.0.1.78.80 100005 3
 verify
 started=1
 printf '1\n' > "$control/threads"

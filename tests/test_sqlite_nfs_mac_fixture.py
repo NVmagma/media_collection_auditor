@@ -155,3 +155,54 @@ def test_buffered_write_return_does_not_imply_fsync_completion(tmp_path, monkeyp
         os.close(controller)
         os.close(reader)
         os.close(fd)
+
+
+@pytest.mark.parametrize('responds', [True, False])
+def test_private_rpc_readiness_uses_direct_null_not_registration_dump(tmp_path, responds):
+    server = (SCRIPTS/'sqlite_nfs_mac_server.sh').read_text()
+    function = 'wait_rpc(){\n'+server.split('wait_rpc(){\n', 1)[1].split('\n}\n', 1)[0]+'\n}\n'
+    tools = tmp_path/'bin'
+    tools.mkdir()
+    calls = tmp_path/'calls'
+    for name, body in {
+        'timeout': 'shift; shift; exec "$@"',
+        'sleep': ':',
+        'rpcinfo': '''printf '%s\\n' "$*" >> "$RPC_CALLS"
+case "$1" in -p) echo 'RPC: Authentication error; why = Client credential too weak' >&2; exit 1;; esac
+[ "$1" = -a ] && [ "$3" = -T ] && [ "$4" = tcp ] || exit 99
+[ "$RPC_RESPONDS" = yes ] || { echo 'RPC: endpoint unavailable' >&2; exit 1; }
+echo 'program ready and waiting' ''',
+    }.items():
+        tool=tools/name
+        tool.write_text('#!/bin/sh\n'+body+'\n')
+        tool.chmod(0o755)
+    code='lab=$1\n'+function+'wait_rpc rpcbind 127.0.0.1.0.111 100000 2\n'
+    result=subprocess.run(['bash','-eu','-s','--',str(tmp_path)], input=code,
+        capture_output=True,text=True,timeout=5,
+        env={**os.environ,'PATH':str(tools)+os.pathsep+os.defpath,
+             'RPC_CALLS':str(calls),'RPC_RESPONDS':'yes' if responds else 'no'})
+    queries=calls.read_text().splitlines()
+    assert queries == ['-a 127.0.0.1.0.111 -T tcp 100000 2'] * (1 if responds else 20)
+    assert (result.returncode == 0) == responds
+    if responds:
+        assert 'private_rpc_ready=rpcbind' in result.stdout
+    else:
+        assert 'private_rpc_unavailable=rpcbind' in result.stderr
+        assert 'private_rpc_ready=' not in result.stdout
+    assert '-i' not in server.split('rpcbind -f',1)[1].split('\n',1)[0]
+    assert 'wait_rpc mountd 127.0.0.1.78.80 100005 3' in server
+
+
+def test_launcher_reports_early_child_exit_with_retained_log(tmp_path):
+    (tmp_path/'control').mkdir()
+    (tmp_path/'server.log').write_text('fixture setup rejected\n')
+    launcher=(SCRIPTS/'sqlite_nfs_mac_lab.sh').read_text()
+    body=launcher.split('for attempt in $(seq 1 600); do',1)[1].split("printf 'fixture_ready",1)[0]
+    code='lab=$1\n(exit 17) &\nserver=$!\nwait "$server" || :\nfor attempt in $(seq 1 600); do'+body
+    result=subprocess.run(['bash','-eu','-s','--',str(tmp_path)],input=code,
+                          text=True,capture_output=True,timeout=5)
+    assert result.returncode == 2
+    assert 'private_server_exit_code=17' in result.stdout
+    assert 'fixture setup rejected' in result.stdout
+    assert 'No such process' not in result.stderr
+    assert 'fixture_ready=true' not in result.stdout

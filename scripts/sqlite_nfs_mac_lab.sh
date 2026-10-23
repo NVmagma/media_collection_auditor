@@ -80,12 +80,23 @@ timeout --kill-after=5s 850 nsenter --net="/proc/self/fd/$net_fd" \
   unshare --mount --pid --fork --kill-child --mount-proc --propagation private \
   bash "$repo/scripts/sqlite_nfs_mac_server.sh" "$lab" "$host_net" "$host_mnt" "$host_control" "$private_net" > "$lab/server.log" 2>&1 &
 server=$!
-for attempt in $(seq 1 200); do
+for attempt in $(seq 1 600); do
   [ ! -f "$lab/control/ready" ] || break
-  kill -0 "$server" || { printf 'private_server_failed_log=%s/server.log\n' "$lab"; exit 2; }
+  if ! kill -0 "$server" 2>/dev/null; then
+    server_status=0
+    wait "$server" || server_status=$?
+    server=''
+    printf 'private_server_exit_code=%s\nprivate_server_failed_log=%s/server.log\n' "$server_status" "$lab"
+    tail -n 12 "$lab/server.log"
+    exit 2
+  fi
   sleep 0.1
 done
-[ -f "$lab/control/ready" ]
+if [ ! -f "$lab/control/ready" ]; then
+  printf 'private_server_startup_timeout_log=%s/server.log\n' "$lab"
+  tail -n 12 "$lab/server.log"
+  exit 2
+fi
 printf 'fixture_ready=true\nfixture_address=%s\nfixture_export=%s/data\nfixture_nonce=%s\nremote_phase_script=%s/scripts/sqlite_nfs_mac_phase.sh\nlifetime_seconds=850\n' "$address" "$lab" "$nonce" "$repo"
 printf '\nRun in a SECOND terminal on the Mac (leave this Tower terminal open):\n'
 printf 'mac_driver=$(mktemp -t auditor-nfs-client)\n'
