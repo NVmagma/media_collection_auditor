@@ -137,3 +137,34 @@ def test_setup_sequence_only_initializes_fresh_fixture_once(fixture_files, monke
         '/Startup/User', '/Startup/Configuration', '/Startup/Complete']
     assert len([path for method, path in calls if method == 'POST']) == 6
     assert json.loads((control / 'server.json').read_text()) == {'id': SERVER}
+
+
+def test_authenticated_request_has_same_token_in_both_headers(monkeypatch):
+    token = 'disposable_fixture_token_0123456789'
+    calls = []
+    class Response:
+        status = 204
+        def read(self, size): return b''
+    class Connection:
+        def __init__(self, host, port, timeout): assert (host, port) == ('127.0.0.1', 8096)
+        def request(self, method, path, body=None, headers=None):
+            # Simulate a server prioritizing Authorization over X-Emby-Token.
+            assert headers['Authorization'].endswith(', Token="' + token + '"')
+            assert headers['X-Emby-Token'] == token
+            assert token not in path
+            calls.append(method)
+        def getresponse(self): return Response()
+        def close(self): pass
+    monkeypatch.setattr(module.http.client, 'HTTPConnection', Connection)
+    assert module.request('POST', '/Library/VirtualFolders', {}, token) is None
+    assert calls == ['POST']
+
+
+@pytest.mark.parametrize('token', ['secret"injected', 'secret\nheader', 'secret with spaces'])
+def test_unsafe_token_is_refused_before_dispatch(monkeypatch, token):
+    class Connection:
+        def __init__(self, *args, **kwargs): pass
+        def request(self, *args, **kwargs): pytest.fail('Invalid token dispatched')
+    monkeypatch.setattr(module.http.client, 'HTTPConnection', Connection)
+    with pytest.raises(RuntimeError, match='token_invalid'):
+        module.request('GET', '/Users', token=token)

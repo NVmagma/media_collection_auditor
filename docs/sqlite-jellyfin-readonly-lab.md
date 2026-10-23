@@ -109,3 +109,16 @@ checks data, cache and program-data space; those fixture paths now all use the
 new disk-backed configuration/cache area. Temp is separate and remains bounded.
 Installed-version behavior after this fix still requires a fresh fixture run.
 Retain the failed lab and do not resume its partially initialized server.
+
+### Startup succeeds; fixture authorization corrected
+
+After the cache change, Tower's fresh fixture stayed running, was not OOM-killed,
+and reached library setup, which returned HTTP 401. This is not an accepted
+read-only/protection result. Inspection found that the fixture's Authorization
+header contained client metadata without a Token field while X-Emby-Token held
+the session token. The client now includes the same token in both headers,
+matching the existing auditor transport pattern, and validates token syntax
+before dispatch. A request-level test simulates Authorization taking precedence
+and verifies one dispatch, not a repeated setup write. Twenty focused local
+protocol/policy tests pass. A new fixture must verify actual installed-server
+acceptance; the partially initialized previous lab is retained, never resumed.

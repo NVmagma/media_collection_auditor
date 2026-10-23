@@ -52,13 +52,16 @@ def request(method, path, body=None, token=None):
     # No URL argument, proxy environment, redirects or automatic write retries.
     if not path.startswith('/') or path.startswith('//'):
         raise RuntimeError('fixture_request_invalid')
-    connection = http.client.HTTPConnection('127.0.0.1', 8096, timeout=4)
     headers = {'Authorization': 'MediaBrowser Client="AuditorFixture", Device="Disposable", DeviceId="readonly-fixture", Version="1"'}
     if token:
+        if not isinstance(token, str) or not re.fullmatch(r'[A-Za-z0-9_-]{16,256}', token):
+            raise RuntimeError('fixture_token_invalid')
+        headers['Authorization'] += ', Token="' + token + '"'
         headers['X-Emby-Token'] = token
     encoded = None if body is None else json.dumps(body).encode()
     if encoded is not None:
         headers['Content-Type'] = 'application/json'
+    connection = http.client.HTTPConnection('127.0.0.1', 8096, timeout=4)
     try:
         connection.request(method, path, body=encoded, headers=headers)
         response = connection.getresponse()
