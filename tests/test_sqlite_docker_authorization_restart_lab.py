@@ -45,7 +45,7 @@ def test_only_new_isolated_resources_are_controlled_and_cleaned(monkeypatch, fai
         assert result['production_authorized'] is False
         assert result['restart_inhibition_verified'] is False
     runs=[args for args in calls if args[0]=='run']
-    assert len(runs)==3
+    assert len(runs)==(3 if fail_client else 4)
     for args in runs:
         assert '--privileged' not in args
         assert args[args.index('--network')+1]=='none'
@@ -56,7 +56,7 @@ def test_only_new_isolated_resources_are_controlled_and_cleaned(monkeypatch, fai
     daemon=next(args for args in runs if '--cap-add' in args)
     assert [daemon[i+1] for i,arg in enumerate(daemon) if arg=='--cap-add']==['CHOWN','DAC_OVERRIDE']
     removals=[args for args in calls if args[0]=='rm']
-    assert len(removals)==2
+    assert len(removals)==(2 if fail_client else 3)
     assert all(args[-1].startswith('mca-authz-') for args in removals)
     assert calls[-1][0:2]==['volume','rm']
     assert not any(args[0] in ('pull','build','system','prune') for args in calls)

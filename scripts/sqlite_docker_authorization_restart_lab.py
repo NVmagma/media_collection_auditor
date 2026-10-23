@@ -35,6 +35,7 @@ def run_lab(*, host, daemon_image, python_image):
     volume_created = False
     label = 'org.nvmagma.auditor.fixture=' + nonce
     results = {}
+    active_policy = policy
     try:
         call('volume', 'create', '--label', label, volume)
         volume_created = True
@@ -51,7 +52,7 @@ def run_lab(*, host, daemon_image, python_image):
         containers.append(policy)
         deadline = time.monotonic()+20
         while True:
-            ready = call('exec', policy, 'python', '-c',
+            ready = call('exec', active_policy, 'python', '-c',
                          "from pathlib import Path; print(Path('/fixture/control/authorization.sock').is_socket())")
             if ready == 'True': break
             if time.monotonic() > deadline: raise RuntimeError('Private plugin startup timeout')
@@ -69,7 +70,7 @@ def run_lab(*, host, daemon_image, python_image):
             deadline = time.monotonic()+20
             while True:
                 try:
-                    state = call('exec', policy, 'python', '-c',
+                    state = call('exec', active_policy, 'python', '-c',
                     "import socket; s=socket.socket(socket.AF_UNIX); s.settimeout(1); "
                     "s.connect('/fixture/engine.sock'); s.sendall(b'GET /_ping HTTP/1.0\\r\\n\\r\\n'); "
                     "print(s.recv(128).splitlines()[0].decode()); s.close()")
@@ -78,26 +79,47 @@ def run_lab(*, host, daemon_image, python_image):
                 if '200' in state: return
                 if time.monotonic() > deadline: raise RuntimeError('Private daemon startup timeout')
                 time.sleep(.2)
-        def probe(unavailable=False):
+        def probe(unavailable=False, hold_invalid=False):
             args = ['-B', '-m', 'scripts.sqlite_docker_authorization_client', '--root', '/fixture']
+            if hold_invalid:
+                args.append('--hold-invalid')
             if unavailable:
                 args.append('--plugin-unavailable')
                 output = call('run', '--rm', '--label', label, *common, '--read-only',
                     '--memory', '128m', '--user', '0', *shared, *sources,
                     '--entrypoint', 'python', python_image, *args)
             else:
-                output = call('exec', policy, 'python', *args)
+                output = call('exec', active_policy, 'python', *args)
             return json.loads(output)
         await_ready()
         results['initial'] = probe()
         call('restart', daemon)
         await_ready()
         results['after_daemon_restart'] = probe()
-        call('kill', policy)
+        hold_digest = call('exec', active_policy, 'python', '-c',
+            "import hashlib; from pathlib import Path; print(hashlib.sha256(Path('/fixture/control/maintenance.hold').read_bytes()).hexdigest())")
+        call('kill', active_policy)
         results['after_plugin_death'] = probe(True)
         call('exec', daemon, 'sh', '-c',
              'test -z "$(ls -A /tmp/fixture-data/containers)"')
         results['private_container_inventory_empty'] = True
+        active_policy = nonce+'-reload'
+        call('run', '-d', '--name', active_policy, '--label', label, *common,
+             '--read-only', '--memory', '128m', '--user', '0', *shared, *sources,
+             '--entrypoint', 'python', python_image, '-B', '-m',
+             'scripts.sqlite_docker_authorization_fixture', '--root', '/fixture/control',
+             '--resume-fixture')
+        containers.append(active_policy)
+        await_ready()
+        results['after_persisted_hold_reload'] = probe()
+        after_digest = call('exec', active_policy, 'python', '-c',
+            "import hashlib; from pathlib import Path; print(hashlib.sha256(Path('/fixture/control/maintenance.hold').read_bytes()).hexdigest())")
+        if hold_digest != after_digest:
+            raise RuntimeError('Persisted hold bytes changed during reload')
+        results['hold_bytes_unchanged_after_reload'] = True
+        call('exec', active_policy, 'python', '-c',
+             "from pathlib import Path; Path('/fixture/control/maintenance.hold').write_bytes(b'corrupt fixture hold')")
+        results['after_hold_corruption'] = probe(hold_invalid=True)
         call('restart', daemon)
         deadline = time.monotonic()+40
         while call('inspect', '--format', '{{.State.Running}}', daemon) == 'true':
@@ -110,7 +132,7 @@ def run_lab(*, host, daemon_image, python_image):
             capture_output=True, text=True, timeout=10)
         if diagnostic.returncode or 'failed to validate authorization plugin' not in (diagnostic.stdout + diagnostic.stderr):
             raise RuntimeError('Plugin-specific startup failure not established')
-        results['restart_without_plugin'] = 'plugin_validation_failed'
+        results['restart_with_invalid_hold'] = 'plugin_validation_failed'
         return {'status': 'private_daemon_restart_rehearsal_complete', 'results': results,
                 'fixture_only': True, 'automatic_restoration': False,
                 'production_authorized': False, 'restart_inhibition_verified': False}

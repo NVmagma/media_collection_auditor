@@ -18,7 +18,7 @@ class Client(http.client.HTTPConnection):
         self.sock.connect(str(self.endpoint))
 
 
-def check(root, *, plugin_available):
+def check(root, *, plugin_available, hold_invalid=False):
     root = Path(root)
     if not root.is_absolute() or root.resolve() != root:
         raise RuntimeError('Canonical fixture root required')
@@ -32,6 +32,8 @@ def check(root, *, plugin_available):
                ('GET', '/containers/json', 200), ('POST', '/containers/create', 403),
                ('POST', '/containers/no-such-fixture/start', 403)]
               if plugin_available else [('POST', '/containers/create', 500)])
+    if hold_invalid:
+        routes = [('GET', '/_ping', 403), ('POST', '/containers/create', 403)]
     statuses = []
     for method, route, expected in routes:
         client = Client(endpoint)
@@ -55,6 +57,9 @@ def check(root, *, plugin_available):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', required=True)
-    parser.add_argument('--plugin-unavailable', action='store_true')
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument('--plugin-unavailable', action='store_true')
+    modes.add_argument('--hold-invalid', action='store_true')
     args = parser.parse_args()
-    print(json.dumps(check(args.root, plugin_available=not args.plugin_unavailable)))
+    print(json.dumps(check(args.root, plugin_available=not args.plugin_unavailable,
+                           hold_invalid=args.hold_invalid)))

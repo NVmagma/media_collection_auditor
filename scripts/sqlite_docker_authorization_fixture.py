@@ -5,10 +5,13 @@ No daemon connection, host installation, policy off-switch or service controls.
 import argparse
 from http.server import BaseHTTPRequestHandler
 import json
+import os
+import stat
 from pathlib import Path
 import socketserver
 
 from app.sqlite_docker_maintenance_policy import authorize_maintenance_request
+from app.sqlite_docker_maintenance_hold import create_disposable_hold, held_disposable_hold, _read_at
 
 LIMIT = 65536
 DENY = {'Allow': False, 'Msg': 'Maintenance request denied', 'Err': ''}
@@ -60,9 +63,14 @@ class Handler(BaseHTTPRequestHandler):
             value = {} if not data and self.path == '/Plugin.Activate' else json.loads(data, object_pairs_hook=unique_object)
             if not isinstance(value, dict):
                 raise ValueError('Object required')
+            verify = getattr(self.server, 'verify_hold', None)
+            if verify is None:
+                raise RuntimeError('Durable hold unavailable')
+            verify()
             result = dispatch(self.path, value)
-        except (ValueError, TypeError, UnicodeError, TimeoutError):
-            pass
+            verify()
+        except (ValueError, TypeError, UnicodeError, TimeoutError, OSError, RuntimeError):
+            result = DENY
         body = json.dumps(result).encode()
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')
@@ -74,17 +82,45 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', required=True)
+    parser.add_argument('--resume-fixture', action='store_true',
+                        help='Reload existing deny-only hold; never release writers')
     args = parser.parse_args()
     root = Path(args.root)
     if not root.is_absolute() or root.resolve() != root:
         raise RuntimeError('Canonical new fixture root required')
-    root.mkdir(mode=0o700)  # Never adopt/replace an existing control root.
-    (root / '.disposable_authorization').write_text('DISPOSABLE ONLY\n')
-    endpoint = root / 'authorization.sock'
-    (root / 'plugin.spec').write_text('unix://' + str(endpoint))
-    with socketserver.UnixStreamServer(str(endpoint), Handler) as server:
-        server.timeout = 1
-        server.serve_forever()
+    if not args.resume_fixture:
+        root.mkdir(mode=0o700)  # Exclusive initialization; partial state is retained.
+        with (root / '.disposable_authorization').open('xb') as marker:
+            marker.write(b'DISPOSABLE ONLY\n')
+            marker.flush()
+            os.fsync(marker.fileno())
+        create_disposable_hold(root)
+    with held_disposable_hold(root) as verify:
+        endpoint = root / 'authorization.sock'
+        if os.path.lexists(endpoint):
+            if not args.resume_fixture or not stat.S_ISSOCK(endpoint.lstat().st_mode):
+                raise RuntimeError('Unsafe retained fixture endpoint')
+            verify()  # Held persistent lock excludes another cooperating listener.
+            endpoint.unlink()
+        spec = root / 'plugin.spec'
+        expected_spec = 'unix://' + str(endpoint)
+        if args.resume_fixture:
+            directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            try:
+                _read_at(directory, 'plugin.spec', expected_spec.encode())
+            finally:
+                os.close(directory)
+            verify()
+        else:
+            with spec.open('x') as output:
+                output.write(expected_spec)
+                output.flush()
+                os.fsync(output.fileno())
+        with socketserver.UnixStreamServer(str(endpoint), Handler) as server:
+            server.verify_hold = verify
+            server.timeout = 1
+            server.serve_forever()
+
 
 
 if __name__ == '__main__':
