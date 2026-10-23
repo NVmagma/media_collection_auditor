@@ -32,7 +32,7 @@ def test_mutations_streams_unknown_versions_and_ambiguous_paths_deny(method, uri
 
 @pytest.mark.parametrize('headers', [{'Upgrade':['websocket']}, {'Connection':['upgrade']},
     {'Content-Length':['0']}, {'Transfer-Encoding':['chunked']}, {'Content-Type':['application/json']},
-    {'X-HTTP-Method-Override':['POST']}, {'bad header':['value']}, {'Host':'not-a-list'}])
+    {'X-HTTP-Method-Override':['POST']}, {'bad header':['value']}, {'Host':42}])
 def test_upgrade_framing_and_malformed_metadata_deny(headers):
     assert authorize(request(RequestHeader=headers))['Allow'] is False
 
@@ -54,3 +54,8 @@ def test_conflicting_header_shapes_and_empty_delimiters_deny():
     assert authorize(request(RequestHeaders={}))['Allow'] is False
     assert authorize(request(uri='/info#'))['Allow'] is False
     assert authorize(request(uri='/info?'))['Allow'] is False
+
+
+def test_docker_header_string_values_are_valid_for_observation_only():
+    assert authorize(request(RequestHeader={'Host': 'private', 'User-Agent': 'fixture'}))['Allow'] is True
+    assert authorize(request('POST', '/containers/create', RequestHeader={'Host': 'private'}))['Allow'] is False

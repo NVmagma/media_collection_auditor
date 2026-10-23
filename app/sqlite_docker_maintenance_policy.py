@@ -15,7 +15,8 @@ def authorize_maintenance_request(request):
 
     Version-prefixed routes are deliberately denied pending an installed-engine
     compatibility test. A request lacking the expected complete metadata denies.
-    No server calls this policy today; a true result is not a production permit.
+    Only the private fixture endpoint calls this policy; a true result is not
+    a production permit.
     """
     deny = {'Allow': False, 'Msg': 'Maintenance request denied', 'Err': ''}
     if not isinstance(request, dict):
@@ -35,7 +36,8 @@ def authorize_maintenance_request(request):
     for key, values in headers.items():
         if (not isinstance(key, str) or not key.isascii()
                 or not key or any(char.isspace() for char in key)
-                or not isinstance(values, list) or not all(isinstance(v, str) for v in values)):
+                or not (isinstance(values, str) or (isinstance(values, list)
+                    and all(isinstance(v, str) for v in values)))):
             return deny
         # No upgrades, hop-by-hop/tunnel ambiguity, framed body or content body.
         if key.lower() in {'upgrade', 'connection', 'transfer-encoding', 'content-length',
