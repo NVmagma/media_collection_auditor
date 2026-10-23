@@ -7,10 +7,13 @@ from contextlib import contextmanager
 import os
 import stat
 
-from app.sqlite_disposable_maintenance_journal import _database, _history, _root
+from app.sqlite_disposable_maintenance_journal import (
+    _database, _history, _root, _require_no_client_writeback_hold,
+)
 
 
 def _writable(db):
+    _require_no_client_writeback_hold(db)
     if _history(db)[-1][1] not in {"prepared", "released"}:
         raise RuntimeError("Disposable writer fenced by pending maintenance")
 

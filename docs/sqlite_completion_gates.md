@@ -1231,5 +1231,22 @@ source/copy trees. A hard link outside a title folder can bypass a media-only
 write fence. No alias is removed; copy-only diagnostics remain source-retaining,
 and production JSON behavior is unchanged. New tests cover pre-intent rejection,
 late-link pending intent retention, nested files and coarse-timestamp link-count
-drift. Local checks pass; focused Unraid acceptance is pending. No new NFS test,
+drift. The user accepted 43 checks on each Unraid lab path through `b484fd9`. No new NFS test,
 module change or production service operation is required for this increment.
+
+
+## Durable client-writeback uncertainty hold prepared
+
+The disposable maintenance journal now persists a deny-only uncertain-client
+hold. It blocks every later transition, synthetic release and cooperative writer
+(including a previously opened descriptor), without claiming an external fence.
+Committed holds survive real process death; detached review identifies the hold
+without clearing it or changing evidence. No clear/force/replay API is added.
+The held event revision stays unchanged because uncertainty is not successful
+maintenance progress. A future external adapter must durably record the required
+request before any risky action; this fixture is not that production adapter.
+
+Local focused journal/controller/review and launcher checks pass. The next
+focused Unraid check covers only this new persistence/deny behavior on both lab
+paths, not another NFS server test. Gate 6 remains open pending real ownership
+continuity, source-entry protection and integrated production-adapter recovery.

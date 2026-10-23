@@ -228,7 +228,45 @@ def _database(root, *, with_verifier=False):
             db.close()
 
 
+def _client_writeback_uncertain(db):
+    # Presence is a deny latch, including malformed/empty/old-schema objects.
+    # Never deserialize caller-supplied "safe" booleans or delete it to recover.
+    return db.execute("SELECT 1 FROM sqlite_master WHERE lower(name)=? LIMIT 1",
+                      ("client_writeback_hold",)).fetchone() is not None
+
+
+def _require_no_client_writeback_hold(db):
+    if _client_writeback_uncertain(db):
+        raise RuntimeError("Client writeback uncertain; explicit recovery review required")
+
+
+def record_disposable_client_writeback_uncertainty(root, *, expected_revision):
+    """Permanently latch a marked fixture for review; never resume/clear/replay.
+
+    The lifecycle event revision does NOT advance: this records uncertainty, not
+    a successful maintenance transition. Every subsequent transition rereads the
+    latch under the same controller lock, including callers holding that revision.
+    """
+    if type(expected_revision) is not int or expected_revision < 0:
+        raise ValueError("Nonnegative integer revision required")
+    with _database(root) as db:
+        rows = _history(db)
+        revision, phase = rows[-1]
+        if revision != expected_revision:
+            raise RuntimeError("Stale maintenance revision")
+        if phase == "released":
+            raise RuntimeError("Released fixture cannot record active writeback uncertainty")
+        _require_no_client_writeback_hold(db)
+        db.execute("CREATE TABLE client_writeback_hold (reason TEXT NOT NULL)")
+        db.execute("INSERT INTO client_writeback_hold VALUES (?)",
+                   ("client_writeback_outcome_uncertain",))
+        report = _report(rows)
+        report["client_writeback_uncertain"] = True
+    return report
+
+
 def _append(db, *, expected_revision, phase):
+    _require_no_client_writeback_hold(db)
     rows = _history(db)
     revision, current = rows[-1]
     if type(expected_revision) is not int or expected_revision < 0:
@@ -274,6 +312,9 @@ def inspect_disposable_journal(root, *, require_linux_boot=False):
         db.execute("BEGIN")
         _verify_binding(db, root, require_linux_boot=require_linux_boot)
         report = _report(_history(db))
+        if _client_writeback_uncertain(db):
+            report["client_writeback_uncertain"] = True
+            report["status"] = "review_required"
         _verify_binding(db, root, require_linux_boot=require_linux_boot)
         return report
 

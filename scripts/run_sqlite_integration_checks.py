@@ -29,7 +29,7 @@ TESTS = (
     "test_sqlite_disposable_rollback", "test_sqlite_rollback_json_restart",
     "test_sqlite_recovery_json_rollback", "test_sqlite_production_cutover_guard",
     "test_state_persistence", "test_sqlite_backend_gate", "test_sqlite_end_to_end",
-    "test_sqlite_jellyfin_readonly_fixture", "test_sqlite_jellyfin_readonly_lab", "test_sqlite_marker_nonblocking_reads", "test_sqlite_copy_nonblocking_reads", "test_sqlite_disposable_copy_stage", "test_sqlite_disposable_copy_intent",
+    "test_sqlite_jellyfin_readonly_fixture", "test_sqlite_jellyfin_readonly_lab", "test_sqlite_maintenance_writeback_hold", "test_sqlite_marker_nonblocking_reads", "test_sqlite_copy_nonblocking_reads", "test_sqlite_disposable_copy_stage", "test_sqlite_disposable_copy_intent",
     "test_sqlite_disposable_copy_inspection", "test_sqlite_disposable_copy_inspect_cli",
     "test_sqlite_planned_copy_stage", "test_sqlite_collected_copy_runner",
     "test_sqlite_collected_copy_series", "test_sqlite_isolated_arr_inspection",
@@ -54,7 +54,7 @@ WRITER_TESTS = (
 MAINTENANCE_TESTS = (
     "test_sqlite_nfs_mac_client_probe", "test_sqlite_nfs_mac_fixture",
     "test_sqlite_restart_policy_actor", "test_sqlite_restart_policy_lab",
-    "test_sqlite_marker_nonblocking_reads",
+    "test_sqlite_maintenance_writeback_hold", "test_sqlite_marker_nonblocking_reads",
     "test_sqlite_disposable_maintenance_writer", "test_sqlite_maintenance_scope_binding", "test_sqlite_maintenance_boot_binding",
     "test_sqlite_maintenance_network_binding", "test_sqlite_maintenance_review",
     "test_sqlite_maintenance_controller_session", "test_sqlite_container_writer_lab", "test_sqlite_container_mount_review", "test_sqlite_docker_control_lab",

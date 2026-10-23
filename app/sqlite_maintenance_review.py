@@ -105,6 +105,9 @@ def review_disposable_maintenance(root):
             report.update(revision=revision, phase=phase, history_valid=True)
         except (sqlite3.Error, RuntimeError):
             report["blockers"].append("fixture_history_invalid_or_unavailable")
+        if journal._client_writeback_uncertain(db):
+            report["client_writeback_uncertain"] = True
+            report["blockers"].append("client_writeback_outcome_uncertain")
         try:
             rows = db.execute("SELECT path, root_device, root_inode, db_device, db_inode "
                               "FROM fixture_binding LIMIT 2").fetchall()
