@@ -4,7 +4,7 @@ set -euo pipefail
 umask 077
 [ "$#" = 3 ] && [ "$(uname -s)" = Linux ] || exit 2
 suite=$1
-case "$suite" in copy-ownership|maintenance-writeback) :;; *) exit 2;; esac
+case "$suite" in copy-ownership|maintenance-writeback|maintenance-bound-copy) :;; *) exit 2;; esac
 shift
 for parent in "$@"; do
   case "$parent" in /*) :;; *) exit 2;; esac
@@ -36,6 +36,7 @@ docker run --rm --pull never --network bridge --read-only --cap-drop ALL \
     case "$1" in
       copy-ownership) set -- tests/test_sqlite_copy_hardlink_ownership.py tests/test_sqlite_copy_live_verification.py tests/test_sqlite_copy_nonblocking_reads.py;;
       maintenance-writeback) set -- tests/test_sqlite_maintenance_writeback_hold.py tests/test_sqlite_disposable_maintenance_journal.py tests/test_sqlite_disposable_maintenance_controller.py tests/test_sqlite_disposable_maintenance_writer.py tests/test_sqlite_maintenance_review.py;;
+      maintenance-bound-copy) set -- tests/test_sqlite_maintenance_bound_copy.py tests/test_sqlite_maintenance_writeback_hold.py tests/test_sqlite_maintenance_review.py;;
       *) exit 2;;
     esac
     for path in /lab-first /lab-second; do

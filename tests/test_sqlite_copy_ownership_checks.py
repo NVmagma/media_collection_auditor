@@ -11,7 +11,7 @@ LAUNCHER=Path(__file__).parents[1]/'scripts/sqlite_copy_ownership_checks.sh'
 
 
 @pytest.mark.parametrize('run_status',[0,23])
-@pytest.mark.parametrize('suite',['copy-ownership','maintenance-writeback'])
+@pytest.mark.parametrize('suite',['copy-ownership','maintenance-writeback','maintenance-bound-copy'])
 def test_launcher_mounts_only_new_labs_and_selected_readonly_sources(tmp_path,run_status,suite):
     tools=tmp_path/'bin'
     tools.mkdir()
@@ -29,7 +29,9 @@ if sys.argv[1]=='run': sys.exit(int(os.environ['RUN_STATUS']))
         tool.chmod(0o755)
     first,second=tmp_path/'first',tmp_path/'second'
     first.mkdir();second.mkdir()
-    selected=LAUNCHER if suite=='copy-ownership' else LAUNCHER.with_name('sqlite_maintenance_writeback_checks.sh')
+    selected={'copy-ownership':LAUNCHER,
+              'maintenance-writeback':LAUNCHER.with_name('sqlite_maintenance_writeback_checks.sh'),
+              'maintenance-bound-copy':LAUNCHER.with_name('sqlite_maintenance_bound_copy_checks.sh')}[suite]
     result=subprocess.run(['bash',str(selected),str(first),str(second)],
         text=True,capture_output=True,timeout=10,
         env={**os.environ,'PATH':str(tools)+os.pathsep+os.environ['PATH'],
