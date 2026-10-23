@@ -381,3 +381,13 @@ restarted. Start remained denied and selected-ID inspection confirmed state.
 This advances existing-writer component acceptance beyond absent-ID routing;
 it does not establish all Tower writers, boot/NFS/administrative routes or the
 integrated production media boundary. Gate 6 remains open.
+
+
+The [independent NFSv4 guest rehearsal](sqlite-nfs4-guest-rehearsal.md) now
+covers real kernel clients for both v4.1 and v4.2. After the pause controller
+was killed, writes returned but fsync stayed pending and server bytes stayed
+unchanged; explicit recovery delivered the pending bytes and allowed normal
+unmount. Recovery helpers remained alive in accepted runs. Seven local guard
+regressions passed. This closes the missing minor-version component experiment,
+not production NFS ownership/restart inhibition or Gate 6. Tower's kernel,
+LOCALIO, administrative routes and integrated maintenance boundary remain open.
