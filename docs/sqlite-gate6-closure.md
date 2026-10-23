@@ -370,3 +370,14 @@ out-of-scope or restart-enabling requests deny; scope survives plugin reload.
 115 local regressions passed. An absent-ID 404 is not successful quiescence or
 existing-writer acceptance. Actual writer stop/restart verification, complete
 external routes, host boot and NFS remain open; production is unchanged.
+
+
+The [independent guest writer rehearsal](sqlite-docker-writer-guest-rehearsal.md)
+through `7140819` now supplies actual selected-writer evidence: a real always-
+restart container wrote synthetic bytes, was restart-disabled/stopped through
+the candidate and remained stopped with unchanged bytes after its private daemon
+restarted. Start remained denied and selected-ID inspection confirmed state.
+120 local regressions also passed. The separate-kernel guest was powered off.
+This advances existing-writer component acceptance beyond absent-ID routing;
+it does not establish all Tower writers, boot/NFS/administrative routes or the
+integrated production media boundary. Gate 6 remains open.

@@ -152,3 +152,11 @@ policy. Local empty-daemon routing proves filtering before/after scope reload,
 not actual writer quiescence. An initial production design must still establish
 a complete fresh inventory, verify disabled automatic restart and stopped state,
 and bind that evidence to the accepted media ownership boundary.
+
+
+An independent disposable Linux VM now has successful actual-writer acceptance
+for the candidate: restart-disable, stop, selected-ID state inspection and no
+resumption after the private daemon restarts. Its own kernel avoided privileged
+nested workloads on a shared Docker Desktop kernel. No Tower changes occurred.
+See the guest rehearsal for exact scope; the complete production ownership model,
+boot routes, NFS and integrated SQLite verifier/recovery remain unaccepted.
