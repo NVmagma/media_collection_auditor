@@ -178,7 +178,8 @@ Homarr's absence does not exclude direct starts or recreation.
 
 The host rc.local fingerprint matches the earlier reviewed source. The custom
 go fingerprint is `6e640b0b9f7d2777569ae2c2fc8f5d8e93f42c937a7b34e58a62c029e8952146`;
-its contents and ordering remain unreviewed. The exact quoted yes/no filter
+its contents were subsequently supplied and reviewed below; management-service
+startup ordering remains unverified. The exact quoted yes/no filter
 produced no NFS setting: missing, alternative formatting and other values were
 not distinguished. This must not be interpreted as disabled NFS.
 
@@ -200,3 +201,30 @@ Before a production adapter can be accepted, its change package must identify:
 
 No host installation, service control, startup preference edit or kernel change
 is performed by this discovery increment. Gate 6 remains open.
+
+
+### Custom go script review
+
+The user supplied the full go script: it starts `/usr/local/sbin/emhttp`, then
+runs `chmod 666` on `/dev/sr0`, `/dev/sg2` and `/var/run/docker.sock`. No direct
+media copy or container-start command appears in this script, but emhttp launches
+the management service; this is not evidence that no writers start indirectly.
+Because emhttp starts before these permission changes, this script is not a
+pre-management maintenance guard. An unsuccessful chmod is possible, so the
+script describes intent, not a fresh assertion of live socket permissions.
+
+The world-writable Docker socket intent expands the administrative control route
+beyond dashboards. A process able to reach the socket may request container
+starts/recreation without a dashboard. A maintenance design cannot limit its
+control inventory to Homarr/Homepage or treat read-only socket binds as denial.
+Changing socket permissions alone also cannot revoke already-open connections,
+exclude root, or guarantee permissions after daemon recreation. Optical-device
+permissions remain relevant to the separately reviewed privileged MakeMKV route;
+they are not by themselves evidence of a Movie/TV write.
+
+The startup probe now reports socket type/mode/owner metadata only, without
+connecting or dispatching any Docker API operation. Container metadata describes
+that container's view only; the wrong-context result remains explicit. This
+observation never authorizes enforcement. No permission changes, startup edits,
+service controls or production work are introduced. Host remediation must be a
+separately reviewed change package with explicit operator approval.

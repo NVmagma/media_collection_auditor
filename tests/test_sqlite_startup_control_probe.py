@@ -41,3 +41,29 @@ def test_container_context_is_explicit_and_never_authorizes(tmp_path):
     assert result['container_marker_observed'] is True
     assert result['production_authorized'] is False
     assert result['source_identities']['/etc/rc.d/rc.docker']['matches_reviewed_upstream'] is False
+
+
+def test_socket_metadata_never_connects_to_endpoint():
+    import socket
+    import tempfile
+    # macOS AF_UNIX paths have a small fixed limit; pytest paths exceed it.
+    with tempfile.TemporaryDirectory(prefix='mca-', dir='/tmp') as folder:
+        root = Path(folder)
+        directory = root / 'var/run'
+        directory.mkdir(parents=True)
+        path = directory / 'docker.sock'
+        with socket.socket(socket.AF_UNIX) as endpoint:
+            endpoint.bind(str(path))
+            path.chmod(0o666)
+            result = module.observe(root)
+        assert result['docker_socket_metadata']['is_socket'] is True
+        assert result['docker_socket_metadata']['mode'] == '0666'
+        assert result['docker_socket_metadata']['world_writable'] is True
+        assert result['writer_exclusion_verified'] is False
+
+
+def test_socket_name_does_not_prove_socket_type(tmp_path):
+    directory = tmp_path / 'var/run'
+    directory.mkdir(parents=True)
+    (directory / 'docker.sock').write_text('not an endpoint')
+    assert module.observe(tmp_path)['docker_socket_metadata']['is_socket'] is False

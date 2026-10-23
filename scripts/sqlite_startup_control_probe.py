@@ -49,6 +49,18 @@ def observe(root=Path('/')):
     for name, key in (('/boot/config/docker.cfg', 'DOCKER_ENABLED'),
                       ('/boot/config/share.cfg', 'shareNFSEnabled')):
         settings[name] = {key: preference(read(name), key)}
+    # Metadata only: never connect to the administrative socket.
+    try:
+        socket_info = (root / 'var/run/docker.sock').stat()
+        socket_metadata = {
+            'status': 'observed',
+            'is_socket': stat.S_ISSOCK(socket_info.st_mode),
+            'mode': format(stat.S_IMODE(socket_info.st_mode), '04o'),
+            'uid': socket_info.st_uid, 'gid': socket_info.st_gid,
+            'world_writable': bool(socket_info.st_mode & stat.S_IWOTH),
+        }
+    except OSError:
+        socket_metadata = {'status': 'unavailable'}
     data = read('/var/lib/docker/unraid-autostart')
     entries = []
     valid = data is not None
@@ -66,7 +78,8 @@ def observe(root=Path('/')):
             'production_authorized': False, 'writer_exclusion_verified': False,
             'restart_inhibition_verified': False, 'automatic_action': 'none',
             'status': 'wrong_execution_context' if container_marker else 'review_required',
-            'container_marker_observed': container_marker, 'settings': settings, 'source_identities': sources,
+            'container_marker_observed': container_marker, 'settings': settings,
+            'docker_socket_metadata': socket_metadata, 'source_identities': sources,
             'unraid_autostart': {'status': 'observed' if valid else 'unverified',
                                  'entries': entries if valid else []},
             'limitations': ['snapshot_never_authorizes_enforcement',
