@@ -391,3 +391,13 @@ unmount. Recovery helpers remained alive in accepted runs. Seven local guard
 regressions passed. This closes the missing minor-version component experiment,
 not production NFS ownership/restart inhibition or Gate 6. Tower's kernel,
 LOCALIO, administrative routes and integrated maintenance boundary remain open.
+
+
+The real guest Docker writer checkpoint now requires explicit stopped state:
+matching full identity, Running/Paused/Restarting/Dead false, exited status,
+integer PID zero, and restart=no with integer retry count zero. Missing or
+ambiguous observations block. Real Engine 29.8.2 acceptance passed before and
+after private daemon restart, with denied starts and unchanged fixture bytes;
+113 focused local checks passed. This strengthens a required observation but
+is not a fence or ownership receipt. Boot ordering, all control routes and
+integration with the actual media boundary remain necessary for Gate 6 closure.

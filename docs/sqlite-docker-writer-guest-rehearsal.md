@@ -108,3 +108,27 @@ ownership. A matching ID/state snapshot alone remains advisory outside this
 controlled fixture. The production maintenance adapter and full integration
 remain blocked. Guest ext4/vfs is a test arrangement, not an application
 filesystem requirement or a new filesystem-name restriction.
+
+## Strict selected-writer checkpoint
+
+The rehearsal now uses `require_stopped_writer` at both fresh inspection points.
+It requires the exact selected full ID, explicit false booleans for Running,
+Paused, Restarting and Dead, status exited, integer PID zero and restart policy
+no with integer MaximumRetryCount zero. Missing fields, boolean/integer coercion,
+created/removing status and mismatched identities block acceptance. The function
+only validates the supplied observation, leaves it unchanged and returns no
+receipt or ownership authority. Fresh collection and the surrounding fence still
+matter; this function cannot detect a change after inspection.
+
+Each rehearsal uses a unique guest-local plugin spec and removes only that spec
+after its owned processes stop. This permits a fresh run without overwriting a
+prior fixture's spec. Existing private daemon data and failed labs are retained.
+
+Real guest acceptance passed this stricter checkpoint before and after private
+Engine 29.8.2 restart. Explicit start remained denied and synthetic media bytes
+were unchanged. 113 focused local checks passed. The first new run failed during
+image import before the checkpoint; the guest disk had only about 0.5 GiB free.
+Its powered-off sparse overlay was expanded from 6 to 10 GiB virtual capacity,
+and a fresh run succeeded. Failed and successful fixture data were retained;
+only the independent guest disk changed. Evidence was archived and the VM shut
+down. This still does not establish host boot or full production ownership.

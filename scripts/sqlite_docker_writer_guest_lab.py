@@ -15,6 +15,9 @@ import socket
 import subprocess
 import sys
 import time
+import uuid
+
+from app.sqlite_docker_writer_observation import require_stopped_writer
 
 
 class Client(http.client.HTTPConnection):
@@ -46,6 +49,7 @@ def run(root, binaries, image_archive):
     env={**os.environ,'PATH':str(binaries)+':/usr/sbin:/usr/bin:/sbin:/bin'}
     processes=[]
     logs=[]
+    plugin_spec=None
     def start_daemon():
         log=(root/'daemon.log').open('ab'); logs.append(log)
         process=subprocess.Popen([str(binaries/'dockerd'), '--host','unix://'+str(endpoint),
@@ -111,9 +115,12 @@ def run(root, binaries, image_archive):
             if policy.poll() is not None or time.monotonic()>deadline: raise RuntimeError('Guest plugin startup failed')
             time.sleep(.1)
         plugin_dir=Path('/etc/docker/plugins'); plugin_dir.mkdir(parents=True,exist_ok=True)
-        with (plugin_dir/'mca-writer.spec').open('x') as spec:
+        plugin_name='mca-writer-'+uuid.uuid4().hex
+        candidate=plugin_dir/(plugin_name+'.spec')
+        with candidate.open('x') as spec:
+            plugin_spec=candidate
             spec.write('unix://'+str(control/'authorization.sock'))
-        config.write_text(json.dumps({'authorization-plugins':['mca-writer']}))
+        config.write_text(json.dumps({'authorization-plugins':[plugin_name]}))
         os.kill(daemon.pid,signal.SIGHUP)
         deadline=time.monotonic()+10
         while api('POST',route+'/start')[0]!=403:
@@ -127,9 +134,7 @@ def run(root, binaries, image_archive):
             status,body=api('GET',route+'/json')
             if status!=200: raise RuntimeError('Guest writer state unavailable: '+str(status))
             state=json.loads(body)
-            if (state.get('Id')!=identity or state['State']['Running'] is not False
-                    or state['HostConfig']['RestartPolicy']['Name']!='no'):
-                raise RuntimeError('Guest writer not independently stopped/restart-disabled')
+            require_stopped_writer(state,identity)
         inspect_stopped()
         digest=hashlib.sha256(ticks.read_bytes()).hexdigest()
         time.sleep(2)
@@ -147,6 +152,7 @@ def run(root, binaries, image_archive):
     finally:
         for process in reversed(processes): stop(process)
         for log in logs: log.close()
+        if plugin_spec is not None: plugin_spec.unlink()
 
 
 if __name__=='__main__':
