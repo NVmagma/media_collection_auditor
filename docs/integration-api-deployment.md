@@ -71,8 +71,9 @@ and review of its effective dry-run settings because startup may schedule audits
    that labeled container leaves the existing auditor and authoritative JSON
    untouched; retain its private credential/configuration for deliberate review.
 
-The user was asked to choose a separate read-only container or update the existing
-container. No target service has been changed by this preparation.
+Deployment choice: the user selected updating the existing auditor container.
+The acceptance updates below record subsequent Tower rollouts; the optional
+separate-service design remains available for other installations.
 
 Local preparation validation (October 22, 2026): 739 maintained tests and 19
 subtests passed on macOS with Python 3.12.14. This includes copied-runtime
@@ -107,3 +108,30 @@ private as appropriate. Recheck the live safety settings and both authenticated
 title routes before replacing widget fixture sources with the permanent auditor
 URL and production integration credential. No SQLite cutover or NFS change is
 part of this update.
+
+
+## Artwork deployment increment
+
+Tower accepted the title-list image at
+`sha256:ec44a707a8d43227a53631983d855194adbc7a6f1bd3de339895d8979e5cc6a8`:
+oldest-waiting returned ten of 522 records and leaving-soon four of four, both
+with authenticated 200 and unauthenticated 401. JSON remained authoritative and
+production activation disabled. The user reported real title widgets working.
+
+The user subsequently reported the disposable artwork/click preview working.
+This accepts the synthetic image/navigation path, not real Jellyfin matches,
+poster access, complete fallback rendering or no-scroll board layout. Local
+artwork regression validation passed 804 tests plus 19 subtests. The candidate
+image smoke covers synthetic media metadata in normal and worker-free modes
+without contacting an external server.
+
+For the existing-container artwork update, retain the integration token and
+`INTEGRATION_API_TITLE_DETAILS=true`, and add `INTEGRATION_API_MEDIA=true`.
+The saved Settings Jellyfin host supplies both private metadata collection and
+browser poster/detail URLs by default, as requested. The user supplied
+`http://10.0.0.10:8086` as the browser-facing address; do not hardcode it into
+application logic. Only use `JELLYFIN_PUBLIC_URL` when a separate browser address
+is needed. Preserve the previous image/state/config rollback and recheck effective
+safety settings. No SQLite activation, NFS change or deletion permission is
+introduced. After the verified candidate runs, verify actual matching, anonymous
+Jellyfin image delivery and browser clicks before claiming real artwork accepted.
