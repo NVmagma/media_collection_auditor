@@ -113,3 +113,127 @@ def read_tracking_titles(path, view, *, holding_days=7):
     report.update(status="advisory_only", items=[entry[3] for entry in entries[:10]],
                   total_records=len(entries), truncated=len(entries) > 10)
     return report
+
+
+def collect_widget_media_index(fetch, media_type):
+    """Bounded, complete per-user catalog for presentation, never protections.
+
+    The caller supplies a deadline-bound GET transport. Folder matches are exact;
+    display-name/year fallbacks and first-match selection are intentionally absent.
+    """
+    import posixpath
+    import re
+    if media_type not in ('Movie', 'Series'):
+        raise ValueError('Unsupported widget media type')
+    users = fetch('/Users', None)
+    if not isinstance(users, list) or not 1 <= len(users) <= 32:
+        raise ValueError('Invalid users')
+    ids = [u.get('Id') if isinstance(u, dict) else None for u in users]
+    valid_id = lambda value: isinstance(value, str) and re.fullmatch(r'[0-9a-fA-F]{32}', value) is not None
+    if any(not valid_id(uid) for uid in ids):
+        raise ValueError('Invalid user identities')
+    ids = [uid.lower() for uid in ids]
+    if len(set(ids)) != len(ids):
+        raise ValueError('Duplicate user identities')
+    folders = {}
+    identities = {}
+    requests_left = 64
+    for uid in ids:
+        start, expected, seen = 0, None, set()
+        while True:
+            requests_left -= 1
+            if requests_left < 0:
+                raise ValueError('Widget catalog bound exceeded')
+            page = fetch('/Users/' + uid + '/Items', {
+                'Recursive': 'true', 'IncludeItemTypes': media_type,
+                'ExcludeItemTypes': 'BoxSet', 'Fields': 'Path',
+                'EnableImages': 'true', 'StartIndex': start, 'Limit': 100})
+            if not isinstance(page, dict):
+                raise ValueError('Invalid page')
+            total, items = page.get('TotalRecordCount'), page.get('Items')
+            if (type(total) is not int or not 0 <= total <= 5000
+                    or not isinstance(items, list)
+                    or len(items) != min(100, max(0, total - start))
+                    or (expected is not None and expected != total)
+                    or ('StartIndex' in page and (type(page['StartIndex']) is not int or page['StartIndex'] != start))):
+                raise ValueError('Incomplete widget catalog')
+            expected = total
+            for item in items:
+                if not isinstance(item, dict) or not valid_id(item.get('Id')):
+                    raise ValueError('Invalid item identity')
+                item_id = item['Id'].lower()
+                if item_id in seen:
+                    raise ValueError('Repeated item')
+                seen.add(item_id)
+                if item.get('Type') == 'BoxSet':
+                    continue
+                path = item.get('Path')
+                if (item.get('Type') != media_type or not isinstance(path, str)
+                        or not path or any(ord(c) < 32 for c in path)):
+                    raise ValueError('Invalid item fields')
+                path = path.replace('\\', '/').rstrip('/')
+                if not (path.startswith('/') or re.match(r'^[A-Za-z]:/', path)):
+                    raise ValueError('Relative item path')
+                if any(part in ('.', '..') for part in path.split('/')):
+                    raise ValueError('Invalid item path')
+                folder = posixpath.basename(posixpath.dirname(path) if media_type == 'Movie' else path)
+                if not folder:
+                    raise ValueError('Missing item folder')
+                identity = (item_id, path)
+                if item_id in identities and identities[item_id] != path:
+                    raise ValueError('Conflicting item identity')
+                identities[item_id] = path
+                tags = item.get('ImageTags')
+                has_poster = isinstance(tags, dict) and isinstance(tags.get('Primary'), str) and bool(tags['Primary'])
+                matches = folders.setdefault(folder, {})
+                matches[identity] = matches.get(identity, False) or has_poster
+            start += len(items)
+            if start == total:
+                break
+    return folders
+
+
+def widget_media_base(value):
+    """Accept an explicit HTTP(S) browser/transport base with no URL credentials."""
+    import re
+    from urllib.parse import urlsplit
+    try:
+        if (not isinstance(value, str) or any(ord(c) <= 32 or ord(c) >= 127 for c in value)
+                or "\\" in value or "?" in value or "#" in value):
+            return None
+        base = value.rstrip('/')
+        url = urlsplit(base)
+        if (url.scheme not in ('http', 'https') or not url.hostname or not url.netloc
+                or url.username is not None or url.password is not None or url.query or url.fragment
+                or '%' in url.netloc
+                or not re.fullmatch(r'(?:/[A-Za-z0-9_~-]+(?:\.[A-Za-z0-9_~-]+)*)*', url.path)):
+            return None
+        _ = url.port
+        return base
+    except ValueError:
+        return None
+
+
+def widget_media_urls(item, index, public_base):
+    """Credential-free URLs only for one exact folder identity in a full catalog."""
+    import re
+    result = {'match_status': 'unavailable', 'poster_url': None, 'jellyfin_url': None}
+    try:
+        base = widget_media_base(public_base)
+        if not base:
+            return result
+        if index is None:
+            return result
+        matches = index.get(item['title'], {})
+        if len(matches) != 1:
+            result['match_status'] = 'ambiguous' if matches else 'unmatched'
+            return result
+        (item_id, _path), has_poster = next(iter(matches.items()))
+        if not re.fullmatch(r'[0-9a-f]{32}', item_id):
+            return result
+        result.update(match_status='matched',
+                      jellyfin_url=base + '/web/index.html#!/details?id=' + item_id,
+                      poster_url=(base + '/Items/' + item_id + '/Images/Primary?maxWidth=160&quality=80') if has_poster else None)
+    except (ValueError, TypeError, KeyError):
+        pass
+    return result

@@ -215,3 +215,48 @@ healthy list or a raw exception/path. Both routes use no-store response headers.
 The Holding list represents tracked Holding records, not a promise that protected
 or otherwise blocked titles will actually leave. Widgets must retain advisory
 wording and show unavailable states explicitly.
+
+## Optional posters and Jellyfin navigation (development revision)
+
+Set `INTEGRATION_API_MEDIA=true` alongside the existing title-detail opt-in to
+add `poster_url`, `jellyfin_url` and `match_status` to title records. Disabled is
+the default: no Jellyfin collection occurs. The aggregate API stays redacted.
+The browser destination uses saved Settings `JELLYFIN_HOST_URL`, falling back to
+the environment exactly as the existing integration does. An optional environment
+`JELLYFIN_PUBLIC_URL` overrides only browser navigation/image addresses when the
+saved host is reachable only inside Docker. No duplicate URL entry is normally
+needed. Explicit invalid overrides do not fall back silently.
+
+Private metadata requests use the saved Jellyfin URL and API credential, never
+browser URLs with API keys. Browser URLs reject userinfo, query/fragment-bearing
+bases, control characters and path traversal. Generated links contain only the
+configured public base, a validated item ID and fixed image sizing parameters.
+Clients can see that configured address and item IDs when this option is enabled;
+raw media paths, user IDs and API credentials are not returned.
+
+The optional presentation lookup reads complete, paginated per-user Movie/Series
+catalogs, with bounds of 32 users, 5,000 records per user, 64 item-page requests
+per media type, request timeouts and a per-type elapsed-time budget. Results are
+cached in memory for at most five minutes (`media_cache_max_age_seconds=300`).
+Expired data is not reused after collection failure. Matching requires an exact
+folder name and one unique ID/path identity across the completed result. It does
+not remove years, fall back to display names, case-fold distinct folder names,
+or choose the first duplicate. BoxSets are excluded from matching. Incomplete,
+malformed or failed collection produces null URLs; title rows remain available.
+These are presentation observations, never protection/ownership verification.
+
+A matched title without a Primary image tag retains navigation but has no poster
+URL. Images load directly from Jellyfin's existing image GET route without
+credentials, rather than adding a public artwork proxy to the auditor. Jellyfin's
+[image controller](https://github.com/jellyfin/jellyfin/blob/master/Jellyfin.Api/Controllers/ImageController.cs)
+currently declares item-image GET/HEAD without an authorization attribute, unlike
+image modification routes. Installed-server/proxy behavior still needs a live
+check. Do not loosen a reverse proxy's authentication to make images display;
+missing/blocked images leave title text and navigation usable. HTTPS dashboards
+need HTTPS-accessible artwork to avoid mixed-content blocking.
+
+Jellyfin details navigation uses the dashboard's existing `/web/index.html#!/details?id=`
+shape. Jellyfin handles its own viewer login and permissions. The optional
+presentation collector is separate from the existing dashboard poster index and
+all lifecycle/protection collectors. No media move, deletion, state write, SQLite
+activation, refresh POST or Jellyfin settings change is performed.

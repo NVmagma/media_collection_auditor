@@ -12,6 +12,7 @@ def main():
     read_only_service = sys.argv[1:] == ['--read-only-service']
     if sys.argv[1:] and not read_only_service:
         raise SystemExit(2)
+    os.environ.pop('INTEGRATION_API_MEDIA', None)
     os.environ['READ_ONLY_API_SERVICE'] = 'true' if read_only_service else 'false'
     root = Path(__file__).resolve().parents[1]
     sys.path[:0] = [str(root / 'app'), str(root)]
@@ -76,6 +77,17 @@ def main():
         assert holding[0]['estimated_removal_stage_at'] == '2024-01-08T00:00:00'
         assert holding[0]['transition_authorized'] is False
         assert client.get(title_paths[0], headers=headers).json['items'] == []
+        os.environ['INTEGRATION_API_MEDIA'] = 'true'
+        os.environ.pop('JELLYFIN_PUBLIC_URL', None)
+        web.load_config = lambda: {'HOLDING_DAYS': '7', 'JELLYFIN_HOST_URL': 'http://fixture.invalid:8096',
+                                   'JELLYFIN_API_TOKEN': 'fixture-server-only-key'}
+        web._widget_media_index = lambda *args: ({'fixture-title': {('a' * 32, '/fixture/title/film.mkv'): True}}, 'collected')
+        media = client.get(title_paths[1], headers=headers)
+        assert media.status_code == 200
+        assert media.json['items'][0]['poster_url'].startswith('http://fixture.invalid:8096/Items/')
+        assert media.json['items'][0]['jellyfin_url'].startswith('http://fixture.invalid:8096/web/')
+        assert 'fixture-server-only-key' not in media.text
+        assert '/fixture/title' not in media.text
         assert state.read_text() == raw
         state.unlink()
         assert client.get('/api/v1/summary', headers=headers).status_code == 503

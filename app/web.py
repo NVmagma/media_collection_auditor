@@ -23,7 +23,7 @@ from auth import session_key, jellyfin_login, current_user, store_token, discard
 from run_control import snapshot, request_run
 from config_store import FIELDS, KEYS, SECRETS, BOOLS, DEFAULTS, FIELD_HELP, load_config, save_config, validate, redacted_config
 from integration_api import authorize_summary, read_only_service_enabled
-from integration_status import read_tracking_status, audit_status_report, read_tracking_titles
+from integration_status import read_tracking_status, audit_status_report, read_tracking_titles, collect_widget_media_index, widget_media_urls, widget_media_base
 
 app = Flask(__name__)
 app.secret_key = os.urandom(32).hex() if read_only_service_enabled() else session_key()
@@ -125,6 +125,71 @@ def integration_summary():
     return report, 503 if report["status"] == "unavailable" else 200
 
 
+_WIDGET_MEDIA_CACHE = {}
+_WIDGET_MEDIA_LOCK = threading.Lock()
+
+
+def _widget_media_index(base, token, media_type):
+    """Five-minute presentation cache; never used for lifecycle decisions."""
+    if not widget_media_base(base) or not token:
+        raise ValueError("Invalid media transport")
+    key = (base, token, media_type)
+    with _WIDGET_MEDIA_LOCK:
+        cached = _WIDGET_MEDIA_CACHE.get(key)
+        if cached and time.monotonic() - cached[0] < 300:
+            return cached[1], "cached"
+    deadline = time.monotonic() + 8
+
+    def fetch(path, params):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise ValueError("Media lookup deadline exceeded")
+        response = requests.get(base + path, params=params, headers=_poster_headers(token),
+                                timeout=(min(2, remaining), min(4, remaining)), allow_redirects=False)
+        if response.status_code != 200:
+            raise ValueError("Media lookup unavailable")
+        data = response.json()
+        if time.monotonic() > deadline:
+            raise ValueError("Media lookup deadline exceeded")
+        return data
+
+    index = collect_widget_media_index(fetch, media_type)
+    with _WIDGET_MEDIA_LOCK:
+        if len(_WIDGET_MEDIA_CACHE) >= 4:
+            _WIDGET_MEDIA_CACHE.clear()
+        _WIDGET_MEDIA_CACHE[key] = (time.monotonic(), index)
+    return index, "collected"
+
+
+def _integration_title_media(report):
+    if not isinstance(report.get("items"), list):
+        return report
+    enabled = os.environ.get("INTEGRATION_API_MEDIA", "false").lower() == "true"
+    report["media_lookup_status"] = "disabled" if not enabled else "available"
+    config = load_config() if enabled else {}
+    base = config.get("JELLYFIN_HOST_URL", os.environ.get("JELLYFIN_HOST_URL", "")).rstrip("/")
+    # Saved Settings wins for both transport and browser navigation by default.
+    # An explicit override supports internal-only Docker names/reverse proxies.
+    public = widget_media_base(os.environ.get("JELLYFIN_PUBLIC_URL", base))
+    if enabled and not public:
+        report["media_lookup_status"] = "unavailable"
+    report["media_cache_max_age_seconds"] = 300 if enabled else None
+    token = config.get("JELLYFIN_API_TOKEN", os.environ.get("JELLYFIN_API_TOKEN", ""))
+    indexes = {}
+    for item in report["items"]:
+        library = item["library"]
+        if enabled and public and library not in indexes:
+            try:
+                indexes[library], _ = _widget_media_index(base, token, "Movie" if library == "Movies" else "Series")
+            except (requests.RequestException, ValueError, TypeError, KeyError, AttributeError):
+                indexes[library] = None
+                report["media_lookup_status"] = "unavailable"
+        item.update(widget_media_urls(item, indexes.get(library), public))
+        if not enabled:
+            item["match_status"] = "disabled"
+    return report
+
+
 @app.get("/api/v1/titles/oldest-waiting", defaults={"view": "oldest-waiting"})
 @app.get("/api/v1/titles/leaving-soon", defaults={"view": "leaving-soon"})
 def integration_titles(view):
@@ -137,7 +202,7 @@ def integration_titles(view):
             days = max(1, int(config.get("HOLDING_DAYS", os.environ.get("HOLDING_DAYS", "7"))))
         except (ValueError, TypeError):
             days = 0
-    report = read_tracking_titles(STATE_FILE, view, holding_days=days)
+    report = _integration_title_media(read_tracking_titles(STATE_FILE, view, holding_days=days))
     return report, 503 if report["status"] == "unavailable" else 200
 
 
