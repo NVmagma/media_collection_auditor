@@ -56,9 +56,33 @@ def main():
             assert client.get('/login').status_code == 404
             assert 'collection_auditor' not in sys.modules
             assert not (Path(directory) / 'must-not-create.key').exists()
+        os.environ.pop('INTEGRATION_API_TITLE_DETAILS', None)
+        title_paths = ('/api/v1/titles/oldest-waiting', '/api/v1/titles/leaving-soon')
+        for path in title_paths:
+            assert client.get(path, headers=headers).status_code == 404
+        os.environ['INTEGRATION_API_TITLE_DETAILS'] = 'true'
+        # Never consult a deployment configuration during synthetic image checks.
+        web.load_config = lambda: {'HOLDING_DAYS': '7'}
+        for path in title_paths:
+            assert client.get(path).status_code == 401
+            titles = client.get(path, headers=headers)
+            assert titles.status_code == 200
+            assert titles.json['production_authorized'] is False
+            assert titles.json['freshness_verified'] is False
+            assert titles.headers['Cache-Control'] == 'no-store'
+        holding = client.get(title_paths[1], headers=headers).json['items']
+        assert len(holding) == 1
+        assert holding[0]['title'] == 'fixture-title'
+        assert holding[0]['estimated_removal_stage_at'] == '2024-01-08T00:00:00'
+        assert holding[0]['transition_authorized'] is False
+        assert client.get(title_paths[0], headers=headers).json['items'] == []
         assert state.read_text() == raw
         state.unlink()
         assert client.get('/api/v1/summary', headers=headers).status_code == 503
+        for path in title_paths:
+            unavailable = client.get(path, headers=headers)
+            assert unavailable.status_code == 503
+            assert unavailable.json['items'] is None
     print(json.dumps({'status': 'disposable_api_smoke_passed', 'fixture_only': True,
                       'production_authorized': False, 'production_activation': 'disabled',
                       'network_collection_performed': False,

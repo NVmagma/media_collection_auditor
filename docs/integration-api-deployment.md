@@ -79,3 +79,31 @@ subtests passed on macOS with Python 3.12.14. This includes copied-runtime
 entrypoint checks that reject worker import/session-key writes in read-only
 mode. Workflow YAML syntax was checked locally; Linux full-suite, actual image
 build/scan/smoke and publication are separate pending workflow evidence.
+
+## Title-list deployment increment
+
+The user selected an update to the existing auditor container and accepted its
+aggregate API at the verified candidate digest
+`sha256:f126c2cef077c50825f66583c12cb04e746e46fa505d9418307b1b2b038a0024`.
+Both aggregate routes returned authenticated 200 and unauthenticated 401;
+authority remained JSON and the selected saved settings reported DRY_RUN=true,
+all deletion/cross-filesystem switches false. These are observations from that
+rollout, not a permanent attestation of future configuration.
+
+For the title increment, 79 focused tests passed on Tower. The user reported both
+synthetic title previews working and supplied an oldest-waiting screenshot with
+successful fetch and rendered cards, then requested deployment. Full ten-row
+no-scroll board acceptance, empty/unavailable and stale-after-failure UI checks
+remain unreported; do not claim those are complete. API fixture tests cover the
+underlying empty/unavailable responses.
+
+The next candidate must run actual-image smoke checks of both title routes in
+normal and worker-free modes, including default-disabled, missing credential,
+opt-in response and missing-state behavior. After acceptance, preserve the
+currently deployed image as rollback, retain the existing integration token,
+and add `INTEGRATION_API_TITLE_DETAILS=true` in the existing Unraid template.
+That option intentionally permits authenticated title-name reads; keep boards
+private as appropriate. Recheck the live safety settings and both authenticated
+title routes before replacing widget fixture sources with the permanent auditor
+URL and production integration credential. No SQLite cutover or NFS change is
+part of this update.
