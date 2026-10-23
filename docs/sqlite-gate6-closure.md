@@ -422,3 +422,13 @@ HTTP comparison mutation. `native_runtime_route_fenced=false` remains explicit.
 The selected synthetic writer still passed stop/restart acceptance. Direct
 runtime access/trusted administrative scope and prior streams therefore remain
 real closure requirements, not a missing HTTP route rule. Tower is unchanged.
+
+
+Tower's subsequent permission/ACL snapshot shows root-only 0700 parent runtime
+directories and root-owned 0660 containerd sockets, without additional ACL entries
+in supplied output. This narrows the native route to callers with actual access;
+it does not show unprivileged dashboard access. Container-mounted sockets/parents,
+elevated access and inherited handles remain review requirements. The advisory
+mount reviewer now catches parent runtime directories, `.sock.ttrpc` and custom
+declared control aliases, including read-only/stopped cases. It remains advisory;
+no production permissions, services, guards or ownership claims change.

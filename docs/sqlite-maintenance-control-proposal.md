@@ -223,3 +223,29 @@ clients remain subject to AuthZ, while direct runtime access and privileged host
 administration must be covered by a reviewed access/trust boundary. No plugin
 claim may silently absorb these routes. Existing client streams and administrative
 configuration changes remain separate. No listener snapshot grants ownership.
+
+
+## Tower runtime permissions accepted (2026-10-23)
+
+The host reports `/var/run/docker` and `/var/run/docker/containerd` as UID/GID
+0:0 directories, mode 0700. The containerd gRPC, ttrpc and debug sockets are
+0:0 mode 0660. Supplied ACL output contains only the base user/group/other entries.
+Docker's public Unix API socket is separately UID 0, GID 281, mode 0660.
+
+For ordinary pathname lookup without privilege, the root-only parent directories
+restrict traversal to the containerd sockets. Thus the earlier guest experiment
+proves a route for an already socket-authorized caller; it must not be described
+as evidence that unprivileged Tower dashboards can reach containerd. No chmod or
+runtime shutdown follows from this snapshot. Group membership, privileged users,
+capabilities, bind-mounted sockets/parents, alternate aliases, inherited handles
+and namespace exposure still require scoped review. Existing connections are not
+revoked by metadata observations.
+
+The advisory container reviewer now also flags source mounts overlapping declared
+runtime control directories, including parent-directory mounts and read-only
+binds, and recognizes `.sock.ttrpc` sockets. Stopped containers remain in scope.
+This closes a reviewer omission; a host path's mode cannot be applied blindly to
+a socket separately bound into a container. Paths are lexical declarations, not
+resolved physical aliases. Defaults cover common `/run` and `/var/run` runtime
+paths; the Python CLI accepts additional `--control-root` aliases, so deployment
+paths are not restricted to Tower's layout. Reports grant no enforcement permit.

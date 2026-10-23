@@ -1,6 +1,10 @@
 """Advisory Docker snapshot review; lexical overlap is never writer exclusion."""
 from pathlib import PurePosixPath
 
+# Declared lexical paths only: callers may add deployment-specific aliases.
+DEFAULT_CONTROL_ROOTS = ("/run/docker", "/var/run/docker", "/run/containerd",
+                         "/var/run/containerd", "/run/docker.sock", "/var/run/docker.sock")
+
 
 def _path(value):
     if (not isinstance(value, str) or not value.startswith("/") or value.startswith("//")
@@ -21,6 +25,8 @@ def _control_requirements(issues, *, running):
             required.add("keep_stopped_writer_fenced")
     if "read_only_media_mount_unverified" in issues:
         required.add("verify_read_only_media_routes")
+    if "administrative_control_mount_requires_review" in issues:
+        required.add("resolve_administrative_control_mount_access")
     if "socket_access_requires_review" in issues:
         required.add("fence_administrative_api_routes")
     if issues.intersection({"privileged_container_review_required", "added_capabilities_review_required",
@@ -31,7 +37,10 @@ def _control_requirements(issues, *, running):
     return sorted(required)
 
 
-def review_container_mounts(records, *, media_roots):
+def review_container_mounts(records, *, media_roots, control_roots=DEFAULT_CONTROL_ROOTS):
+    controls = [_path(value) for value in control_roots]
+    if not controls or len(set(controls)) != len(controls) or PurePosixPath("/") in controls:
+        raise ValueError("Distinct specific control roots required")
     roots = [_path(value) for value in media_roots]
     if not roots or len(set(roots)) != len(roots) or PurePosixPath("/") in roots:
         raise ValueError("Distinct specific media roots required")
@@ -84,9 +93,14 @@ def review_container_mounts(records, *, media_roots):
                                   for other, media in direct):
                 reasons.append("writable_destination_overlap")
                 issues.add("writable_destination_overlap")
+            # Directory binds can expose sockets below them, even read-only.
+            # Source paths are declarations, not resolved aliases or access proof.
+            if source is not None and any(_overlap(source, root) for root in controls):
+                reasons.append("declared_control_source_overlap")
+                issues.add("administrative_control_mount_requires_review")
             # Read-only access to a Docker socket still permits administrative
             # API calls. Other socket mounts need review too, not an allowlist.
-            if any(str(path).endswith(".sock") for path in (source, destination) if path is not None):
+            if any(str(path).endswith((".sock", ".sock.ttrpc")) for path in (source, destination) if path is not None):
                 reasons.append("socket_access_requires_review")
                 issues.add("socket_access_requires_review")
             if item["RW"] and item["Type"] != "bind":
@@ -103,6 +117,7 @@ def review_container_mounts(records, *, media_roots):
                              "control_requirements": _control_requirements(issues, running=record["running"])})
     return {"status": "review_required", "read_only": True, "containers_observed": len(records),
             "containers_requiring_review": reviewed, "declared_media_roots": [str(root) for root in roots],
+            "declared_control_roots": [str(root) for root in controls],
             "path_resolution_verified": False, "snapshot_continuity_verified": False,
             "enforcement_supported": False,
             "writer_exclusion_verified": False, "restart_inhibition_verified": False,

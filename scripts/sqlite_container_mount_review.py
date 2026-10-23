@@ -4,12 +4,14 @@ import argparse
 import json
 import sys
 
-from app.sqlite_container_mount_review import review_container_mounts
+from app.sqlite_container_mount_review import DEFAULT_CONTROL_ROOTS, review_container_mounts
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--media-root", action="append", required=True)
+    parser.add_argument("--control-root", action="append",
+                        help="Additional declared control socket/directory alias; never an access permit")
     args = parser.parse_args(argv)
     try:
         content = sys.stdin.buffer.read(1024 * 1024 + 1)
@@ -21,7 +23,8 @@ def main(argv=None):
         records = lines[:-1]
         if any(not isinstance(row, dict) or row.get("kind") != "container" for row in records):
             raise ValueError("Invalid selected snapshot")
-        report = review_container_mounts(records, media_roots=args.media_root)
+        report = review_container_mounts(records, media_roots=args.media_root,
+            control_roots=tuple(DEFAULT_CONTROL_ROOTS)+tuple(args.control_root or ()))
     except (ValueError, TypeError, KeyError, UnicodeError):
         report = {"status": "blocked", "reason": "selected_mount_snapshot_unavailable_or_invalid",
                   "read_only": True, "automatic_action": "none", "production_authorized": False,

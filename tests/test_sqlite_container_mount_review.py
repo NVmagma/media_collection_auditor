@@ -111,7 +111,8 @@ def test_stopped_privileged_writer_requires_start_inhibition_and_access_review()
 def test_read_only_socket_requires_api_fence_without_claiming_media_write_overlap():
     item = review(record(mount("/var/run/docker.sock", "/var/run/docker.sock", False)))[
         "containers_requiring_review"][0]
-    assert item["control_requirements"] == ["fence_administrative_api_routes"]
+    assert item["control_requirements"] == ["fence_administrative_api_routes",
+        "resolve_administrative_control_mount_access"]
 
 
 def test_cache_volume_is_a_scope_question_not_an_asserted_media_writer():
@@ -120,3 +121,57 @@ def test_cache_volume_is_a_scope_question_not_an_asserted_media_writer():
     assert item["control_requirements"] == ["resolve_non_bind_storage_scope"]
     assert "writable_declared_media_mount" not in item["issues"]
     assert report["enforcement_supported"] is False
+
+
+@pytest.mark.parametrize("source", ["/run", "/var/run", "/var/run/docker", "/run/containerd",
+    "/var/run/docker/containerd/containerd.sock.ttrpc"])
+@pytest.mark.parametrize("rw,running", [(False, True), (True, False)])
+def test_parent_runtime_mount_and_ttrpc_access_remain_reviewable(source, rw, running):
+    item = review(record(mount(source, "/renamed", rw), running=running))[
+        "containers_requiring_review"][0]
+    assert "administrative_control_mount_requires_review" in item["issues"]
+    assert "resolve_administrative_control_mount_access" in item["control_requirements"]
+    assert "declared_control_source_overlap" in item["mounts"][0]["reasons"]
+    assert "writable_declared_media_mount" not in item["issues"]
+
+
+def test_similar_control_prefix_is_not_an_overlap():
+    report = review(record(mount("/run/docker-backup", "/cache", False)))
+    assert report["containers_requiring_review"] == []
+    assert report["writer_exclusion_verified"] is False
+
+
+def test_custom_control_alias_is_additive_and_advisory():
+    from app.sqlite_container_mount_review import DEFAULT_CONTROL_ROOTS
+    result = review_container_mounts([record(mount("/srv/private-control", "/runtime", False))],
+        media_roots=ROOTS, control_roots=DEFAULT_CONTROL_ROOTS+("/srv/private-control",))
+    assert "administrative_control_mount_requires_review" in result["containers_requiring_review"][0]["issues"]
+    assert result["path_resolution_verified"] is False
+    assert result["enforcement_supported"] is False
+
+
+def test_ttrpc_socket_under_unresolved_alias_is_still_reviewed():
+    item = review(record(mount("/other/service.sock.ttrpc", "/renamed", False)))[
+        "containers_requiring_review"][0]
+    assert "socket_access_requires_review" in item["issues"]
+
+
+@pytest.mark.parametrize("controls", [(), ("/",), ("relative",), ("/run/docker", "/run/docker")])
+def test_invalid_control_scope_fails_closed(controls):
+    with pytest.raises(ValueError):
+        review_container_mounts([], media_roots=ROOTS, control_roots=controls)
+
+
+def test_cli_adds_custom_control_alias_without_removing_defaults(monkeypatch, capsys):
+    rows = [record(mount("/custom/runtime", "/alias", False)),
+            record(mount("/run/docker", "/other", False), name="/second")]
+    content = "\n".join(json.dumps(row) for row in rows)+'\n{"kind":"end"}\n'
+    class Input:
+        buffer = io.BytesIO(content.encode())
+    monkeypatch.setattr("sys.stdin", Input())
+    assert main(["--media-root", ROOTS[0], "--control-root", "/custom/runtime"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert len(report["containers_requiring_review"]) == 2
+    assert "/run/docker" in report["declared_control_roots"]
+    assert "/custom/runtime" in report["declared_control_roots"]
+    assert report["writer_exclusion_verified"] is False
