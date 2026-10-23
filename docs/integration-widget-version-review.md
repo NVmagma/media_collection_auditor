@@ -65,3 +65,13 @@ in Homarr, then supplied a successful workbench sample preview (two load queries
 counts 2/1/1/1/1). Default-bridge reachability, authentication and sample rendering
 are now accepted for that workflow. Direct import of the complete JSON file and
 the empty/unavailable/stale/saved-board behaviors remain separately unverified.
+
+Poster/link source review at the same Homarr revision: its
+[runtime components](https://github.com/homarr-labs/homarr/blob/9a38404f738f1e50e382095716cc08f3b3751182/packages/custom-widgets/src/jsx/runtime-components.tsx)
+wrap Anchor with URL validation and `noopener noreferrer` for new tabs. Its
+[property sanitizer](https://github.com/homarr-labs/homarr/blob/9a38404f738f1e50e382095716cc08f3b3751182/packages/custom-widgets/src/jsx/safe-properties.ts)
+accepts HTTP(S) image sources, rejects data URLs and strips event callbacks. The
+[component catalog](https://github.com/homarr-labs/homarr/blob/9a38404f738f1e50e382095716cc08f3b3751182/packages/custom-widgets/src/core/component-catalog.generated.json)
+includes Image, Group and Anchor. This supports credential-free browser image
+URLs rather than embedding credentials or data URLs in templates. Actual image
+loading/click acceptance remains pending on the installed dashboard.

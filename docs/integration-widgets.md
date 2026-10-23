@@ -189,3 +189,23 @@ Local JSON checks and API fixture tests do not establish renderer acceptance.
 The fixture expires after fifteen minutes; never use its URL/token as a permanent
 source. No new image build, NFS operation or production container restart is
 needed for this preview.
+
+### Poster cards and clickable navigation
+
+The title JSX now adds 44×66 poster thumbnails and safe Anchor components for
+matched titles. Posters and an accessible text link open Jellyfin in a new tab.
+Titles without artwork show “No poster”; unavailable or ambiguous matches remain
+unlinked. Existing title/estimate and loading/error guards are retained. The
+initial title-only image remains compatible with this JSX via missing-field
+fallbacks. Shipping artwork metadata requires the new API revision and its
+explicit opt-in; replacing the template alone does not enable network lookup.
+
+Preview without a production restart using
+`bash scripts/integration_widget_lab.sh artwork`. Use the newly printed fixture
+URL/token and the updated JSX fragments. The fixture's inert PNG and text-only
+navigation destination are intentionally public and synthetic; the title JSON
+still requires its private bearer token. Row 3 is ambiguous and unlinked, row 4
+has no poster but retains a link, and row 5 is unmatched and unlinked. Other rows
+show generated gradient placeholders, not real Jellyfin artwork. Click a poster
+and confirm the synthetic destination opens, then check the fallback rows. All
+fixture endpoints expire with the isolated container after fifteen minutes.

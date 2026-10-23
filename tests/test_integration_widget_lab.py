@@ -59,7 +59,7 @@ else:
     return result, calls, lab
 
 
-@pytest.mark.parametrize('scenario', ['sample', 'titles', 'empty', 'unavailable'])
+@pytest.mark.parametrize('scenario', ['sample', 'titles', 'artwork', 'empty', 'unavailable'])
 def test_only_new_fixture_gets_run_exec_and_private_mounts(tmp_path, scenario):
     result, calls, lab = run_lab(tmp_path, scenario=scenario)
     assert result.returncode == 0, result.stderr

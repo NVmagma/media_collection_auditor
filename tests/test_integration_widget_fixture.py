@@ -1,4 +1,5 @@
 """Synthetic widget fixture exposes only authenticated, read-only integration views."""
+import json
 import pytest
 from scripts.integration_widget_fixture import create_fixture_app, read_fixture_token
 
@@ -143,3 +144,27 @@ def test_dense_fixture_exercises_ten_rows_and_truncation(tmp_path, monkeypatch, 
     assert report['truncated'] is True
     assert report['items'][0]['title'].endswith('01')
     assert report['items'][-1]['title'].endswith('10')
+
+
+def test_artwork_fixture_serves_only_synthetic_public_image_and_link(tmp_path, monkeypatch):
+    monkeypatch.setenv('INTEGRATION_API_TOKEN', TOKEN)
+    client = create_fixture_app(tmp_path, 'artwork').test_client()
+    assert client.get('/api/v1/titles/oldest-waiting').status_code == 401
+    report = client.get('/api/v1/titles/oldest-waiting', headers=AUTH).json
+    assert len(report['items']) == 10
+    assert report['items'][0]['poster_url'] == 'http://localhost/fixture/poster.png'
+    assert report['items'][2]['match_status'] == 'ambiguous'
+    assert report['items'][2]['poster_url'] is None
+    assert report['items'][2]['jellyfin_url'] is None
+    assert report['items'][3]['poster_url'] is None
+    assert report['items'][3]['jellyfin_url']
+    assert report['items'][4]['match_status'] == 'unmatched'
+    image = client.get('/fixture/poster.png')
+    assert image.status_code == 200
+    assert image.content_type == 'image/png'
+    assert image.data.startswith(b'\x89PNG\r\n\x1a\n')
+    assert len(image.data) < 1000
+    assert client.head('/fixture/poster.png').data == b''
+    assert client.post('/fixture/poster.png').status_code == 405
+    assert b'Synthetic Jellyfin destination reached' in client.get('/fixture/jellyfin').data
+    assert TOKEN not in json.dumps(report)
