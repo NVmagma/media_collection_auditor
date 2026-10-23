@@ -1218,3 +1218,18 @@ NFS does not discard queued client writes. Unknown client outcomes must retain
 pending state; the accepted fixture cannot authorize automatic production service
 restoration, move verification or intent clearance. See the
 [accepted test and recovery constraint](sqlite-mac-nfs-lab.md).
+
+## Gate 6 closure audit and hard-link ownership boundary
+
+The [closure checklist](sqlite-gate6-closure.md) groups the remaining work into
+three acceptance requirements: enforced external-writer continuity, source-entry
+action under that ownership, and integrated crash/recovery. Existing passing
+component fixtures do not satisfy an unimplemented production adapter.
+
+Live verified copy completion now rejects multiply linked regular files in
+source/copy trees. A hard link outside a title folder can bypass a media-only
+write fence. No alias is removed; copy-only diagnostics remain source-retaining,
+and production JSON behavior is unchanged. New tests cover pre-intent rejection,
+late-link pending intent retention, nested files and coarse-timestamp link-count
+drift. Local checks pass; focused Unraid acceptance is pending. No new NFS test,
+module change or production service operation is required for this increment.

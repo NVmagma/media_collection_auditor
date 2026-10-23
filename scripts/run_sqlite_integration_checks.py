@@ -39,7 +39,7 @@ TESTS = (
     "test_integration_media", "test_integration_titles", "test_integration_status", "test_integration_api", "test_integration_read_only_service", "test_integration_api_http_smoke", "test_integration_widget_fixture", "test_integration_widget_lab", "test_dashboard_snapshot_parity", "test_dashboard_state_errors", "test_dashboard_inventory",
     "test_dashboard_lifecycle_visibility", "test_sqlite_dashboard_integration",
     "test_docker_runtime_context", "test_sqlite_copy_source_parent_binding",
-    "test_sqlite_copy_live_verification", "test_sqlite_isolated_copy_batch",
+    "test_sqlite_copy_live_verification", "test_sqlite_copy_hardlink_ownership", "test_sqlite_copy_ownership_checks", "test_sqlite_isolated_copy_batch",
     "test_sqlite_holding_copy_completion",
     "test_rescue_safety", "test_rescue_process_lock", "test_web_security",
 )

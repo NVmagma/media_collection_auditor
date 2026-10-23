@@ -10,6 +10,13 @@ import stat
 from app.sqlite_disposable_copy_stage import FLAGS, _directory_names, _identity
 
 
+def _require_single_link_file(info):
+    # A media-only mount/write fence cannot cover another hard-link name in a
+    # download tree or outside the declared scope. Never unlink that alias.
+    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+        raise RuntimeError("Live copy file has unverified hard-link aliases")
+
+
 def _metadata_snapshot(directory_fd, prefix=""):
     before = _identity(os.fstat(directory_fd))
     observed = {prefix: before}
@@ -19,18 +26,28 @@ def _metadata_snapshot(directory_fd, prefix=""):
         info = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
         if not (stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode)):
             raise RuntimeError("Live copy verification refuses symlinks and special files")
+        if stat.S_ISREG(info.st_mode):
+            _require_single_link_file(info)
         flags = FLAGS if stat.S_ISDIR(info.st_mode) else os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
         fd = os.open(name, flags, dir_fd=directory_fd)
         try:
-            if _identity(os.fstat(fd)) != _identity(info):
+            opened = os.fstat(fd)
+            if stat.S_ISREG(info.st_mode):
+                _require_single_link_file(opened)
+            if _identity(opened) != _identity(info):
                 raise RuntimeError("Live copy entry changed during metadata verification")
             if stat.S_ISDIR(info.st_mode):
                 observed.update(_metadata_snapshot(fd, relative + "/"))
             else:
                 observed[relative] = _identity(info)
-            if _identity(os.fstat(fd)) != _identity(info):
+            after = os.fstat(fd)
+            bound = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+            if stat.S_ISREG(info.st_mode):
+                _require_single_link_file(after)
+                _require_single_link_file(bound)
+            if _identity(after) != _identity(info):
                 raise RuntimeError("Live copy entry changed during metadata verification")
-            if _identity(os.stat(name, dir_fd=directory_fd, follow_symlinks=False)) != _identity(info):
+            if _identity(bound) != _identity(info):
                 raise RuntimeError("Live copy entry binding changed during metadata verification")
         finally:
             os.close(fd)

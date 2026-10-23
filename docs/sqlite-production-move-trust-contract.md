@@ -586,3 +586,14 @@ substitution retains the controlled RuntimeError contract and leaves the durable
 request pending. The targeted startup acceptance command selects 48 marker,
 maintenance-scope/controller/history and normal-lock reuse checks, avoiding a
 repeat of the already-accepted 53 copy checks and native-only rename tests.
+
+## Hard-link alias ownership is independently checked
+
+See [the Gate 6 closure checklist](sqlite-gate6-closure.md). Single-title path
+ownership does not cover external names for the same file inode. The live copy
+completion verifier now rejects regular-file link counts other than one at its
+metadata boundaries, including held/opened and current-entry observations. This
+preserves source/intent rather than unlinking aliases or granting completion from
+matching bytes alone. Copy-only diagnostics remain available without promotion.
+This closes a known alias blind spot, not the source-entry atomicity window or
+external-writer ownership requirement. No filesystem-name blacklist is added.
