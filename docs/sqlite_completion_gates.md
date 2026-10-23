@@ -1155,3 +1155,14 @@ tag with a digest artifact. No branch release tag is updated by that candidate
 path, no other branch is edited, and no new automatic build trigger is added.
 The target service model is pending user choice; no Unraid service, NFS setting,
 production authority or SQLite gate status has changed.
+
+### Non-deferred Gate 6 read-boundary acceptance
+
+Tower accepted the copy type-substitution increment `108b8a3`: 53 checks passed
+on each persistent shfs/native lab. No NFS/kernel controls were involved.
+A follow-up removes blocking/unbounded startup marker reads in the isolated
+runner and disposable maintenance journal, with bounded real-FIFO child tests,
+byte-retention checks and oversized-marker rejection. Local focused validation
+passes 87 checks including the accepted copy regressions; marker acceptance on
+Tower is pending. Gates 6–7 remain in progress, and production SQLite remains
+disabled. These fixes do not replace the deferred external-writer/NFS proof.

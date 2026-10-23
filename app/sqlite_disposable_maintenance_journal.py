@@ -121,9 +121,35 @@ def create_disposable_journal(root, *, bind_linux_boot=False):
 def _fixture(root):
     marker = root / ".disposable_maintenance"
     info = marker.lstat()
-    if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
-            or marker.read_bytes() != MARKER):
-        raise RuntimeError("Disposable fixture marker required")
+    def identity(value):
+        if not stat.S_ISREG(value.st_mode) or value.st_nlink != 1:
+            raise RuntimeError("Disposable fixture marker required")
+        return (value.st_dev, value.st_ino, value.st_size, value.st_mtime_ns, value.st_ctime_ns)
+    expected = identity(info)
+    try:
+        root_fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except OSError as exc:
+        raise RuntimeError("Disposable fixture root changed or unavailable") from exc
+    marker_fd = None
+    try:
+        marker_fd = os.open(".disposable_maintenance", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                            dir_fd=root_fd)
+        if identity(os.fstat(marker_fd)) != expected:
+            raise RuntimeError("Disposable fixture marker changed")
+        content = os.pread(marker_fd, len(MARKER) + 1, 0)
+        if (content != MARKER or identity(os.fstat(marker_fd)) != expected
+                or identity(os.stat(".disposable_maintenance", dir_fd=root_fd, follow_symlinks=False)) != expected):
+            raise RuntimeError("Disposable fixture marker changed")
+        held_root = os.fstat(root_fd)
+        current_root = root.lstat()
+        if (held_root.st_dev, held_root.st_ino) != (current_root.st_dev, current_root.st_ino):
+            raise RuntimeError("Disposable fixture root changed")
+    except OSError as exc:
+        raise RuntimeError("Disposable fixture marker changed or unavailable") from exc
+    finally:
+        if marker_fd is not None:
+            os.close(marker_fd)
+        os.close(root_fd)
 
 
 def _identity(root):

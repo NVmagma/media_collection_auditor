@@ -556,3 +556,33 @@ Unraid shfs/native acceptance remains pending.
 The broader maintained local regression set also passes: 823 tests and 19
 subtests on macOS/Python 3.12. This is not a claim of full native-Linux or Unraid
 acceptance for the new race tests. No expensive CI/image build was triggered.
+
+Tower subsequently accepted `108b8a3` on both persistent lab paths: 53 focused
+checks passed on shfs and 53 on native Btrfs. The FIFO entry-substitution fix is
+therefore accepted on those paths; production ownership remains unverified.
+
+### Bounded startup marker validation
+
+The follow-up Gate 6 read-boundary review found the isolated runner still read
+its fixture marker by pathname before its already-safe descriptor check. The
+maintenance journal also used an unbounded pathname byte read after lstat.
+These could block on a substituted FIFO or consume an arbitrarily large marker.
+The isolated runner now relies on its existing bounded, nonblocking held-marker
+read, and its persistent lock open explicitly includes O_NONBLOCK. Maintenance
+marker validation now uses a held root, no-follow/nonblocking marker descriptor,
+a marker-length-plus-one read, before/after file identity checks and a root/entry
+binding recheck. Descriptor cleanup happens on every exit.
+
+Real child-process FIFO substitutions must stop before lock creation or operation
+entry and preserve original marker/database bytes. Oversized-marker tests require
+bounded descriptor reads and forbid pathname content reads. This is not an NFS
+service test, production ownership fence, restart permit or all-I/O timeout.
+Neither maintenance history nor production data is migrated or repaired. The
+new startup cases and the previously accepted copy cases pass 87 focused tests
+locally; Unraid acceptance for the marker increment remains pending.
+
+Final maintained local validation passes 827 tests and 19 subtests. Root-alias
+substitution retains the controlled RuntimeError contract and leaves the durable
+request pending. The targeted startup acceptance command selects 48 marker,
+maintenance-scope/controller/history and normal-lock reuse checks, avoiding a
+repeat of the already-accepted 53 copy checks and native-only rename tests.

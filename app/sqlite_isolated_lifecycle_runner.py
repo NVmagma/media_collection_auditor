@@ -26,7 +26,6 @@ def isolated_runner_lock(root):
     database = root / "state.db"
     if (not root.is_absolute() or root.resolve() != root or root.is_symlink()
             or not root.is_dir() or marker.is_symlink() or not marker.is_file()
-            or marker.read_text() != "DISPOSABLE ONLY\n"
             or database.is_symlink() or not database.is_file()):
         raise RuntimeError("Marked disposable root and database required")
     expected_root = os.stat(root, follow_symlinks=False)
@@ -47,7 +46,7 @@ def isolated_runner_lock(root):
         marker_content = b"DISPOSABLE ONLY\n"
         if os.pread(marker_fd, len(marker_content) + 1, 0) != marker_content:
             raise RuntimeError("Disposable marker changed while opening")
-        lock_fd = os.open(".sqlite_runner.lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW,
+        lock_fd = os.open(".sqlite_runner.lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK,
                           0o600, dir_fd=directory_fd)
         info = os.fstat(lock_fd)
         if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
