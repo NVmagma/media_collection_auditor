@@ -205,3 +205,18 @@ The storage-only variant is `scripts/sqlite_storage_copy_guest_lab.py`. Passing
 only one external domain adapter rejects before fixture creation; passing both
 uses the required-domain composer. Every checkpoint creates an independent
 fixture and observer; an earlier failed instance is never reset or reused.
+
+### Retained-attempt admission after controller or boot change
+
+`scripts/sqlite_unified_recovery_guest_lab.py` checks the four retained loss
+cases against freshly healthy Docker, NFS and storage observers. It explicitly
+samples the required-domain composer before trying admission, then requires the
+specific controller-session or Linux-boot scope exception. It never adopts a
+journal, recreates its binding, releases writers or starts collection. Retained
+media/control bytes must remain identical and no release receipt may appear.
+A different error is a failed rehearsal, not successful fail-closed evidence.
+
+`MaintenanceBootScopeChanged` is now a distinct `RuntimeError` subtype, preserving
+the existing error text and rejection behavior while allowing exact diagnosis.
+The recovery script creates new private guard mounts only in the separate VM;
+its observations are not evidence of automatic production restart inhibition.

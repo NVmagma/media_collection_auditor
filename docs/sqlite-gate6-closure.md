@@ -554,3 +554,13 @@ ownership permit, Unraid service installer, boot clearance or activation was
 introduced. Remaining closure work is actual host enforcement plus integrated
 boot/controller-recovery acceptance, followed by production lifecycle wiring
 under a separately approved activation plan.
+
+Retained-attempt recovery milestone: in the independent Linux VM, a replacement
+controller sampled freshly healthy Docker/NFS/storage domains and then tried all
+four retained loss cases. Each rejected specifically for controller-session
+change, including the already-committed media checkpoint. After an actual VM
+reboot, the same four cases rejected specifically for Linux boot change. Every
+retained media/control byte remained unchanged, collection was unreachable and
+no release receipt appeared. New private guard fixtures were explicitly prepared
+for the checks; this is scope-rejection evidence, not automatic boot fencing or
+restoration acceptance. Actual host enforcement/startup continuity remains open.

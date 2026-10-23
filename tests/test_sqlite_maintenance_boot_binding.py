@@ -37,7 +37,7 @@ def test_different_boot_retains_every_checkpoint_without_recovery(tmp_path, monk
         lambda: controller.fence_disposable_fixture(root, expected_revision=revision),
         lambda: controller.release_disposable_fixture(root, expected_revision=revision),
     ):
-        with pytest.raises(RuntimeError, match="boot binding changed"):
+        with pytest.raises(journal.MaintenanceBootScopeChanged, match="boot binding changed"):
             action()
     assert (root / "maintenance.db").read_bytes() == before
     assert not list(root.glob("*.fixture-receipt"))
@@ -66,7 +66,7 @@ def test_boot_drift_after_action_retains_intent_without_outcome(tmp_path, monkey
         monkeypatch.setattr(journal, "_linux_boot_id", lambda: BOOT_B)
         return receipt
     monkeypatch.setattr(controller, "_receipt", drift)
-    with pytest.raises(RuntimeError, match="boot binding changed"):
+    with pytest.raises(journal.MaintenanceBootScopeChanged, match="boot binding changed"):
         controller.fence_disposable_fixture(root, expected_revision=0)
     with sqlite3.connect(root / "maintenance.db") as db:
         assert db.execute("SELECT revision, phase FROM events ORDER BY revision").fetchall() == [

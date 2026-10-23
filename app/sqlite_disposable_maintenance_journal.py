@@ -57,6 +57,10 @@ def _linux_boot_id():
     return value
 
 
+class MaintenanceBootScopeChanged(RuntimeError):
+    """A retained fixture belongs to a different Linux boot."""
+
+
 class MaintenanceControllerSessionChanged(RuntimeError):
     """A new controller process cannot inherit a retained Linux fixture session."""
 
@@ -184,7 +188,7 @@ def _verify_binding(db, root, *, require_linux_boot=False, require_controller_se
             or not isinstance(boot_rows[0][1], str)):
         raise RuntimeError("Disposable journal boot binding invalid")
     if boot_rows[0][0] != _linux_boot_id():
-        raise RuntimeError("Disposable journal boot binding changed")
+        raise MaintenanceBootScopeChanged("Disposable journal boot binding changed")
     if boot_rows[0][1] != _linux_network_namespace():
         raise MaintenanceNetworkScopeChanged("Disposable journal network namespace changed")
     if require_controller_session:
