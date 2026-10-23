@@ -176,7 +176,25 @@ def run(root, binaries, image_archive, *, probe_runtime_route=False, integrate_c
             result['healthy_copy']=run_copy_case(root,observe_selected)
             def lose_policy():
                 policy.kill();policy.wait(timeout=5)
-            result['boundary_loss_copy']=run_copy_case(root,observe_selected,lose_boundary=lose_policy)
+            result['boundary_loss_copies']=[]
+            for loss_at in ('publication','quarantine','completion','collection'):
+                result['boundary_loss_copies'].append(run_copy_case(root,observe_selected,
+                    lose_boundary=lose_policy,loss_at=loss_at))
+                if loss_at!='collection':
+                    policy=subprocess.Popen([sys.executable,'-B','-m',
+                        'scripts.sqlite_docker_authorization_fixture','--root',str(control),
+                        '--resume-fixture'],env=env,stdout=log,stderr=log)
+                    processes.append(policy)
+                    deadline=time.monotonic()+10
+                    while True:
+                        if policy.poll() is not None or time.monotonic()>deadline:
+                            raise RuntimeError('Deny-only fixture policy reload failed')
+                        try:
+                            observe_selected()
+                            break
+                        except (OSError,RuntimeError,http.client.HTTPException):
+                            time.sleep(.1)
+
         result.update(status='private_guest_writer_quiescence_complete',
                       stopped_after_daemon_restart=True, fixture_bytes_unchanged=True)
         return result

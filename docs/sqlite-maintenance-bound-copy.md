@@ -126,3 +126,30 @@ platform capability skips on macOS. The real guest independently exercised the
 healthy Linux publication/quarantine path and the collection-time policy loss.
 Evidence was archived; the independent guest was powered off. No new Tower test
 or production service change was needed for these two cases.
+
+## Real policy loss at media-action boundaries
+
+The independent guest subsequently accepted real policy-process SIGKILL at the
+first existing binding check observing destination publication, source quarantine,
+or committed media checkpoint, as well as collection. No rename, hashing, SQLite
+commit or live witness syscall was replaced. Each case retains the original bytes
+at their appropriate source/quarantine location and leaves maintenance work_pending.
+Publication/quarantine retain pending media evidence; the committed-checkpoint
+case explicitly reports absent pending intent as not completion proof. None grants
+media-outcome verification, release or production authority after boundary loss.
+
+The updated `--integrate-copy` rehearsal reloads only the same persisted deny
+policy between cases. It never restarts the writer or clears an attempt. Same-
+controller retries were rejected as already attempted at all four real boundaries;
+all retained media/journal file bytes stayed unchanged. A later controller was
+separately rejected by session binding for all four retained attempts. The first
+later-controller checker incorrectly expected the same-controller error, and the
+first nested same-controller setup omitted its media directory; both harness
+expectations/setup were corrected without changing application guards. Failed
+fixture artifacts were retained.
+
+69 local focused checks passed with six existing macOS capability skips. Real
+Linux guest acceptance covers the action syscalls missing from those platform
+checks. Original/synthetic copy bytes and uncertainty evidence remain retained.
+These checks do not establish continuous exclusion between observations or combine
+all production Docker/NFS/host administrative controls into an ownership permit.

@@ -447,3 +447,13 @@ attempt, source/state and work_pending phase without release. The optional obser
 is deny-only, accepts no boolean authority and changes no production permission.
 This advances integrated component acceptance; full external ownership, Unraid/NFS
 controls and remaining action-boundary failure acceptance still block Gate 6.
+
+
+Combined selected-writer/copy acceptance now includes real policy death at the
+first live check after publication, quarantine and committed media checkpoint,
+in addition to collection. Original bytes and work_pending maintenance remain;
+committed media with no pending intent still grants no completion/release proof.
+Same-controller retries and different-controller adoption were rejected for all
+four cases without changing retained bytes. 69 local checks passed with six
+platform skips; real guest action syscalls supplied the Linux component evidence.
+Full host/share ownership and continuous production enforcement remain open.
