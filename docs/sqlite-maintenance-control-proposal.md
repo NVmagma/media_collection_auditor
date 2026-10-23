@@ -160,3 +160,32 @@ resumption after the private daemon restarts. Its own kernel avoided privileged
 nested workloads on a shared Docker Desktop kernel. No Tower changes occurred.
 See the guest rehearsal for exact scope; the complete production ownership model,
 boot routes, NFS and integrated SQLite verifier/recovery remain unaccepted.
+
+
+## Next host observation: actual listener routes
+
+The guest boot prototype now has real valid-hold/corrupt-hold reboot and policy
+process-death acceptance; see [its evidence](sqlite-docker-boot-guest-rehearsal.md).
+It is not an Unraid installer. The next host-adapter input is a fresh listener
+snapshot, since HTTP authorization cannot establish native gRPC exclusion.
+
+Run only in Tower's host terminal:
+
+```sh
+(
+  set -eu
+  cd /mnt/user/sqlite_lab_checkout
+  [ "$(git branch --show-current)" = feature/sqlite ]
+  git pull --ff-only origin feature/sqlite
+  bash scripts/sqlite_control_transport_probe.sh
+)
+```
+
+The probe queries TCP/Unix listeners with `ss` and prints rows attributed to
+Docker, containerd or BuildKit. It does not connect to those sockets, query the
+Docker API, display process command lines/environment, change permissions,
+reload/start/stop anything or load modules. Missing process names are unknown
+visibility, not evidence of no listener. It explicitly rejects a Docker-container
+execution context. The host snapshot is one architecture input, never an
+ownership permit, full namespace inventory or proof that existing streams have
+been revoked. No production changes are authorized by running it.
