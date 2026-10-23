@@ -20,7 +20,7 @@ disabled SQLite activation and deletion safeguards remain unchanged.
 
 | Requirement | Work remaining before acceptance |
 | --- | --- |
-| Enforced ownership and continuity | A real maintenance adapter must cover every relevant container/host/share writer, their storage aliases and pending writes, and administrative restart/recreation/boot paths. It must remain fenced across controller death; no receipt or operator boolean substitutes for enforcement. Mac NFSv3 evidence does not cover NFSv4/Linux LOCALIO. |
+| Enforced ownership and continuity | A real maintenance adapter must cover every relevant container/host/share writer, their storage aliases and pending writes, and administrative restart/recreation/boot paths. It must remain fenced across controller death; no receipt or operator boolean substitutes for enforcement. Separate Mac v3 and Linux guest v4.1/v4.2 evidence exists; Tower LOCALIO and production startup fencing remain unverified. |
 | Safe source-entry action under ownership | Bind verified source/destination objects to the accepted ownership boundary. Existing renameat2 no-replace protects the destination but is not inode-conditional source rename. Pre/post checks alone do not eliminate source substitution. Retain originals and pending intents on uncertainty. |
 | Integrated crash/recovery acceptance | Rehearse the accepted adapter and verifier together, including boundary loss, queued client writes, source substitution and unknown commit outcomes. Recovery must retain evidence and never automatically reopen writers or clear intents from a matching path/hash alone. |
 
@@ -401,3 +401,13 @@ after private daemon restart, with denied starts and unchanged fixture bytes;
 113 focused local checks passed. This strengthens a required observation but
 is not a fence or ownership receipt. Boot ordering, all control routes and
 integration with the actual media boundary remain necessary for Gate 6 closure.
+
+
+The [independent boot rehearsal](sqlite-docker-boot-guest-rehearsal.md) now
+accepts actual guest reboot with persisted deny policy before private Engine
+startup: selected writer stays stopped, starts deny and bytes remain unchanged.
+Policy SIGKILL stops the bound engine. A second reboot with corrupt hold blocks
+both services with unchanged media bytes. 85 focused local checks passed; fixture
+units were disabled and the independent VM powered off. This is real prototype
+boot/failure evidence, not Unraid startup/management acceptance or complete writer
+exclusion. No production installer, release path or ownership permit is added.
