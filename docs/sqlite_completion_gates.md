@@ -52,6 +52,27 @@ Gate 6 closes only after the production enforcement and verifier requirements
 above are implemented and their failure/recovery behavior is accepted. No
 reliable count of remaining test rounds or completion percentage is available.
 
+## Gate 6 versus Gate 7 after the widget rollout
+
+Gate 7's isolated all-or-nothing clock/intent/Arr reconciliation tests already
+exist. Its production acceptance cannot close ahead of Gate 6's trusted verifier.
+Moving the numbering forward would not resolve the missing ownership proof.
+The working JSON read-only API, poster cards and Jellyfin navigation do not
+supply a move permit or change this dependency.
+
+The deferred scope remains Tower kernel NFS-client load/mount/cache testing.
+Non-deferred Gate 6 work includes source-entry race rejection, production
+verifier design, complete container/admin restart controls and live read-only
+Jellyfin compatibility under a separately reviewed media-write fence. None of
+these controls is established by a passing widget or a stopped container.
+Do not operate production services merely to exercise them.
+
+The current increment fixes a concrete stat/open race in the disposable copy
+verifier: regular-file reads become nonblocking and recheck descriptor type.
+Real FIFO/symlink/directory substitutions and a post-intent failure are tested
+in bounded children. No production execution is wired and no gate is newly
+complete. See the latest subsection in the [move trust contract](sqlite-production-move-trust-contract.md).
+
 ## Next engineering task
 
 Extend the disposable witnessed-move contract into a production-reviewed,

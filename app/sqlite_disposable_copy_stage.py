@@ -84,9 +84,10 @@ def _manifest(directory_fd, prefix=""):
             finally:
                 os.close(fd)
         elif stat.S_ISREG(info.st_mode):
-            fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=directory_fd)
+            fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory_fd)
             try:
-                if _identity(os.fstat(fd)) != _identity(info):
+                opened = os.fstat(fd)
+                if not stat.S_ISREG(opened.st_mode) or _identity(opened) != _identity(info):
                     raise RuntimeError("Source file changed during verification")
                 digest = hashlib.sha256()
                 size = 0
@@ -122,9 +123,10 @@ def _copy_tree(source_fd, destination_fd):
             finally:
                 os.close(source_child)
         elif stat.S_ISREG(info.st_mode):
-            source_file = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=source_fd)
+            source_file = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=source_fd)
             try:
-                if _identity(os.fstat(source_file)) != _identity(info):
+                opened = os.fstat(source_file)
+                if not stat.S_ISREG(opened.st_mode) or _identity(opened) != _identity(info):
                     raise RuntimeError("Source file changed during copy")
                 destination_file = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
                                            0o600, dir_fd=destination_fd)

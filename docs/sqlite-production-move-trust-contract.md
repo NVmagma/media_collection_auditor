@@ -529,3 +529,30 @@ cooperating-application gap and rejects unsupported rescue backends. See the
 establish control over Arr, share clients or privileged administrators, nor does
 the isolated SQLite root lock become a production coordination mechanism.
 Gate 6 remains open and all implementation blockers remain authoritative.
+
+### Nonblocking reads after file-entry substitution
+
+A Gate 6 review outside the deferred NFS work found that the copy manifest and
+copy loop checked a directory entry as regular, then opened it without
+`O_NONBLOCK`. Replacement by a FIFO in that window could wait indefinitely for a
+writer instead of returning an uncertain/pending failure. Both opens now use
+`O_NOFOLLOW | O_NONBLOCK` and recheck the opened descriptor's regular-file type
+and captured identity before reading or creating a destination payload.
+
+Disposable child-process tests substitute a real FIFO, symlink or directory
+between stat and open, at root and nested paths, during hashing, copying and
+metadata verification. Each must reject without a FIFO writer and retain the
+original fixture bytes. A separate durable-intent case verifies unchanged clocks,
+no Arr work, no verified-copy claim and retained intent/artifacts after the race.
+Children have a bounded parent-side timeout so a regression cannot hang pytest.
+
+This narrows a concrete source-entry race failure mode. It does not prevent
+arbitrary writer mutation, solve atomic source-entry fencing, bound all regular
+file/storage I/O, authorize source cleanup or establish production ownership.
+No NFS operation, production runner, deletion safeguard or backend selection is
+changed. Local focused validation: 53 tests passed on macOS/Python 3.12; persistent
+Unraid shfs/native acceptance remains pending.
+
+The broader maintained local regression set also passes: 823 tests and 19
+subtests on macOS/Python 3.12. This is not a claim of full native-Linux or Unraid
+acceptance for the new race tests. No expensive CI/image build was triggered.
