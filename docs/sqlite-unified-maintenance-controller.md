@@ -82,3 +82,32 @@ before proposing Tower installation:
 
 There is no production install, startup edit, socket permission change or service
 control in this contract. No gate is marked complete from these design choices.
+
+## Required-domain disposable admission implementation
+
+`app/sqlite_unified_disposable_controller.py` now supplies one admission wrapper
+for the marked disposable copy flow. It requires callable Docker, NFS and
+host/storage adapters; a caller cannot replace the combined checker with the old
+single observer argument. No host backend or installer is provided by this wrapper.
+
+The combined checker in `app/sqlite_disposable_boundary_set.py` samples all three
+domains and revisits them in reverse order. Each adapter must return None or raise;
+booleans and receipt objects deny rather than act as authority. A reversed/invalid
+clock or a completed observation sequence exceeding five seconds denies. Backend
+calls must still have their own bounded I/O: the elapsed-time check does not
+interrupt a hung callback. Failure, interruption, concurrency or recursive use
+latches that checker instance closed. It never automatically resumes after an
+adapter later returns a good result and it returns no permit or receipt.
+
+This latch is in-memory, not new durable ownership evidence. Existing one-shot
+journal/session and writeback-hold checks remain authoritative and are neither
+cleared nor replaced. A fresh checker or no-op fixture adapter cannot establish
+production ownership; production paths remain unwired, and release, production
+and complete writer-exclusion flags remain false. Repeated observations do not
+close the interval requiring an actual enforced fence.
+
+Local integration checks confirm that failure of any one domain blocks the real
+disposable journal/media wrapper before collection and attempt creation, preserving
+source state. Other tests cover missing adapters, second-pass drift, receipt
+rejection, clock reversal/expiry, interruption and recursive use. These use
+synthetic adapters and are not new host-enforcement acceptance.

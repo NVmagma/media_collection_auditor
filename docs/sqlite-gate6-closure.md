@@ -475,3 +475,11 @@ observation returns. Replaced media/controller locks block before attempt bindin
 or collection. 65 focused local checks passed with six existing platform skips.
 This is an ordering fix and integration contract, not a production adapter or
 accepted Unraid/NFS startup fence. No deployment authority is added.
+
+
+A unified disposable admission wrapper now requires Docker, NFS and host/storage
+checks together, including reverse rechecks and a latched failed checker. One
+failed domain blocks before collection or attempt creation; adapter booleans and
+receipts are not authority. Existing durable journal/hold/session checks stay
+intact. This combines the control interfaces, not production enforcement: real
+host adapters, complete scope, continuity and clearance remain unimplemented.
