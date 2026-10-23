@@ -1180,3 +1180,13 @@ See the [isolated Jellyfin compatibility lab](sqlite-jellyfin-readonly-lab.md).
 Local protocol and inert Docker-policy tests pass; real Jellyfin/Docker acceptance
 is pending on Tower. Gate 6 remains open; Gate 7 production acceptance still
 depends on an accepted verifier and ownership model.
+
+## Real Jellyfin compatibility accepted; restart-policy fixture pending
+
+Tower's `jellyfin-ro.s4hBBv` passed initial and post-restart protection/favorite
+reads, EROFS media denial and unchanged-byte checks on cached Jellyfin 12.2.0.
+This closes that bounded Gate 6 compatibility check, not external-writer ownership.
+The next [restart-policy fixture](sqlite-restart-policy-lab.md) tests only a new
+container's automatic process-restart policy after controller death. Tower
+acceptance is pending. Administrative starts/recreation, production restart
+fencing, atomic source-entry fencing and deferred NFS client tests remain open.

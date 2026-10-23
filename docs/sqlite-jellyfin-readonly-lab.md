@@ -122,3 +122,12 @@ before dispatch. A request-level test simulates Authorization taking precedence
 and verifies one dispatch, not a repeated setup write. Twenty focused local
 protocol/policy tests pass. A new fixture must verify actual installed-server
 acceptance; the partially initialized previous lab is retained, never resumed.
+
+### Tower acceptance
+
+The fresh `jellyfin-ro.s4hBBv` lab passed with cached Jellyfin 12.2.0 image
+`sha256:b603f4b6dede2e060e8bb34e2dc5234926c1ced89d856f227c4a58749719b2a9`.
+Both initial and post-restart checks read fresh protection/favorite signals,
+received EROFS for the fixed media write, and verified unchanged fixture bytes.
+This accepts the tested read-only compatibility path. Production writer
+exclusion, NFS clients and administrative restart fencing remain unverified.
