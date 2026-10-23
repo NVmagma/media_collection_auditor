@@ -19,7 +19,7 @@ reference=$(docker inspect --type container --format '{{.Config.Image}}' Jellyfi
 case "$reference" in jellyfin/jellyfin:*|jellyfin/jellyfin@sha256:*) :;; *)
   printf '%s\n' 'blocked: fixture adapter requires the cached official Jellyfin image' >&2; exit 2;; esac
 lab=$(mktemp -d "$parent/jellyfin-ro.XXXXXX")
-mkdir "$lab/media" "$lab/config" "$lab/control" "$lab/media/Movies"
+mkdir "$lab/media" "$lab/config" "$lab/control" "$lab/cache" "$lab/media/Movies"
 mkdir "$lab/media/Movies/Fixture Movie (2024)"
 printf 'DISPOSABLE JELLYFIN READONLY FIXTURE\n' > "$lab/media/.fixture-only"
 cat > "$lab/media/Movies/Fixture Movie (2024)/movie.nfo" <<'XML'
@@ -85,9 +85,10 @@ client prepare
 server_id=$(docker create --pull=never --network none --read-only --cap-drop ALL \
   --restart no --security-opt no-new-privileges --memory 768m --cpus 1 --pids-limit 256 \
   --label "org.nvmagma.auditor.fixture=$label" \
-  --tmpfs /tmp:rw,nosuid,nodev,size=64m --tmpfs /cache:rw,nosuid,nodev,size=128m \
+  --tmpfs /tmp:rw,nosuid,nodev,size=64m \
   --mount "type=bind,src=$lab/media,dst=/media,readonly" \
   --mount "type=bind,src=$lab/config,dst=/config" \
+  --mount "type=bind,src=$lab/cache,dst=/cache" \
   --entrypoint /usr/bin/timeout "$jellyfin_image" --kill-after=5s 300s /jellyfin/jellyfin \
   --datadir /config/data --configdir /config/config --cachedir /cache \
   --logdir /config/log --ffmpeg /usr/lib/jellyfin-ffmpeg/ffmpeg)

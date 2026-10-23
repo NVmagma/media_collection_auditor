@@ -30,7 +30,8 @@ paste the credentials or unredacted server configuration/logs.
 - Create one new label-bound Jellyfin server with network `none`, no published
   ports, read-only root/media, dropped capabilities, no privileged/devices/socket
   access, capped memory/CPU/PIDs and a five-minute internal lifetime per start.
-  Its configuration is a fresh writable lab bind; cache and temp are tmpfs.
+  Its configuration and cache use fresh writable lab binds; temp remains a
+  small tmpfs. No production cache/configuration is mounted.
 - A fixed-loopback Python client shares only that new server's network namespace.
   It reads the app collector/client source and synthetic media read-only, and
   writes only its new control directory. It accepts no target URL or real API key.
@@ -88,3 +89,23 @@ before cleanup on failure. Original fixture application logs may also remain
 under its fresh config/log directory. Do not rerun or change production controls
 until the available fixture diagnostics have been reviewed. Six launcher-policy
 tests pass for the diagnostic refinement, including label-loss refusal.
+
+
+### Startup capacity failure diagnosed
+
+The retained Tower fixture log identifies Jellyfin 12.2.0 and a fatal cache
+capacity check: the fixture's 128 MiB cache tmpfs was below its required 2 GiB
+free space. The data path had already passed with ample space. The swap-limit
+warning was not this fatal error, and increasing the readiness timeout would
+not address it.
+
+The launcher now binds a new empty `cache` directory inside the exclusive lab
+instead of mounting a small cache tmpfs. This exposes the backing filesystem's
+actual free space without reserving gigabytes of RAM or disabling the server's
+capacity check. Media/root read-only flags, dropped capabilities, memory/CPU/PID
+limits, isolated networking, deadlines and new-ID-only restart/cleanup remain.
+The [upstream storage helper](https://github.com/jellyfin/jellyfin/blob/master/Jellyfin.Server.Implementations/StorageHelpers/StorageHelper.cs)
+checks data, cache and program-data space; those fixture paths now all use the
+new disk-backed configuration/cache area. Temp is separate and remains bounded.
+Installed-version behavior after this fix still requires a fresh fixture run.
+Retain the failed lab and do not resume its partially initialized server.

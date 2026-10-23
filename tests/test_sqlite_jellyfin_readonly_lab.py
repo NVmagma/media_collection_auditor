@@ -74,9 +74,11 @@ def test_only_new_label_bound_server_has_lifecycle_controls(tmp_path):
     assert '--privileged' not in create and '-p' not in create and '--publish' not in create
     assert '--entrypoint' in create and '/usr/bin/timeout' in create and '300s' in create
     mounts = [create[i+1] for i, value in enumerate(create[:-1]) if value == '--mount']
-    assert len(mounts) == 2
+    assert len(mounts) == 3
     assert any('dst=/media,readonly' in mount for mount in mounts)
     assert all(str(tmp_path) in mount for mount in mounts)
+    assert any('dst=/cache' in mount and 'readonly' not in mount for mount in mounts)
+    assert not any(value.startswith('/cache:') for value in create)
     clients = [call for call in calls if call[0] == 'run' and '--phase' in call]
     assert [call[-1] for call in clients] == ['prepare', 'setup', 'check']
     for call in clients[1:]:
