@@ -15,7 +15,7 @@ from app.sqlite_disposable_nfs_backend import MARKER, _kernel_state, held_dispos
 GUARD_DIGEST='8a8cb6fa489a472e288fc1619e4bf9a2d2231282822c7c1952dfdd4f928022d2'
 
 
-def run(root):
+def prepare_guard_fixture(root):
     require_guest()
     _kernel_state()  # Refuse a running/exporting guest; never stop it here.
     root=Path(root)
@@ -32,6 +32,11 @@ def run(root):
         (root/name).touch()
         subprocess.run(['mount','--bind',str(root/'guard-source'),str(root/name)],check=True,capture_output=True)
         subprocess.run(['mount','-o','remount,bind,ro,nosuid,nodev',str(root/name)],check=True,capture_output=True)
+    return root
+
+
+def run(root):
+    root = prepare_guard_fixture(root)
     with held_disposable_nfs_observer(root=root,guard_sha256=GUARD_DIGEST) as verify:
         verify()
         denied=0

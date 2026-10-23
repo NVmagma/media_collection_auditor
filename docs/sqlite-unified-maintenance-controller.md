@@ -179,3 +179,29 @@ and rejects baseline mount detachment. A held baseline descriptor makes ordinary
 unmount busy, so that specific fixture loss uses lazy detachment of its newly
 created private mount. Namespace exit removes remaining fixture mounts. No host
 service, exports, kernel modules or production paths are controlled.
+
+### Combined live-observer copy rehearsal
+
+`scripts/sqlite_unified_copy_guest_lab.py` connects the selected private Docker
+writer observer, the live NFS fixture observer and the live storage observer to
+the actual maintenance-bound disposable copy. The Docker fixture must already be
+fenced and running on its private socket. The script never starts/stops that
+daemon or changes its policy. It requires its new root beneath the private
+writer's media directory, checks the selected writer before creating NFS mount
+fixtures, and runs inside a private mount namespace of the dedicated Linux VM.
+The NFS server must already be stopped with no exports. Dispatch guards cover
+new fixture paths, not real Unraid service entrypoints.
+
+The independent VM accepted the healthy copy, then rejected same-inode stage
+mount overlays at collection, publication, source quarantine and final completion.
+Originals and attempt evidence were retained, retries changed no retained bytes,
+and automatic release stayed disabled. The final case includes an already
+committed SQLite media checkpoint: that checkpoint alone is not accepted as a
+verified maintenance outcome after boundary loss. No external Jellyfin/Arr
+collection was performed. These observations still do not establish complete
+host writer coverage, real Unraid startup fencing or production ownership.
+
+The storage-only variant is `scripts/sqlite_storage_copy_guest_lab.py`. Passing
+only one external domain adapter rejects before fixture creation; passing both
+uses the required-domain composer. Every checkpoint creates an independent
+fixture and observer; an earlier failed instance is never reset or reused.

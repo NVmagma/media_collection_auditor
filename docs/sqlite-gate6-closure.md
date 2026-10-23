@@ -540,3 +540,17 @@ capture-time root replacement gap by requiring the marker's held root descriptor
 to match the captured root directory/mount. This satisfies the narrow Linux
 mount-drift acceptance item above, not host writer exclusion or production move
 admission. Full integrated host enforcement and boot/recovery closure remain open.
+
+Combined live-domain milestone: the separate Linux VM ran the real disposable
+copy with selected private Docker observations, stopped/export-empty NFS and
+private read-only dispatch guards, and held storage/mount observations together.
+The healthy copy completed with originals retained. Storage mount-ID loss at
+collection, publication, quarantine and completion blocked verified outcomes,
+retained attempts/originals and rejected retry without byte changes. In the last
+case SQLite had committed, but that did not grant release or verified outcome.
+The same four loss cases also passed with storage alone. Fixture guards and
+synthetic collection/journal setup remain explicit limitations; no production
+ownership permit, Unraid service installer, boot clearance or activation was
+introduced. Remaining closure work is actual host enforcement plus integrated
+boot/controller-recovery acceptance, followed by production lifecycle wiring
+under a separately approved activation plan.
