@@ -493,3 +493,12 @@ bound; read timeouts and oversized/ambiguous responses deny. 98 local checks pas
 with six platform skips. This supplies a real Docker observation adapter for the
 unified interface, not complete production enforcement or inventory ownership.
 NFS restart/boot and host/storage bindings remain necessary before Gate 6 closes.
+
+
+Pinned startup sources were rechecked before choosing the production NFS design.
+A plugin-only or go-only fence does not cover Safe Mode. The
+[NFS host change draft](sqlite-nfs-host-fence-change-draft.md) identifies a
+conditional persistent-disable/runtime-guard approach, backup/recovery requirements
+and the missing implementation/acceptance. Administrative trust scope is a pending
+design decision; no host-root bypass exclusion is silently assumed. No installer,
+configuration change, service action or production readiness is introduced.
