@@ -228,3 +228,32 @@ that container's view only; the wrong-context result remains explicit. This
 observation never authorizes enforcement. No permission changes, startup edits,
 service controls or production work are introduced. Host remediation must be a
 separately reviewed change package with explicit operator approval.
+
+
+### Live socket observation and retained-attempt review
+
+Tower subsequently reported the live Docker socket as mode 660, owner root,
+group docker. It is not currently world-writable. The go-script chmod intent
+must not be substituted for this observed live state; why the states differ
+was not established. Docker-group membership, socket-mounted containers, open
+connections and recreation remain control routes to review. No chmod is needed
+merely to accept this observation.
+
+The detached maintenance reviewer now validates the copy binding's object type,
+row cardinality, canonical absolute path syntax, nonnegative integer identities
+and safe operation ID. It never follows the stored path or opens the associated
+media database. Malformed/view/empty/duplicate bindings remain explicit blockers.
+Paths, inode/device identifiers and operation IDs are not returned in the report.
+
+A structurally valid binding reports only identifiers, not ownership. The
+checkpoint distinguishes work_pending from outcomes_recorded, with media outcome
+not independently verified and retry/original-retention authority always false.
+In particular, the media checkpoint may commit while the maintenance phase stays
+work_pending: the injected completion-checkpoint fault test requires the report
+to remain uncertain and refuse automatic retry. No history record proves current
+media bytes or permits a resume. Source database bytes and sidecars remain
+untouched by detached review.
+
+This improves recovery evidence for Gate 6's integrated acceptance requirement;
+it does not implement the missing host fence or close the gate. The existing
+maintenance-bound-copy focused launcher includes these regressions on both paths.

@@ -63,6 +63,9 @@ def test_collection_failure_retains_binding_and_blocks_second_attempt(setup):
     assert journal.inspect_disposable_journal(control)['phase']=='work_pending'
     review=review_disposable_maintenance(control)
     assert review['maintenance_copy_attempt_present'] is True
+    assert review['copy_attempt']['binding_status']=='structurally_valid_identifiers_only'
+    assert review['copy_attempt']['checkpoint']=='work_pending'
+    assert review['copy_attempt']['retry_authorized'] is False
     assert review['resume_authorized'] is False
     with pytest.raises(RuntimeError,match='already attempted'):
         invoke(setup,lambda *a:pytest.fail('Retained attempt cannot retry'))
@@ -163,6 +166,11 @@ def test_completion_crash_never_replays_or_releases_maintenance(setup,fault):
     assert 'Injected completion crash' in str(caught.value)
     assert journal.inspect_disposable_journal(control)['phase']=='work_pending'
     assert not (control/'release.fixture-receipt').exists()
+    review=review_disposable_maintenance(control)
+    assert review['copy_attempt']['checkpoint']=='work_pending'
+    assert review['copy_attempt']['media_outcome']=='not_independently_verified'
+    assert review['copy_attempt']['retry_authorized'] is False
+    assert review['resume_authorized'] is False
     state=GuardedSQLiteStateStore(database).load_with_revision()[0]
     if fault=='after_completion_checkpoint':
         assert FOLDER in state['queued'] and 'sqlite_pending_operations' not in state

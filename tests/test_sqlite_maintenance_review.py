@@ -146,3 +146,55 @@ def test_cli_zero_exit_only_means_history_was_read_not_clearance(tmp_path, capsy
     assert report["production_activation"] == "disabled"
     assert report["blockers"]
     assert evidence(root) == before
+
+
+@pytest.mark.parametrize('shape', ['valid', 'empty', 'duplicate', 'view', 'bad_schema',
+                                  'relative', 'parent', 'negative', 'unsafe_operation'])
+def test_retained_copy_binding_is_redacted_and_never_followed(tmp_path, shape):
+    root = pending(tmp_path)
+    secret = str(tmp_path / 'private-media-never-created')
+    with sqlite3.connect(root / 'maintenance.db') as db:
+        if shape == 'view':
+            db.execute("CREATE VIEW maintenance_copy_binding AS SELECT 'private' AS root")
+        elif shape == 'bad_schema':
+            db.execute('CREATE TABLE maintenance_copy_binding(secret TEXT)')
+        else:
+            db.execute('CREATE TABLE maintenance_copy_binding '
+                       '(root, root_device, root_inode, database_device, database_inode, operation_id)')
+            row = (secret, 1, 2, 3, 4, 'secret-operation')
+            if shape == 'relative': row = ('relative', *row[1:])
+            if shape == 'parent': row = ('/private/../media', *row[1:])
+            if shape == 'negative': row = (secret, -1, *row[2:])
+            if shape == 'unsafe_operation': row = (*row[:5], '../unsafe')
+            if shape != 'empty':
+                db.execute('INSERT INTO maintenance_copy_binding VALUES (?,?,?,?,?,?)', row)
+            if shape == 'duplicate':
+                db.execute('INSERT INTO maintenance_copy_binding VALUES (?,?,?,?,?,?)', row)
+    before = evidence(root)
+    report = review.review_disposable_maintenance(root)
+    assert report['copy_attempt']['binding_status'] == (
+        'structurally_valid_identifiers_only' if shape == 'valid' else 'invalid_or_unavailable')
+    assert report['copy_attempt']['retry_authorized'] is False
+    assert report['copy_attempt']['original_retention_verified'] is False
+    assert report['copy_attempt']['media_outcome'] == 'not_independently_verified'
+    assert report['resume_authorized'] is False
+    assert secret not in json.dumps(report)
+    assert 'secret-operation' not in json.dumps(report)
+    assert evidence(root) == before
+    assert not Path(secret).exists()
+
+
+@pytest.mark.parametrize('phase,valid,expected', [
+    ('work_pending', True, 'work_pending'),
+    ('outcomes_verified', True, 'outcomes_recorded'),
+    ('released', True, 'unexpected_maintenance_phase'),
+    ('outcomes_verified', False, 'unverified')])
+def test_copy_checkpoint_never_claims_independent_media_verification(phase, valid, expected):
+    with sqlite3.connect(':memory:') as db:
+        db.execute('CREATE TABLE maintenance_copy_binding '
+                   '(root, root_device, root_inode, database_device, database_inode, operation_id)')
+        db.execute("INSERT INTO maintenance_copy_binding VALUES ('/fixture',1,2,3,4,'copy')")
+        report = review._copy_attempt(db, phase, valid)
+    assert report['checkpoint'] == expected
+    assert report['media_outcome'] == 'not_independently_verified'
+    assert report['retry_authorized'] is False

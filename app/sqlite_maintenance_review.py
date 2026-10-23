@@ -5,6 +5,8 @@ execution rights. Scope drift can be reported without accepting it for use.
 """
 from contextlib import closing
 import os
+from pathlib import PurePosixPath
+import re
 import sqlite3
 import stat
 
@@ -74,6 +76,44 @@ def _runtime_scope(db):
     return result
 
 
+def _copy_attempt(db, phase, history_valid):
+    """Validate detached binding shape, without following its untrusted paths.
+
+    A recorded checkpoint is not independent evidence of a media commit. Never
+    open a media database or filesystem path supplied by the retained journal.
+    """
+    kinds = db.execute("SELECT type FROM sqlite_master WHERE lower(name)=?",
+                       ("maintenance_copy_binding",)).fetchall()
+    if not kinds:
+        return None
+    result = {"binding_status": "invalid_or_unavailable",
+              "checkpoint": "unverified", "media_outcome": "not_independently_verified",
+              "retry_authorized": False, "original_retention_verified": False}
+    if kinds != [("table",)]:
+        return result
+    try:
+        rows = db.execute("SELECT root, root_device, root_inode, database_device, "
+                          "database_inode, operation_id FROM maintenance_copy_binding LIMIT 2").fetchall()
+    except sqlite3.Error:
+        return result
+    if len(rows) != 1:
+        return result
+    root, *remaining = rows[0]
+    identities, operation = remaining[:4], remaining[4]
+    if (not isinstance(root, str) or not root.startswith('/') or '\x00' in root
+            or str(PurePosixPath(root)) != root or '..' in PurePosixPath(root).parts
+            or not all(type(value) is int and value >= 0 for value in identities)
+            or not isinstance(operation, str) or operation in ('.', '..')
+            or not re.fullmatch(r'[A-Za-z0-9_.-]{1,128}', operation)):
+        return result
+    result['binding_status'] = 'structurally_valid_identifiers_only'
+    if history_valid:
+        result['checkpoint'] = ('outcomes_recorded' if phase == 'outcomes_verified'
+                                else 'work_pending' if phase == 'work_pending'
+                                else 'unexpected_maintenance_phase')
+    return result
+
+
 def review_disposable_maintenance(root):
     """Report evidence even after scope drift; NEVER return resume clearance.
 
@@ -105,10 +145,13 @@ def review_disposable_maintenance(root):
             report.update(revision=revision, phase=phase, history_valid=True)
         except (sqlite3.Error, RuntimeError):
             report["blockers"].append("fixture_history_invalid_or_unavailable")
-        if db.execute("SELECT 1 FROM sqlite_master WHERE lower(name)=? LIMIT 1",
-                      ("maintenance_copy_binding",)).fetchone():
+        attempt = _copy_attempt(db, report['phase'], report['history_valid'])
+        if attempt is not None:
             report["maintenance_copy_attempt_present"] = True
+            report["copy_attempt"] = attempt
             report["blockers"].append("retained_media_attempt_requires_review")
+            if attempt['binding_status'] == 'invalid_or_unavailable':
+                report['blockers'].append('retained_media_binding_invalid_or_unavailable')
         if journal._client_writeback_uncertain(db):
             report["client_writeback_uncertain"] = True
             report["blockers"].append("client_writeback_outcome_uncertain")
