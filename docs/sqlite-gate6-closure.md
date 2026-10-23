@@ -512,3 +512,13 @@ intervening edit. Binding/content drift, unsafe file types and plan overwrites
 block, with original source bytes retained. 87 focused checks passed with six
 platform skips and the synthetic CLI passed. This is backup/review preparation,
 not settings application, a live NFS fence or production ownership acceptance.
+
+
+The live NFS observer now binds actual Linux boot/network/mount scope, stopped
+kernel threads, empty kernel exports, disabled fixture preferences and both exact
+read-only guard mounts/content. Real separate-VM acceptance denied 12 dispatches,
+blocked guard mount-policy loss and refused automatic observer recovery. This
+extracts another control-domain observer, not a Tower fence installer. The global
+Unraid enable form is distinct from nfsSettings protocol/thread apply; no unsafe
+HTTP/configuration shortcut is added. Production settings/boot and host/storage
+ownership integration remain open.

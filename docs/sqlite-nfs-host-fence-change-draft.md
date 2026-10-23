@@ -113,3 +113,49 @@ This implements backup/candidate preparation only. The supported Unraid settings
 operation, held-binding atomic application/recovery, runtime service fence and
 all-mode boot acceptance remain required. No raw edit of var.ini or share.cfg,
 service stop/reload, plugin installation or Tower test is requested by this step.
+
+## Global settings operation boundary confirmed
+
+The pinned [NFS management page](https://github.com/unraid/webgui/blob/26eb1b5c1d547ddbf44a38e63956ba24f659098b/emhttp/plugins/dynamix/NFS.page)
+has separate global enable and protocol/thread forms. The global preference uses
+the manager's `/update.htm` handler. The reviewed `nfsSettings apply` helper only
+writes protocol/thread settings and conditionally restarts an already-running
+service; it is not a substitute for globally disabling NFS.
+
+No public page source establishes the compiled manager handler's full transaction,
+CSRF/authentication or failure semantics. Do not synthesize a privileged POST,
+source shell configuration or edit the live manager state as a shortcut. The
+initial package should use an explicit approved administrator settings step until
+that integration has its own accepted adapter. Normal/Safe Mode startup and live
+manager behavior still need actual Unraid acceptance. No setting is changed by
+reading this draft or running the observer below.
+
+## Live NFS observation backend accepted in the separate VM
+
+`app/sqlite_disposable_nfs_backend.py` now reads actual Linux boot/network/mount
+scope, zero NFSD threads and empty kernel exports. It additionally requires both
+marked-fixture preferences explicitly disabled, both guard files matching an
+explicit digest, and exact read-only/nosuid/nodev bind-mount entries. Root, marker,
+preferences, guard identities and mount IDs remain bound and are sampled again.
+Any change, error or interruption latches that observer failed. It does not start,
+stop, export, install, restore or clear anything and returns no ownership permit.
+
+The reproducible `scripts/sqlite_nfs_backend_guest_lab.py` runs only in the dedicated
+separate VM, under a fresh private mount namespace. It refuses a running/exporting
+NFS baseline rather than stopping it. Package services were explicitly stopped in
+that disposable VM before rehearsal. It mounts only new fixture targets; all 12
+fixed dispatch attempts returned the reviewed denial. A controlled read-write
+remount was rejected, and remounting read-only did not revive the failed observer.
+Real guest kernel state and mountinfo were used, not caller-provided receipts.
+
+The private targets are not Unraid's live rc.nfsd aliases, and the preferences are
+synthetic lab files. Therefore this is backend/mechanism acceptance, not host
+installation, complete NFS restart inhibition, writeback clearance or proof of
+production boot coverage. The existing durable client-writeback hold remains
+separate and authoritative. The unified controller still needs the real host
+installer/setting operation and complete host/storage ownership binding.
+
+Validation for this backend increment: 96 focused local checks passed with six
+existing macOS capability skips. The private guest rehearsal passed with actual
+mountinfo/kernel observations. Fixture evidence was archived and the separate VM
+powered off. Tower was never contacted; no host setting or service was changed.
