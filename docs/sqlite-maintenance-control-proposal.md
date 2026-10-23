@@ -19,12 +19,22 @@ No permission remediation is part of this proposal.
 
 Evaluate a host-side Docker authorization plugin, not a proxy that leaves the
 original socket accessible. Docker documents request/response authorization at
-its daemon boundary and that adding a plugin requires a daemon restart:
+its daemon HTTP boundary:
 [Docker authorization plugins](https://docs.docker.com/engine/extend/plugins_authorization/).
 This is a candidate, not a claim of compatibility with Tower or comprehensive
 container restart inhibition. Check installed daemon version, existing authorization
 plugins and live-restore configuration before implementing or planning deployment.
-An existing authorization policy must not be replaced or bypassed.
+An existing authorization policy must not be replaced or bypassed. The cited
+page contains conflicting restart/loading statements; determine the supported
+configuration/reload procedure for the installed Engine instead of assuming
+that installation is restart-free. No daemon reconfiguration is authorized.
+
+Docker explicitly excludes native gRPC and upgraded gRPC calls from this
+authorization mechanism, and does not reauthorize established hijacked streams.
+Those routes must be independently denied or shown unavailable in the accepted
+deployment. A policy that only denies /grpc at HTTP request review is not proof
+of native gRPC exclusion. Until that gap is addressed, this candidate cannot
+establish the complete daemon control boundary.
 
 The intended maintenance policy denies operations capable of starting/recreating
 writers, exec/attach streams, filesystem writes and control/policy changes. Permit
