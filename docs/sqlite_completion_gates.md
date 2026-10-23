@@ -39,7 +39,7 @@ control. More test cases alone cannot complete this gate.
 | Preserve uncertainty across controller failure | Accepted durable intent, boot/network checks, later-session rejection and read-only review |
 | Exercise NFS pause and known restart entry points | Accepted private NFSv3 RPC pause/crash/guard fixtures; no production restart fence |
 | Keep reads available while denying container media writes | Accepted on shfs/native: fixture reads, EROFS media denial and container restart; live Jellyfin and full deployment controls remain unverified |
-| Enforce complete external-writer exclusion | Unimplemented for production: boot-mode restart controls, NFSv4/existing-client caches, all overlapping container/host routes and administrative bypasses need an accepted model |
+| Enforce complete external-writer exclusion | Unimplemented for production: guest boot, real v3/v4 client recovery and disposable copy integration are accepted components; Unraid startup/NFS fences, overlapping host/container routes and the full ownership boundary remain open |
 | Trust production move completion and recovery | Depends on accepted ownership controls, atomic source-entry fencing, fresh real protections and independent outcome verification; no production permit/clearance API |
 
 The selected-field mount review has been received. Dashboard pause is accepted

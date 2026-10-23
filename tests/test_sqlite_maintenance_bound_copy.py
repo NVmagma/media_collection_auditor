@@ -403,3 +403,24 @@ def test_boundary_loss_after_collection_retains_attempt_and_original(setup):
     assert report['maintenance_copy_attempt_present'] is True
     assert report['resume_authorized'] is False
     assert journal.inspect_disposable_journal(control)['phase'] == 'work_pending'
+
+
+@pytest.mark.parametrize('drift', ['media_lock', 'controller_lock'])
+def test_local_scope_rechecked_after_external_observation_before_binding(setup, drift):
+    root, database, control = setup
+    before = database.read_bytes()
+    changed = False
+    def observe():
+        nonlocal changed
+        if changed:
+            return
+        changed = True
+        lock = control/'controller.lock' if drift == 'controller_lock' else root/'.sqlite_runner.lock'
+        lock.rename(lock.with_name(lock.name+'.retained'))
+        lock.touch()
+    with pytest.raises((RuntimeError, OSError)):
+        invoke(setup, lambda *a:pytest.fail('No collection after scope drift'),
+               _fixture_boundary_observer=observe)
+    untouched(setup, before)
+    with sqlite3.connect(control/'maintenance.db') as db:
+        assert not db.execute("SELECT 1 FROM sqlite_master WHERE name='maintenance_copy_binding'").fetchone()

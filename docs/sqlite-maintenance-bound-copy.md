@@ -153,3 +153,14 @@ Linux guest acceptance covers the action syscalls missing from those platform
 checks. Original/synthetic copy bytes and uncertainty evidence remain retained.
 These checks do not establish continuous exclusion between observations or combine
 all production Docker/NFS/host administrative controls into an ownership permit.
+
+## Recheck local scope after an external observation
+
+The held copy verifier now rechecks the media lock and maintenance journal/scope
+immediately after an optional external observer returns, before binding a local
+attempt or continuing an action. Real lock-entry replacement during that observer
+is rejected before creating the copy binding or starting collection. The initial
+SQLite write transaction already excludes a competing database writer at that
+point; a test attempting such a write correctly received database-is-locked and
+was not used to weaken the transaction. Later hold-drift checks remain in place.
+This closes an observation-ordering gap, not the intervals requiring real ownership.

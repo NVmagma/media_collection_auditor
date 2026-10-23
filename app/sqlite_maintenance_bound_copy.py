@@ -63,6 +63,10 @@ def run_maintenance_bound_disposable_copy(*, journal_root, maintenance_revision,
                     # Extra deny-only observation, never an ownership credential.
                     if _fixture_boundary_observer() is not None:
                         raise RuntimeError("Boundary observer must return no authority")
+                    # External observation can take time. Revalidate local
+                    # bindings/hold after it, before any local checkpoint/action.
+                    verify_media()
+                    check_scope()
                 if _media_identity(root, database) != expected:
                     raise RuntimeError('Maintenance media binding changed')
                 if binding_persisted:

@@ -465,3 +465,13 @@ collection/attempt binding, both while fsync is pending and after explicit serve
 recovery/fsync/unmount. Recovery does not clear the hold or grant release. This
 combines client uncertainty with the SQLite deny path, while leaving production
 clearance and complete Docker/NFS/host ownership integration unimplemented.
+
+
+The [unified controller contract](sqlite-unified-maintenance-controller.md) now
+specifies separate host-controller placement, three mandatory control domains,
+durable request-before-action ordering and production installation prerequisites.
+The disposable verifier also rechecks local lock/journal scope after external
+observation returns. Replaced media/controller locks block before attempt binding
+or collection. 65 focused local checks passed with six existing platform skips.
+This is an ordering fix and integration contract, not a production adapter or
+accepted Unraid/NFS startup fence. No deployment authority is added.
