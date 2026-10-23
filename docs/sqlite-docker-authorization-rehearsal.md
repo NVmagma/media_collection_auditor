@@ -188,3 +188,52 @@ writers. A matching hold or digest cannot prove external exclusion, fresh media
 protections or source retention. NFS pending writes, native gRPC/control routes,
 existing streams/writers and Unraid management compatibility remain independent
 requirements. All production and complete-restart-inhibition fields remain false.
+
+## Selected-ID reduction-only quiesce routing
+
+The increment through `aad9329` adds an optional bounded list of full 64-character
+container IDs to the private fixture. Empty scope remains the default. Scope is
+created exclusively as canonical `quiesce.json`, fsynced with the hold directory,
+verified at each request and reloaded without an override option. Names, short
+IDs, duplicates, malformed or oversized scope cannot initialize a hold. Old
+fixtures without scope evidence fail closed; no migration/repair is performed.
+
+For IDs in that scope only, the candidate admits exactly:
+
+- POST to the unversioned container stop route, without body/query/upgrade.
+- POST to the unversioned update route with exactly RestartPolicy Name no and
+  integer MaximumRetryCount zero, and no other update fields.
+
+The update decoder requires canonical valid base64 for the Engine envelope,
+UTF-8 JSON, exact field names, no duplicate object keys, JSON content type and
+consistent body length when supplied. Restart-enabling values, bool/float retry
+counts, unrelated fields, framing ambiguity, upgrades and unknown routes deny.
+No owner header/root identity can broaden those rules. Start/restart/unpause,
+exec, kill, archive and recreation remain denied. This is fixture policy, not a
+production controller or permission to stop any existing service.
+
+The rationale is that HTTP authorization alone does not replace automatic
+restart handling. Docker documents that a manually stopped always-policy
+container can return after daemon restart:
+[Docker restart policies](https://docs.docker.com/engine/containers/start-containers-automatically/).
+Disabling restart and verifying actual stopped state must occur before any
+future authoritative media baseline. A configuration response or stop reply
+alone cannot establish complete writer exclusion or drain all pending writes.
+
+The local separate daemon was deliberately empty. With a single absent synthetic
+ID selected, its stop and restart-disable update returned 404, demonstrating that
+the request passed authorization and reached container lookup. Stop of a different
+ID, start of the selected ID, and update to restart always returned 403. The same
+404/403 pattern passed after a new plugin process reloaded the persisted scope.
+HTTP 404 is **not** successful quiescence: existing_writer_verified remains false.
+No existing workload was started, stopped, updated or otherwise targeted.
+
+The prior read/deny, daemon restart, plugin-death, unchanged hold reload and corrupt
+hold startup-failure checks also passed. 115 local policy/hold/transport/launcher
+regressions passed. All private containers/volume were cleaned up. No image build
+or pull, Tower changes, host kernel changes or production controls occurred.
+
+Remaining acceptance includes an actual disposable writer stopped/restart-disabled
+under the candidate, fresh independently bound state verification, restart
+continuity with that writer, native gRPC/previous streams, host boot and NFS.
+This increment supplies request-filtering evidence only and closes no gate.

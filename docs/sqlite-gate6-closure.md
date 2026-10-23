@@ -361,3 +361,12 @@ startup via plugin validation failure. 82 local regressions passed, including
 abrupt process exit and rejected concurrent listener adoption. This advances
 deny-state recovery only: it does not authorize a maintenance session, release
 writers, implement host boot controls or close Gate 6. All fixtures were removed.
+
+
+Through `aad9329`, the private Docker candidate has persisted selected-ID scope
+for stop and strict restart-disable-only updates. Real empty-daemon tests confirm
+those two requests reach lookup for the absent selected fixture ID, while
+out-of-scope or restart-enabling requests deny; scope survives plugin reload.
+115 local regressions passed. An absent-ID 404 is not successful quiescence or
+existing-writer acceptance. Actual writer stop/restart verification, complete
+external routes, host boot and NFS remain open; production is unchanged.

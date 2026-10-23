@@ -143,3 +143,12 @@ Missing/corrupt/drifting evidence denies all protocol requests including plugin
 activation. Local separate-daemon tests accept unchanged-hold reload and corrupt
 hold startup denial; they do not accept a production fence activation or release
 sequence, host boot recovery, existing writer exclusion or NFS coordination.
+
+
+The private candidate now prototypes reduction-only quiesce requests for a
+persisted full-container-ID scope: stop or exact restart-policy no, with all
+other control mutations still denied. No production controller consumes this
+policy. Local empty-daemon routing proves filtering before/after scope reload,
+not actual writer quiescence. An initial production design must still establish
+a complete fresh inventory, verify disabled automatic restart and stopped state,
+and bind that evidence to the accepted media ownership boundary.
