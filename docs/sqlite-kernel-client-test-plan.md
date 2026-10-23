@@ -102,3 +102,17 @@ do not infer a kernel-module problem or restart production NFS from this error.
 Primary references:
 [Apple nfsstat manual](https://github.com/apple-oss-distributions/NFS/blob/main/nfsstat/nfsstat.1),
 [Apple mount_nfs manual](https://github.com/apple-oss-distributions/NFS/blob/main/mount_nfs/mount_nfs.8).
+
+### Mac network connectivity accepted; disposable recovery test prepared
+
+The user's explicit NFSv3/TCP/2049 read-only mount now works. The Mac reports
+hard/nointr/nolocks; no Tower client module was needed. Both explicit-address
+NFS NULL probes answered on Tower. Missing RPC discovery registration remains
+separate from endpoint availability; no service repair was performed.
+
+The [Mac NFSv3 fixture](sqlite-mac-nfs-lab.md) now prepares a private export and
+uses existing SSH for the real client. It preserves hard-mount semantics,
+observes pending writes separately from fsync, verifies server bytes during
+controller death, and explicitly tests delayed writeback on recovery. Actual
+Mac/Tower acceptance is pending. Linux client module loads/mounts remain
+unexecuted, and NFSv4/LOCALIO acceptance remains outside this fixture.

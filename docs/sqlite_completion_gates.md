@@ -1197,3 +1197,14 @@ The maintained maintenance-only suite passes locally: 206 checks, including the
 inert restart-policy launcher failure cases. These tests require no daemon or
 production services. No additional Tower acceptance is required solely for this
 regression-test/documentation increment.
+
+## Mac NFS alternative: connectivity accepted, recovery fixture pending
+
+The user approved an actual Mac client and existing SSH, with no Tower module
+loads/global kernel-setting changes. The Mac's explicit read-only NFSv3 mount
+succeeded; this is connectivity only. A new
+[Mac recovery fixture](sqlite-mac-nfs-lab.md) tests held-descriptor buffered
+writes, incomplete fsync, independent paused server bytes, controller death,
+explicit recovery and clean client unmount through private SSH forwards.
+Only new fixture resources are controlled. Real Mac/Tower acceptance is pending;
+NFSv4/Linux LOCALIO and production ownership/restart inhibition remain open.

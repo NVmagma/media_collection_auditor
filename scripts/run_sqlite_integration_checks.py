@@ -15,7 +15,7 @@ import sys
 TESTS = (
     "test_sqlite_restart_policy_actor", "test_sqlite_restart_policy_lab",
     "test_sqlite_nfs_namespace_probe", "test_sqlite_nfs_thread_lab",
-    "test_sqlite_nfs_kernel_client_probe", "test_sqlite_nfs_mac_client_probe",
+    "test_sqlite_nfs_kernel_client_probe", "test_sqlite_nfs_mac_client_probe", "test_sqlite_nfs_mac_fixture",
     "test_sqlite_nfs_rpc_client_lab", "test_sqlite_nfs_client_lab_isolation",
     "test_sqlite_nfs_restart_probe", "test_sqlite_nfs_restart_guard",
     "test_sqlite_disposable_maintenance_journal",
@@ -52,6 +52,7 @@ WRITER_TESTS = (
 )
 
 MAINTENANCE_TESTS = (
+    "test_sqlite_nfs_mac_client_probe", "test_sqlite_nfs_mac_fixture",
     "test_sqlite_restart_policy_actor", "test_sqlite_restart_policy_lab",
     "test_sqlite_marker_nonblocking_reads",
     "test_sqlite_disposable_maintenance_writer", "test_sqlite_maintenance_scope_binding", "test_sqlite_maintenance_boot_binding",
