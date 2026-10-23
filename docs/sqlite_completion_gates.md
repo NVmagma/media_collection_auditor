@@ -27,6 +27,15 @@ used different scopes and should not be compared or treated as reliable.
 Production authority remains JSON. SQLite production activation and permanent
 filesystem deletion remain disabled.
 
+## Current host closure package
+
+The consolidated [host implementation and acceptance package](sqlite-gate6-host-closure-package.md)
+separates accepted live-observer/copy/recovery evidence from the remaining host
+controller, Unraid enforcement, ownership-bound production verifier and explicit
+recovery deliverables. Those implementations remain absent; additional isolated
+smoke tests cannot close Gate 6. Tower changes and boot acceptance need a
+reviewable implementation package and separately approved maintenance window.
+
 ## Gate 6 current exit checklist
 
 This is the current summary; the later entries preserve the evidence history.
