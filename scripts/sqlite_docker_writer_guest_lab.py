@@ -4,6 +4,7 @@ Starts its OWN daemon and writer. No existing daemon/service is controlled.
 Requires a fresh root, NoCloud fixture identity and no pre-existing dockerd.
 """
 import argparse
+from contextlib import ExitStack
 import hashlib
 import http.client
 import json
@@ -48,6 +49,7 @@ def run(root, binaries, image_archive, *, probe_runtime_route=False, integrate_c
     endpoint=root/'engine.sock'
     env={**os.environ,'PATH':str(binaries)+':/usr/sbin:/usr/bin:/sbin:/bin'}
     processes=[]
+    backend_contexts=ExitStack()
     logs=[]
     plugin_spec=None
     def start_daemon():
@@ -166,13 +168,14 @@ def run(root, binaries, image_archive, *, probe_runtime_route=False, integrate_c
         if hashlib.sha256(ticks.read_bytes()).hexdigest()!=digest: raise RuntimeError('Guest writer resumed after restart')
         if integrate_copy:
             from scripts.sqlite_docker_copy_guest_lab import run_copy_case
-            def observe_selected():
-                if policy.poll() is not None:
-                    raise RuntimeError('Guest selected-writer policy lost')
-                status,body=api('GET','/info')
-                if status!=200 or json.loads(body).get('Plugins',{}).get('Authorization')!=[plugin_name]:
-                    raise RuntimeError('Guest engine policy binding unavailable')
-                inspect_stopped()
+            from app.sqlite_disposable_docker_backend import held_disposable_docker_observer
+            status,body=api('GET','/info')
+            if status!=200:raise RuntimeError('Guest daemon identity unavailable')
+            expected_daemon=json.loads(body)['ID']
+            def new_backend():
+                return backend_contexts.enter_context(held_disposable_docker_observer(
+                    root=root,daemon_id=expected_daemon,plugin=plugin_name,container_ids=[identity]))
+            observe_selected=new_backend()
             result['healthy_copy']=run_copy_case(root,observe_selected)
             def lose_policy():
                 policy.kill();policy.wait(timeout=5)
@@ -190,6 +193,10 @@ def run(root, binaries, image_archive, *, probe_runtime_route=False, integrate_c
                         if policy.poll() is not None or time.monotonic()>deadline:
                             raise RuntimeError('Deny-only fixture policy reload failed')
                         try:
+                            status,body=api('GET','/info')
+                            if status!=200 or json.loads(body).get('Plugins',{}).get('Authorization')!=[plugin_name]:
+                                raise RuntimeError('Deny-only policy not ready')
+                            observe_selected=new_backend()
                             observe_selected()
                             break
                         except (OSError,RuntimeError,http.client.HTTPException):
@@ -200,6 +207,7 @@ def run(root, binaries, image_archive, *, probe_runtime_route=False, integrate_c
         return result
     finally:
         for process in reversed(processes): stop(process)
+        backend_contexts.close()
         for log in logs: log.close()
         if plugin_spec is not None: plugin_spec.unlink()
 

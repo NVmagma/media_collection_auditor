@@ -111,3 +111,36 @@ disposable journal/media wrapper before collection and attempt creation, preserv
 source state. Other tests cover missing adapters, second-pass drift, receipt
 rejection, clock reversal/expiry, interruption and recursive use. These use
 synthetic adapters and are not new host-enforcement acceptance.
+
+## Extracted live Docker observation backend
+
+`held_disposable_docker_observer` in `app/sqlite_disposable_docker_backend.py` is
+now a real read-only Engine adapter for a marked disposable daemon. The caller
+supplies an expected daemon ID, exact configured fixture policy name and nonempty
+full selected-ID scope. It binds the canonical fixture directory, regular single-
+link marker and existing Unix socket inode, then rechecks those bindings before
+and after API reads. A replacement socket is never automatically adopted.
+
+Each observation requires the expected daemon ID, live restore explicitly false,
+the exact expected fixture authorization chain and strict stopped/restart-disabled
+state for every selected container. Responses are size bounded, duplicate JSON
+keys deny, each read has a timeout and the sequence has a five-second elapsed
+budget. Network/parse uncertainty is redacted and latches the observer failed;
+policy reload does not reset that failed observer. It returns no permit and
+performs no Docker mutation or service control.
+
+The guest copy launcher now uses this adapter instead of its embedded checks.
+Independent Engine 29.8.2 acceptance verified healthy selected state, real copy
+completion with retained originals, unknown selected-ID denial, policy-death
+denial and a retained failed observer after explicit deny-policy reload. Synthetic
+media bytes remained unchanged except the intended disposable copy artifacts.
+98 focused local regressions passed with six existing platform skips. Socket
+binding tests ran outside the local sandbox's bind restriction. Guest evidence
+was retained and the VM powered off; Tower was not accessed or changed.
+
+This is the Docker observation side of an already established fixture fence, not
+a complete production backend. Caller-selected IDs do not prove inventory
+completeness, repeated snapshots do not enforce continuity, and the marker does
+not protect against privileged redirection. Production policy installation,
+control-route scope, NFS startup/restart inhibition and real host/storage ownership
+remain required. Existing production activation and release guards are unchanged.

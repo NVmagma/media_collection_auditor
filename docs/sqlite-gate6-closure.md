@@ -483,3 +483,13 @@ failed domain blocks before collection or attempt creation; adapter booleans and
 receipts are not authority. Existing durable journal/hold/session checks stay
 intact. This combines the control interfaces, not production enforcement: real
 host adapters, complete scope, continuity and clearance remain unimplemented.
+
+
+The live Docker observer has been extracted from the guest script into a reusable
+marked-fixture backend. Real Engine acceptance includes copy completion, absent
+selected writer denial, policy-loss denial and no automatic failed-observer reset
+after policy reload. Directory/marker/socket and daemon/policy identities stay
+bound; read timeouts and oversized/ambiguous responses deny. 98 local checks passed
+with six platform skips. This supplies a real Docker observation adapter for the
+unified interface, not complete production enforcement or inventory ownership.
+NFS restart/boot and host/storage bindings remain necessary before Gate 6 closes.
