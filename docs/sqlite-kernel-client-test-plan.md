@@ -71,3 +71,34 @@ References reviewed for the design:
 [Linux LOCALIO documentation](https://docs.kernel.org/filesystems/nfs/localio.html).
 These describe upstream interfaces; they do not establish Tower's installed
 module build or authorize loading it.
+
+## Mac client alternative approved
+
+The user approved a real Mac client against a new disposable share, with no
+Tower module loads or kernel-setting changes. The Tower client-module/mount
+route remains deferred. A network Mac client can exercise its own buffered
+writes and recovery without the same-host Linux LOCALIO path; it does not
+verify all Linux client implementations. The server still shares Tower's kernel,
+so namespace isolation must not be described as a separate failure domain.
+
+The next fixture must match an explicitly observed client protocol, keep its
+own network endpoint/export/recovery state, and avoid host export reloads,
+production service controls or changes to global kernel parameters. Existing
+file descriptors, buffered writes, fsync outcomes and independently observed
+server bytes must be checked across pause/controller death and explicit recovery.
+A timeout is uncertainty, not durable denial; client exit does not prove pending
+kernel writes are gone. Teardown must account for the new client mount before
+restoration/cleanup. Until these checks are accepted, production exclusion stays
+false. Protocol coverage beyond the tested client remains an explicit gap.
+
+`scripts/sqlite_nfs_mac_client_probe.sh` reads current NFS mount options using
+`nfsstat -m`. It omits export/server paths and original mount defaults, reports
+missing options as unknown, and never mounts or changes settings. The user's
+current attempt to mount Tower returned `RPC prog. not avail` (mount exit 74),
+so no successful client mount or protocol has yet been established. Diagnose
+RPC registration/reachability before creating the disposable network fixture;
+do not infer a kernel-module problem or restart production NFS from this error.
+
+Primary references:
+[Apple nfsstat manual](https://github.com/apple-oss-distributions/NFS/blob/main/nfsstat/nfsstat.1),
+[Apple mount_nfs manual](https://github.com/apple-oss-distributions/NFS/blob/main/mount_nfs/mount_nfs.8).
