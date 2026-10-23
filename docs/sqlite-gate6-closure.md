@@ -311,3 +311,16 @@ explicitly simulated for the protocol-only collection case. No Tower module,
 NFS/Docker service, startup or production media changes are involved. These
 checks advance the integrated disposable crash evidence only; actual host
 writer exclusion, restart continuity and production integration remain open.
+
+
+Tower accepted abrupt controller-death checks through `74d93ab`: 63 passed with
+six capability skips on shfs and all 69 passed on native storage. This accepts
+process exit at those disposable boundaries, not host power loss or enforcement
+of external writer exclusion.
+
+The user requires Unraid web management to stay available during maintenance.
+The [control proposal](sqlite-maintenance-control-proposal.md) records that
+constraint and evaluates a Docker daemon authorization boundary as a candidate,
+with separate restart/NFS/boot limitations. It is not installed, tested against
+a real daemon, or approved for production changes. Further repetitions of the
+accepted copy suite alone will not resolve that architecture requirement.
