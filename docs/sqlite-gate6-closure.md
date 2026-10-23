@@ -351,3 +351,13 @@ transport/startup/launcher regressions passed; all new fixture resources were
 removed. See the separate-daemon rehearsal for failed-timeout investigation and
 exact scope. This is not host boot, automatic workload restart, durable hold or
 complete restart inhibition; those production blockers remain unchanged.
+
+
+The candidate private Docker authorization endpoint now loads a fixed durable
+deny-only hold. Real separate-daemon acceptance through `eb2ae98` confirms that
+a new plugin process can reload unchanged hold bytes while mutations remain
+denied; corrupting the hold denies observations too, and blocks the next daemon
+startup via plugin validation failure. 82 local regressions passed, including
+abrupt process exit and rejected concurrent listener adoption. This advances
+deny-state recovery only: it does not authorize a maintenance session, release
+writers, implement host boot controls or close Gate 6. All fixtures were removed.

@@ -138,3 +138,53 @@ loading/release or policy reconfiguration continuity is accepted. Native gRPC,
 previous streams, actual writer quiescence, Unraid UI compatibility and NFS
 remain open. `restart_inhibition_verified` and production authorization remain
 false in every result.
+
+## Durable deny-only hold reload
+
+The next increment through `eb2ae98` adds fixed persisted `maintenance.hold`
+evidence to the **disposable** authorization endpoint. The hold records schema 1,
+fence_requested and automatic_restoration false. Initial creation uses exclusive
+files, full writes and file/directory fsync. Partial initialization is retained;
+there is no repair, expiry, release, success flag or force-clear API.
+
+The listener holds a persistent flock inode. Marker/hold/lock objects must be
+regular, single-link and bound to their opened directory/entries. Reads are
+bounded, no-follow and nonblocking. Every protocol evaluation checks the live
+binding before and after dispatch. Missing/unknown/corrupt/replaced state denies
+even observation requests and activation. An absent verifier also denies.
+This mechanism is not an external-writer lock or production ownership permit.
+
+`--resume-fixture` explicitly reloads an existing **deny-only** fixture. It does
+not initialize missing evidence. It requires the existing hold, marker and spec
+and acquires the same persistent lock before removing a stale socket. A second
+cooperating active listener blocks adoption without unlinking its live socket.
+Reload neither rewrites the hold nor changes its phase. It is not resumption of
+media work or adoption of a dead maintenance controller's execution authority.
+
+Local real files/process tests cover exclusive creation, missing/malformed/
+released-looking/symlink/hard-link/FIFO holds, binding replacement, committed
+state surviving os._exit without cleanup, and a killed listener replaced by a
+new process using the same evidence. Mac test paths were canonicalized to
+/private/tmp rather than weakening the canonical-path requirement.
+
+The separate Engine 29.8.2 rehearsal then passed:
+
+| Phase | Observed result |
+| --- | --- |
+| Original daemon and after private daemon restart | Reads 200; writes 403 |
+| Original plugin process killed | Explicit plugin-error 500; nested inventory empty |
+| New plugin process explicitly reloads existing hold | Hold digest unchanged; reads 200; writes 403 |
+| Fixture hold deliberately corrupted | Ping and create both 403 |
+| Private daemon restarted while hold remains invalid | Nonzero exit with authorization-plugin validation failure |
+
+82 local rule/transport/hold/startup/launcher regressions passed. All fixture
+containers/volume were cleaned up. No Tower service, socket permissions,
+configuration, NFS, media or kernel setting changed. No image build/pull was
+needed for this increment.
+
+This accepts process-level deny-state reload and corruption handling, not power
+loss, host boot integration or atomic activation of a fence around preexisting
+writers. A matching hold or digest cannot prove external exclusion, fresh media
+protections or source retention. NFS pending writes, native gRPC/control routes,
+existing streams/writers and Unraid management compatibility remain independent
+requirements. All production and complete-restart-inhibition fields remain false.

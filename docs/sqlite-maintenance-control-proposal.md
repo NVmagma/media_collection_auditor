@@ -135,3 +135,11 @@ plugin validation prevents its next startup. This does not establish continuity
 while changing daemon configuration, restoring existing writers, loading a durable
 maintenance hold or booting Unraid. The launcher rejects non-Docker-Desktop outer
 engines before creating resources; do not run it on Tower.
+
+
+The private candidate now requires a fixed persisted deny-only hold. Its explicit
+fixture reload can restore only that deny service, never media-work authority.
+Missing/corrupt/drifting evidence denies all protocol requests including plugin
+activation. Local separate-daemon tests accept unchanged-hold reload and corrupt
+hold startup denial; they do not accept a production fence activation or release
+sequence, host boot recovery, existing writer exclusion or NFS coordination.
