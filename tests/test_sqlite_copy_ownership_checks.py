@@ -49,5 +49,24 @@ if sys.argv[1]=='run': sys.exit(int(os.environ['RUN_STATUS']))
         assert f'type=bind,src={labs[0]},dst={target}' in mounts
     assert run[run.index('--cap-drop')+1]=='ALL'
     assert '240s' in run
+    assert '/tmp:rw,noexec,nosuid,nodev,size=256m' in run
+    assert '/tmp/testenv/bin/python -m pip install' in run[-1]
+    assert '/tmp/testenv/bin/pip ' not in run[-1]
     assert not any('docker.sock' in mount or 'dst=/media,' in mount or '.env' in mount for mount in mounts)
     assert '--publish' not in run and '--privileged' not in run
+
+
+def test_pip_module_runs_when_generated_launcher_is_not_executable(tmp_path):
+    environment=tmp_path/'testenv'
+    subprocess.run([sys.executable,'-m','venv',str(environment)],check=True,
+                   capture_output=True,text=True,timeout=30)
+    launcher=environment/'bin'/'pip'
+    launcher.chmod(0o600)
+    assert not os.access(launcher,os.X_OK)
+    interpreter=environment/'bin'/'python'
+    assert interpreter.is_symlink()  # resolves to the executable base runtime
+    result=subprocess.run([str(interpreter),'-m','pip','--version'],
+                          capture_output=True,text=True,timeout=15)
+    assert result.returncode==0,result.stderr
+    assert 'pip ' in result.stdout
+    assert str(environment) in result.stdout

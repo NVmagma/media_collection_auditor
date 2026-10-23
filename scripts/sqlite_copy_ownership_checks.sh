@@ -19,7 +19,7 @@ printf 'First lab: %s\nSecond lab: %s\n' "$first" "$second"
 docker run --rm --pull never --network bridge --read-only --cap-drop ALL \
   --security-opt no-new-privileges --memory 512m --pids-limit 128 --cpus 2 \
   --label org.nvmagma.auditor.fixture=copy-ownership-tests \
-  --tmpfs /tmp:rw,nosuid,nodev,size=256m \
+  --tmpfs /tmp:rw,noexec,nosuid,nodev,size=256m \
   --mount "type=bind,src=$repo/app,dst=/src/app,readonly" \
   --mount "type=bind,src=$repo/tests,dst=/src/tests,readonly" \
   --mount "type=bind,src=$repo/requirements.txt,dst=/src/requirements.txt,readonly" \
@@ -28,7 +28,7 @@ docker run --rm --pull never --network bridge --read-only --cap-drop ALL \
   -e PYTHONDONTWRITEBYTECODE=1 -e PYTHONPATH=/src -w /src \
   "$image" timeout --kill-after=5s 240s sh -eu -c '
     python -m venv /tmp/testenv
-    /tmp/testenv/bin/pip install -q --disable-pip-version-check --no-cache-dir -r /src/requirements.txt pytest
+    /tmp/testenv/bin/python -m pip install -q --disable-pip-version-check --no-cache-dir -r /src/requirements.txt pytest
     for path in /lab-first /lab-second; do
       printf "\nTesting: %s\n" "$path"
       /tmp/testenv/bin/python -B -m pytest -p no:cacheprovider --basetemp "$path/tests" -q --tb=short \

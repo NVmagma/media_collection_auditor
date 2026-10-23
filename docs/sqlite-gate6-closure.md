@@ -69,3 +69,17 @@ inert launcher's source/mount restrictions. The broader maintained run passed
 892 checks and 19 subtests but its existing loopback HTTP smoke test hit sandbox
 EPERM on socket bind. That five-check HTTP module passed separately outside the
 bind restriction; no application assertion or safety guard was changed for it.
+
+### Focused launcher startup correction
+
+The first Tower run stopped before pytest: executing the generated
+`/tmp/testenv/bin/pip` script returned permission denied. This supplied no
+hard-link test result. Installation now uses the venv interpreter's `-m pip`
+entry point, matching the existing `python -m pytest` pattern. The interpreter
+symlink resolves to the base runtime outside the temporary mount. `/tmp` is
+explicitly noexec/nosuid/nodev; no executable-mount permission is added.
+
+A regression creates a real venv, removes the pip launcher's executable bits,
+and verifies module invocation still works. Inert Docker tests also require
+noexec and interpreter/module invocation. Actual Tower acceptance requires a
+fresh launcher run; failed lab artifacts remain retained.
