@@ -34,8 +34,10 @@ Two Docker designs have different remaining costs:
 | Selected writers with live Docker | Relevant writers/dashboards pause; unrelated services may remain up | Host authorization service and its startup ordering, prior streams/runtime routes, durable hold, Unraid daemon integration and recovery |
 | Entire Docker service offline | Every container pauses, including AdGuard DNS and unrelated services | Supported persistent Docker opt-out, verified daemon/runtime/container shutdown, current-boot dispatch guards and normal/Safe Mode acceptance |
 
-The second design is a proposed scope simplification, not an accepted fence or
-permission to stop Docker. Its wider disruption needs an explicit user decision.
+The user accepted the second design: all Docker services may pause during the
+initial maintenance window, including AdGuard DNS. This is a design decision,
+not permission to stop Docker or proof of a fence. The selected-writer live
+Docker design is no longer required for that initial window.
 A disabled preference alone is insufficient: the reviewed `rc.docker start`
 dispatch can directly launch the daemon. The direct/manual privileged bypass
 boundary remains the accepted trusted-administrator protocol, not an assertion
@@ -45,7 +47,9 @@ that UID 0 is always trusted.
 
 1. **Runnable host controller.** Establish a reviewed runtime that remains alive
    with the worker paused (and with Docker offline if that design is selected).
-   Do not assume Tower has Python merely because tests ran inside containers.
+   Tower has no host Python installation; earlier Python tests ran in containers.
+   A disposable cached-image runtime export/chroot rehearsal is prepared to avoid
+   requiring a host Python installation. Tower runtime acceptance is still needed.
    Bind a single durable private request, exact scope and exclusive controller
    lock before any external action. Confirm the control path is outside every
    exported/bind alias; no hard-coded Unraid pool or filesystem name is adequate.

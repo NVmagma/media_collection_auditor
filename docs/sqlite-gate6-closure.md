@@ -564,3 +564,24 @@ retained media/control byte remained unchanged, collection was unreachable and
 no release receipt appeared. New private guard fixtures were explicitly prepared
 for the checks; this is scope-rejection evidence, not automatic boot fencing or
 restoration acceptance. Actual host enforcement/startup continuity remains open.
+
+Initial host model narrowed with explicit user agreement: every Docker service
+may pause, including unrelated services/DNS, while Unraid management and SSH
+remain available. This permits an offline-Docker design instead of requiring a
+live authorization service for that window; it does not authorize changing
+Tower. Persistent opt-out plus runtime/startup verification are still required.
+
+Tower has no host Python. A new cached-image export/chroot runtime rehearsal
+avoids requiring a host Python installation. Restricted packaging and a fixed
+host-launched program touch only a fresh lab, verify flock/SQLite, and preserve
+artifacts. The separate VM passed with a synthetic local Python image, including
+a read after its private Docker daemon stopped. Tower's cached-image execution
+capability still needs a focused disposable check. No existing service is paused
+by this rehearsal and no production controller/fence is implied.
+
+Exact Docker-disabled configuration candidates now share the existing strict
+preference parser and private artifact preparation with NFS. Only one canonical
+DOCKER_ENABLED yes/no assignment is accepted, unrelated bytes stay unchanged,
+and restoration candidates reject intervening edits. These are marked lab
+artifacts only; no supported UI handler, host preference application or recovery
+approval is implemented by producing them.
