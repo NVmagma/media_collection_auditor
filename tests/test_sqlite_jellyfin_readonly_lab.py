@@ -42,6 +42,9 @@ elif args[0]=='run':
         phase=args[args.index('--phase')+1]
         if phase==os.environ['LAB_FAILURE']: sys.exit(2)
         print(json.dumps({'status':'fixture_test_stub','phase':phase}))
+elif args[0]=='logs':
+    assert args[-1]=='a'*64
+    print('Synthetic fixture diagnostic log')
 elif args[0] in ('start','restart','rm'):
     if args[0]=='rm' and os.environ['LAB_FAILURE']=='cleanup': sys.exit(1)
     assert args[-1]=='a'*64, 'Existing service targeted'
@@ -91,4 +94,6 @@ def test_failure_never_restarts_existing_service_or_reports_success(tmp_path, fa
     if failure in ('setup', 'writable', 'identity'):
         assert not any(call[0] == 'restart' for call in calls)
     if failure == 'identity':
-        assert not any(call[0] == 'rm' for call in calls)
+        assert not any(call[0] in ('rm', 'logs') for call in calls)
+    if failure in ('setup', 'check', 'writable'):
+        assert any(call[0] == 'logs' and call[-1] == CID for call in calls)

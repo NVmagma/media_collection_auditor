@@ -79,3 +79,12 @@ and launcher tests also pass, including refusal to report completion after
 cleanup failure. Shell syntax and diff whitespace checks pass. Actual cached
 Jellyfin startup/scanning/restart on Tower is still required; no success is
 inferred from the inert local transport/CLI doubles.
+
+Tower's first attempt retained `jellyfin-ro.BMfwUE` and timed out waiting for
+startup. This is failed fixture acceptance, not proof of a Docker swap-limit,
+filesystem, permission or networking cause. The launcher now retains its new
+container's bounded private stdout log plus selected running/exit/OOM state
+before cleanup on failure. Original fixture application logs may also remain
+under its fresh config/log directory. Do not rerun or change production controls
+until the available fixture diagnostics have been reviewed. Six launcher-policy
+tests pass for the diagnostic refinement, including label-loss refusal.

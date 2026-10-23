@@ -46,7 +46,18 @@ cleanup(){
     fi
   fi
 }
-trap cleanup EXIT
+finish(){
+  local outcome=$?
+  if [ "$outcome" != 0 ] && ours; then
+    docker inspect --format 'fixture_running={{.State.Running}} fixture_exit_code={{.State.ExitCode}} fixture_oom_killed={{.State.OOMKilled}}' "$server_id" || true
+    # Retain private logs before removing this new fixture. Never inspect production logs.
+    docker logs --tail 100 "$server_id" > "$lab/control/server-startup.log" 2>&1 || true
+    printf 'Private fixture diagnostics: %s/control/server-startup.log\n' "$lab"
+  fi
+  cleanup || return 1
+  return "$outcome"
+}
+trap finish EXIT
 printf '%s\n' 'production_activation=disabled' 'writer_exclusion_verified=false'
 printf 'Lab directory: %s\n' "$lab"
 printf 'cached_jellyfin_image=%s\n' "$jellyfin_image"
