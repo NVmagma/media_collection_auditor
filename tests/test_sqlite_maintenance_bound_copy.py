@@ -294,3 +294,80 @@ def test_combined_cli_reports_comparison_without_clearance(setup, capsys):
     assert report['media_comparison']['binding'] == 'matching_identifiers_only'
     assert report['clearance_authorized'] is False
     assert report['production_authorized'] is False
+
+
+def abrupt_copy_child(parent, fault):
+    """Subprocess-only fixture: os._exit bypasses finally/SQLite/lock cleanup."""
+    from pathlib import Path
+    parent = Path(parent)
+    if sys.platform != 'linux':
+        # Protocol-only Mac test; native directory-action cases are Linux-only.
+        journal._linux_boot_id = lambda: '11111111-1111-4111-8111-111111111111'
+        journal._linux_network_namespace = lambda: 'net:[12345]'
+    root, database = lab(parent)
+    control = parent / 'maintenance'
+    journal.create_disposable_journal(control, bind_linux_boot=True)
+    fence_disposable_fixture(control, expected_revision=0)
+    journal.advance_disposable_journal(control, expected_revision=2, phase='work_pending')
+    if fault == 'during_collection':
+        def fetch(*args):
+            os._exit(23)
+    else:
+        from app import sqlite_disposable_copy_completion as completion
+        # Replace only construction of the existing injected crash exception.
+        # Exit occurs before raise/unwinding; no syscall, verifier or lock is mocked.
+        def crash_exception(message):
+            if message.startswith('Injected completion crash'):
+                os._exit(23)
+            return RuntimeError(message)
+        completion.RuntimeError = crash_exception
+        fetch, _ = transport([[item()]])
+    try:
+        invoke((root, database, control), fetch,
+               completion_fault_at=None if fault == 'during_collection' else fault)
+    except RuntimeError as exc:
+        if str(exc) == 'Atomic no-replace rename unsupported':
+            os._exit(77)
+        raise
+    os._exit(24)  # Reaching completion instead of the requested crash is failure.
+
+
+@pytest.mark.parametrize('fault', ['during_collection', 'after_retirement_intent',
+                                  'after_source_quarantine', 'after_completion_checkpoint'])
+def test_abrupt_process_death_retains_uncertainty_and_never_reopens(tmp_path, monkeypatch, fault):
+    import subprocess
+    if fault != 'during_collection' and sys.platform != 'linux':
+        pytest.skip('Actual Linux publication/quarantine required')
+    if sys.platform != 'linux':
+        monkeypatch.setattr(journal, '_linux_boot_id', lambda: '11111111-1111-4111-8111-111111111111')
+        monkeypatch.setattr(journal, '_linux_network_namespace', lambda: 'net:[12345]')
+    result = subprocess.run([sys.executable, '-B', '-c',
+        'from tests.test_sqlite_maintenance_bound_copy import abrupt_copy_child; '
+        'import sys; abrupt_copy_child(sys.argv[1], sys.argv[2])', str(tmp_path), fault],
+        capture_output=True, timeout=40)
+    root, control = tmp_path / 'lab', tmp_path / 'maintenance'
+    database = root / 'state.db'
+    if result.returncode == 77:
+        assert (root / 'transient' / FOLDER / 'payload').read_text() == 'fixture'
+        assert 'sqlite_pending_operations' in GuardedSQLiteStateStore(database).load_with_revision()[0]
+        pytest.skip('Unsupported atomic publication retains original and intent')
+    assert result.returncode == 23, result.stderr.decode(errors='replace')
+    assert not (control / 'release.fixture-receipt').exists()
+    before = {p: p.read_bytes() for folder in (root, control)
+              for p in folder.rglob('*') if p.is_file()}
+    review = review_disposable_maintenance(control, media_root=root)
+    assert review['phase'] == 'work_pending'
+    assert review['resume_authorized'] is False
+    assert review['media_comparison']['retry_authorized'] is False
+    expected_pending = ('no_pending_record_not_completion_proof'
+        if fault in ('during_collection', 'after_completion_checkpoint')
+        else 'matching_operation_requires_review')
+    assert review['media_comparison']['pending_operation'] == expected_pending
+    original = (root / 'transient' / FOLDER if fault in ('during_collection', 'after_retirement_intent')
+                else root / '.sqlite_retained_sources' / 'bound-copy')
+    assert (original / 'payload').read_text() == 'fixture'
+    # A new process/session cannot adopt the dead controller's attempt.
+    with pytest.raises(journal.MaintenanceControllerSessionChanged):
+        invoke((root, database, control), lambda *args: pytest.fail('No replay after death'))
+    assert before == {p: p.read_bytes() for folder in (root, control)
+                      for p in folder.rglob('*') if p.is_file()}

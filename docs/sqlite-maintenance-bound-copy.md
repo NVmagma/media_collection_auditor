@@ -82,3 +82,10 @@ This is optional detached read-only comparison, not a retry command. The reviewe
 never derives the media path from stored evidence. A matching identity or absent
 pending record never authorizes recovery. SQLite sidecars block comparison
 without being recovered or removed. No original media bytes are read or changed.
+
+
+The focused suite additionally exits a separate controller process abruptly
+during collection and at the three native completion fault boundaries. The
+parent reviews retained state and must refuse adoption/replay without changing
+evidence. These cases bypass Python cleanup using os._exit; they do not emulate
+host power loss, server reboot or an external writer fence.

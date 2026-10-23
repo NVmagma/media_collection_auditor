@@ -282,3 +282,32 @@ authority. Existing writeback holds and scope blockers remain authoritative.
 
 This advances integrated recovery diagnostics, not external writer enforcement.
 Actual ownership/continuity and production integration remain Gate 6 blockers.
+
+
+Tower accepted explicit detached media comparison through `d024988`: 62 passed
+with three capability skips on shfs, and all 65 passed on native storage.
+
+### Abrupt process-death acceptance prepared
+
+The maintenance-bound integration suite now starts a separate Python process
+that creates its own actual boot/network/controller-bound journal and media lab.
+It uses `os._exit(23)` during collection, and at each existing injected
+retirement-intent, source-quarantine and media-completion-checkpoint boundary.
+For completion cases, only construction of the test-injected crash exception
+is replaced in the child, so exit precedes Python stack unwinding; no filesystem
+syscall, identity verifier, lock or lifecycle guard is replaced. Production
+code is unchanged. This tests process death, not power loss/disk-cache durability.
+
+The parent requires the requested exit code, retained original bytes, no release
+receipt, uncertain detached evidence and rejected adoption by a different
+controller process/session. A committed media checkpoint with no pending record
+still reports no completion proof. Read-only review and rejected replay must not
+change retained file bytes. Unsupported atomic publication verifies original
+and intent retention before explicitly skipping unreachable crash boundaries.
+
+The collection-death case runs locally; actual Linux completion cases need
+Tower acceptance via the same focused launcher. Mac boot/network readers are
+explicitly simulated for the protocol-only collection case. No Tower module,
+NFS/Docker service, startup or production media changes are involved. These
+checks advance the integrated disposable crash evidence only; actual host
+writer exclusion, restart continuity and production integration remain open.
