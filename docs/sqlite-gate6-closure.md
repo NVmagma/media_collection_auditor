@@ -137,5 +137,23 @@ marked disposable operation. It commits the operation/root/database binding
 before work, holds both cooperative locks, observes fresh journal state at
 verification boundaries, refuses existing holds or drift, and never replays a
 retained attempt. Only live core completion can record verified outcomes;
-maintenance is never automatically released. Actual native completion/crash
-acceptance on Unraid is pending. No external-fence claim is made from this wrapper.
+maintenance is never automatically released. The user accepted 38 checks with
+3 capability skips on shfs and all 41 checks on the native path through `096ca65`,
+including the native publication/quarantine fault cases. No external-fence claim
+is made from this wrapper.
+
+
+## Startup control discovery before host adapter implementation
+
+The read-only `scripts/sqlite_startup_control_probe.py` reports exact yes/no
+Docker/NFS enable preferences, fingerprints startup scripts (including go, without
+displaying or executing its contents), and validated container names/delays from
+`/var/lib/docker/unraid-autostart`. Unknown/malformed input remains unverified.
+It does not invoke Docker, service controls, shell configuration or kernel controls.
+
+The pinned [Unraid rc.docker source](https://github.com/unraid/webgui/blob/26eb1b5c1d547ddbf44a38e63956ba24f659098b/etc/rc.d/rc.docker)
+uses this autostart list to call docker start separately from container restart
+policies. The actual host source fingerprints still need review. Disabling a
+restart policy alone is therefore insufficient. This discovery cannot establish
+boot ordering, exclude administrative recreation, or grant ownership. A concrete
+host change package and integrated acceptance remain required before Gate 6 closes.
