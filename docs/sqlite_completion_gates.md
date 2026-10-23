@@ -1166,3 +1166,17 @@ byte-retention checks and oversized-marker rejection. Local focused validation
 passes 87 checks including the accepted copy regressions; marker acceptance on
 Tower is pending. Gates 6–7 remain in progress, and production SQLite remains
 disabled. These fixes do not replace the deferred external-writer/NFS proof.
+
+### Startup marker acceptance; real Jellyfin read-only fixture prepared
+
+Tower accepted `fc23aac`: 48 targeted startup-marker/controller/scope checks passed
+on shfs and 48 on native. Both read-boundary fixes are accepted on those paths.
+
+The next non-deferred Gate 6 increment tests a cached actual Jellyfin image with
+new synthetic media/configuration under read-only media mounts, then repeats fresh
+protection reads after restarting only that fixture. The launcher publishes no
+ports, uses no production state/key and performs no NFS controls or image build.
+See the [isolated Jellyfin compatibility lab](sqlite-jellyfin-readonly-lab.md).
+Local protocol and inert Docker-policy tests pass; real Jellyfin/Docker acceptance
+is pending on Tower. Gate 6 remains open; Gate 7 production acceptance still
+depends on an accepted verifier and ownership model.

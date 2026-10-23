@@ -28,7 +28,7 @@ TESTS = (
     "test_sqlite_disposable_rollback", "test_sqlite_rollback_json_restart",
     "test_sqlite_recovery_json_rollback", "test_sqlite_production_cutover_guard",
     "test_state_persistence", "test_sqlite_backend_gate", "test_sqlite_end_to_end",
-    "test_sqlite_marker_nonblocking_reads", "test_sqlite_copy_nonblocking_reads", "test_sqlite_disposable_copy_stage", "test_sqlite_disposable_copy_intent",
+    "test_sqlite_jellyfin_readonly_fixture", "test_sqlite_jellyfin_readonly_lab", "test_sqlite_marker_nonblocking_reads", "test_sqlite_copy_nonblocking_reads", "test_sqlite_disposable_copy_stage", "test_sqlite_disposable_copy_intent",
     "test_sqlite_disposable_copy_inspection", "test_sqlite_disposable_copy_inspect_cli",
     "test_sqlite_planned_copy_stage", "test_sqlite_collected_copy_runner",
     "test_sqlite_collected_copy_series", "test_sqlite_isolated_arr_inspection",
