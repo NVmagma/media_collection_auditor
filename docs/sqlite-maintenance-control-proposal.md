@@ -84,3 +84,30 @@ availability require an isolated integration rehearsal before production use.
 If the daemon boundary cannot meet the availability and fail-closed requirements,
 revise the architecture rather than relaxing media protections or installing an
 untested guard on Tower. This proposal removes no production cutover blocker.
+
+
+## Installed baseline and offline policy increment
+
+Tower reports Engine 29.8.2, authorization plugins null, live restore false.
+These observations do not establish request fencing or future restart behavior.
+No daemon reload, signal, setting change, plugin installation or service stop
+was performed. The dockerd reference explicitly lists authorization plugins as
+a reloadable setting; that resolves the generic reload capability, not Tower's
+configuration integration or uninterrupted enforcement during a policy change:
+[dockerd reload behavior](https://docs.docker.com/reference/cli/dockerd/#configuration-reload-behavior).
+
+`app/sqlite_docker_maintenance_policy.py` is an offline always-maintenance
+candidate rule function, with Docker AuthZ response keys. It has no listener,
+installer, daemon calls, inactive mode, owner header exception or production
+caller. Only exact unversioned ping/version/info/container-list observations
+are allowed. Versioned endpoints remain denied until independently rehearsed;
+this is deliberately not compatible with ordinary full Docker CLI/UI operation
+yet. Mutations, streams, upgrades, body framing, ambiguous query/path encodings
+and missing metadata deny. Results never echo caller credentials or URIs.
+
+Local tests exercise these rules only, not daemon enforcement. Local Docker
+Desktop separately reports Engine 29.8.2 via its explicitly selected local Unix
+socket. A read-only image inventory found no cached Docker-in-Docker runtime.
+The existing local daemon was not reconfigured and must not be used as the
+experimental authorization target. No image was pulled or built. A separate
+daemon rehearsal remains necessary; mocked AuthZ responses are not a substitute.

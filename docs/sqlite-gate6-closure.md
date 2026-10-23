@@ -324,3 +324,11 @@ constraint and evaluates a Docker daemon authorization boundary as a candidate,
 with separate restart/NFS/boot limitations. It is not installed, tested against
 a real daemon, or approved for production changes. Further repetitions of the
 accepted copy suite alone will not resolve that architecture requirement.
+
+
+The user supplied Tower's Engine 29.8.2 baseline: no authorization plugins and
+live restore disabled. An offline deny-by-default Docker HTTP policy candidate
+now has local rule tests; no listener, installer or daemon configuration is
+introduced. This is implementation preparation only, with native gRPC, restart,
+existing streams, host boot and NFS explicitly outside its enforcement claim.
+See the control proposal for the required separate-daemon rehearsal.
