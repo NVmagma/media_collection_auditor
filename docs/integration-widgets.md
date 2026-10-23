@@ -209,3 +209,19 @@ has no poster but retains a link, and row 5 is unmatched and unlinked. Other row
 show generated gradient placeholders, not real Jellyfin artwork. Click a poster
 and confirm the synthetic destination opens, then check the fallback rows. All
 fixture endpoints expire with the isolated container after fifteen minutes.
+
+### Compact title card presentation
+
+The current title templates omit the explanatory paragraphs above the lists and
+the separate “Open in Jellyfin” text links. A matched poster remains a labeled,
+keyboard-accessible Anchor. A missing poster shows a text fallback without a
+navigation link. Loading, unavailable, empty and truncation indicators remain.
+The API's freshness and authorization metadata and all lifecycle safeguards are
+unchanged; Holding dates retain their estimated-transition label.
+
+Dates display as `MM/DD/YYYY HH:mm` in 24-hour time, for example
+`12/10/2026 11:30`. Formatting rearranges the API's validated ISO local wall-time
+characters; it performs no timezone conversion, date parsing or browser-local
+reinterpretation. Seconds/fractions are hidden, and absent timestamps display
+“Unknown”. Both full import definitions contain the same JSX as the separate
+editor fragments. Updating a widget template requires no container update.
