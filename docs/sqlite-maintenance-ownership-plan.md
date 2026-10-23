@@ -836,3 +836,23 @@ source loader configuration, and no global kernel parameter changes are made.
 See the [unexecuted kernel-client fixture plan](sqlite-kernel-client-test-plan.md)
 for the prerequisites and write/cache/teardown evidence needed before a mount
 fixture is chosen. Gate 6 and all production denials remain unchanged.
+
+
+### Real Mac NFSv3 recovery accepted without Tower module loads
+
+The user accepted `nfs-mac.65HHZW` through `59a99c2`: the real Mac returned from
+write during the private-server pause while fsync stayed pending. Independent
+server bytes were unchanged after pause-controller death. Explicit recovery
+completed the queued write; the Mac cleanly unmounted its new mount, and Tower
+verified unchanged host state with no module loads. See the
+[accepted Mac fixture](sqlite-mac-nfs-lab.md).
+
+This closes the real Mac NFSv3 buffered-write/recovery experiment. A paused NFS
+server does not discard dirty client state: successful later delivery is the
+observed behavior, not a denied-write claim. Future maintenance must account
+for client quiescence/pending writeback before the authoritative media baseline
+and before fence release. Ambiguous client outcomes require retained pending
+state and explicit review; no automatic service restore or intent clearance is
+permitted by this evidence. NFSv4/Linux LOCALIO, production restart inhibition,
+all external writer routes and atomic source-entry fencing remain separate
+open requirements. No new NFSv3 server test is needed solely for this record.

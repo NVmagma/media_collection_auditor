@@ -11,7 +11,7 @@ A gate is complete only when its acceptance criteria are verified.
 | 3. Guarded checkpoints | Compare-and-swap, stale-writer rejection, uncertain checkpoint quarantine | Complete: isolated tests |
 | 4. Lifecycle decision parity | Representative movie/season clocks and read-only rehearsal | Complete: isolated tests |
 | 5. Restart and failure rehearsals | Pending intents persist, crashes fail closed, no automatic replay | Complete: disposable Unraid tests |
-| 6. Trusted move verification | Bind identity and paths, independently prove the moved object, reject races and ambiguous outcomes | In progress: native Unraid tests verify live source-retaining Waiting/Holding completion, held paths, fresh protections and failure retention. shfs rejects no-replace publication and retains source/intent. External-writer ownership, atomic source-entry fencing and production crash trust remain open |
+| 6. Trusted move verification | Bind identity and paths, independently prove the moved object, reject races and ambiguous outcomes | In progress: native Unraid tests verify live source-retaining Waiting/Holding completion, held paths, fresh protections and failure retention. shfs rejects no-replace publication and retains source/intent. Real Mac NFSv3 pause/recovery passed without module loads. External-writer ownership, atomic source-entry fencing and production crash trust remain open |
 | 7. Atomic lifecycle reconciliation | Verified move clock change and intent clearance commit together; failure injection proves all-or-nothing | In progress: Unraid verifies atomic Waiting/Holding destination clocks, stable Arr queue, retained-original ledger and intent clearance, including uncertain commits. Production completion still depends on gate 6 and live integration |
 | 8. Production lifecycle integration | Real Waiting/Holding/Keep/Removal moves use guarded ordering; existing JSON path unaffected until cutover | Not wired: capped, revision-chained isolated batches support Waiting/Holding decisions and stop on uncertainty; production audit paths still reject SQLite |
 | 9. External integrations | Arr uncertain outcomes, Jellyfin protection, dashboard authoritative reads, TV-season behavior | In progress: 539-title live advisory coverage, bounded fresh protection scans, one-shot Arr uncertainty, and whole-show copy preservation are verified. Production Arr verification, dashboard authority and season-pruning execution remain open |
@@ -1198,7 +1198,7 @@ inert restart-policy launcher failure cases. These tests require no daemon or
 production services. No additional Tower acceptance is required solely for this
 regression-test/documentation increment.
 
-## Mac NFS alternative: connectivity accepted, recovery fixture pending
+## Mac NFS alternative: connectivity and recovery accepted
 
 The user approved an actual Mac client and existing SSH, with no Tower module
 loads/global kernel-setting changes. The Mac's explicit read-only NFSv3 mount
@@ -1206,5 +1206,15 @@ succeeded; this is connectivity only. A new
 [Mac recovery fixture](sqlite-mac-nfs-lab.md) tests held-descriptor buffered
 writes, incomplete fsync, independent paused server bytes, controller death,
 explicit recovery and clean client unmount through private SSH forwards.
-Only new fixture resources are controlled. Real Mac/Tower acceptance is pending;
-NFSv4/Linux LOCALIO and production ownership/restart inhibition remain open.
+Only new fixture resources are controlled. The user accepted `nfs-mac.65HHZW`
+through `59a99c2`: buffered write returned while paused, fsync remained pending,
+explicit recovery completed it, the Mac cleanly unmounted, and Tower verified
+unchanged host snapshot with no module loads. This closes that bounded real
+Mac NFSv3 test. NFSv4/Linux LOCALIO and production ownership/restart inhibition
+remain open. No new NFSv3 run is needed solely to record this acceptance.
+
+The observed delayed writeback is a maintenance recovery requirement: pausing
+NFS does not discard queued client writes. Unknown client outcomes must retain
+pending state; the accepted fixture cannot authorize automatic production service
+restoration, move verification or intent clearance. See the
+[accepted test and recovery constraint](sqlite-mac-nfs-lab.md).

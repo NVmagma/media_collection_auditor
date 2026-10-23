@@ -1,7 +1,7 @@
 # Real Mac NFSv3 recovery fixture, without Tower module changes
 
-This lab is separate from production media and remains pending Tower/Mac
-acceptance. JSON is authoritative. Writer exclusion, restart inhibition and
+This lab is separate from production media. The Mac NFSv3 recovery run is
+accepted for the scope recorded below. JSON is authoritative. Writer exclusion, restart inhibition and
 SQLite production activation remain false/disabled.
 
 ## Accepted connectivity, not pause/recovery acceptance
@@ -96,8 +96,8 @@ Sources: [Apple NFS mount options](https://github.com/apple-oss-distributions/NF
 The maintained maintenance-only suite passes 232 checks on the development Mac.
 The focused NFS set passes 50 checks. Tests use regular disposable files and
 inert commands, not actual SSH mounts or kernel NFS controls. They establish
-local protocol/isolation guards; the generated Tower/Mac run is still required
-for real buffered-write/recovery acceptance.
+local protocol/isolation guards; real buffered-write/recovery acceptance is
+recorded separately below.
 
 ## First Tower startup rejected; endpoint readiness corrected
 
@@ -115,5 +115,39 @@ DUMP, unavailable endpoints that must block, and early-child-exit diagnostics.
 
 Private rpcbind debug logging and failure-line/phase diagnostics are retained.
 The launcher reports the child exit code and a bounded log excerpt without a
-misleading kill error. Use a fresh lab, not the failed directory. Actual endpoint
-startup and Mac recovery still require acceptance on Tower.
+misleading kill error. The subsequent fresh lab completed as recorded below;
+the failed directory is retained, never resumed.
+
+## Tower and Mac acceptance — October 23, 2026
+
+The user supplied both successful final outputs for `nfs-mac.65HHZW` through
+`59a99c2`. The real Mac reported `write_returned=true` while fsync remained
+incomplete during the private pause. The independently checked paused server
+bytes stayed unchanged after controller death. Explicit fixture recovery then
+completed the queued write and fsync; the Mac cleanly unmounted its new mount.
+Tower reported `isolated_mac_nfs3_fixture_complete`, with unchanged host snapshot
+and `module_loads_performed=false`. Both sides retained production denials.
+
+SSH emitted two channel connection-refused messages during the deliberate
+private-server interruption. In this accepted run they were followed by the
+expected uncertain-write report and successful recovery/teardown, not by a
+startup failure. These messages alone must not be treated as durable write
+denial or ignored in an otherwise failed run.
+
+No repeat NFSv3 fixture run is needed just to accept this evidence. The test
+closes the real Mac NFSv3 buffered-write/controller-death/explicit-recovery
+coverage gap. It does not close all of Gate 6 or prove production restart
+inhibition. NFSv4 and Linux LOCALIO remain untested; no claim about them is
+inferred from this result.
+
+### Maintenance recovery constraint established by this result
+
+A client may return from write while the server is fenced and later deliver
+those bytes when service resumes. Therefore controller death, zero server
+threads, unchanged paused bytes and client process exit cannot independently
+prove that client writes have been discarded. An eventual production protocol
+must account for existing clients and their pending writeback before establishing
+an authoritative media baseline and before releasing the fence. If a pause/crash
+leaves client outcomes unknown, retain pending state and require explicit recovery;
+never automatically restore service, clear intents or mark moves verified from
+this fixture result. Production enforcement is not implemented by these docs.
