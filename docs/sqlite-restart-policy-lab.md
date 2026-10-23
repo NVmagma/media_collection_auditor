@@ -30,3 +30,12 @@ jobs, external supervisors or other writers. No daemon restart or host reboot
 is performed. Production activation, writer exclusion and restart-inhibition
 verification stay disabled/false. Actual Docker behavior requires Tower output;
 local actor tests alone do not establish it.
+
+## Tower acceptance
+
+`restart-policy.jmMjaw` passed: the baseline process failure restarted
+automatically, then the second failure stayed stopped after `restart=no` and
+controller death. Production controls were unchanged. No repeat Tower run is
+needed solely for the added inert launcher regression tests. Those tests cover
+policy-update rejection, changed identity, missing automatic baseline and failed
+cleanup; each must suppress success, with no removal on changed identity.

@@ -10,7 +10,7 @@ by this document. JSON remains authoritative and SQLite activation is disabled.
 | Observed route | Review / control requirement |
 | --- | --- |
 | Auditor: broad RW media bind | Coordinate current JSON audits and manual writers with the future exclusive maintenance owner; existing locks do not exclude external writers |
-| Jellyfin: broad native RW bind and nested union Movies/TV binds | Cover every overlapping mount; a read-only parent alone cannot cover writable nested mounts. Keep fresh real protection reads available while denying media writes; the synthetic HTTP fixture does not establish Jellyfin compatibility |
+| Jellyfin: broad native RW bind and nested union Movies/TV binds | Cover every overlapping mount; a read-only parent alone cannot cover writable nested mounts. Keep fresh real protection reads available while denying media writes; the real Jellyfin 12.2.0 disposable fixture now verifies initial/post-restart protection reads and EROFS media denial; production mount coverage remains unverified |
 | Radarr/Sonarr: broad media and download binds, restart always | Quiesce automatic writers and prevent start/recreation throughout ownership. Required Arr API/reconciliation ordering must be reviewed separately; stopping containers alone is not an accepted integration model |
 | MakeMKV: stopped, privileged, devices, broad RW media, restart always | Stopped state is not a fence. Review elevated access and prevent activation/recreation; a media mount policy alone does not account for privileged/device routes |
 | Lidarr: stopped, broad native RW media, unless-stopped | Keep the writer excluded, including explicit starts/recreation; do not infer an ownership permit from its stopped state or restart policy |
@@ -81,3 +81,19 @@ The user confirmed this bounded pause scenario on Tower through `58d5ce8`:
 one fixture action, endpoint still live, client still paused after controller
 death, and no automatic restoration. This does not accept real dashboard restart
 controls or independent exclusion of other administrative routes.
+
+## Bounded process-restart acceptance
+
+Tower accepted `restart-policy.jmMjaw` using only a new disposable container.
+The first nonzero process exit caused an automatic restart; after persisting
+`restart=no` and killing the fixture controller, the second nonzero exit stayed
+stopped. This accepts running-daemon process-failure policy behavior only.
+Explicit starts, recreation, external supervisors, daemon/host restarts and
+production enforcement remain unverified. See the
+[restart-policy lab](sqlite-restart-policy-lab.md).
+
+The accepted read-only Jellyfin fixture and this policy fixture supply two
+components of the maintenance design. They do not establish exclusive ownership
+of the media namespace. Combining them into production controls still requires
+a reviewed recovery model and coverage of all administrative and external-writer
+routes; the deferred NFS client gap cannot be replaced by these results.
