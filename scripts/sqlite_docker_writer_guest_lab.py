@@ -30,7 +30,7 @@ class Client(http.client.HTTPConnection):
         self.sock.connect(str(self.endpoint))
 
 
-def run(root, binaries, image_archive, *, probe_runtime_route=False):
+def run(root, binaries, image_archive, *, probe_runtime_route=False, integrate_copy=False):
     if (sys.platform!='linux' or os.geteuid()!=0
             or socket.gethostname()!='mca-writer-fixture'
             or Path('/var/lib/cloud/data/instance-id').read_text().strip()!='mca-writer-fixture'):
@@ -164,6 +164,19 @@ def run(root, binaries, image_archive, *, probe_runtime_route=False):
         if api('POST',route+'/start')[0]!=403: raise RuntimeError('Guest start denial lost after daemon restart')
         time.sleep(2)
         if hashlib.sha256(ticks.read_bytes()).hexdigest()!=digest: raise RuntimeError('Guest writer resumed after restart')
+        if integrate_copy:
+            from scripts.sqlite_docker_copy_guest_lab import run_copy_case
+            def observe_selected():
+                if policy.poll() is not None:
+                    raise RuntimeError('Guest selected-writer policy lost')
+                status,body=api('GET','/info')
+                if status!=200 or json.loads(body).get('Plugins',{}).get('Authorization')!=[plugin_name]:
+                    raise RuntimeError('Guest engine policy binding unavailable')
+                inspect_stopped()
+            result['healthy_copy']=run_copy_case(root,observe_selected)
+            def lose_policy():
+                policy.kill();policy.wait(timeout=5)
+            result['boundary_loss_copy']=run_copy_case(root,observe_selected,lose_boundary=lose_policy)
         result.update(status='private_guest_writer_quiescence_complete',
                       stopped_after_daemon_restart=True, fixture_bytes_unchanged=True)
         return result
@@ -180,5 +193,7 @@ if __name__=='__main__':
     parser.add_argument('--image-archive',required=True)
     parser.add_argument('--probe-runtime-route',action='store_true',
                         help='Negative test: label only the new synthetic ID through private containerd')
+    parser.add_argument('--integrate-copy',action='store_true',
+                        help='Run synthetic bound copy and policy-loss retention cases')
     args=parser.parse_args()
-    print(json.dumps(run(args.root,args.docker_bin,args.image_archive,probe_runtime_route=args.probe_runtime_route),sort_keys=True))
+    print(json.dumps(run(args.root,args.docker_bin,args.image_archive,probe_runtime_route=args.probe_runtime_route,integrate_copy=args.integrate_copy),sort_keys=True))

@@ -371,3 +371,35 @@ def test_abrupt_process_death_retains_uncertainty_and_never_reopens(tmp_path, mo
         invoke((root, database, control), lambda *args: pytest.fail('No replay after death'))
     assert before == {p: p.read_bytes() for folder in (root, control)
                       for p in folder.rglob('*') if p.is_file()}
+
+
+@pytest.mark.parametrize('returned', [True, False, {'authorized': True}])
+def test_observer_cannot_supply_a_boolean_or_receipt_as_authority(setup, returned):
+    _, database, _ = setup
+    before = database.read_bytes()
+    with pytest.raises(RuntimeError, match='return no authority'):
+        invoke(setup, lambda *a: pytest.fail('No collection'),
+               _fixture_boundary_observer=lambda: returned)
+    untouched(setup, before)
+
+
+def test_boundary_loss_after_collection_retains_attempt_and_original(setup):
+    root, database, control = setup
+    before = database.read_bytes()
+    fetch, _ = transport([[item()]])
+    lost = False
+    def observe():
+        if lost:
+            raise RuntimeError('Selected fixture writer boundary lost')
+    def collect(*args, **kwargs):
+        nonlocal lost
+        value = fetch(*args, **kwargs)
+        lost = True
+        return value
+    with pytest.raises(RuntimeError):
+        invoke(setup, collect, _fixture_boundary_observer=observe)
+    untouched(setup, before)
+    report = review_disposable_maintenance(control)
+    assert report['maintenance_copy_attempt_present'] is True
+    assert report['resume_authorized'] is False
+    assert journal.inspect_disposable_journal(control)['phase'] == 'work_pending'

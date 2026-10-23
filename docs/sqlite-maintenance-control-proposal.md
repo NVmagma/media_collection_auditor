@@ -249,3 +249,28 @@ a socket separately bound into a container. Paths are lexical declarations, not
 resolved physical aliases. Defaults cover common `/run` and `/var/run` runtime
 paths; the Python CLI accepts additional `--control-root` aliases, so deployment
 paths are not restricted to Tower's layout. Reports grant no enforcement permit.
+
+
+## Updated selected container review accepted (2026-10-23)
+
+The report observes 22 containers and flags 11 for advisory review:
+
+| Declared route | Observations | Required design treatment |
+| --- | --- | --- |
+| Writable media mounts, running | Auditor, Jellyfin, audiobookshelf, NZBGet, Sonarr, Radarr | Cover actual write scope and starts; the current auditor is itself a writer and cannot supply its own independent maintenance boundary. |
+| Writable media mounts, stopped | MakeMKV (privileged/devices, restart always), Lidarr (unless-stopped) | Preserve stopped state and inhibit starts; stopped is not excluded. Elevated access needs separate review. |
+| Docker API mounts | Homarr and Homepage, both read-only socket binds | HTTP access remains administrative; read-only binds do not make API requests read-only. Homepage also has a read-only media bind. |
+| Unresolved volume | SearXNG cache volume | Resolve scope; this observation alone is not a declared media write or a reason to stop the service. |
+
+Jellyfin has both native and shfs media sources, including nested writable Movie
+and TV mounts. A read-only parent alone would not cover these. The supplied
+review does not flag a declared runtime control-directory bind or a host-PID
+route; no physical alias or complete elevated-access exclusion follows from that
+absence. The privileged stopped container remains a distinct control concern.
+
+The media roots for this snapshot cover the entire share. Podcast/download/cache
+mount classifications must not be converted directly into a list of services to
+stop for a Movie/TV operation: narrow operation scope and actual aliases must be
+resolved first. None of these names is a stable full-ID execution binding, and
+this report must not be fed to a quiesce executor as authority. No container is
+stopped, remounted, restart-updated or otherwise changed by this acceptance.

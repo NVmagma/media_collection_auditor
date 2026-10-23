@@ -432,3 +432,18 @@ elevated access and inherited handles remain review requirements. The advisory
 mount reviewer now catches parent runtime directories, `.sock.ttrpc` and custom
 declared control aliases, including read-only/stopped cases. It remains advisory;
 no production permissions, services, guards or ownership claims change.
+
+
+The updated host mount report observes 22 containers and flags 11. It identifies
+the current auditor as a writable media client, dashboard Docker API binds, and
+stopped privileged MakeMKV; these must remain separate from unresolved cache-volume
+scope. Broad share overlap is not automatically a stop list for narrow Movie/TV
+work. The control proposal records the role-specific interpretation.
+
+The independent guest now accepts real selected-Docker-writer observations through
+the maintenance-bound copy verifier. Healthy synthetic media completion retains
+original bytes; policy death during collection blocks completion and retains the
+attempt, source/state and work_pending phase without release. The optional observer
+is deny-only, accepts no boolean authority and changes no production permission.
+This advances integrated component acceptance; full external ownership, Unraid/NFS
+controls and remaining action-boundary failure acceptance still block Gate 6.

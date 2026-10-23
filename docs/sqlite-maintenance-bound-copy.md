@@ -89,3 +89,40 @@ during collection and at the three native completion fault boundaries. The
 parent reviews retained state and must refuse adoption/replay without changing
 evidence. These cases bypass Python cleanup using os._exit; they do not emulate
 host power loss, server reboot or an external writer fence.
+
+## Selected-writer observations in the independent guest
+
+The disposable wrapper optionally accepts a private `_fixture_boundary_observer`
+at its existing held-binding verification points. It must return None or raise;
+booleans/receipts are rejected. It supplies an additional deny condition, never
+external ownership authority. Existing journal/media locks, scope/identity checks,
+protection collection, retention and one-shot behavior remain authoritative.
+All external-writer and production permission flags stay false. There is no
+production caller or activation path.
+
+On 2026-10-23 the real independent Engine 29.8.2 guest exercised this integration
+through `scripts/sqlite_docker_copy_guest_lab.py`, invoked by the writer rehearsal's
+`--integrate-copy` option. The synthetic title/state reside beneath the same bind
+exposed to the selected synthetic writer. Its observer requires the owned policy
+process alive, fresh Engine info identifying the expected authorization plugin,
+and a fresh strict stopped/restart-disabled observation of that exact writer ID.
+Jellyfin collection uses fixed synthetic data; no production network is accessed.
+
+The healthy case completed the real SQLite/copy/quarantine checkpoint and retained
+original bytes without releasing maintenance. The second case killed the policy
+at collection. The next observation blocked completion; the original title and
+state database were unchanged, the one-shot attempt remained recorded, and the
+maintenance phase stayed work_pending with no resume/release authority. No syscall,
+identity witness or production guard was mocked for these guest outcomes.
+
+This accepts selected-writer loss handling at the exercised boundary. It is not
+full external-writer exclusion, a coherent cross-service transaction, protection
+against a change after inspection, a replacement for NFS/boot/administrative
+controls, or acceptance of every completion fault point. A no-op callback cannot
+confer a permit because this wrapper remains disposable and non-authorizing.
+
+Local validation for this increment: 97 focused checks passed with six existing
+platform capability skips on macOS. The real guest independently exercised the
+healthy Linux publication/quarantine path and the collection-time policy loss.
+Evidence was archived; the independent guest was powered off. No new Tower test
+or production service change was needed for these two cases.

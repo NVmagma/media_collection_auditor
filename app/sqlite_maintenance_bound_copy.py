@@ -27,8 +27,10 @@ def run_maintenance_bound_disposable_copy(*, journal_root, maintenance_revision,
         root, database, operation_id, media_key, title_folder, jellyfin_type,
         thresholds, fetch, clock=datetime.now, timer=monotonic,
         favorites_trigger_keep=True, maximum_age_seconds=60,
-        arr_sync_request=None, completion_fault_at=None):
+        arr_sync_request=None, completion_fault_at=None, _fixture_boundary_observer=None):
     """Persist one attempt before work; never release writers or retry an attempt."""
+    if _fixture_boundary_observer is not None and not callable(_fixture_boundary_observer):
+        raise ValueError("Callable disposable boundary observer required")
     root, database = Path(root), Path(database)
     journal_root = journal._root(journal_root)
     if (not root.is_absolute() or root.resolve() != root or database != root/'state.db'
@@ -57,6 +59,10 @@ def run_maintenance_bound_disposable_copy(*, journal_root, maintenance_revision,
             def verify():
                 verify_media()
                 check_scope()
+                if _fixture_boundary_observer is not None:
+                    # Extra deny-only observation, never an ownership credential.
+                    if _fixture_boundary_observer() is not None:
+                        raise RuntimeError("Boundary observer must return no authority")
                 if _media_identity(root, database) != expected:
                     raise RuntimeError('Maintenance media binding changed')
                 if binding_persisted:
