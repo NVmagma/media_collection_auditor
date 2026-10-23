@@ -11,7 +11,8 @@ LAUNCHER=Path(__file__).parents[1]/'scripts/sqlite_copy_ownership_checks.sh'
 
 
 @pytest.mark.parametrize('run_status',[0,23])
-def test_launcher_mounts_only_new_labs_and_selected_readonly_sources(tmp_path,run_status):
+@pytest.mark.parametrize('suite',['copy-ownership','maintenance-writeback'])
+def test_launcher_mounts_only_new_labs_and_selected_readonly_sources(tmp_path,run_status,suite):
     tools=tmp_path/'bin'
     tools.mkdir()
     calls=tmp_path/'calls'
@@ -28,7 +29,8 @@ if sys.argv[1]=='run': sys.exit(int(os.environ['RUN_STATUS']))
         tool.chmod(0o755)
     first,second=tmp_path/'first',tmp_path/'second'
     first.mkdir();second.mkdir()
-    result=subprocess.run(['bash',str(LAUNCHER),str(first),str(second)],
+    selected=LAUNCHER if suite=='copy-ownership' else LAUNCHER.with_name('sqlite_maintenance_writeback_checks.sh')
+    result=subprocess.run(['bash',str(selected),str(first),str(second)],
         text=True,capture_output=True,timeout=10,
         env={**os.environ,'PATH':str(tools)+os.pathsep+os.environ['PATH'],
              'DOCKER_CALLS':str(calls),'RUN_STATUS':str(run_status)})
@@ -39,19 +41,21 @@ if sys.argv[1]=='run': sys.exit(int(os.environ['RUN_STATUS']))
     run=operations[1]
     assert run[0]=='run' and '--rm' in run and '--read-only' in run
     mounts=[run[index+1] for index,arg in enumerate(run) if arg=='--mount']
-    assert len(mounts)==5
+    assert len(mounts)==6
     repo=LAUNCHER.parents[1]
-    for name in ('app','tests','requirements.txt'):
+    for name in ('app','tests','scripts','requirements.txt'):
         assert f'type=bind,src={repo/name},dst=/src/{name},readonly' in mounts
     for parent,target in ((first,'/lab-first'),(second,'/lab-second')):
         labs=list(parent.iterdir())
-        assert len(labs)==1 and labs[0].name.startswith('copy-ownership.')
+        assert len(labs)==1 and labs[0].name.startswith(suite+'.')
         assert f'type=bind,src={labs[0]},dst={target}' in mounts
     assert run[run.index('--cap-drop')+1]=='ALL'
     assert '240s' in run
     assert '/tmp:rw,noexec,nosuid,nodev,size=256m' in run
-    assert '/tmp/testenv/bin/python -m pip install' in run[-1]
-    assert '/tmp/testenv/bin/pip ' not in run[-1]
+    payload=run[run.index('-c')+1]
+    assert '/tmp/testenv/bin/python -m pip install' in payload
+    assert '/tmp/testenv/bin/pip ' not in payload
+    assert run[-1]==suite
     assert not any('docker.sock' in mount or 'dst=/media,' in mount or '.env' in mount for mount in mounts)
     assert '--publish' not in run and '--privileged' not in run
 
@@ -70,3 +74,24 @@ def test_pip_module_runs_when_generated_launcher_is_not_executable(tmp_path):
     assert result.returncode==0,result.stderr
     assert 'pip ' in result.stdout
     assert str(environment) in result.stdout
+
+
+def test_unknown_suite_rejected_before_any_lab_or_docker_operation(tmp_path):
+    tools=tmp_path/'bin'
+    tools.mkdir()
+    for name,body in {'uname':'echo Linux',
+                      'readlink':'shift; printf "%s\\n" "$1"',
+                      'docker':'touch "$MUTATED"; exit 99'}.items():
+        tool=tools/name
+        tool.write_text('#!/bin/sh\n'+body+'\n')
+        tool.chmod(0o755)
+    parent=tmp_path/'labs'
+    parent.mkdir()
+    result=subprocess.run(['bash',str(LAUNCHER.with_name('sqlite_boundary_checks.sh')),
+                           'arbitrary-command',str(parent),str(parent)],
+                          text=True,capture_output=True,timeout=5,
+                          env={**os.environ,'PATH':str(tools)+os.pathsep+os.environ['PATH'],
+                               'MUTATED':str(tmp_path/'mutated')})
+    assert result.returncode==2
+    assert not list(parent.iterdir())
+    assert not (tmp_path/'mutated').exists()
