@@ -69,3 +69,16 @@ three actual-Linux directory-action cases explicitly skipped on the development
 Mac. Focused integration/hold/review/launcher tests pass 46 checks with the same
 three skips. Linux boot/net readers are simulated only in the Mac protocol tests;
 the Unraid run uses its actual kernel identities and supported directory syscall.
+
+
+For retained disposable evidence, explicitly select both labs:
+
+```sh
+python -m scripts.sqlite_maintenance_review --root /absolute/maintenance-lab \
+  --media-root /absolute/media-lab
+```
+
+This is optional detached read-only comparison, not a retry command. The reviewer
+never derives the media path from stored evidence. A matching identity or absent
+pending record never authorizes recovery. SQLite sidecars block comparison
+without being recovered or removed. No original media bytes are read or changed.

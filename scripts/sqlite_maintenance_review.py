@@ -10,9 +10,10 @@ from app.sqlite_maintenance_review import review_disposable_maintenance
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", required=True)
+    parser.add_argument("--media-root", help="Explicit marked media lab; stored paths are never followed")
     args = parser.parse_args(argv)
     try:
-        report = review_disposable_maintenance(args.root)
+        report = review_disposable_maintenance(args.root, media_root=args.media_root)
     except (OSError, RuntimeError, ValueError, TypeError, sqlite3.Error):
         report = {"status": "blocked", "reason": "retained_fixture_review_unavailable",
                   "read_only": True, "automatic_action": "none", "resume_authorized": False,

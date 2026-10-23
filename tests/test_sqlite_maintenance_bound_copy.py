@@ -171,6 +171,11 @@ def test_completion_crash_never_replays_or_releases_maintenance(setup,fault):
     assert review['copy_attempt']['media_outcome']=='not_independently_verified'
     assert review['copy_attempt']['retry_authorized'] is False
     assert review['resume_authorized'] is False
+    combined=review_disposable_maintenance(control, media_root=root)
+    assert combined['media_comparison']['pending_operation']==(
+        'no_pending_record_not_completion_proof' if fault=='after_completion_checkpoint'
+        else 'matching_operation_requires_review')
+    assert combined['resume_authorized'] is False
     state=GuardedSQLiteStateStore(database).load_with_revision()[0]
     if fault=='after_completion_checkpoint':
         assert FOLDER in state['queued'] and 'sqlite_pending_operations' not in state
@@ -180,3 +185,112 @@ def test_completion_crash_never_replays_or_releases_maintenance(setup,fault):
     assert (original/'payload').read_text()=='fixture'
     with pytest.raises(RuntimeError,match='already attempted'):
         invoke(setup,lambda *a:pytest.fail('Never replay a failed bound operation'))
+
+
+def retain_failed_attempt(setup):
+    def fail(*args):
+        raise RuntimeError('fixture transport unavailable')
+    with pytest.raises(RuntimeError):
+        invoke(setup, fail)
+
+
+def test_detached_media_comparison_reports_no_intent_without_completion_claim(setup):
+    root, database, control = setup
+    retain_failed_attempt(setup)
+    before = {p: p.read_bytes() for folder in (root, control)
+              for p in folder.rglob('*') if p.is_file()}
+    report = review_disposable_maintenance(control, media_root=root)
+    comparison = report['media_comparison']
+    assert comparison['binding'] == 'matching_identifiers_only'
+    assert comparison['pending_operation'] == 'no_pending_record_not_completion_proof'
+    assert comparison['retry_authorized'] is False
+    assert comparison['media_bytes_verified'] is False
+    assert report['resume_authorized'] is False
+    assert before == {p: p.read_bytes() for folder in (root, control)
+                      for p in folder.rglob('*') if p.is_file()}
+    import json
+    assert str(root) not in json.dumps(report)
+    assert 'bound-copy' not in json.dumps(report)
+
+
+@pytest.mark.parametrize('operation', ['bound-copy', 'different-attempt'])
+def test_detached_media_pending_identity_remains_review_only(setup, operation):
+    root, database, control = setup
+    retain_failed_attempt(setup)
+    state, revision = GuardedSQLiteStateStore(database).load_with_revision()
+    state['sqlite_pending_operations'] = {'id': operation, 'kind': 'copy_stage',
+                                         'phase': 'intent_recorded', 'details': {}}
+    GuardedSQLiteStateStore(database).save_if_revision(state, revision)
+    report = review_disposable_maintenance(control, media_root=root)
+    assert report['media_comparison']['pending_operation'] == (
+        'matching_operation_requires_review' if operation == 'bound-copy'
+        else 'different_operation_requires_review')
+    assert report['media_comparison']['retry_authorized'] is False
+
+
+@pytest.mark.parametrize('suffix', ['-wal', '-shm', '-journal'])
+def test_media_sidecars_are_retained_without_recovery(setup, suffix):
+    root, database, control = setup
+    retain_failed_attempt(setup)
+    sidecar = root / ('state.db' + suffix)
+    sidecar.write_bytes(b'uncertain retained evidence')
+    before = database.read_bytes()
+    with pytest.raises(RuntimeError, match='sidecars'):
+        review_disposable_maintenance(control, media_root=root)
+    assert sidecar.read_bytes() == b'uncertain retained evidence'
+    assert database.read_bytes() == before
+
+
+def test_replaced_media_database_cannot_inherit_pending_comparison(setup):
+    root, database, control = setup
+    retain_failed_attempt(setup)
+    database.rename(root / 'retained-state.db')
+    database.write_bytes((root / 'retained-state.db').read_bytes())
+    report = review_disposable_maintenance(control, media_root=root)
+    assert report['media_comparison']['binding'] == 'changed_or_unavailable'
+    assert report['media_comparison']['pending_operation'] == 'unverified'
+
+
+def test_media_comparison_never_follows_stored_path(setup):
+    root, _, control = setup
+    retain_failed_attempt(setup)
+    with sqlite3.connect(control / 'maintenance.db') as db:
+        db.execute("UPDATE maintenance_copy_binding SET root='/unavailable/private/path'")
+    report = review_disposable_maintenance(control, media_root=root)
+    assert report['media_comparison']['binding'] == 'changed_or_unavailable'
+
+
+def test_unmarked_media_root_is_rejected_before_snapshot(setup):
+    root, _, control = setup
+    retain_failed_attempt(setup)
+    (root / '.sqlite_disposable_rehearsal').unlink()
+    with pytest.raises(OSError):
+        review_disposable_maintenance(control, media_root=root)
+
+
+def test_media_replacement_during_detached_snapshot_discards_report(setup, monkeypatch):
+    from app import sqlite_maintenance_review as module
+    root, database, control = setup
+    retain_failed_attempt(setup)
+    original = module._snapshot
+    def replace(directory, name='maintenance.db'):
+        result = original(directory, name)
+        if name == 'state.db':
+            database.rename(root / 'retained-state.db')
+            database.write_bytes((root / 'retained-state.db').read_bytes())
+        return result
+    monkeypatch.setattr(module, '_snapshot', replace)
+    with pytest.raises(RuntimeError, match='Media evidence changed'):
+        review_disposable_maintenance(control, media_root=root)
+
+
+def test_combined_cli_reports_comparison_without_clearance(setup, capsys):
+    import json
+    from scripts.sqlite_maintenance_review import main
+    root, _, control = setup
+    retain_failed_attempt(setup)
+    assert main(['--root', str(control), '--media-root', str(root)]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report['media_comparison']['binding'] == 'matching_identifiers_only'
+    assert report['clearance_authorized'] is False
+    assert report['production_authorized'] is False

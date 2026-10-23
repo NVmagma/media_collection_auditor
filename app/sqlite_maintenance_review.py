@@ -5,7 +5,8 @@ execution rights. Scope drift can be reported without accepting it for use.
 """
 from contextlib import closing
 import os
-from pathlib import PurePosixPath
+import json
+from pathlib import Path, PurePosixPath
 import re
 import sqlite3
 import stat
@@ -21,18 +22,18 @@ def _file_identity(info):
     return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
 
 
-def _require_no_sidecars(root):
+def _require_no_sidecars(root, name="maintenance.db"):
     # A raw main-file image is not a committed snapshot when recovery/WAL state
     # exists. Never recover, checkpoint, delete or inspect those source files.
     for suffix in ("-journal", "-wal", "-shm"):
-        if os.path.lexists(root / ("maintenance.db" + suffix)):
+        if os.path.lexists(root / (name + suffix)):
             raise RuntimeError("Retained fixture has unresolved SQLite sidecars")
 
 
-def _snapshot(root):
+def _snapshot(root, name="maintenance.db"):
     """Read a bounded file image; SQLite never opens the source or sidecars."""
-    _require_no_sidecars(root)
-    path = root / "maintenance.db"
+    _require_no_sidecars(root, name)
+    path = root / name
     expected = _file_identity(path.lstat())
     if expected[2] > MAX_JOURNAL_BYTES:
         raise RuntimeError("Retained fixture exceeds review bound")
@@ -114,7 +115,67 @@ def _copy_attempt(db, phase, history_valid):
     return result
 
 
-def review_disposable_maintenance(root):
+def _review_media_binding(db, media_root):
+    """Read only an explicitly selected marked media lab, never a stored path."""
+    root = Path(media_root)
+    if not root.is_absolute() or root.resolve() != root or not stat.S_ISDIR(root.lstat().st_mode):
+        raise RuntimeError('Canonical disposable media root required')
+    directory = root.lstat()
+    def marker():
+        path = root / '.sqlite_disposable_rehearsal'
+        expected = _file_identity(path.lstat())
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        try:
+            if (_file_identity(os.fstat(fd)) != expected
+                    or os.read(fd, 17) != b'DISPOSABLE ONLY\n'
+                    or _file_identity(path.lstat()) != expected):
+                raise RuntimeError('Disposable media marker unavailable')
+        finally:
+            os.close(fd)
+        return expected
+    marker_identity = marker()
+    content, identity = _snapshot(root, 'state.db')
+    report = {'binding': 'changed_or_unavailable', 'pending_operation': 'unverified',
+              'source': 'detached_media_snapshot', 'retry_authorized': False,
+              'media_bytes_verified': False, 'original_retention_verified': False}
+    # Do not interpret media state as belonging to the attempt on identity drift.
+    rows = db.execute('SELECT root, root_device, root_inode, database_device, '
+                      'database_inode, operation_id FROM maintenance_copy_binding LIMIT 2').fetchall()
+    expected = (str(root), directory.st_dev, directory.st_ino, identity[0], identity[1])
+    if len(rows) == 1 and rows[0][:5] == expected:
+        report['binding'] = 'matching_identifiers_only'
+        with closing(sqlite3.connect(':memory:')) as media:
+            media.deserialize(content)
+            media.execute('PRAGMA query_only=ON')
+            media.execute('PRAGMA trusted_schema=OFF')
+            media.execute('PRAGMA temp_store=MEMORY')
+            # Read only the schema/completion and pending record, not titles or
+            # clocks. Absence of a pending record never proves a media commit.
+            schema = media.execute("SELECT value FROM metadata WHERE key='schema_version'").fetchall()
+            complete = media.execute("SELECT value FROM metadata WHERE key='snapshot_complete'").fetchall()
+            if schema != [('2',)] or complete != [('1',)]:
+                raise RuntimeError('Completed media schema required')
+            pending = media.execute("SELECT value_json FROM extra_state WHERE key='sqlite_pending_operations'").fetchall()
+            if not pending:
+                report['pending_operation'] = 'no_pending_record_not_completion_proof'
+            elif len(pending) == 1:
+                value = json.loads(pending[0][0])
+                if not isinstance(value, dict) or not isinstance(value.get('id'), str):
+                    raise RuntimeError('Pending media operation unavailable')
+                report['pending_operation'] = ('matching_operation_requires_review'
+                    if value['id'] == rows[0][5] else 'different_operation_requires_review')
+            else:
+                raise RuntimeError('Pending media operation unavailable')
+    current = root.lstat()
+    _require_no_sidecars(root, 'state.db')
+    if ((current.st_dev, current.st_ino) != (directory.st_dev, directory.st_ino)
+            or _file_identity((root/'state.db').lstat()) != identity
+            or marker() != marker_identity):
+        raise RuntimeError('Media evidence changed during review')
+    return report
+
+
+def review_disposable_maintenance(root, *, media_root=None):
     """Report evidence even after scope drift; NEVER return resume clearance.
 
     Only a marked, canonical disposable fixture is accepted. Queries use a
@@ -152,6 +213,11 @@ def review_disposable_maintenance(root):
             report["blockers"].append("retained_media_attempt_requires_review")
             if attempt['binding_status'] == 'invalid_or_unavailable':
                 report['blockers'].append('retained_media_binding_invalid_or_unavailable')
+        if media_root is not None:
+            if attempt is None or attempt['binding_status'] != 'structurally_valid_identifiers_only':
+                raise RuntimeError('Valid retained attempt required for media comparison')
+            report['media_comparison'] = _review_media_binding(db, media_root)
+            report['blockers'].append('detached_media_comparison_never_authorizes_recovery')
         if journal._client_writeback_uncertain(db):
             report["client_writeback_uncertain"] = True
             report["blockers"].append("client_writeback_outcome_uncertain")

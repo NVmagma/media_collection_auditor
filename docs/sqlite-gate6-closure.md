@@ -257,3 +257,28 @@ untouched by detached review.
 This improves recovery evidence for Gate 6's integrated acceptance requirement;
 it does not implement the missing host fence or close the gate. The existing
 maintenance-bound-copy focused launcher includes these regressions on both paths.
+
+
+Tower accepted the retained-binding review through `5f26bb6`: 51 passed with
+three capability skips on shfs, and all 54 passed on native storage.
+
+### Explicit detached media comparison
+
+An optional `--media-root` on the maintenance review CLI compares the retained
+binding with an explicitly supplied canonical, marked disposable media lab. It
+never follows the path stored in the maintenance database. Both main databases
+are read as bounded detached images; SQLite never opens the source files.
+Unresolved sidecars are preserved and block review. Root/database/marker
+replacement during the observation discards the report. No runner lock is
+created, no migration/recovery/checkpoint runs and no network collection occurs.
+
+The result reports identifier comparison and whether a pending operation ID
+matches, differs, or is absent. Absence is explicitly not completion proof: the
+media transaction can commit before the maintenance checkpoint does. Operation
+IDs, media paths and title details stay redacted. This is neither a coherent
+cross-database transaction nor verification of media bytes/protections/retained
+originals; no combination grants retry, clearance, writer release or production
+authority. Existing writeback holds and scope blockers remain authoritative.
+
+This advances integrated recovery diagnostics, not external writer enforcement.
+Actual ownership/continuity and production integration remain Gate 6 blockers.
