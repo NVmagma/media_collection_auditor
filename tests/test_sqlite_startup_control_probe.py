@@ -32,3 +32,12 @@ def test_malformed_or_duplicate_settings_and_autostart_fail_closed(tmp_path):
     auto.mkdir(parents=True)
     (auto / 'unraid-autostart').write_text('radarr 10\nsecret=$(command)\n')
     assert module.observe(tmp_path)['unraid_autostart'] == {'status': 'unverified', 'entries': []}
+
+
+def test_container_context_is_explicit_and_never_authorizes(tmp_path):
+    (tmp_path / '.dockerenv').touch()
+    result = module.observe(tmp_path)
+    assert result['status'] == 'wrong_execution_context'
+    assert result['container_marker_observed'] is True
+    assert result['production_authorized'] is False
+    assert result['source_identities']['/etc/rc.d/rc.docker']['matches_reviewed_upstream'] is False

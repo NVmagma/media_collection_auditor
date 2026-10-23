@@ -157,3 +157,46 @@ policies. The actual host source fingerprints still need review. Disabling a
 restart policy alone is therefore insufficient. This discovery cannot establish
 boot ordering, exclude administrative recreation, or grant ownership. A concrete
 host change package and integrated acceptance remain required before Gate 6 closes.
+
+
+### Tower startup observations accepted (2026-10-23)
+
+The first probe was incorrectly launched inside the auditor container. Its
+unavailable host files are not host evidence. The probe now explicitly reports
+`wrong_execution_context` when a Docker container marker is present. Absence of
+that marker is not proof of a host namespace or permission to enforce anything.
+
+The subsequent host-terminal snapshot reports Docker enabled, 24 Unraid
+autostart entries, and matching Docker service aliases with SHA-256
+`0528b5a5ea967a0f64675f61381eadd922a9538b16dcd36b7b1a635d78b955c2`.
+The pinned upstream rc.docker bytes were downloaded and independently hashed to
+the same value. Both start and restart dispatch asynchronous container startup
+from `/var/lib/docker/unraid-autostart`, separately from Docker restart policies.
+Auditor, Jellyfin, Radarr, Sonarr, NZBGet and Homepage are among these entries.
+Names in this list do not prove that those containers exist, run, or write media.
+Homarr's absence does not exclude direct starts or recreation.
+
+The host rc.local fingerprint matches the earlier reviewed source. The custom
+go fingerprint is `6e640b0b9f7d2777569ae2c2fc8f5d8e93f42c937a7b34e58a62c029e8952146`;
+its contents and ordering remain unreviewed. The exact quoted yes/no filter
+produced no NFS setting: missing, alternative formatting and other values were
+not distinguished. This must not be interpreted as disabled NFS.
+
+Before a production adapter can be accepted, its change package must identify:
+
+1. Durable pending-maintenance state outside disposable controller processes,
+   with boot recovery refusing automatic media work and service restoration.
+2. Every legitimate service/container start and recreation route, including
+   background Unraid autostart and dashboard Docker access. Editing only the
+   autostart list or restart policies cannot enforce this boundary.
+3. A reviewed boot ordering mechanism that applies before writers start; a
+   late go-script hook alone cannot establish that ordering.
+4. Pending NFS client writeback handling before collecting an authoritative
+   media baseline, and explicit recovery before reopening access.
+5. Integrated failure acceptance and a manual rollback/recovery procedure that
+   retains originals and uncertainty records. Unknown state never restores
+   writers automatically. Arbitrary privileged bypass cannot be represented
+   as excluded merely by a shell wrapper or cooperative lock.
+
+No host installation, service control, startup preference edit or kernel change
+is performed by this discovery increment. Gate 6 remains open.

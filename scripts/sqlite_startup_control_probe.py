@@ -34,11 +34,17 @@ def preference(data, key):
 def observe(root=Path('/')):
     def read(name):
         return read_regular(root / name.lstrip('/'))
+    container_marker = (root / '.dockerenv').exists()
     sources = {}
     for name in ('/etc/rc.d/rc.docker', '/usr/local/etc/rc.d/rc.docker',
                  '/etc/rc.d/rc.local', '/boot/config/go'):
         data = read(name)
         sources[name] = {'status': 'observed', 'sha256': hashlib.sha256(data).hexdigest()} if data is not None else {'status': 'unavailable'}
+    docker_source = sources['/etc/rc.d/rc.docker']
+    docker_source['matches_reviewed_upstream'] = (
+        docker_source.get('sha256') ==
+        '0528b5a5ea967a0f64675f61381eadd922a9538b16dcd36b7b1a635d78b955c2'
+    )
     settings = {}
     for name, key in (('/boot/config/docker.cfg', 'DOCKER_ENABLED'),
                       ('/boot/config/share.cfg', 'shareNFSEnabled')):
@@ -59,7 +65,8 @@ def observe(root=Path('/')):
     return {'read_only': True, 'production_activation': 'disabled',
             'production_authorized': False, 'writer_exclusion_verified': False,
             'restart_inhibition_verified': False, 'automatic_action': 'none',
-            'status': 'review_required', 'settings': settings, 'source_identities': sources,
+            'status': 'wrong_execution_context' if container_marker else 'review_required',
+            'container_marker_observed': container_marker, 'settings': settings, 'source_identities': sources,
             'unraid_autostart': {'status': 'observed' if valid else 'unverified',
                                  'entries': entries if valid else []},
             'limitations': ['snapshot_never_authorizes_enforcement',
