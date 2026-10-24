@@ -146,7 +146,7 @@ and provide non-adopting review after interruption. The actual packaged entry
 point passed Linux/Python 3.12.15 SIGKILL and competing-controller acceptance with
 all external-action flags false. See
 [host controller preparation](sqlite-host-controller-preparation.md).
-Native host scope/control mappings and service adapters are still absent; this
+Production runtime/control-location binding and service adapters remain unverified; this
 component does not satisfy the complete runnable production-controller deliverable.
 
 ## Native launcher mechanism
@@ -154,7 +154,23 @@ component does not satisfy the complete runnable production-controller deliverab
 A native preparation-only launcher now avoids the need for host Python, chroot or
 new host mounts by invoking the copied interpreter with its own loader/libraries.
 Local ARM64 Linux acceptance passed, including actual controller death and
-non-adopting review; x86-64/Tower acceptance remains required. The narrow lab
+non-adopting review. Tower/x86-64 native preparation and separate non-adopting
+review also passed; its retained request stayed unchanged. The narrow lab
 procedure is in [native launcher review](sqlite-host-controller-native-launcher.md).
 No production control location, service adapter or boot enforcement is approved
 by this mechanism. All controller/cutover authority blockers remain.
+
+## Private location exposure review
+
+`app/sqlite_control_location_review.py` now checks detached candidate paths and
+explicit aliases against observed NFS export roots, SMB share roots and container
+bind sources. Both parent exposure and nested exposure conflict; a read-only
+container bind also exposes controller state. Component boundaries prevent an
+`appdata` export from incorrectly matching an unrelated `appdata-private` sibling.
+Ambiguous paths and malformed observations are rejected rather than normalized.
+
+This helper performs no filesystem or service operations. Even an empty conflict
+list retains blockers for incomplete alias/exposure coverage and unverified live
+identity, permissions and durability. It is not connected to controller authority
+and cannot clear the private-location blocker. Actual host inventory collection,
+private path selection and live binding still remain to be implemented/reviewed.

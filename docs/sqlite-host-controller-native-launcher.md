@@ -1,7 +1,7 @@
 # Native preparation launcher without host Python installation
 
 Status: preparation-only launcher implemented; local ARM64 Linux acceptance passed.
-Unraid/x86-64 acceptance is pending. No service adapter or production activation
+Tower/x86-64 native preparation acceptance also passed. No service adapter or production activation
 has been added, and all existing controller blockers remain.
 
 ## Mechanism and trust boundary
@@ -90,9 +90,27 @@ No runtime is automatically deleted and no existing service is restored/restarte
 
 ## Still required
 
-After actual x86-64 acceptance, review the immutable runtime/source deployment,
+Following native launch acceptance, review the immutable runtime/source deployment,
 all extension dependencies and the private persistent control location outside
 exports/binds/aliases. Then implement exact host service/settings adapters and
 owned-change recovery, with boot fencing and authoritative fresh protections.
 Native observations do not remove any of those requirements. The alternative
 chroot/bind-mapping design is not silently activated by this mechanism.
+
+## Tower acceptance received
+
+The operator ran the narrow lab at `/mnt/media/sql_test/native-controller.lK8u8c`.
+The six-module bundle launched through the exported runtime. Preparation observed
+matching boot, mount/network namespaces and control identities; a separate review
+process refused controller-session adoption. The retained request was unchanged,
+and the final status was `native_host_preparation_lab_complete`.
+
+Bundle manifest SHA256:
+`9fefce46a92f749ef08973a27a3576dd46b893dec5fdc6f0004f7bcf0877a664`.
+Entrypoint SHA256:
+`244e20817809d98f0cd7be1236f93663587c8f5ff2e46dfaa7d4588139e38654`.
+
+This accepts native launch mechanics on Tower. It does not accept production
+storage/runtime installation, Docker-shutdown survival of this controller, or a
+Tower controller-death test. All six reported dependency blockers remain. The
+swap-limit warning did not prevent these preparation checks from completing.
