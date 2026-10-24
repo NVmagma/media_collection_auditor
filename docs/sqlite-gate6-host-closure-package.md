@@ -148,3 +148,13 @@ all external-action flags false. See
 [host controller preparation](sqlite-host-controller-preparation.md).
 Native host scope/control mappings and service adapters are still absent; this
 component does not satisfy the complete runnable production-controller deliverable.
+
+## Native launcher mechanism
+
+A native preparation-only launcher now avoids the need for host Python, chroot or
+new host mounts by invoking the copied interpreter with its own loader/libraries.
+Local ARM64 Linux acceptance passed, including actual controller death and
+non-adopting review; x86-64/Tower acceptance remains required. The narrow lab
+procedure is in [native launcher review](sqlite-host-controller-native-launcher.md).
+No production control location, service adapter or boot enforcement is approved
+by this mechanism. All controller/cutover authority blockers remain.

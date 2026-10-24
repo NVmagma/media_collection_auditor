@@ -109,3 +109,12 @@ startup, fresh Jellyfin protection availability, explicit owned-change recovery
 and production ownership-bound operations remain unimplemented. The preparation
 report includes fixed blockers for these dependencies; an operator boolean cannot
 turn a successful preparation into permission to act.
+
+## Native launcher candidate
+
+The [native preparation launcher](sqlite-host-controller-native-launcher.md) now
+runs the copied runtime through its own loader, avoiding chroot and host proc/control
+bind mounts for this preparation core. Local ARM64 Linux launch, mapped-runtime,
+SIGKILL and review acceptance passed. x86-64/Tower acceptance and actual private
+control location/runtime deployment review are still pending. The chroot mapping
+requirements above describe that alternative design; no such mappings were added.

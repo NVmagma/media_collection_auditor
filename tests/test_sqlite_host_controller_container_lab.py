@@ -5,7 +5,8 @@ import pytest
 from scripts import sqlite_host_controller_container_lab as lab
 
 
-def test_fixture_cannot_target_an_existing_service_or_inherit_host_access(monkeypatch):
+@pytest.mark.parametrize('native',[False,True])
+def test_fixture_cannot_target_an_existing_service_or_inherit_host_access(monkeypatch,native):
     image='sha256:'+'a'*64;container='b'*64;calls=[]
     def command(*args,**kwargs):
         calls.append(args)
@@ -15,7 +16,7 @@ def test_fixture_cannot_target_an_existing_service_or_inherit_host_access(monkey
         if args[:2]==('docker','start'):raise RuntimeError('fixture failure')
         return b''
     monkeypatch.setattr(lab,'command',command)
-    with pytest.raises(RuntimeError,match='fixture failure'):lab.run(image)
+    with pytest.raises(RuntimeError,match='fixture failure'):lab.run(image,native=native)
     create=next(args for args in calls if args[:2]==('docker','create'))
     assert '--mount' not in create and '--volume' not in create and '--cap-add' not in create
     assert '--privileged' not in create and '--read-only' in create
