@@ -102,11 +102,13 @@ def recheck_scheduled_move(*, plan, move, read_tracking, fetch_protection,
             return blocked('tracking_changed_during_refresh')
         decision = review_decision(after, move.media_key, move.source_stage, clock(),
             move.threshold_days, protection.signals, plan.favorites_trigger_keep)
-        if current_tick() - started >= maximum_protection_seconds:
+        checked_tick = current_tick()
+        if checked_tick - started >= maximum_protection_seconds:
             return blocked('protection_read_deadline_exceeded')
     except Exception:
         return blocked('tracking_or_plan_not_current')
     if decision['status'] != 'advisory' or decision['action'] != move.action:
         return blocked('fresh_decision_changed')
     return {**base, 'status': 'revalidated_advisory', 'reason': 'fresh_decision_matches',
-            'filesystem_validation_required': True, 'guarded_intent_required': True}
+            'filesystem_validation_required': True, 'guarded_intent_required': True, 'checked_tick': checked_tick,
+            'protection_deadline_tick': started + maximum_protection_seconds}

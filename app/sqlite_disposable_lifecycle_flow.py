@@ -43,7 +43,8 @@ def execute_disposable_lifecycle_move(*, root, database, operation_id, media_key
                                       observed_at=None, fault_at=None, expected_revision=None,
                                       planned_move=None, _use_directory_handles=False,
                                       _verify_runner_binding=None, title_folder="Movie",
-                                      _before_intent_review=None, arr_sync_request=None):
+                                      _before_intent_review=None, arr_sync_request=None,
+                                      _before_rename_review=None, _sync_rename_parents=False):
     """Persist intent, rename with live witness, checkpoint clocks and intent.
 
     fault_at is test-only: after_intent, after_rename, after_applied.
@@ -106,7 +107,7 @@ def execute_disposable_lifecycle_move(*, root, database, operation_id, media_key
                                     fault_at, source, destination, fd, parents,
                                     expected_revision, planned_move, _use_directory_handles,
                                     _verify_runner_binding, title_folder, _before_intent_review,
-                                    arr_sync_request)
+                                    arr_sync_request, _before_rename_review, _sync_rename_parents)
 
 
 def _perform_pinned_move(root, database, operation_id, media_key,
@@ -114,7 +115,7 @@ def _perform_pinned_move(root, database, operation_id, media_key,
                          fault_at, source, destination, fd, parents,
                          expected_revision, planned_move, use_directory_handles,
                          verify_runner_binding, title_folder, before_intent_review,
-                         arr_sync_request):
+                         arr_sync_request, before_rename_review, sync_rename_parents):
     if verify_runner_binding is not None:
         verify_runner_binding()
     original = os.fstat(fd)
@@ -205,6 +206,10 @@ def _perform_pinned_move(root, database, operation_id, media_key,
         verify_runner_binding()
     if fault_at == "after_intent":
         raise RuntimeError("Injected crash after intent")
+    if before_rename_review is not None:
+        before_rename_review()
+        assert_stage_directories_unchanged(root, parents)
+        verify_mount_binding()
     # The persisted intent is durable before this external operation.
     try:
         if use_directory_handles:
@@ -223,6 +228,10 @@ def _perform_pinned_move(root, database, operation_id, media_key,
     verify_mount_binding()
     if verify_runner_binding is not None:
         verify_runner_binding()
+    if sync_rename_parents:
+        # Directory sync failure is uncertain: retain the intent, never replay.
+        os.fsync(parents[source_stage])
+        os.fsync(parents[destination_stage])
     if fault_at == "after_rename":
         raise RuntimeError("Injected crash after rename")
     coordinator.mark_applied(operation_id)

@@ -135,3 +135,41 @@ checks and durable intent/outcome reconciliation. A completed move advances the
 tracking revision, so a future serialized executor must validate a guarded revision
 chain for subsequent candidates; it must not simply relax the original plan's
 revision comparison. Existing production cutover guards still block activation.
+
+
+## Scheduled disposable rename integration
+
+`app/sqlite_scheduled_disposable_executor.py` connects one advisory scheduled
+candidate to the existing marked disposable SQLite lifecycle flow. It holds the
+cooperating runner lock, validates the requested title/database binding, performs
+a fresh advisory recheck before intent, and requires that exact pending intent
+and revision immediately before rename. Evidence hashing and intent persistence
+must finish within the protection and plan deadlines; expiration retains intent
+and blocks rename. Held stage directory descriptors, same-mount/device binding,
+atomic no-replace rename and live post-rename witness checks remain in force.
+Both parent directories are fsynced before lifecycle reconciliation. No copy,
+source deletion, Arr delivery, restart replay or production activation is exposed.
+
+Local Linux/Python 3.12.15 acceptance passed 12 scenarios in a new cached-image
+container with no host mounts, network or added capabilities. Real rename and
+clock/intent reconciliation passed. Other scenarios cover fresh protection,
+missing protection, pending failures before/after rename, existing and racing
+destinations, source replacement during refresh, expiration after intent,
+unsupported rename and parent sync failure. An actual SIGKILL immediately after
+the durable intent checkpoint left the source and pending intent intact; a later
+attempt did not replay it. The fixture container was removed after acceptance.
+This is local Linux evidence, not Tower filesystem acceptance.
+
+Source-entry identity is checked before the rename and witnessed afterward.
+This is not an inode-conditional syscall and does not prevent a writer replacing
+the source entry in the final gap. Such post-check races remain an acknowledged
+concurrency limitation; detected uncertain outcomes retain intent instead of
+clearing it or rolling back another writer's data. These checks also do not
+establish absence of open writers inside the moved directory.
+
+The adapter handles one candidate, not a production batch. Reusing its original
+plan after a successful move is stale and must fail. Remaining integration:
+guarded batch revision chaining, authoritative provider wiring, production stage
+roots/capability acceptance, explicit pending-operation review, scheduler/worker
+settings, and production cutover assessment for this revised model. No further
+host-wide exclusion/boot permission probes are needed for the scheduled model.
