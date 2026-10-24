@@ -7,7 +7,7 @@ collection barrier. External writers are not excluded.
 """
 from copy import deepcopy
 from contextlib import ExitStack
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 import math
 import os
@@ -35,6 +35,7 @@ class ScheduledLibrary:
     roots: tuple
     wait_days: int
     holding_days: int
+    new_content_resets_clock: bool = False
 
     def media_key(self, folder):
         return self.state_prefix + validate_title_folder(folder)
@@ -62,6 +63,7 @@ class ScheduledWorkerPreparation:
     plan: object
     bindings: tuple
     untracked: tuple
+    clock_proposal: object = None
     production_authorized: bool = False
     production_activation: str = 'disabled'
 
@@ -72,8 +74,8 @@ def configured_scheduled_worker(*, libraries, local_time, timezone_name,
     """Detach only supported settings from the current library dictionaries.
 
     Arr clients/credentials are neither retained nor invoked. Whole-show moves
-    do not prune seasons. Episode-driven clock reset requires a later adapter;
-    reject that policy rather than silently move TV using stale clocks.
+    do not prune seasons. Episode-driven resets require discovery preparation;
+    the ordinary planning path refuses that policy instead of ignoring it.
     """
     schedule = DailyRunSchedule(local_time, timezone_name)
     if (type(maximum_actions) is not int or not 1 <= maximum_actions <= 100000
@@ -91,11 +93,12 @@ def configured_scheduled_worker(*, libraries, local_time, timezone_name,
                 or prefix != ('' if kind == 'Movie' else 'TV/') or prefix in prefixes
                 or type(library.get('wait_days')) is not int or library['wait_days'] < 0):
             raise ValueError('Unique library/type/tracking binding required')
-        if library.get('new_content_resets_clock', False) is not False:
-            raise ValueError('Episode clock reset integration is not yet supported')
+        reset_clock = library.get('new_content_resets_clock', False)
+        if type(reset_clock) is not bool or (reset_clock and kind != 'Series'):
+            raise ValueError('Explicit series-only new-content policy required')
         roots = tuple((stage, _canonical(library.get(field))) for stage, field in _STAGE_FIELDS)
         paths.extend(PurePosixPath(path) for _, path in roots)
-        captured.append(ScheduledLibrary(name, kind, prefix, roots, library['wait_days'], holding_days))
+        captured.append(ScheduledLibrary(name, kind, prefix, roots, library['wait_days'], holding_days, reset_clock))
         names.add(name); prefixes.add(prefix)
     if any(a == b or a in b.parents or b in a.parents
            for i, a in enumerate(paths) for b in paths[i + 1:]):
@@ -105,7 +108,7 @@ def configured_scheduled_worker(*, libraries, local_time, timezone_name,
 
 def prepare_scheduled_worker(*, config, snapshot, revision, fetch_signals,
                              now=None, maximum_titles=100000,
-                             maximum_scan_seconds=3600, timer=monotonic):
+                             maximum_scan_seconds=3600, timer=monotonic, discover_clocks=False):
     """Inventory all four roots in every library, then return one bounded plan.
 
     fetch_signals receives an immutable title binding and must perform bounded,
@@ -116,6 +119,9 @@ def prepare_scheduled_worker(*, config, snapshot, revision, fetch_signals,
     """
     if not isinstance(config, ScheduledWorkerConfig) or not callable(fetch_signals):
         raise ValueError('Scheduled worker configuration and protection reader required')
+    if type(discover_clocks) is not bool or (not discover_clocks and any(
+            library.new_content_resets_clock for library in config.libraries)):
+        raise ValueError('TV content policy requires discovery preparation')
     if (type(maximum_titles) is not int or not 1 <= maximum_titles <= 100000
             or type(maximum_scan_seconds) not in (int, float)
             or not math.isfinite(maximum_scan_seconds) or maximum_scan_seconds <= 0):
@@ -185,6 +191,7 @@ def prepare_scheduled_worker(*, config, snapshot, revision, fetch_signals,
                 if inventory(fd) != inventories[identity_key]:
                     raise ScheduledScanBlocked('title_inventory_changed')
         by_name = {library.name: library for library in config.libraries}
+        available_keys, content_times = set(), {}
         def scan(name):
             library = by_name[name]
             def titles():
@@ -192,6 +199,19 @@ def prepare_scheduled_worker(*, config, snapshot, revision, fetch_signals,
                     if binding.library == name:
                         check_time()
                         signals = fetch_signals(binding)
+                        check_time()
+                        if discover_clocks:
+                            fields = ('played', 'favorite', 'disliked', 'keep', 'keep_all', 'protected')
+                            if not isinstance(signals, dict) or not all(type(signals.get(field)) is bool for field in fields):
+                                signals = None
+                            else:
+                                available_keys.add(binding.media_key)
+                                if library.new_content_resets_clock and binding.stage == 'Waiting':
+                                    from app.sqlite_scheduled_content import observe_scheduled_content
+                                    content_times[binding.media_key] = observe_scheduled_content(
+                                        title_path=dict(library.roots)[binding.stage] + '/' + binding.folder,
+                                        now=now, maximum_seconds=min(30, maximum_scan_seconds - (timer() - start)),
+                                        timer=timer)
                         check_time()
                         yield ScannedTitle(binding.media_key, binding.stage,
                             library.wait_days if binding.stage == 'Waiting' else library.holding_days,
@@ -205,7 +225,19 @@ def prepare_scheduled_worker(*, config, snapshot, revision, fetch_signals,
             maximum_actions=config.maximum_actions, maximum_titles=maximum_titles,
             maximum_scan_seconds=remaining, favorites_trigger_keep=config.favorites_trigger_keep,
             timer=timer)
+        proposal = None
+        if discover_clocks:
+            from app.sqlite_scheduled_discovery import propose_discovery_clocks
+            proposal = propose_discovery_clocks(snapshot=snapshot, revision=revision,
+                bindings=bindings, now=now, available_protection_keys=available_keys,
+                reset_keys=set(content_times), reset_content_times=content_times)
+            if proposal.changes:
+                # The clocks have NOT been checkpointed. Nothing from the old
+                # plan may execute; the future worker must CAS then rebuild.
+                plan = replace(plan, moves=(), capped_moves=0, skipped=plan.skipped +
+                    tuple((move.library, move.media_key, ('discovery_checkpoint_required',), 'none')
+                          for move in plan.moves))
         verify_inventory()
         untracked = tuple(binding.media_key for binding in bindings
             if not any(binding.media_key in snapshot[clock] for clock in CLOCKS.values()))
-        return ScheduledWorkerPreparation(plan, tuple(bindings), untracked)
+        return ScheduledWorkerPreparation(plan, tuple(bindings), untracked, proposal)

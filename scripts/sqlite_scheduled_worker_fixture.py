@@ -2,6 +2,7 @@
 from copy import deepcopy
 from datetime import datetime
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -10,6 +11,7 @@ from app.sqlite_scheduled_plan import ScheduledScanBlocked
 from app.sqlite_scheduled_worker import configured_scheduled_worker, prepare_scheduled_worker
 from app.sqlite_scheduled_jellyfin import scheduled_inventory_signal_reader
 from app.sqlite_state import SECTIONS
+from app.sqlite_scheduled_content import ScheduledContentBlocked
 
 
 class ScheduledWorkerFixtureTests(unittest.TestCase):
@@ -97,10 +99,70 @@ class ScheduledWorkerFixtureTests(unittest.TestCase):
         self.assertEqual(self.snapshot, before)
 
 
+    def discovery(self, fetch=None):
+        signals = {field: False for field in ('played', 'favorite', 'disliked', 'keep', 'keep_all', 'protected')}
+        return prepare_scheduled_worker(config=self.config(), snapshot=self.snapshot,
+            revision=2, fetch_signals=fetch or (lambda _: signals),
+            now=datetime(2026, 10, 24), discover_clocks=True)
+
+    def test_discovered_titles_start_now_and_do_not_move(self):
+        self.snapshot['first_seen'].clear()
+        result = self.discovery()
+        self.assertEqual(result.plan.moves, ())
+        self.assertEqual(set(result.clock_proposal.proposed_snapshot['first_seen']),
+                         {'Same (2020)', 'TV/Same (2020)'})
+        self.assertEqual(result.clock_proposal.proposed_snapshot['first_seen']['TV/Same (2020)'],
+                         '2026-10-24T00:00:00')
+        self.assertEqual(self.snapshot['first_seen'], {})
+
+    def test_new_tv_content_suppresses_entire_old_plan(self):
+        self.libraries[1]['new_content_resets_clock'] = True
+        title = Path(self.libraries[1]['transient']) / 'Same (2020)'
+        episode = title / 'episode.mkv'; episode.write_bytes(b'fixture')
+        at = datetime(2026, 10, 1).timestamp(); os.utime(episode, (at, at))
+        result = self.discovery()
+        self.assertEqual(result.plan.moves, ())
+        self.assertEqual(result.clock_proposal.proposed_snapshot['first_seen']['TV/Same (2020)'],
+                         '2026-10-01T00:00:00')
+        self.assertEqual(self.snapshot, self.before)
+        self.assertEqual(episode.read_bytes(), b'fixture')
+
+    def test_tv_content_symlink_blocks_discovery_without_state_change(self):
+        self.libraries[1]['new_content_resets_clock'] = True
+        title = Path(self.libraries[1]['transient']) / 'Same (2020)'
+        (title / 'escape').symlink_to(self.root, target_is_directory=True)
+        with self.assertRaises(ScheduledContentBlocked):
+            self.discovery()
+        self.assertEqual(self.snapshot, self.before)
+
+    def test_future_tv_content_blocks_discovery(self):
+        self.libraries[1]['new_content_resets_clock'] = True
+        episode = Path(self.libraries[1]['transient']) / 'Same (2020)' / 'episode'
+        episode.write_bytes(b'fixture')
+        at = datetime(2030, 1, 1).timestamp(); os.utime(episode, (at, at))
+        with self.assertRaises(ScheduledContentBlocked):
+            self.discovery()
+        self.assertEqual(self.snapshot, self.before)
+
+    def test_empty_tv_title_does_not_rewind_existing_clock(self):
+        self.libraries[1]['new_content_resets_clock'] = True
+        result = self.discovery()
+        self.assertEqual(result.clock_proposal.changes, ())
+        self.assertEqual(len(result.plan.moves), 2)
+        self.assertEqual(self.snapshot, self.before)
+
+    def test_partial_protection_never_initializes_discovery_clock(self):
+        self.snapshot['first_seen'].clear()
+        result = self.discovery(lambda _: {'played': False})
+        self.assertEqual(result.plan.moves, ())
+        self.assertEqual(result.clock_proposal.changes, ())
+        self.assertEqual(self.snapshot['first_seen'], {})
+
+
 def main():
     result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(
         ScheduledWorkerFixtureTests))
-    if not result.wasSuccessful() or result.skipped or result.testsRun != 8:
+    if not result.wasSuccessful() or result.skipped or result.testsRun != 14:
         return 1
     print(json.dumps({'status': 'scheduled_worker_preparation_verified', 'tests': result.testsRun,
         'fixture_only': True, 'production_authorized': False, 'production_activation': 'disabled'}))

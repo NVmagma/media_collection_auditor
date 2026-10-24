@@ -156,7 +156,7 @@ def test_total_budget_includes_inventory(tmp_path):
 
 
 @pytest.mark.parametrize('field,value', [('state_prefix', 'Other/'), ('wait_days', True),
-    ('new_content_resets_clock', True), ('jellyfin_type', 'Episode')])
+    ('new_content_resets_clock', 'true'), ('jellyfin_type', 'Episode')])
 def test_unsupported_policy_rejected_before_collection(tmp_path, field, value):
     libraries, snapshot = setup(tmp_path)
     libraries[1][field] = value
@@ -189,3 +189,38 @@ def test_real_collector_incomplete_coverage_produces_no_candidate(tmp_path):
     libraries, snapshot = setup(tmp_path)
     reader = scheduled_inventory_signal_reader(fetch=lambda *a: [], clock=lambda: NOW)
     assert prepare(configure(libraries), snapshot, fetch_signals=reader).plan.moves == ()
+
+
+def test_enabled_tv_policy_cannot_fall_back_to_ordinary_plan(tmp_path):
+    libraries, snapshot = setup(tmp_path)
+    libraries[1]['new_content_resets_clock'] = True
+    with pytest.raises(ValueError, match='discovery preparation'):
+        prepare(configure(libraries), snapshot)
+
+
+def test_discovery_changes_suppress_all_moves_until_checkpoint_and_rebuild(tmp_path):
+    import os
+    libraries, snapshot = setup(tmp_path)
+    libraries[1]['new_content_resets_clock'] = True
+    title = Path(libraries[1]['transient']) / 'Same (2020)'
+    episode = title / 'episode.mkv'; episode.write_bytes(b'fixture')
+    new = datetime(2026, 10, 1)
+    os.utime(episode, (new.timestamp(), new.timestamp()))
+    signals = {key: False for key in ('played', 'favorite', 'disliked', 'keep', 'keep_all', 'protected')}
+    result = prepare(configure(libraries), snapshot, fetch_signals=lambda _: signals, discover_clocks=True)
+    assert result.plan.moves == ()
+    assert result.clock_proposal.proposed_snapshot['first_seen']['TV/Same (2020)'] == new.isoformat()
+    assert snapshot['first_seen']['TV/Same (2020)'] == '2026-01-01'
+    # Simulate the snapshot/revision from a separately verified checkpoint.
+    after = prepare_scheduled_worker(config=configure(libraries),
+        snapshot=result.clock_proposal.proposed_snapshot, revision=5, fetch_signals=lambda _: signals,
+        now=NOW, discover_clocks=True)
+    assert after.clock_proposal.changes == ()
+    assert len(after.plan.moves) == 2 and after.plan.revision == 5
+
+
+def test_discovery_does_not_start_clocks_without_complete_protection(tmp_path):
+    libraries, snapshot = setup(tmp_path)
+    snapshot['first_seen'].clear()
+    result = prepare(configure(libraries), snapshot, discover_clocks=True)
+    assert result.clock_proposal.changes == () and result.plan.moves == ()

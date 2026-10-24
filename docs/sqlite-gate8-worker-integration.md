@@ -30,11 +30,11 @@ The existing authoritative Jellyfin collector supplies scan-time signals through
 Missing/partial coverage produces no candidate for that title. No scan-time
 signal may replace the mandatory fresh per-move protection check.
 
-Untracked titles are reported without creating clocks. Conflicting/missing clocks
-remain blocked by the existing decision bridge. Episode-driven waiting-clock
-resets are explicitly rejected until their integration is implemented; this avoids
-silently changing the configured TV policy. Whole-show planning does not invoke
-season pruning, delete files, deliver Arr requests or change tracking state.
+The default preparation reports untracked titles without creating clocks.
+Conflicting/missing clocks remain blocked by the existing decision bridge.
+An enabled TV clock-reset policy requires explicit discovery preparation;
+ordinary planning rejects it instead of silently ignoring the setting. Whole-show
+planning does not invoke season pruning, delete files or deliver Arr requests.
 
 ## Acceptance
 
@@ -74,7 +74,7 @@ Run the committed acceptance package on Tower to verify both filesystem views:
 Each run uses an immutable cached Python image, a new `scheduled-worker.*`
 directory and a new fixture container. Only that new directory is bound writable;
 there is no network, package installation, image pull, Docker socket mount or
-production credential/configuration access. It runs eight worker inventory cases and 11 read-only HTTP cases. It does not
+production credential/configuration access. It now runs 14 worker/discovery cases and 11 read-only HTTP cases. It does not
 claim rename capability or rerun the native-only Gate 6/7 rename suites. Expected final status:
 `scheduled_worker_acceptance_complete`. Production activation remains disabled.
 Existing media, state, services, exports, boot settings and kernel controls are
@@ -96,15 +96,57 @@ from this package changes no move safeguards and skips no inventory/HTTP tests.
 Native Gate 6/7 acceptance remains recorded separately; shfs no-overwrite moves
 remain blocked. Any eventual production dispatch must check the actual configured
 root capability and must not substitute overwrite-prone rename or copy/delete.
-The corrected worker package still requires passing results from both views.
+The corrected package passed on both views at source
+`3af27ac5020b53ac90a7df16dbed578c43069148`:
+
+- shfs: `/mnt/user/sql_test/scheduled-worker.WrUaRq`, eight worker tests in
+  0.183 seconds and 11 HTTP tests in 0.237 seconds.
+- Native: `/mnt/media/sql_test/scheduled-worker.ufIF1h`, eight worker tests in
+  0.036 seconds and 11 HTTP tests in 0.240 seconds.
+
+Both ended in `scheduled_worker_acceptance_complete`, explicitly scoped to
+worker preparation and read-only transport, with production authorization false
+and activation disabled. The worker preparation boundary is accepted. The swap
+warning was nonblocking. No production services/configuration/media were changed.
+
+## Discovery/content milestone
+
+`discover_clocks=True` adds a pure clock proposal to worker preparation. New
+titles with complete six-field protection observations start at scan time in
+the stage where they were observed. They do not inherit old filesystem age.
+Unknown fields, unrelated queue data and missing-title clocks are retained;
+stage/clock conflicts block the proposal instead of guessing a reconciliation.
+
+For configured TV Waiting resets, `observe_scheduled_content` opens directories
+without following symlinks and observes descendant files/directories, matching
+the existing newest-content policy. Global entry/depth/time limits bound each
+observation. Incomplete reads, unsupported entries, future timestamps and observed
+identity/metadata changes return no timestamp and block preparation. Empty
+content does not rewind a clock. This is change detection, not writer exclusion;
+a later move still needs current protection/content validation.
+
+The proposal does not write SQLite. If discovery/reset changes any clock, all
+moves from the original plan are suppressed. The remaining worker integration
+must checkpoint the proposal with exact source revision/snapshot verification,
+then rebuild the plan before dispatch. An old plan cannot authorize execution
+using proposed but uncommitted clocks. When no clock changes are needed, the
+ordinary plan remains available for later guarded verification.
+
+Focused clock/content/worker checks passed 68 tests. Development-host scheduled
+regressions passed 197 tests and 14 subtests, with 46 Linux-only cases verified
+separately. An isolated Linux/Python 3.12.15 container passed all 14 worker cases,
+19 Gate 7 cases, 27 Gate 6 cases and 11 HTTP cases without host mounts/network.
+The six new filesystem/discovery cases still require Tower acceptance through
+the command above; the accepted original eight-case boundary remains recorded.
 
 ## Remaining Gate 8 scope
 
 1. Connect real configured roots/database to the guarded intent, descriptor-bound
    no-overwrite rename and exact atomic reconciliation flow. Preserve Gate 6/7
    behavior without removing disposable markers from their test-only APIs.
-2. Integrate discovery clocks and the configured TV new-episode reset policy,
-   retaining durable revision checks and the all-library scan barrier.
+2. Connect discovery/reset proposals to durable CAS checkpoints and post-checkpoint
+   plan rebuilds. The complete content reader and pure proposals are implemented;
+   retain the all-library scan barrier and repeat content validation before moves.
 3. Connect the daily worker/slot ownership and settings path, with one run-wide
    action cap, duplicate-run prevention and no uncertain-operation replay.
 4. Verify both production-shaped movie/TV routing and unchanged JSON execution
