@@ -1,6 +1,7 @@
 # Scheduled SQLite lifecycle runs
 
-Status: user-approved operating model, 2026-10-24. Implementation is in progress;
+Status: user-approved operating model; Gate 6 core acceptance completed 2026-10-24.
+Production integration remains in progress;
 SQLite production activation and permanent/filesystem deletion remain disabled.
 This contract supersedes host-wide writer exclusion as the Gate 6 target. Earlier
 maintenance-controller, NFS, Docker and boot-fence work is retained as historical
@@ -239,7 +240,18 @@ never follows retained media paths or clears/replays an operation. It refuses
 WAL/hot-journal snapshots rather than creating SQLite recovery sidecars.
 
 These implementations do not wire the live worker or change JSON authority.
-Native Tower acceptance and exact-commit test CI remain the Gate 6 exit checks.
+Native Tower acceptance and exact-implementation test CI have passed; Gate 6 is closed.
 Production multi-library routing/settings/credentials and release activation stay
 in Gates 8–10. The former host-wide maintenance fence is not required by this
 scheduled operating model.
+
+
+## Gate 6 closure
+
+On 2026-10-24 the operator supplied the required Tower result: all 27 disposable
+filesystem/integration tests and 11 HTTP transport tests passed, with final status
+`scheduled_gate6_acceptance_complete`. Together with passing implementation CI,
+this closes Gate 6 for the scheduled model. Historical intermediate progress
+statements above do not override this closure. Gate 7 remains a separate
+reconciliation milestone. JSON remains authoritative; no production behavior,
+backend selection, image deployment or deletion setting changed with closure.

@@ -9,7 +9,8 @@ A gate is complete only when its acceptance criteria are verified.
 complete scan before moves, fresh per-move checks, capability-verified same-filesystem
 renames and retained uncertainty. Host-wide writer exclusion and boot/service
 fences are no longer required for this initial operating model. Later historical
-maintenance-fence entries do not override this contract. No gate is newly complete.
+maintenance-fence entries do not override this contract. Gate 6 completed native
+Tower acceptance on 2026-10-24 under this scheduled-run scope.
 
 | Gate | Acceptance criteria | Current state |
 | --- | --- | --- |
@@ -18,23 +19,25 @@ maintenance-fence entries do not override this contract. No gate is newly comple
 | 3. Guarded checkpoints | Compare-and-swap, stale-writer rejection, uncertain checkpoint quarantine | Complete: isolated tests |
 | 4. Lifecycle decision parity | Representative movie/season clocks and read-only rehearsal | Complete: isolated tests |
 | 5. Restart and failure rehearsals | Pending intents persist, crashes fail closed, no automatic replay | Complete: disposable Unraid tests |
-| 6. Scheduled move verification | Complete scan before dispatch; fresh protection/decision/source checks; supported same-filesystem rename; durable intent and crash recovery; accepted concurrency limits | In progress: daily schedule calculator and complete-scan barrier with bounded advisory plans implemented/tested; fresh decision/revision recheck implemented/tested as advisory; Scheduled core, read-only configured roots, GET transport, durable slot ownership, batch revision chain and pending review implemented. Local acceptance and test-only CI passed for f163d17; only native Tower disposable acceptance remains before closure. Production worker/root routing is Gate 8 work. Historical maintenance fixtures do not establish these requirements |
-| 7. Atomic lifecycle reconciliation | Verified move clock change and intent clearance commit together; failure injection proves all-or-nothing | In progress: Unraid verifies atomic Waiting/Holding destination clocks, stable Arr queue, retained-original ledger and intent clearance, including uncertain commits. Production completion still depends on gate 6 and live integration |
+| 6. Scheduled move verification | Complete scan before dispatch; fresh protection/decision/source checks; supported same-filesystem rename; durable intent and crash recovery; accepted concurrency limits | Complete for the scheduled model: local checks, exact-implementation CI, and native Tower acceptance passed (27 filesystem/integration tests and 11 HTTP transport tests). Production activation remains disabled; worker/root routing is Gate 8 work |
+| 7. Atomic lifecycle reconciliation | Verified move clock change and intent clearance commit together; failure injection proves all-or-nothing | In progress: Unraid verifies atomic Waiting/Holding destination clocks, stable Arr queue, retained-original ledger and intent clearance, including uncertain commits. Gate 6 prerequisite is met; this gate still needs its own reconciliation/integration acceptance |
 | 8. Production lifecycle integration | Real Waiting/Holding/Keep/Removal moves use guarded ordering; existing JSON path unaffected until cutover | Not wired: capped, revision-chained isolated batches support Waiting/Holding decisions and stop on uncertainty; production audit paths still reject SQLite |
 | 9. External integrations | Arr uncertain outcomes, Jellyfin protection, dashboard authoritative reads, TV-season behavior | In progress: 539-title live advisory coverage, bounded fresh protection scans, one-shot Arr uncertainty, and whole-show copy preservation are verified. Production Arr verification, dashboard authority and season-pruning execution remain open |
 | 10. Deployment and rollback | Disposable Unraid end-to-end tests, full CI, Docker build, backup/rollback, explicit activation approval | Incomplete: full native Unraid suite passed 1,650 tests and 22 subtests through d67b7da; maintained shfs suite passed 475 tests and 19 subtests. Accepted operational restore, final release CI/image and explicit activation approval remain open |
 
 ## Current scheduled Gate 6 exit checklist
 
-The [scheduled acceptance record](sqlite-gate6-scheduled-acceptance.md) is the
-current exit checklist. Local implementation/acceptance and exact-commit test CI passed. Do not mark
-Gate 6 closed until the native Tower fixture result is recorded. No additional
-Gate 6 feature work is required after this package passes that acceptance. The previous host-wide maintenance/controller/boot work below is
-historical and does not define this initial rollout's prerequisites.
+The [scheduled acceptance record](sqlite-gate6-scheduled-acceptance.md) records
+passing local checks, test-only CI for implementation commit `f163d17`, and the
+operator's native Tower result received on 2026-10-24. The final status was
+`scheduled_gate6_acceptance_complete`; all 27 filesystem/integration tests and
+11 HTTP transport tests passed. Gate 6 is closed under the approved scheduled
+model. Historical host-wide controller/boot requirements below do not reopen it.
+Gate 7 is next; production behavior and activation remain unchanged.
 
 ## Current decision
 
-Five of ten *gates* have been met, but these gates do not represent equal
+Six of ten *gates* have been met, but these gates do not represent equal
 amounts of work. Do not publish an overall percent complete without a
 documented weighting and stable denominator. Earlier 90% and 65–70% estimates
 used different scopes and should not be compared or treated as reliable.

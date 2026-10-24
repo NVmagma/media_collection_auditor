@@ -1,8 +1,8 @@
 # Gate 6 scheduled-run acceptance
 
-Status: implementation, local acceptance and GitHub test CI passed. Only the
-operator's native Tower acceptance result remains required before closure. No
-production activation, image update or deletion approval is implied.
+Status: **Gate 6 complete for the scheduled-run model, 2026-10-24.** Implementation,
+local acceptance, GitHub test CI and native Tower acceptance passed. No production
+activation, image update or deletion approval is implied.
 
 The user approved this narrower operating model on 2026-10-24. The governing
 [scheduled-run contract](sqlite-scheduled-run-contract.md) replaces the former
@@ -39,9 +39,9 @@ passed for implementation commit `f163d17f6f1092d144731481612196e9da254496`:
 155 isolated safety tests. These are separate workflow steps, not a statement
 that the entire release suite has run. Any later acceptance-document-only commit
 retains the same app/scripts/tests/workflow implementation tree. No image was
-built or published. Native Tower acceptance is the single remaining Gate 6 check;
-a passing result from this package closes the scheduled-model gate without new
-host-fence requirements. Subsequent worker/release work stays in later gates.
+built or published. The operator subsequently supplied the successful native Tower
+result recorded below. All scheduled-model Gate 6 exit checks are satisfied;
+subsequent reconciliation, worker and release work stays in later gates.
 
 ## Native Tower acceptance
 
@@ -75,6 +75,29 @@ A failure or unsupported capability is not a pass and does not enable a fallback
 Review the retained output before changing the selected path or implementation.
 Development-host SSH could reach Tower but non-interactive authentication was
 unavailable; no Tower test was executed by the development agent.
+
+## Native Tower result received — 2026-10-24
+
+The operator supplied the complete passing test output: 27 filesystem/integration
+tests in 13.623 seconds and 11 private-loopback HTTP transport tests in 0.240
+seconds, both with `OK`. The script completed with:
+
+```text
+status=scheduled_gate6_acceptance_complete
+fixture_only=true
+production_activation=disabled
+production_authorized=false
+```
+
+The result explicitly states that only new lab files and a new fixture container
+were used, and production media/configuration/services, exports, boot settings and
+kernel controls were unchanged. The swap-limit warning did not prevent any test
+from passing. This accepts the native disposable scheduled-run core; it does not
+claim live production execution, cross-filesystem copy support, external-writer
+exclusion, an inode-conditional rename, or a deletion permit.
+
+Gate 6 is closed. No additional Gate 6 probe or host-fence implementation is
+required. Gate 7 reconciliation acceptance is the next milestone.
 
 ## Scope after acceptance
 
