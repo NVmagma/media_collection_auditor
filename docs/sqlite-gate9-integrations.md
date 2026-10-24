@@ -264,3 +264,11 @@ Expected per parent: 11 delivery cases and 11 HTTP regressions, final
 container and private loopback fake Arr services are used. No real Arr/Jellyfin,
 production media/state/settings, host services or kernel controls are changed.
 This acceptance does not close Gate 9 or authorize queue clearance/activation.
+
+Delivery implementation `81e211792b1046abc6ea4659d2e46be0b80cb3ed` passed
+[CI run 40132184733](https://github.com/NVmagma/media_collection_auditor/actions/runs/40132184733):
+367 scheduled/backend checks with 27 subtests, 248 Gate 9/API checks, 23 atomic
+checks, 671 SQLite regressions and 286 isolated safety tests (separate steps).
+Local focused checks passed 90 tests. The isolated Linux container passed 11
+delivery, 6 configured queue, 27 rename and 11 HTTP cases, including actual
+SIGKILL. Tower acceptance remains pending; production activation stays disabled.
