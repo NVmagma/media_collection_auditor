@@ -109,3 +109,29 @@ An advisory plan records its tracking revision/source clocks for later checks;
 those records do not prove the revision stayed current during collection. Next:
 fresh-check execution with current revision/path validation, durable intent/outcome
 integration and plan expiration, then scheduler/worker settings integration.
+
+
+## Fresh per-move advisory recheck
+
+`app/sqlite_scheduled_recheck.py` now reads tracking before and after invoking a
+fresh protection-provider call. It rejects plan nonmembers, different processes,
+expired/regressing monotonic time, changed revisions/clocks, pending operations,
+conflicting stages, incomplete/inconsistent signals and changed lifecycle
+decisions. The original favorite policy is retained in the plan. All six existing
+signal fields must be explicit booleans; an empty dictionary is not a fresh clear
+protection response. Provider exceptions are redacted from the report.
+
+Plans carry their creating process ID and monotonic collection deadline; that
+same deadline also bounds recheck. A separate short protection budget includes
+tracking checks surrounding the refresh. These ephemeral plans are not restart
+recovery records and must not be deserialized/adopted after restart. Successful
+rechecks remain `revalidated_advisory`, with filesystem validation and guarded
+intent handling explicitly required. The injected read-only protection provider
+must genuinely query authoritative data; a callback invocation alone does not
+prove it bypassed caches or established complete user/title coverage.
+
+Execution remains unwired. Before moving, implement source/destination capability
+checks and durable intent/outcome reconciliation. A completed move advances the
+tracking revision, so a future serialized executor must validate a guarded revision
+chain for subsequent candidates; it must not simply relax the original plan's
+revision comparison. Existing production cutover guards still block activation.

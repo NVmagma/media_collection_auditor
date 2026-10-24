@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from time import monotonic
 import math
+import os
 
 from app.sqlite_lifecycle_decision_bridge import review_decision
 from app.sqlite_lifecycle_checkpoint_plan import CLOCKS
@@ -54,6 +55,10 @@ class ScheduledPlan:
     moves: tuple
     skipped: tuple
     capped_moves: int
+    favorites_trigger_keep: bool
+    created_tick: float
+    deadline_tick: float
+    process_id: int
     authorization: str = 'not_authorized'
 
 
@@ -137,4 +142,5 @@ def collect_scheduled_plan(*, snapshot, revision, libraries, scan_library, now,
             moves.append(PlannedMove(library, title.media_key, title.stage, destination,
                 decision['action'], detached[CLOCKS[title.stage]][title.media_key], title.threshold_days))
     check_time()
-    return ScheduledPlan(revision, now, libraries, len(collected), tuple(moves), tuple(skipped), capped)
+    return ScheduledPlan(revision, now, libraries, len(collected), tuple(moves), tuple(skipped), capped,
+                         favorites_trigger_keep, started, started + maximum_scan_seconds, os.getpid())
