@@ -535,6 +535,17 @@ production/service gate tests verify no callback/settings side effects; a subpro
 runs the real `main.py` with tripwire thread/auditor/history stubs to verify rejection.
 The actual read-only API entry-point regression remains passing.
 
+Development-host scheduled/API regression checks passed 286 tests and 14 subtests;
+103 Linux-only cases were skipped there and separately executed in the isolated
+Linux package. That package passed 8 runtime, 8 layout, 4 configured, 14 slot,
+22 routed, 14 inventory, 16 checkpoint, 19 reconciliation, 27 rename and 11 HTTP
+cases in one new cached-image container without host mounts/network.
+[Test-only CI run 40126891290](https://github.com/NVmagma/media_collection_auditor/actions/runs/40126891290)
+passed for implementation `e5b0cde3e70d7751a27c7b40da1a01c213473e98`: 367 scheduled
+and backend-gate tests with 27 subtests, 23 atomic regressions, 671 SQLite
+regressions and 260 isolated safety tests (separate workflow steps). No image was
+built or deployed.
+
 Native Tower acceptance of this final candidate runtime is required:
 
 ```bash
