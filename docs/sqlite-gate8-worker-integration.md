@@ -465,6 +465,11 @@ The full isolated Linux package additionally passed the 4 configured, 14 slot,
 cases. A JSON entry-point regression verifies preparatory SQLite schedule values
 do not affect the legacy JSON callback, existing state or backend guard.
 
+[Test-only CI run 40126252624](https://github.com/NVmagma/media_collection_auditor/actions/runs/40126252624)
+passed for implementation `f68189dc25d202c242ccb5ec08daf675bf00039c`: 333 scheduled
+tests and 27 subtests, 23 atomic regressions, 671 SQLite regressions and 252
+isolated safety tests (separate workflow steps). No image was built/deployed.
+
 Native Tower acceptance for this separated layout is required:
 
 ```bash
