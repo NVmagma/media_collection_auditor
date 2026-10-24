@@ -173,3 +173,39 @@ guarded batch revision chaining, authoritative provider wiring, production stage
 roots/capability acceptance, explicit pending-operation review, scheduler/worker
 settings, and production cutover assessment for this revised model. No further
 host-wide exclusion/boot permission probes are needed for the scheduled model.
+
+
+## Revision-chained disposable batches and collector adapter
+
+`app/sqlite_scheduled_disposable_batch.py` now holds one cooperating runner lock
+across a single-library batch. It verifies initial revision/pending state, invokes
+the fresh-check rename adapter for each candidate, and accepts only the exact
+expected lifecycle snapshot at revision +3 (intent, applied, reconciliation).
+Only that verified result advances the ephemeral plan's revision. It does not
+rebase against arbitrary newer state. Unexpected metadata/revision changes stop
+the batch. The original plan cannot replay a completed batch.
+
+The batch report distinguishes verified completed entries from the stopped
+candidate. A stopped candidate may already have moved; no replay/clearance is
+implied. Earlier verified moves remain committed. Protection changes, unavailable
+providers and post-intent uncertainty stop remaining candidates. No rollback or
+automatic retry is attempted. Action caps leave unplanned source titles alone.
+The disposable adapter binds one stage tree/library; multi-library production
+root routing and one run-wide action budget remain to be integrated.
+
+`app/sqlite_scheduled_jellyfin.py` binds title keys/types/folders to the existing
+Jellyfin collector, invoking user enumeration and complete page collection on
+every candidate refresh. It stores no signal cache. Missing coverage, ambiguous
+matches, transport failures and invalid responses return unavailable protection.
+Bindings are detached from caller mutations. The collector currently uses the
+default tag names; custom tag settings must not silently use this adapter. A
+production transport with timeouts/credentials and library/path identity binding
+still needs integration and acceptance; injected transports are not independent
+proof of live freshness.
+
+Local Linux/Python 3.12.15 acceptance now covers 20 scenarios, including two
+successful chained moves, a saved second title, second-operation failures before
+and after rename, caps, a competing cooperating runner, an unexpected writer
+changing tracking after completion, and an integrated collector refresh that
+sees a new keep-forever tag after the scan. These extend the earlier 12-scenario
+acceptance. All are disposable; no production behavior or gate status changed.

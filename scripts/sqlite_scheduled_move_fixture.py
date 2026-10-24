@@ -11,6 +11,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from app.sqlite_scheduled_disposable_batch import execute_scheduled_disposable_batch
+from app.sqlite_audit_session import RevisionedAuditSession
 from app.sqlite_operation_coordinator import INTENTS_KEY
 from app.sqlite_snapshot_writer import write_offline_snapshot
 from app.sqlite_scheduled_plan import LibraryScan, ScannedTitle, collect_scheduled_plan
@@ -55,6 +57,130 @@ class ScheduledMoveFixtureTests(unittest.TestCase):
             fetch_protection=lambda _: self.protection(), clock=lambda: NOW, timer=lambda: 101)
         values.update(kwargs)
         return execute_scheduled_disposable_move(**values)
+
+    def setup_batch(self, maximum_actions=10):
+        source = self.root / 'transient/Second'; source.mkdir()
+        (source / 'payload').write_text('second disposable')
+        session = RevisionedAuditSession(self.store)
+        session.state['first_seen']['Second'] = '2024-01-01'
+        session.checkpoint()
+        snapshot, revision = self.store.load_with_revision()
+        self.plan = collect_scheduled_plan(snapshot=snapshot, revision=revision,
+            libraries=['Movies'], now=NOW, timer=lambda: 100, maximum_actions=maximum_actions,
+            scan_library=lambda _: LibraryScan(True, [ScannedTitle(name, 'Waiting', 7, {})
+                for name in ('Movie', 'Second')]))
+        self.initial = snapshot
+
+    def execute_batch(self, **kwargs):
+        values = dict(root=self.root, database=self.database, plan=self.plan,
+            title_folders={move.media_key: move.media_key for move in self.plan.moves},
+            fetch_protection=lambda _: self.protection(), clock=lambda: NOW, timer=lambda: 101)
+        values.update(kwargs)
+        return execute_scheduled_disposable_batch(**values)
+
+    def test_batch_two_moves_chain_revisions_and_never_replay(self):
+        self.setup_batch()
+        result = self.execute_batch()
+        self.assertEqual(result['status'], 'disposable_batch_complete')
+        self.assertEqual(len(result['completed']), 2)
+        self.assertEqual(result['final_revision'], self.plan.revision + 6)
+        self.assertEqual([item['revision'] for item in result['completed']],
+                         [self.plan.revision + 3, self.plan.revision + 6])
+        self.assertNotEqual(result['completed'][0]['operation_id'], result['completed'][1]['operation_id'])
+        self.assertTrue((self.root / 'holding/Second/payload').exists())
+        snapshot = self.store.load_with_revision()
+        self.assertEqual(self.execute_batch()['status'], 'stopped')
+        self.assertEqual(self.store.load_with_revision(), snapshot)
+
+    def test_batch_second_title_saved_stops_without_undoing_completed_move(self):
+        self.setup_batch()
+        result = self.execute_batch(fetch_protection=lambda move:
+            self.protection(keep=True) if move.media_key == 'Second' else self.protection())
+        self.assertEqual(result['status'], 'stopped')
+        self.assertEqual(len(result['completed']), 1)
+        self.assertEqual(result['stopped_index'], 1)
+        self.assertTrue(self.destination.exists())
+        self.assertTrue((self.root / 'transient/Second').exists())
+        self.assertNotIn(INTENTS_KEY, self.store.load_with_revision()[0])
+
+    def test_batch_second_intent_failure_retains_first_completion_and_pending_second(self):
+        self.setup_batch()
+        result = self.execute_batch(fault_at=(1, 'after_intent'))
+        self.assertEqual(result['status'], 'stopped')
+        self.assertEqual(len(result['completed']), 1)
+        snapshot, _ = self.store.load_with_revision()
+        self.assertEqual(snapshot[INTENTS_KEY]['details']['media_key'], 'Second')
+        self.assertEqual(snapshot['queued']['Movie'], NOW.isoformat())
+        self.assertIn('Second', snapshot['first_seen'])
+        self.assertTrue((self.root / 'transient/Second').exists())
+
+    def test_batch_second_post_rename_failure_never_clears_or_replays(self):
+        self.setup_batch()
+        result = self.execute_batch(fault_at=(1, 'after_rename'))
+        self.assertEqual(result['status'], 'stopped')
+        snapshot = self.store.load_with_revision()
+        self.assertIn(INTENTS_KEY, snapshot[0])
+        self.assertIn('Second', snapshot[0]['first_seen'])
+        self.assertTrue((self.root / 'holding/Second').exists())
+        self.assertEqual(self.execute_batch()['status'], 'stopped')
+        self.assertEqual(self.store.load_with_revision(), snapshot)
+
+    def test_batch_action_cap_leaves_unplanned_source_untouched(self):
+        self.setup_batch(maximum_actions=1)
+        result = self.execute_batch()
+        self.assertEqual(result['status'], 'disposable_batch_complete')
+        self.assertEqual(result['capped_moves'], 1)
+        self.assertEqual(len(result['completed']), 1)
+        self.assertTrue((self.root / 'transient/Second').exists())
+
+    def test_batch_competing_runner_cannot_enter_while_first_is_refreshing(self):
+        self.setup_batch()
+        def refresh(move):
+            with self.assertRaisesRegex(RuntimeError, 'runner is active'):
+                self.execute_batch()
+            return self.protection()
+        self.assertEqual(self.execute_batch(fetch_protection=refresh)['status'], 'disposable_batch_complete')
+
+    def test_batch_unexpected_writer_after_completion_stops_revision_chain(self):
+        self.setup_batch()
+        import app.sqlite_scheduled_disposable_batch as batch
+        original = batch._execute_scheduled_move_locked
+        def interfere(**kwargs):
+            result = original(**kwargs)
+            session = RevisionedAuditSession(self.store)
+            session.state['other_writer'] = {'changed': True}
+            session.checkpoint()
+            return result
+        with patch.object(batch, '_execute_scheduled_move_locked', side_effect=interfere):
+            result = self.execute_batch()
+        self.assertEqual(result['status'], 'stopped')
+        self.assertEqual(result['reason'], 'post_move_revision_or_state_changed')
+        self.assertTrue((self.root / 'transient/Second').exists())
+        self.assertTrue(self.destination.exists())
+
+    def test_batch_collector_refetch_sees_second_title_saved_after_scan(self):
+        self.setup_batch()
+        from app.sqlite_scheduled_jellyfin import scheduled_protection_provider
+        requests = []
+        def fetch(path, params):
+            requests.append(path)
+            if path == '/Users': return [{'Id': 'fixture-user'}]
+            refresh_number = requests.count('/Users')
+            items = []
+            for name in ('Movie', 'Second'):
+                items.append({'Id': name, 'Type': 'Movie',
+                    'Path': '/fixture/transient/' + name + '/payload',
+                    'Tags': ['keep-forever'] if name == 'Second' and refresh_number >= 2 else [],
+                    'UserData': {'IsFavorite': False, 'Played': False, 'PlayCount': 0}})
+            return {'TotalRecordCount': len(items), 'Items': items}
+        provider = scheduled_protection_provider(fetch=fetch,
+            bindings={name: (name, 'Movie') for name in ('Movie', 'Second')}, clock=lambda: NOW)
+        report = self.execute_batch(fetch_protection=provider)
+        self.assertEqual(report['status'], 'stopped')
+        self.assertEqual(len(report['completed']), 1)
+        self.assertEqual(requests.count('/Users'), 2)
+        self.assertTrue((self.root / 'transient/Second').exists())
+        self.assertNotIn(INTENTS_KEY, self.store.load_with_revision()[0])
 
     def test_real_rename_commits_clock_and_clears_intent(self):
         result = self.execute()
