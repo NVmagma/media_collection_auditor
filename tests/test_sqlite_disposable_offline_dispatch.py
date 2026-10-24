@@ -9,6 +9,7 @@ from scripts.sqlite_offline_dispatch_guest_lab import prepare
 @pytest.fixture
 def root(tmp_path,monkeypatch):
     monkeypatch.setattr(dispatch,'_scope',lambda:('boot','net:[1]','mnt:[2]'))
+    monkeypatch.setattr(dispatch,'_mount_rows',lambda:(('1','0','0:1','/','/','rw'),))
     return prepare(tmp_path.resolve()/'fixture')
 
 
@@ -217,3 +218,50 @@ def test_review_rejects_artifact_drift_instead_of_returning_mixed_snapshot(root,
     with pytest.raises(RuntimeError,match='Review route changed'):
         dispatch.review_disposable_offline_dispatch(root)
     assert (root/'pending-request.json').read_bytes()==pending
+
+
+@pytest.mark.parametrize('existing',['mount','bytes'])
+def test_preexisting_dispatch_is_never_claimed_as_original(root,monkeypatch,existing):
+    target=root/'host/usr/local/sbin/mover'
+    if existing=='mount':
+        monkeypatch.setattr(dispatch,'_mount_rows',lambda:(('2','1','0:1','/',str(target),'ro'),))
+    else:
+        target.unlink();target.write_bytes(dispatch.GUARD)
+    monkeypatch.setattr(dispatch.subprocess,'run',lambda *a,**k:pytest.fail('No mount'))
+    with pytest.raises(RuntimeError,match='ownership unverified'):
+        with dispatch.install_disposable_offline_dispatch(root):pytest.fail('No adoption')
+    assert not (root/'pending-request.json').exists()
+
+
+def test_overlay_appearing_after_request_prevents_first_mount(root,monkeypatch):
+    calls=0
+    target=root/'host/usr/local/etc/rc.d/rc.docker'
+    def rows():
+        nonlocal calls
+        calls+=1
+        return (('1','0','0:1','/',str(target) if calls>=3 else '/','rw'),)
+    monkeypatch.setattr(dispatch,'_mount_rows',rows)
+    monkeypatch.setattr(dispatch.subprocess,'run',lambda *a,**k:pytest.fail('No mount'))
+    with pytest.raises(RuntimeError,match='ownership unverified'):
+        with dispatch.install_disposable_offline_dispatch(root):pass
+    assert (root/'pending-request.json').exists()
+
+
+@pytest.mark.parametrize('content',[b'',b'not mountinfo\n',b'0 1 0:1 / / rw - tmpfs tmpfs rw\n',
+                                     b'1 0 0:1 / / rw - tmpfs\n'])
+def test_unknown_mount_inventory_fails_closed(monkeypatch,content):
+    import io
+    monkeypatch.setattr('builtins.open',lambda *a,**k:io.BytesIO(content))
+    with pytest.raises(RuntimeError,match='Mount inventory'):
+        dispatch._mount_rows()
+
+
+def test_mount_parser_preserves_exact_guard_binding(monkeypatch,tmp_path):
+    import io
+    target=tmp_path/'guard'
+    content=f'17 1 0:2 /guard {target} ro,nosuid,nodev - tmpfs tmpfs rw\n'.encode()
+    monkeypatch.setattr('builtins.open',lambda *a,**k:io.BytesIO(content))
+    assert dispatch._mounts({'fixture':target})==(
+        ('fixture',('17','1','0:2','/guard',str(target),'ro,nosuid,nodev')),)
+    with pytest.raises(RuntimeError,match='ownership unverified'):
+        dispatch._require_unmounted_targets({'fixture':target})

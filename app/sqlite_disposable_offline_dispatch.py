@@ -59,15 +59,30 @@ def _targets(root):
     return targets
 
 
-def _mounts(targets):
+def _mount_rows():
     with open('/proc/self/mountinfo','rb') as stream:content=stream.read(1024*1024+1)
     if len(content)>1024*1024:raise RuntimeError('Mount inventory exceeds bound')
-    found={name:[] for name in targets}
+    rows=[]
     for line in content.decode('utf-8').splitlines():
         halves=line.split(' - ')
         if len(halves)!=2:raise RuntimeError('Mount inventory malformed')
         fields=halves[0].split()
-        if len(fields)<6:raise RuntimeError('Mount inventory malformed')
+        if (len(fields)<6 or not fields[0].isdigit() or int(fields[0])<=0
+                or len(halves[1].split())<3):raise RuntimeError('Mount inventory malformed')
+        rows.append(tuple(fields[:6]))
+    if not rows:raise RuntimeError('Mount inventory unavailable')
+    return tuple(rows)
+
+
+def _require_unmounted_targets(targets):
+    paths={str(path) for path in targets.values()}
+    if any(row[4] in paths for row in _mount_rows()):
+        raise RuntimeError('Pre-existing dispatch mount; ownership unverified')
+
+
+def _mounts(targets):
+    found={name:[] for name in targets}
+    for fields in _mount_rows():
         for name,target in targets.items():
             if fields[4]==str(target):found[name].append(fields)
     result=[]
@@ -225,16 +240,20 @@ def install_disposable_offline_dispatch(root):
         if os.path.lexists(root/'pending-request.json'):
             raise RuntimeError('Retained request requires review; no reinstall')
         targets=_targets(root)
+        _require_unmounted_targets(targets)
         originals={}
         for name,target in targets.items():
             parent=os.open(target.parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
             try:
                 content,identity=_read(parent,target.name)
+                if content==GUARD:
+                    raise RuntimeError('Pre-existing guard bytes; ownership unverified')
                 originals[name]={'sha256':hashlib.sha256(content).hexdigest(),'identity':identity}
             finally:os.close(parent)
         guard,guard_identity=_read(directory,'deny-guard')
         if guard!=GUARD:raise RuntimeError('Exact disposable guard required')
         held=os.fstat(directory)
+        _require_unmounted_targets(targets)
         request=dict(schema_version=1,fixture_only=True,phase='fence_requested',
                      scope=_scope(),root_identity=(held.st_dev,held.st_ino),
                      guard_sha256=hashlib.sha256(guard).hexdigest(),originals=originals,
@@ -256,6 +275,7 @@ def install_disposable_offline_dispatch(root):
                 raise RuntimeError('Fixture binding changed; request retained')
         for name,target in targets.items():
             binding()
+            _require_unmounted_targets({name:target})
             parent=os.open(target.parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
             try:
                 content,identity=_read(parent,target.name)

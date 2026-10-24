@@ -99,3 +99,18 @@ Matching original files is not proof that no mount was installed; matching guard
 bytes is not proof that a mount belongs to this request. Mount ownership and an
 explicit owned-change recovery implementation remain required before restoration.
 This report is not a production host recovery tool and supplies no writer permit.
+
+### Refuse pre-existing dispatch changes
+
+Installation now rejects any exact target mount before capturing originals and
+again before writing the pending request. Original content already equal to the
+fixed guard is rejected as unowned. Each target is checked once more immediately
+before its bind action; a conflict at that stage retains the durable request and
+any completed guards. Missing, empty, oversized or malformed mount inventories
+fail closed. The same bounded parser supplies complete guard verification.
+
+These are admission checks, not continuous mount exclusion: an external actor
+can still race an observation. They neither make another installer's mount owned
+nor enable automatic recovery. Actual Linux acceptance of this expanded installer
+remains pending; portable tests use synthetic mount inventories and never mount
+anything on the development Mac.
