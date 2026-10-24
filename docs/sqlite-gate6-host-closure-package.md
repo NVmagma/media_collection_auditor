@@ -223,3 +223,11 @@ These are detached permission observations, not ACL, race, mount-identity or
 privacy attestations. Production path selection must account for the full parent
 chain and all exposure aliases; it must not chmod existing lab/share parents as
 an automatic remediation. Gate 6 and all controller authority blockers remain open.
+
+The ancestor follow-up completed: both `/mnt/media` and `/mnt/user` were observed
+as uid/gid 99:100, mode 0777; `/mnt` and `/` were 0:0, mode 0755. The lab-route
+permission investigation is sufficient to identify this constraint; no further
+repeat probe is needed. The [host control storage contract](sqlite-host-control-storage-contract.md)
+records the result and couples durable backing/recovery to boot enforcement.
+A private leaf or bind mount alone is not an accepted remediation. No production
+permissions, mounts or settings were changed, and no Gate 6 blocker was cleared.
