@@ -386,6 +386,45 @@ a policy built from these settings through an actual claimed movie/TV fixture ru
 with a shared cap and retained daily claim. This configuration-only bridge needs
 no additional Tower run; production root/database/entry-point dispatch remains open.
 
+## Configured GET collection and dispatch composition
+
+`run_configured_disposable_slot` connects the effective-settings policy to a new
+bounded GET-only Jellyfin transport per attempt, configured tag names, complete
+scan-time collection and repeated per-move protection reads. It retains one request
+budget through scans, rebuilds and moves. Movie/TV identities come from that
+attempt's inventory; scan-time signals are never reused as move-time protection.
+Only marked disposable roots are accepted through the existing slot runner.
+Explicit `DRY_RUN=false` is required for this fixture rename entry point; production
+`run_once` still rejects SQLite before side effects. No Arr delivery is performed.
+
+Four stdlib Linux fixture tests compose settings, actual private loopback HTTP,
+daily claims, SQLite and actual no-overwrite renames: two-library success and
+no-repeat collection; a configured protection tag appearing after scan blocks
+before intent; unavailable HTTP protection leaves clocks/media unchanged and
+retains the daily claim; invalid tags/connection/dry-run policy makes no requests
+or claim. Unavailable scan signals are safely skipped by the established planner,
+not treated as authorization. Local Linux execution also passed the existing 14
+slot, 27 rename and 11 HTTP cases. Development-host regression checks passed 249
+tests and 14 subtests, with 87 Linux cases skipped there and separately exercised.
+
+Native Tower acceptance of this combined boundary is pending:
+
+```bash
+(
+  set -eu
+  cd /mnt/user/sqlite_lab_checkout
+  [ "$(git branch --show-current)" = feature/sqlite ]
+  git pull --ff-only origin feature/sqlite
+  bash scripts/sqlite_scheduled_configured_slot_lab.sh /mnt/media/sql_test
+)
+```
+
+Expected: 4 configured workflow tests plus 11 HTTP transport tests, final
+`scheduled_configured_slot_acceptance_complete`, scope
+`configured_disposable_daily_slot`. The new lab has synthetic credentials and
+responses, no external network access, no production mounts or service/kernel
+changes, and only its new directory is writable. Production remains disabled.
+
 ## Remaining Gate 8 scope
 
 1. Connect the accepted configured multi-library routed ordering to production
