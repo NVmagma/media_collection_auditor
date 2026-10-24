@@ -1,7 +1,7 @@
 # Gate 6 scheduled-run acceptance
 
-Status: implementation and local acceptance complete; GitHub test CI and the
-operator's native Tower acceptance result are required before closure. No
+Status: implementation, local acceptance and GitHub test CI passed. Only the
+operator's native Tower acceptance result remains required before closure. No
 production activation, image update or deletion approval is implied.
 
 The user approved this narrower operating model on 2026-10-24. The governing
@@ -33,7 +33,15 @@ standard-library fixture suites.
 The existing Python safety workflow now includes `tests/test_sqlite_scheduled*.py`
 and `tests/test_sqlite_run_schedule.py` on `feature/sqlite`, in addition to its
 existing regression tests. This is a test-only workflow, not an image publication.
-Its result must be recorded against the exact commit before closure.
+CI run [40102472454](https://github.com/NVmagma/media_collection_auditor/actions/runs/40102472454)
+passed for implementation commit `f163d17f6f1092d144731481612196e9da254496`:
+143 scheduled tests plus 14 subtests, 671 existing SQLite regression tests and
+155 isolated safety tests. These are separate workflow steps, not a statement
+that the entire release suite has run. Any later acceptance-document-only commit
+retains the same app/scripts/tests/workflow implementation tree. No image was
+built or published. Native Tower acceptance is the single remaining Gate 6 check;
+a passing result from this package closes the scheduled-model gate without new
+host-fence requirements. Subsequent worker/release work stays in later gates.
 
 ## Native Tower acceptance
 
