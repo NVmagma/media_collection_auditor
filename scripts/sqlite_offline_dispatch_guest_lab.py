@@ -26,10 +26,12 @@ def prepare(root):
     direct=root/'host/usr/local/etc/rc.d';direct.mkdir(parents=True)
     (root/'host/etc').mkdir()
     (root/'host/etc/rc.d').symlink_to('../usr/local/etc/rc.d')
-    for name in ('rc.docker','rc.nfsd'):
+    for relative,_ in dispatch.ROUTES.values():
+        target=root/'host'/relative
+        target.parent.mkdir(parents=True,exist_ok=True)
         # Even a broken guard can execute only this inert fixture stub.
-        (direct/name).write_bytes(b'#!/bin/bash\nprintf "UNGUARDED FIXTURE\\n"\nexit 99\n')
-        (direct/name).chmod(0o500)
+        target.write_bytes(b'#!/bin/bash\nprintf "UNGUARDED FIXTURE\\n"\nexit 99\n')
+        target.chmod(0o500)
     return root
 
 
@@ -42,16 +44,29 @@ def dispatches(root, *, partial=False):
     else:verify_disposable_offline_dispatch(root)
     count=0
     actions={'rc.docker':('start','stop','force_stop','restart','status'),
-             'rc.nfsd':('start','stop','restart','reload','update','status')}
-    if partial:actions.pop('rc.nfsd')
+             'rc.nfsd':('start','stop','restart','reload','update','status'),
+             'rc.samba':(None,'start','stop','restart','reload','update','status','unrecognized')}
+    if partial:actions={name:commands for name,commands in actions.items() if name=='rc.docker'}
     for alias in ('etc/rc.d','usr/local/etc/rc.d'):
         for service,commands in actions.items():
             for action in commands:
-                result=subprocess.run([str(root/'host'/alias/service),action],
+                result=subprocess.run([str(root/'host'/alias/service)]+([] if action is None else [action]),
                                       capture_output=True,timeout=5)
                 if result.returncode!=75 or b'UNGUARDED' in result.stdout:
                     raise RuntimeError('Fixture dispatch not denied')
                 if not partial:verify_disposable_offline_dispatch(root)
+                count+=1
+    if not partial:
+        for route in ('mover','mover.old','move-helper'):
+            relative,_=dispatch.ROUTES[route]
+            commands=(None,) if route=='move-helper' else (None,'start','stop','status','unrecognized')
+            for action in commands:
+                result=subprocess.run([str(root/'host'/relative)]+([] if action is None else [action]),
+                    input=b'/SYNTHETIC_ONLY/no_existing_file\n' if route=='move-helper' else None,
+                    capture_output=True,timeout=5)
+                if result.returncode!=75 or b'UNGUARDED' in result.stdout:
+                    raise RuntimeError('Fixture mover dispatch not denied')
+                verify_disposable_offline_dispatch(root)
                 count+=1
     return count
 
@@ -130,7 +145,7 @@ if __name__=='__main__':
         root=Path(args.root)
         request=json.loads((root/'pending-request.json').read_bytes())
         for name,original in request['originals'].items():
-            content=(root/'host/usr/local/etc/rc.d'/name).read_bytes()
+            content=(root/'host'/dispatch.ROUTES[name][0]).read_bytes()
             if hashlib.sha256(content).hexdigest()!=original['sha256']:
                 raise RuntimeError('Underlying fixture original changed')
         result=json.loads((root/'result.json').read_text())

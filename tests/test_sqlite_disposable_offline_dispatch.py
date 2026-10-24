@@ -17,7 +17,7 @@ def test_durable_request_precedes_every_mount_and_failure_retains_it(root,monkey
     def fail(command,**kwargs):
         request=json.loads((root/'pending-request.json').read_bytes())
         assert request['phase']=='fence_requested'
-        assert set(request['originals'])=={'rc.docker','rc.nfsd'}
+        assert set(request['originals'])==set(dispatch.ROUTES)
         assert request['production_authorized'] is False
         calls.append(command)
         raise RuntimeError('synthetic mount failure')
@@ -100,3 +100,24 @@ def test_retained_request_with_missing_lock_is_not_repaired(root,monkeypatch):
     assert set(root.iterdir())==before
     assert not (root/'controller.lock').exists()
     assert pending.read_bytes()==b'retained uncertain request'
+
+
+@pytest.mark.parametrize('arguments',[[],['start'],['stop'],['restart'],['reload'],
+                                     ['update'],['status'],['unrecognized']])
+def test_fixed_guard_denies_samba_default_and_explicit_dispatches(tmp_path,arguments):
+    import subprocess
+    guard=tmp_path/'deny-guard'
+    guard.write_bytes(dispatch.GUARD)
+    result=subprocess.run(['/bin/bash','-p',str(guard),*arguments],capture_output=True)
+    assert result.returncode==75
+    assert result.stdout==b''
+    assert b'Offline maintenance service dispatch denied' in result.stderr
+
+
+def test_every_fixed_route_is_in_fake_host_tree(root):
+    targets=dispatch._targets(root)
+    assert set(targets)=={'rc.docker','rc.nfsd','rc.samba','mover','mover.old','move-helper'}
+    for name,target in targets.items():
+        assert root/'host' in target.parents
+        assert b'UNGUARDED FIXTURE' in target.read_bytes()
+    assert targets['move-helper']==root/'host/usr/libexec/unraid/move'

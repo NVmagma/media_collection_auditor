@@ -99,3 +99,20 @@ Gate 6 stays open until the actual host implementation, ownership-bound verifier
 and integrated failure/boot recovery requirements above are accepted. Code-only
 preparation and guest tests cannot truthfully close it. Gates 7–10 retain their
 existing dependencies; no blocker is waived to make the gate table green.
+
+## Confirmed additional host routes and protection dependency
+
+The operator accepted pausing SMB and scheduled mover activity in the same
+maintenance window. Tower's Samba and both mover-script hashes match the pinned
+Unraid revision; the move-helper binary/environment and existing children still
+need scope verification. The current read-only preference probe also corrects
+CRLF/unquoted-format observation while rejecting ambiguity. See the
+[SMB/mover review](sqlite-smb-mover-source-review.md).
+
+Fully stopping Docker also stops the existing Jellyfin protection API. Media work
+therefore requires an independently reviewed, authoritative fresh-protection
+provider or an execution mode that preserves that capability under the complete
+fence. Offline preparation/recovery alone does not supply it. Cached pre-stop
+observations cannot be promoted to trusted protection evidence. This requirement
+must be solved before production move wiring; the permission to pause services
+does not waive it. No production cutover blocker is removed by these design choices.

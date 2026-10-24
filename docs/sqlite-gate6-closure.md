@@ -604,3 +604,18 @@ The next host input is a selected read-only SMB/mover/scheduler scope snapshot,
 so the actual installer covers host services beyond Docker/NFS where applicable.
 No service stop, preference application or production media test is requested by
 that snapshot. See [offline dispatch rehearsal](sqlite-offline-dispatch-rehearsal.md).
+
+SMB/mover source review: Tower's rc.samba, mover and mover.old hashes all match
+Unraid revision 26eb1b5c1d547ddbf44a38e63956ba24f659098b. The operator accepted
+pausing SMB and scheduled mover activity as a design scope extension. The stock
+.old script is not evidence of a tuning plugin. Source review identified Samba's
+default-start behavior and the mover's separate helper/override route. The fake
+host guard fixture now models six fixed entrypoints; expanded Linux acceptance
+is pending. No real service/script/helper was executed.
+
+The scope probe now observes canonical CRLF/unquoted preferences without changing
+source bytes and adds redacted format counts, reviewed-source comparisons and
+helper/child observations. Earlier unverified preferences remain unverified until
+a fresh host snapshot establishes their actual format. Fresh authoritative
+Jellyfin protections remain required during media work even with Docker paused;
+an independent provider/accepted execution mode is still an implementation gap.

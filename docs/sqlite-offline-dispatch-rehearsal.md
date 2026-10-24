@@ -1,5 +1,9 @@
 # Offline-service dispatch guard rehearsal
 
+This page records the original two-service Linux acceptance. The current
+expanded six-route fixture and its pending Linux acceptance are described in
+the [SMB/mover source review](sqlite-smb-mover-source-review.md).
+
 Tower's disposable controller runtime passed with Python 3.12.15, SQLite 3.46.1,
 exclusive locking and a persisted synthetic checkpoint. That confirms the cached
 runtime mechanism, not a host fence or production move permit. The initial
@@ -21,9 +25,9 @@ both aliases must resolve to it. Originals are inert scripts, so a broken guard
 cannot accidentally execute a real host service. The observer requires exact
 mount inventory, bytes and scope; it returns no ownership credential.
 
-Run `python -B -m scripts.sqlite_offline_dispatch_guest_lab --root NEW_PATH` only
+The original acceptance ran `python -B -m scripts.sqlite_offline_dispatch_guest_lab --root NEW_PATH` only
 in the dedicated independent Linux VM. It creates a private mount namespace,
-starts the fixture installer as a separate process, verifies 22 fixed dispatch
+started the fixture installer as a separate process and verified 22 fixed dispatch
 denials, kills the installer with SIGKILL, verifies all 22 again and rejects a
 replacement installation from the retained request. The request remains byte
 identical. Namespace exit removes only fixture mounts; the outer harness then

@@ -21,7 +21,15 @@ GUARD=b'''#!/bin/bash -p
 printf '%s\\n' 'Offline maintenance service dispatch denied' >&2
 exit 75
 '''
-SERVICES=('rc.docker','rc.nfsd')
+ROUTES={
+    'rc.docker':('usr/local/etc/rc.d/rc.docker',('etc/rc.d/rc.docker',)),
+    'rc.nfsd':('usr/local/etc/rc.d/rc.nfsd',('etc/rc.d/rc.nfsd',)),
+    'rc.samba':('usr/local/etc/rc.d/rc.samba',('etc/rc.d/rc.samba',)),
+    'mover':('usr/local/sbin/mover',()),
+    'mover.old':('usr/local/sbin/mover.old',()),
+    'move-helper':('usr/libexec/unraid/move',()),
+}
+SERVICES=tuple(ROUTES)
 
 
 def _root(root):
@@ -40,13 +48,14 @@ def _scope():
 
 
 def _targets(root):
-    directory=root/'host/usr/local/etc/rc.d'
-    if directory.resolve()!=directory:
-        raise RuntimeError('Disposable service directory changed')
-    targets={name:directory/name for name in SERVICES}
-    for name,target in targets.items():
-        if target.resolve()!=target or (root/'host/etc/rc.d'/name).resolve()!=target:
+    targets={}
+    for name,(relative,aliases) in ROUTES.items():
+        target=root/'host'/relative
+        if target.parent.resolve()!=target.parent or target.resolve()!=target:
+            raise RuntimeError('Disposable service directory changed')
+        if any((root/'host'/alias).resolve()!=target for alias in aliases):
             raise RuntimeError('Disposable service alias binding changed')
+        targets[name]=target
     return targets
 
 
@@ -129,7 +138,7 @@ def install_disposable_offline_dispatch(root):
         for name,target in targets.items():
             parent=os.open(target.parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
             try:
-                content,identity=_read(parent,name)
+                content,identity=_read(parent,target.name)
                 originals[name]={'sha256':hashlib.sha256(content).hexdigest(),'identity':identity}
             finally:os.close(parent)
         guard,guard_identity=_read(directory,'deny-guard')
@@ -158,7 +167,7 @@ def install_disposable_offline_dispatch(root):
             binding()
             parent=os.open(target.parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
             try:
-                content,identity=_read(parent,name)
+                content,identity=_read(parent,target.name)
                 if (identity!=originals[name]['identity']
                         or hashlib.sha256(content).hexdigest()!=originals[name]['sha256']):
                     raise RuntimeError('Original dispatch changed; request retained')
