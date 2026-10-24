@@ -93,5 +93,19 @@ it complete or authorize cutover.
 from a local HH:MM and explicit zone. It performs no I/O or media operations and
 is not yet connected to the worker. Tests cover startup/missed-slot behavior,
 exact-slot replay prevention, DST gaps/folds, fractional-hour zones, invalid
-settings and naive timestamps. Next: the complete-scan barrier and bounded move
-plan, followed by fresh-check execution and scheduler/worker settings integration.
+settings and naive timestamps. The complete-scan barrier and bounded advisory move plan are also implemented in
+`app/sqlite_scheduled_plan.py`. Every configured collector and its iterator must
+finish before the existing lifecycle decision bridge runs. Later-library or
+pagination exceptions expose no partial plan. Pending operations, duplicate media
+identities, title-limit overflow and scan deadlines block planning. Action caps
+limit the plan without shortening collection. Detached snapshot/signal inputs and
+immutable move records prevent later collector mutations from changing the plan.
+Missing protection data blocks that title; Removal never proposes deletion.
+
+The injected collector remains responsible for complete pagination and genuinely
+authoritative observations; this interface is not proof of live Jellyfin freshness.
+There is no move/Arr/persistence callback or production runner connection here.
+An advisory plan records its tracking revision/source clocks for later checks;
+those records do not prove the revision stayed current during collection. Next:
+fresh-check execution with current revision/path validation, durable intent/outcome
+integration and plan expiration, then scheduler/worker settings integration.
