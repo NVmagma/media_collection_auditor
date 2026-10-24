@@ -22,8 +22,17 @@ def run_configured_disposable_slot(*, root, settings, scheduled_at, now,
     no production execution or implicit live selection is introduced. Transport
     request limits span all scans, rebuilds and move checks within this attempt.
     """
-    config = scheduled_worker_from_settings(settings)
+    config, scan, protect = _configured_run_inputs(settings=settings, clock=clock)
+    return run_disposable_routed_slot(root=root, config=config,
+        scheduled_at=scheduled_at, now=now, fetch_signals=scan,
+        fetch_protection=protect, clock=clock, timer=timer,
+        maximum_run_seconds=maximum_run_seconds)
+
+
+def _configured_run_inputs(*, settings, clock):
+    """Shared detached settings and fresh collectors; construction performs no HTTP."""
     values = dict(settings)
+    config = scheduled_worker_from_settings(values)
     if values.get('DRY_RUN', 'true').strip().lower() != 'false':
         raise ValueError('Disposable rename acceptance requires explicit DRY_RUN=false')
     tags = validated_tag_names({field: values.get(key, default) for field, key, default in (
@@ -48,7 +57,4 @@ def run_configured_disposable_slot(*, root, settings, scheduled_at, now,
         return scheduled_protection_provider(fetch=fetch, bindings=bindings,
             clock=clock, tag_names=tags)(move)
 
-    return run_disposable_routed_slot(root=root, config=config,
-        scheduled_at=scheduled_at, now=now, fetch_signals=scan,
-        fetch_protection=protect, clock=clock, timer=timer,
-        maximum_run_seconds=maximum_run_seconds)
+    return config, scan, protect

@@ -150,3 +150,23 @@ def test_settings_policy_drives_actual_daily_movie_tv_dispatch():
         assert fixture.fixture.path(1, 'transient').is_dir()
     finally:
         fixture.doCleanups()
+
+
+def test_json_entrypoint_ignores_preparatory_sqlite_schedule(monkeypatch, tmp_path):
+    """Adding saved daily fields must not change legacy JSON dispatch selection."""
+    from pathlib import Path
+    from unittest.mock import Mock
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / 'app'))
+    import collection_auditor as auditor
+    state_path = tmp_path / 'state.json'
+    state_path.write_text('{"unchanged":true}')
+    monkeypatch.setattr(auditor, 'STATE_FILE', str(state_path))
+    monkeypatch.setenv('AUDITOR_STATE_BACKEND', 'json')
+    monkeypatch.setenv('SQLITE_DAILY_RUN_TIME', 'invalid-unused-value')
+    monkeypatch.setenv('SQLITE_DAILY_RUN_TIMEZONE', 'invalid-unused-zone')
+    legacy = Mock(return_value='json-result')
+    monkeypatch.setattr(auditor, '_run_once_locked', legacy)
+    assert auditor.run_once() == 'json-result'
+    legacy.assert_called_once_with()
+    assert state_path.read_text() == '{"unchanged":true}'
+    assert not list(tmp_path.glob('*.db'))

@@ -55,6 +55,18 @@ def _execute_routed_batch_locked(*, root, config, preparation, fetch_protection,
         arr_sync_requests, clock, timer, maximum_protection_seconds, verify_binding):
     """Internal composition while the daily claim retains the runner lock."""
     root = Path(root)
+    for library in config.libraries:
+        if any(root not in Path(path).parents for _, path in library.roots):
+            raise ValueError('Every stage must remain in the marked disposable root')
+    return _execute_configured_batch_locked(database=root / 'state.db', config=config,
+        preparation=preparation, fetch_protection=fetch_protection,
+        arr_sync_requests=arr_sync_requests, clock=clock, timer=timer,
+        maximum_protection_seconds=maximum_protection_seconds, verify_binding=verify_binding)
+
+
+def _execute_configured_batch_locked(*, database, config, preparation, fetch_protection,
+        arr_sync_requests, clock, timer, maximum_protection_seconds, verify_binding):
+    """Shared routed ordering; caller pins control/database independently of media."""
     if (not isinstance(config, ScheduledWorkerConfig) or not isinstance(preparation, ScheduledWorkerPreparation)
             or preparation.configuration != config
             or preparation.clock_proposal is None or preparation.clock_proposal.changes
@@ -66,8 +78,7 @@ def _execute_routed_batch_locked(*, root, config, preparation, fetch_protection,
         raise ValueError('Configured library/action-cap binding mismatch')
     roots = {(library.name, stage): path for library in config.libraries for stage, path in library.roots}
     captured_roots = {(name, stage): (path, identity) for name, stage, path, identity in preparation.root_bindings}
-    if (set(roots) != set(captured_roots) or any(captured_roots[key][0] != path
-            or root not in Path(path).parents for key, path in roots.items())):
+    if (set(roots) != set(captured_roots) or any(captured_roots[key][0] != path for key, path in roots.items())):
         raise ValueError('Configured stage paths differ from the marked lab preparation')
     bindings = {binding.media_key: binding for binding in preparation.bindings}
     identities = dict(preparation.title_identities)
@@ -92,7 +103,7 @@ def _execute_routed_batch_locked(*, root, config, preparation, fetch_protection,
     def stopped(reason, index):
         return {**base, 'status': 'stopped', 'reason': reason,
                 'completed': tuple(completed), 'stopped_index': index}
-    store = GuardedSQLiteStateStore(root / 'state.db')
+    store = GuardedSQLiteStateStore(database)
     expected, revision = store.load_with_revision()
     if (plan.process_id != os.getpid() or revision != plan.revision or INTENTS_KEY in expected
             or expected != preparation.clock_proposal.source_snapshot
@@ -109,7 +120,7 @@ def _execute_routed_batch_locked(*, root, config, preparation, fetch_protection,
             observed_at = clock()
             operation_id = batch_id + ':' + str(index)
             binding = bindings[move.media_key]
-            _move(root=root, store=store, library=libraries[move.library], roots=roots,
+            _move(store=store, library=libraries[move.library], roots=roots,
                 captured_roots=captured_roots, title_identity=identities[move.media_key],
                 folder=binding.folder, plan=chained, move=move, expected=expected,
                 operation_id=operation_id, observed_at=observed_at,
@@ -135,7 +146,7 @@ def _execute_routed_batch_locked(*, root, config, preparation, fetch_protection,
             'final_revision': revision, 'capped_moves': plan.capped_moves}
 
 
-def _move(*, root, store, library, roots, captured_roots, title_identity, folder, plan, move,
+def _move(*, store, library, roots, captured_roots, title_identity, folder, plan, move,
         expected, operation_id, observed_at, fetch_protection, verify_binding,
         timer, maximum_protection_seconds, arr_request, queue_entry):
     if (not isinstance(observed_at, datetime) or observed_at.tzinfo is not None

@@ -19,6 +19,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         self.server.calls.append((self.path, self.headers.get('X-Emby-Token')))
+        hook = getattr(self.server, 'on_request', None)
+        if hook is not None:
+            hook()
         if self.server.mode == 'unauthorized':
             self.send_response(401); self.end_headers(); return
         if self.path == '/Users':

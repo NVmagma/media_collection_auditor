@@ -413,7 +413,13 @@ tests and 27 subtests, 23 atomic regressions, 671 SQLite regressions and 244
 isolated safety tests (separate steps). This includes the actual configured
 settings-to-dispatch Linux test. No production image was built or deployed.
 
-Native Tower acceptance of this combined boundary is pending:
+Native Tower acceptance of this combined boundary passed at source
+`3a07827c63db5105b81acc052e12a5497e02435e`, lab
+`/mnt/media/sql_test/scheduled-configured-slot.DzqmQ0`: all 4 configured workflow
+tests in 1.497 seconds and 11 HTTP tests in 0.235 seconds. Final status was
+`scheduled_configured_slot_acceptance_complete`, scope
+`configured_disposable_daily_slot`; production remained disabled and unchanged.
+The accepted command is retained here for reference:
 
 ```bash
 (
@@ -430,6 +436,53 @@ Expected: 4 configured workflow tests plus 11 HTTP transport tests, final
 `configured_disposable_daily_slot`. The new lab has synthetic credentials and
 responses, no external network access, no production mounts or service/kernel
 changes, and only its new directory is writable. Production remains disabled.
+
+## Separate control/database and media roots
+
+The shared locked worker internals now accept an explicitly bound SQLite database
+independently of the configured movie/TV roots. Existing disposable public APIs
+still require their exact original marker/root layout. A separate
+`run_disposable_worker_layout` entry point tests deployment-shaped control/media
+separation only inside a marked disposable lab: its separately marked control
+directory holds `state.db`, the persistent cooperating lock and daily claims.
+All media roots must be inside the outer lab and disjoint from control. Component
+no-follow opens and repeated directory/marker/database identity checks bind both
+sides; no missing state is initialized or migrated.
+
+The same private checkpoint/rebuild, complete scan, fresh GET protection and routed
+move implementation now serves both layouts. Pending intents stop before collection,
+including empty malformed intent values. The total deadline starts before control
+lock/claim acquisition and is not reset between phases. The configuration capture
+also detaches policy and credentials from one effective-settings snapshot.
+
+Eight Linux fixture tests verify separate-state success without creating an outer
+state database, retained daily claim/no replay, pending-state refusal before HTTP,
+replaced database refusal, control-lock retention during real HTTP, missing marker,
+control/media overlap and outside-control refusal, retained intent after a real
+rename with uncertain acknowledgement, and invalid deadline refusal before claim.
+The full isolated Linux package additionally passed the 4 configured, 14 slot,
+22 routed, 14 inventory, 16 checkpoint, 19 reconciliation, 27 rename and 11 HTTP
+cases. A JSON entry-point regression verifies preparatory SQLite schedule values
+do not affect the legacy JSON callback, existing state or backend guard.
+
+Native Tower acceptance for this separated layout is required:
+
+```bash
+(
+  set -eu
+  cd /mnt/user/sqlite_lab_checkout
+  [ "$(git branch --show-current)" = feature/sqlite ]
+  git pull --ff-only origin feature/sqlite
+  bash scripts/sqlite_scheduled_worker_layout_lab.sh /mnt/media/sql_test
+)
+```
+
+Expected: 8 layout tests and 11 HTTP tests, final
+`scheduled_worker_layout_acceptance_complete`, scope
+`disposable_separate_control_media`. Only its new disposable directory/container
+are used; no external Jellyfin, production media/database/settings/services,
+exports, kernel controls or boot settings are touched. Native rename capability
+remains required; there is no copy/delete fallback.
 
 ## Remaining Gate 8 scope
 

@@ -12,6 +12,7 @@ from pathlib import Path
 from time import monotonic
 
 from app.sqlite_audit_session import RevisionedAuditSession
+from app.sqlite_operation_coordinator import INTENTS_KEY
 from app.sqlite_isolated_lifecycle_runner import isolated_runner_lock
 from app.sqlite_scheduled_worker import ScheduledWorkerConfig, prepare_scheduled_worker
 from app.state_store import GuardedSQLiteStateStore
@@ -63,14 +64,24 @@ def _validate_clock_preparation(*, root, config, fetch_signals, clock, timer, ma
 def _prepare_checkpointed_worker_locked(*, root, config, fetch_signals, clock, timer,
         maximum_titles, maximum_scan_seconds, verify_binding):
     """Internal composition while the daily claim retains the runner lock."""
+    return _prepare_configured_worker_locked(database=Path(root) / 'state.db', config=config,
+        fetch_signals=fetch_signals, clock=clock, timer=timer, maximum_titles=maximum_titles,
+        maximum_scan_seconds=maximum_scan_seconds, verify_binding=verify_binding)
+
+
+def _prepare_configured_worker_locked(*, database, config, fetch_signals, clock, timer,
+        maximum_titles, maximum_scan_seconds, verify_binding):
+    """Shared ordering for a caller-bound database and independently held roots."""
     started = timer()
     def remaining():
         elapsed = timer() - started
         if not math.isfinite(elapsed) or not 0 <= elapsed < maximum_scan_seconds:
             raise RuntimeError('Clock preparation deadline exceeded')
         return maximum_scan_seconds - elapsed
-    session = RevisionedAuditSession(GuardedSQLiteStateStore(root / 'state.db'))
+    session = RevisionedAuditSession(GuardedSQLiteStateStore(database))
     source, initial_revision = session.read_verified_snapshot()
+    if INTENTS_KEY in source:
+        raise RuntimeError('Unresolved SQLite operation; scheduled collection stopped')
     def prepare(snapshot, revision):
         verify_binding()
         result = prepare_scheduled_worker(config=config, snapshot=snapshot,
