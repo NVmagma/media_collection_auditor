@@ -120,3 +120,14 @@ and projection reads, file replacement/removal, and failed-output retention. A
 ninth stdlib fixture case checks this same lifetime contract on Tower before
 cleanup. All nine cases still require successful cleanup. Rerun the two-view
 command above after pulling the repair; production remains unchanged.
+
+
+Repair validation: local storage/worker/API regressions passed 494 tests and 14
+subtests (103 Linux-only cases skipped locally). The isolated Linux package passed
+9 reader, 8 candidate-runtime, 27 rename and 11 HTTP cases with successful cleanup.
+[Test-only CI run 40130538886](https://github.com/NVmagma/media_collection_auditor/actions/runs/40130538886)
+passed for repair implementation `b7b37ee9b306320e5fbcca485643dffb507e4d9f`: 367
+scheduled/backend-gate tests and 27 subtests, 199 Gate 9/API/lifetime checks, 23
+atomic regressions, 671 SQLite regressions and 269 isolated safety tests (separate
+steps). The repaired shfs/native acceptance remains pending; CI does not replace
+Tower's filesystem-specific cleanup check.
