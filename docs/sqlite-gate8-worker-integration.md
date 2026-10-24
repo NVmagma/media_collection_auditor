@@ -179,7 +179,14 @@ these cases too. They write only the newly created disposable database; producti
 state/media/services remain unchanged. Focused checkpoint checks passed 16 tests;
 development-host scheduled regressions passed 213 tests and 14 subtests. The 46
 Linux-only cases passed separately in the isolated Linux run, together with the
-14 worker, 16 checkpoint and 11 HTTP cases. Tower checkpoint acceptance is pending.
+14 worker, 16 checkpoint and 11 HTTP cases.
+
+[Test-only CI run 40106351229](https://github.com/NVmagma/media_collection_auditor/actions/runs/40106351229)
+passed for implementation `0ace0da3e47c169a19632c8c51019c123445dc55`: 248 scheduled
+tests and 18 subtests, 23 atomic regressions, 671 SQLite regressions and 204 isolated
+safety tests (separate workflow steps). No image was built/deployed. Tower
+checkpoint acceptance is pending; later documentation-only commits preserve this
+implementation tree.
 
 ## Remaining Gate 8 scope
 
