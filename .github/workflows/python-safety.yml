@@ -38,7 +38,7 @@ jobs:
         env:
           WEB_SESSION_SECRET: ci-only-session-secret
           PYTHONPATH: ${{ github.workspace }}
-        run: python -m pytest -q tests/test_sqlite_tracking_view*.py tests/test_sqlite_connection_lifetime.py tests/test_sqlite_arr_catalog.py tests/test_sqlite_arr_queue_fixture.py tests/test_sqlite_arr_queue_lab.py tests/test_dashboard_tracking_snapshot.py tests/test_dashboard_snapshot_parity.py tests/test_integration*.py tests/test_docker_runtime_context.py
+        run: python -m pytest -q tests/test_sqlite_tracking_view*.py tests/test_sqlite_connection_lifetime.py tests/test_sqlite_arr_catalog.py tests/test_sqlite_arr_queue_fixture.py tests/test_sqlite_arr_queue_lab.py tests/test_sqlite_arr_delivery_fixture.py tests/test_sqlite_arr_delivery_lab.py tests/test_sqlite_arr_title_transport.py tests/test_dashboard_tracking_snapshot.py tests/test_dashboard_snapshot_parity.py tests/test_integration*.py tests/test_docker_runtime_context.py
       - name: Run atomic SQLite Gate 7 regression tests
         if: github.ref == 'refs/heads/feature/sqlite'
         env:

@@ -180,7 +180,7 @@ credentials and wrong source root. The catalog fixture verifies its requests occ
 after the complete Jellyfin scan and before either per-move refresh. No real Arr
 service is contacted.
 
-Native Tower acceptance of this queue boundary is pending:
+Native Tower acceptance of this queue boundary passed. Repeat command:
 
 ```bash
 (
@@ -206,8 +206,61 @@ All 19 catalog unit/transport tests passed locally. Final isolated Linux checks
 passed the 6 queue cases plus 27 rename and 11 HTTP cases. An earlier full package
 also passed 9 tracking, 8 runtime, 4 configured-slot, 14 daily-slot, 22 routed,
 14 inventory, 16 checkpoint and 19 reconciliation cases. No production activation
-or real service update was performed; native queue acceptance remains pending.
+or real service update was performed. Native Tower acceptance passed at
+`68f0142b7699241217641f01ba8d6c21927117bb`, lab
+`/mnt/media/sql_test/arr-queue.UiskXt`: 6 queue cases in 2.259s and
+11 HTTP cases in 0.233s; final `arr_queue_acceptance_complete`.
 
 The remaining Arr work is one-shot delivery and independently verified outcome
 reconciliation under the same stable identity and local destination binding.
 Coordinator/history authority and TV-season compatibility also remain open.
+
+## One-shot HTTP delivery and independent readback boundary
+
+`ArrTitleUpdate` adds one single-use transport attempt to the existing marked-lab
+intent runner. It is not connected to the production worker. The runner persists
+an Arr intent before the first HTTP request. The transport reads the stable ID,
+requires the exact prepared source path, preserves the full resource except for
+path/monitoring, and sends one PUT with `moveFiles=false`. It then issues two new
+GETs requiring the exact ID, destination folder/root and strict monitoring value.
+The PUT response body alone cannot establish completion. Radarr's documented
+202 and Sonarr's documented 200 are handled separately; see the official
+[Radarr API specification](https://github.com/Radarr/Radarr/blob/develop/src/Radarr.Api.V3/openapi.json)
+and [Sonarr API specification](https://github.com/Sonarr/Sonarr/blob/develop/src/Sonarr.Api.V3/openapi.json).
+
+All requests share a response deadline and size bound, reject redirects/proxies,
+and redact transport errors. The attempt is consumed on failure. An exception or
+lost acknowledgement never causes a retry or opportunistic success readback.
+Even two matching readbacks retain the queue and intent: exact local binding,
+verified normal-path CAS clearance and configured worker integration remain the
+next Arr layer. Generic diagnostic recovery clearance is unchanged and refused.
+
+Eleven private HTTP/SQLite fixtures cover both API acknowledgement shapes, full
+resource/season preservation, lost acknowledgement after the remote update,
+wrong-folder and second-read disagreement, changed source/ID, HTTP rejection,
+redirect refusal, injected failure, and actual SIGKILL after readback. Every case
+retains its queue/clock/unknown data and proves that a second dispatch cannot
+send another request. Nine additional transport unit cases cover invalid JSON,
+size/deadline limits, response closure, redaction and service mismatch.
+
+Tower acceptance is pending. This boundary performs no media rename and should
+be exercised on both accepted filesystem parents:
+
+```bash
+(
+  set -eu
+  cd /mnt/user/sqlite_lab_checkout
+  [ "$(git branch --show-current)" = feature/sqlite ]
+  git pull --ff-only origin feature/sqlite
+  for parent in /mnt/user/sql_test /mnt/media/sql_test; do
+    bash scripts/sqlite_arr_delivery_lab.sh "$parent"
+  done
+)
+```
+
+Expected per parent: 11 delivery cases and 11 HTTP regressions, final
+`arr_delivery_acceptance_complete`, scope
+`one_shot_arr_delivery_retained_pending`. Only new lab files, one new cached-image
+container and private loopback fake Arr services are used. No real Arr/Jellyfin,
+production media/state/settings, host services or kernel controls are changed.
+This acceptance does not close Gate 9 or authorize queue clearance/activation.
