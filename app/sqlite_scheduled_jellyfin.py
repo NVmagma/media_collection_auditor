@@ -40,3 +40,28 @@ def scheduled_protection_provider(*, fetch, bindings, clock=datetime.now, tag_na
             return ProtectionRead(False, None)
         return ProtectionRead(True, deepcopy(observation['signals']))
     return read
+
+
+def scheduled_inventory_signal_reader(*, fetch, clock=datetime.now, tag_names=None):
+    """Fresh scan-time signals for the worker's immutable inventory bindings.
+
+    This reader is separate from the per-move provider; a future executor must
+    still repeat protection collection immediately before each move.
+    """
+    from app.sqlite_scheduled_worker import ScheduledTitleBinding
+    if not callable(fetch):
+        raise ValueError('Read-only transport required')
+    tags = validated_tag_names(tag_names)
+    def read(binding):
+        if (not isinstance(binding, ScheduledTitleBinding)
+                or binding.jellyfin_type not in ('Movie', 'Series')
+                or binding.media_key != (binding.folder if binding.jellyfin_type == 'Movie'
+                                          else 'TV/' + binding.folder)):
+            raise ValueError('Worker inventory identity mismatch')
+        validate_title_folder(binding.folder)
+        observation = collect_title_observation(fetch=fetch, jellyfin_type=binding.jellyfin_type,
+            folder=binding.folder, media_key=binding.media_key, now=clock(), tag_names=tags)
+        if observation['status'] != 'shape_valid_untrusted' or observation['blockers']:
+            return None
+        return deepcopy(observation['signals'])
+    return read
