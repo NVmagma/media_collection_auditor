@@ -80,8 +80,15 @@ new directory, packages, production settings/credentials or service operations.
 Native/shfs acceptance is pending.
 
 Local dashboard/API/runtime regression checks passed 194 tests. The reader
-fixture also passed its independent-process SQLite checks locally. Exact-source
-CI and isolated Linux validation are recorded below after completion.
+fixture passed all 8 tests both locally and in the cached isolated Linux package;
+that package also passed 8 candidate runtime, 27 rename and 11 HTTP regression
+cases without host mounts or external network.
+[Test-only CI run 40130132387](https://github.com/NVmagma/media_collection_auditor/actions/runs/40130132387)
+passed for implementation `9f3fdcd5075d176b4d75cd7f0d1af29ce4cde339`: 367 scheduled
+and backend-gate tests with 27 subtests, 194 Gate 9/API/runtime checks, 23 atomic
+regressions, 671 SQLite regressions and 268 isolated safety tests (separate steps).
+No deployment or production activation was performed. Later documentation-only
+commits retain the tested app/scripts/tests/workflow implementation tree.
 
 ## Still open after the tracking reader increment
 
