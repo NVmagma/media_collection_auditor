@@ -44,6 +44,16 @@ def execute_disposable_routed_batch(*, root, config, preparation, fetch_protecti
     must already be verified; this API never updates discovery clocks itself.
     Stop on the first failed/uncertain candidate, preserving earlier completions.
     """
+    with isolated_runner_lock(root) as verify_binding:
+        return _execute_routed_batch_locked(root=root, config=config, preparation=preparation,
+            fetch_protection=fetch_protection, arr_sync_requests=arr_sync_requests,
+            clock=clock, timer=timer, maximum_protection_seconds=maximum_protection_seconds,
+            verify_binding=verify_binding)
+
+
+def _execute_routed_batch_locked(*, root, config, preparation, fetch_protection,
+        arr_sync_requests, clock, timer, maximum_protection_seconds, verify_binding):
+    """Internal composition while the daily claim retains the runner lock."""
     root = Path(root)
     if (not isinstance(config, ScheduledWorkerConfig) or not isinstance(preparation, ScheduledWorkerPreparation)
             or preparation.configuration != config
@@ -82,48 +92,47 @@ def execute_disposable_routed_batch(*, root, config, preparation, fetch_protecti
     def stopped(reason, index):
         return {**base, 'status': 'stopped', 'reason': reason,
                 'completed': tuple(completed), 'stopped_index': index}
-    with isolated_runner_lock(root) as verify_binding:
-        store = GuardedSQLiteStateStore(root / 'state.db')
-        expected, revision = store.load_with_revision()
-        if (plan.process_id != os.getpid() or revision != plan.revision or INTENTS_KEY in expected
-                or expected != preparation.clock_proposal.source_snapshot
-                or preparation.clock_proposal.source_revision != revision):
-            return stopped('stale_preparation_or_pending_operation', None)
-        batch_id = secrets.token_hex(16)
-        chained = plan
-        for index, move in enumerate(plan.moves):
-            try:
-                verify_binding()
-                current, current_revision = store.load_with_revision()
-                if current != expected or current_revision != revision:
-                    raise RuntimeError('Tracking chain changed')
-                observed_at = clock()
-                operation_id = batch_id + ':' + str(index)
-                binding = bindings[move.media_key]
-                _move(root=root, store=store, library=libraries[move.library], roots=roots,
-                    captured_roots=captured_roots, title_identity=identities[move.media_key],
-                    folder=binding.folder, plan=chained, move=move, expected=expected,
-                    operation_id=operation_id, observed_at=observed_at,
-                    fetch_protection=fetch_protection, verify_binding=verify_binding,
-                    timer=timer, maximum_protection_seconds=maximum_protection_seconds,
-                    arr_request=requests.get(move.media_key), queue_entry=queue_entries.get(move.media_key))
-                expected_after = deepcopy(expected)
-                expected_after[CLOCKS[move.source_stage]].pop(move.media_key)
-                expected_after[CLOCKS[move.destination_stage]][move.media_key] = observed_at.isoformat()
-                if move.media_key in queue_entries:
-                    expected_after['arr_sync_pending'][move.media_key] = queue_entries[move.media_key]
-                verify_binding()
-                after, after_revision = store.load_with_revision()
-                if after != expected_after or after_revision != revision + 3:
-                    raise RuntimeError('Post-move tracking chain changed')
-            except Exception:
-                return stopped('move_failed_or_uncertain', index)
-            completed.append({'media_key': move.media_key, 'library': move.library,
-                              'operation_id': operation_id, 'revision': after_revision})
-            expected, revision = after, after_revision
-            chained = replace(chained, revision=revision)
-        return {**base, 'status': 'disposable_routed_batch_complete', 'completed': tuple(completed),
-                'final_revision': revision, 'capped_moves': plan.capped_moves}
+    store = GuardedSQLiteStateStore(root / 'state.db')
+    expected, revision = store.load_with_revision()
+    if (plan.process_id != os.getpid() or revision != plan.revision or INTENTS_KEY in expected
+            or expected != preparation.clock_proposal.source_snapshot
+            or preparation.clock_proposal.source_revision != revision):
+        return stopped('stale_preparation_or_pending_operation', None)
+    batch_id = secrets.token_hex(16)
+    chained = plan
+    for index, move in enumerate(plan.moves):
+        try:
+            verify_binding()
+            current, current_revision = store.load_with_revision()
+            if current != expected or current_revision != revision:
+                raise RuntimeError('Tracking chain changed')
+            observed_at = clock()
+            operation_id = batch_id + ':' + str(index)
+            binding = bindings[move.media_key]
+            _move(root=root, store=store, library=libraries[move.library], roots=roots,
+                captured_roots=captured_roots, title_identity=identities[move.media_key],
+                folder=binding.folder, plan=chained, move=move, expected=expected,
+                operation_id=operation_id, observed_at=observed_at,
+                fetch_protection=fetch_protection, verify_binding=verify_binding,
+                timer=timer, maximum_protection_seconds=maximum_protection_seconds,
+                arr_request=requests.get(move.media_key), queue_entry=queue_entries.get(move.media_key))
+            expected_after = deepcopy(expected)
+            expected_after[CLOCKS[move.source_stage]].pop(move.media_key)
+            expected_after[CLOCKS[move.destination_stage]][move.media_key] = observed_at.isoformat()
+            if move.media_key in queue_entries:
+                expected_after['arr_sync_pending'][move.media_key] = queue_entries[move.media_key]
+            verify_binding()
+            after, after_revision = store.load_with_revision()
+            if after != expected_after or after_revision != revision + 3:
+                raise RuntimeError('Post-move tracking chain changed')
+        except Exception:
+            return stopped('move_failed_or_uncertain', index)
+        completed.append({'media_key': move.media_key, 'library': move.library,
+                          'operation_id': operation_id, 'revision': after_revision})
+        expected, revision = after, after_revision
+        chained = replace(chained, revision=revision)
+    return {**base, 'status': 'disposable_routed_batch_complete', 'completed': tuple(completed),
+            'final_revision': revision, 'capped_moves': plan.capped_moves}
 
 
 def _move(*, root, store, library, roots, captured_roots, title_identity, folder, plan, move,

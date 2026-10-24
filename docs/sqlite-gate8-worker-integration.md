@@ -295,18 +295,70 @@ passed for implementation `1af16f6fb3bda89ed4de2921eae92c66a8bcad13`: 275 schedu
 tests and 22 subtests, 23 atomic regressions, 671 SQLite regressions and 226 isolated
 safety tests (separate workflow steps). No image was built/deployed. Later
 acceptance-document-only commits retain that implementation tree. Routed native
-Tower acceptance is pending.
+Tower acceptance was received for the routed engine at source
+`ce90bae015c41a6e94cfbb34394ed6867813ca54`: lab
+`/mnt/media/sql_test/scheduled-routed.KyQkzm`, all 22 routed cases in 12.918 seconds
+and 11 HTTP cases in 0.238 seconds. Final status was
+`scheduled_routed_acceptance_complete`, scoped to disposable routed moves, with
+production activation disabled and authorization false. The routed native
+boundary is accepted. No production media/configuration/services changed.
+
+## Daily claim, checkpoint and routed dispatch composition
+
+`run_disposable_routed_slot` now composes the due daily claim, complete multi-library
+scan, optional exact clock checkpoint, fresh plan rebuild and routed batch under
+one cooperating runner lock. Internal locked helpers preserve the existing public
+clock/batch wrappers and their mandatory disposable markers; there is no public
+skip-lock or activation flag. One total monotonic deadline covers every phase.
+
+A claim must be synced before any collection. It is never removed on completion,
+collection failure, uncertain checkpoint or controller death. Repeating a claimed
+slot cannot scan or move again, including after a time change on the same zone/local
+date. Early/missed slots do not catch up. A new local date can attempt a fresh run,
+but unresolved media intents still block it. Partial claim records are never
+automatically replaced. Requests are detached before callbacks, bound to observed
+titles and filtered by the one globally capped plan; no service mutation occurs.
+
+The 14-case composed stdlib fixture covers successful all-library ordering,
+duplicate/date-change rejection, early/missed slots, collection failure, clock
+checkpoint/rebuild before Keep moves, lock retention across scan and per-move
+refresh, global cap with detached Arr requests, fresh next-date attempts, partial
+claim writes, uncertain committed clocks, a shared deadline, pending-intent blocking
+on the next date, and an actual controller SIGKILL after rename with retained claim.
+Scheduling dates are injected independently of the past lifecycle fixture clock;
+production future-clock rejection is unchanged.
+
+Native Tower acceptance of the composed workflow is required:
+
+```bash
+(
+  set -eu
+  cd /mnt/user/sqlite_lab_checkout
+  [ "$(git branch --show-current)" = feature/sqlite ]
+  git pull --ff-only origin feature/sqlite
+  bash scripts/sqlite_scheduled_routed_slot_lab.sh /mnt/media/sql_test
+)
+```
+
+This new package runs 14 daily-slot cases and 11 HTTP cases using only its new
+`scheduled-routed-slot.*` lab directory and one new fixture container. It uses the
+same cached immutable Python image, no network, added capabilities, packages,
+production mounts, service controls or kernel changes. Expected final status is
+`scheduled_routed_slot_acceptance_complete`, `acceptance_scope=disposable_daily_slot`,
+with production activation disabled and authorization false. It performs actual
+fixture renames, so use the native parent with previously accepted rename support.
+The read-only/clock shfs package is separate. Composed native acceptance is pending.
 
 ## Remaining Gate 8 scope
 
-1. Accept configured multi-library routed moves on native Tower, then connect
-   the guarded ordering to production roots/database behind the disabled cutover
-   boundary. Existing disposable APIs retain their markers and remain test-only.
+1. Connect the accepted configured multi-library routed ordering to production
+   roots/database behind the disabled cutover boundary. Existing disposable APIs retain their markers and remain test-only.
 2. Connect the accepted disposable CAS checkpoint/rebuild ordering to the
    production worker. The routed adapter now repeats TV content validation before
    intent; the production worker still rejects SQLite and performs no SQLite dispatch.
-3. Connect the daily worker/slot ownership and settings path, with one run-wide
-   action cap, duplicate-run prevention and no uncertain-operation replay.
+3. Accept the composed daily-slot workflow on native Tower, then connect the
+   production worker/settings path. Disposable due-slot ownership now spans every
+   phase with one action cap and no uncertain-operation replay.
 4. Verify both production-shaped movie/TV routing and unchanged JSON execution
    through end-to-end disposable acceptance. Keep backend activation blocked
    until the later integration/release gates and explicit approval.
