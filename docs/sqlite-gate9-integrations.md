@@ -134,8 +134,9 @@ subtests (103 Linux-only cases skipped locally). The isolated Linux package pass
 passed for repair implementation `b7b37ee9b306320e5fbcca485643dffb507e4d9f`: 367
 scheduled/backend-gate tests and 27 subtests, 199 Gate 9/API/lifetime checks, 23
 atomic regressions, 671 SQLite regressions and 269 isolated safety tests (separate
-steps). The repaired shfs/native acceptance remains pending; CI does not replace
-Tower's filesystem-specific cleanup check.
+steps). At that repair CI checkpoint Tower acceptance was pending. The subsequent
+9-test shfs/native results recorded above accept the repaired boundary, including
+filesystem-specific cleanup.
 
 
 ## Configured Arr identities and atomic queue preparation
@@ -196,6 +197,16 @@ Expected: 6 configured queue tests plus 11 HTTP regressions, final
 fixture files/container and synthetic loopback HTTP are used. Actual fixture
 renames require the accepted native parent; no shfs rename fallback is added.
 Production Arr/Jellyfin/media/state/settings/services remain unchanged.
+
+[Final queue CI run 40131467883](https://github.com/NVmagma/media_collection_auditor/actions/runs/40131467883)
+passed for implementation `73376bde9108831a6abf277aab508e50454408d0`: 367 scheduled
+and backend-gate tests with 27 subtests, 226 Gate 9/API/catalog checks, 23 atomic
+regressions, 671 SQLite regressions and 275 isolated safety tests (separate steps).
+All 19 catalog unit/transport tests passed locally. Final isolated Linux checks
+passed the 6 queue cases plus 27 rename and 11 HTTP cases. An earlier full package
+also passed 9 tracking, 8 runtime, 4 configured-slot, 14 daily-slot, 22 routed,
+14 inventory, 16 checkpoint and 19 reconciliation cases. No production activation
+or real service update was performed; native queue acceptance remains pending.
 
 The remaining Arr work is one-shot delivery and independently verified outcome
 reconciliation under the same stable identity and local destination binding.
