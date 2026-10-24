@@ -174,3 +174,22 @@ list retains blockers for incomplete alias/exposure coverage and unverified live
 identity, permissions and durability. It is not connected to controller authority
 and cannot clear the private-location blocker. Actual host inventory collection,
 private path selection and live binding still remain to be implemented/reviewed.
+
+The read-only `scripts/sqlite_control_location_probe.sh` collects candidate
+metadata, mount targets/types, NFS export root tokens, all container bind sources
+(including stopped containers and read-only binds), and potential Unraid user
+share roots derived from configuration file names. It never reads raw container
+configuration, environment variables, share configuration contents or credentials.
+NFS paths containing whitespace/escapes need manual interpretation; the root token
+is an observation, not a canonical path assertion. Named volumes, custom Samba
+configuration, storage aliases and concurrent inventory changes remain unverified.
+
+For the accepted lab parent, run on Tower after pulling `feature/sqlite`:
+
+```bash
+bash scripts/sqlite_control_location_probe.sh /mnt/media/sql_test /mnt/user/sql_test
+```
+
+This selects existing lab directories for exposure discovery, not a production
+control location. No new directory or control state is created. Unavailable tools
+or observations stay explicit; even all commands completing never approves storage.
