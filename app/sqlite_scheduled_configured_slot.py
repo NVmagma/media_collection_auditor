@@ -6,6 +6,7 @@ blocked there. This integration creates no Arr clients and delivers no mutations
 from datetime import datetime
 from time import monotonic
 
+from app.sqlite_arr_catalog import configured_arr_queue_resolver
 from app.sqlite_jellyfin_collection import validated_tag_names
 from app.sqlite_scheduled_jellyfin import (scheduled_inventory_signal_reader,
     scheduled_protection_provider)
@@ -22,11 +23,13 @@ def run_configured_disposable_slot(*, root, settings, scheduled_at, now,
     no production execution or implicit live selection is introduced. Transport
     request limits span all scans, rebuilds and move checks within this attempt.
     """
-    config, scan, protect = _configured_run_inputs(settings=settings, clock=clock)
+    values = dict(settings)
+    config, scan, protect = _configured_run_inputs(settings=values, clock=clock)
     return run_disposable_routed_slot(root=root, config=config,
         scheduled_at=scheduled_at, now=now, fetch_signals=scan,
         fetch_protection=protect, clock=clock, timer=timer,
-        maximum_run_seconds=maximum_run_seconds)
+        maximum_run_seconds=maximum_run_seconds,
+        resolve_arr_requests=configured_arr_queue_resolver(settings=values, config=config))
 
 
 def _configured_run_inputs(*, settings, clock):

@@ -77,7 +77,12 @@ Expected per view: 9 tests, final `tracking_view_acceptance_complete`, scope
 `candidate_tracking_views`. The launcher uses only one new directory and new
 cached-image container per invocation, without network, host mounts outside that
 new directory, packages, production settings/credentials or service operations.
-Native/shfs acceptance is pending.
+The repaired reader boundary is accepted on both views at source
+`4b6ef271b5a80504f9561ac1e5bf1b4126f93ff7`: shfs lab
+`/mnt/user/sql_test/tracking-views.HHO7VM` passed 9 tests in 2.209 seconds;
+native lab `/mnt/media/sql_test/tracking-views.79Ae7u` passed 9 tests in
+2.513 seconds. Both ended in `tracking_view_acceptance_complete`, scope
+`candidate_tracking_views`, with cleanup successful and production unchanged.
 
 Local dashboard/API/runtime regression checks passed 194 tests. The reader
 fixture passed all 8 tests both locally and in the cached isolated Linux package;
@@ -131,3 +136,66 @@ scheduled/backend-gate tests and 27 subtests, 199 Gate 9/API/lifetime checks, 23
 atomic regressions, 671 SQLite regressions and 269 isolated safety tests (separate
 steps). The repaired shfs/native acceptance remains pending; CI does not replace
 Tower's filesystem-specific cleanup check.
+
+
+## Configured Arr identities and atomic queue preparation
+
+After the complete Jellyfin/library scan and any required clock checkpoint/rebuild,
+the candidate worker resolves **all planned Arr requests before the first move**.
+The [Radarr v3 catalog](https://radarr.video/docs/api/) and
+[Sonarr v3 catalog](https://sonarr.tv/docs/api/) are requested via bounded,
+authenticated GET only (`/api/v3/movie` and `/api/v3/series`). One fresh catalog
+per planned service is allowed per attempt, with no retry, redirects, inherited
+proxy settings, mutating methods or credentials in persisted requests.
+
+Enabled services require both URL and key; a partial configuration fails before
+claim/collection. Both blank retains the existing disabled-service behavior.
+Catalog records need unique positive integer IDs, strict monitoring booleans,
+canonical paths and unambiguous exact folder names. Movie/TV routing is separate,
+even with identical names. The current source path must match the configured Arr
+view; Holding/Keep/Removal `*_APP_*_PATH` aliases are distinct from filesystem
+roots. Waiting uses the existing transient filesystem path, matching the current
+configuration vocabulary. A source-path mismatch blocks rather than guessing.
+
+Destination requests persist only service, stable ID, application root and boolean
+monitoring. Holding/Removal requests disable monitoring. Holding-to-Keep enables
+it; Waiting-to-Keep preserves the current Arr boolean, matching JSON behavior.
+Requests are prepared only for the globally capped plan. Every successful move
+commits its matching request with its destination clock and exact intent clearance
+in the accepted single CAS; existing unrelated queue entries remain untouched.
+A later catalog failure prevents *every* move in that attempt. The retained daily
+claim prevents automatic same-date retry. Unknown outcomes and earlier unresolved
+queues retain their existing blocking behavior; there is no delivery or clearance
+in this increment.
+
+Seventeen pure/transport tests verify identities, aliases, monitoring policy,
+configuration detachment, service separation, ambiguity/missing-source refusal,
+one-read-per-service, invalid URLs and redacted no-retry failures. Six end-to-end
+stdlib Linux tests combine synthetic private GET catalogs, actual two-library
+media renames, durable claims and SQLite queue/clock reconciliation. They cover
+both queued identities, later-service failure, ambiguity, global cap, partial
+credentials and wrong source root. The catalog fixture verifies its requests occur
+after the complete Jellyfin scan and before either per-move refresh. No real Arr
+service is contacted.
+
+Native Tower acceptance of this queue boundary is pending:
+
+```bash
+(
+  set -eu
+  cd /mnt/user/sqlite_lab_checkout
+  [ "$(git branch --show-current)" = feature/sqlite ]
+  git pull --ff-only origin feature/sqlite
+  bash scripts/sqlite_arr_queue_lab.sh /mnt/media/sql_test
+)
+```
+
+Expected: 6 configured queue tests plus 11 HTTP regressions, final
+`arr_queue_acceptance_complete`, scope `configured_arr_queue`. Only new marked
+fixture files/container and synthetic loopback HTTP are used. Actual fixture
+renames require the accepted native parent; no shfs rename fallback is added.
+Production Arr/Jellyfin/media/state/settings/services remain unchanged.
+
+The remaining Arr work is one-shot delivery and independently verified outcome
+reconciliation under the same stable identity and local destination binding.
+Coordinator/history authority and TV-season compatibility also remain open.

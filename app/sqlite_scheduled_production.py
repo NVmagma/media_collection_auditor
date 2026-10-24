@@ -10,6 +10,7 @@ from pathlib import Path
 import stat
 from time import monotonic
 
+from app.sqlite_arr_catalog import configured_arr_queue_resolver
 from app.sqlite_backend_gate import require_sqlite_production_activation
 from app.sqlite_lock import _exclusive_lock, audit_run_lock
 from app.sqlite_scheduled_configured_slot import _configured_run_inputs
@@ -40,6 +41,7 @@ def _configured_cycle_step(*, cycle, settings, now, clock):
 def _run_bound_production_slot(*, settings, scheduled_at, now, clock, timer=monotonic):
     """Private candidate implementation; the public entry above remains sealed."""
     config, scan, protect = _configured_run_inputs(settings=settings, clock=clock)
+    resolve_arr = configured_arr_queue_resolver(settings=settings, config=config)
     source = Path(_canonical(settings.get('STATE_FILE', '/app/logs/auditor_state.json')))
     database = Path(_canonical(settings.get('SQLITE_STATE_FILE', '/app/logs/sqlite_worker/state.db')))
     control = database.parent
@@ -61,7 +63,7 @@ def _run_bound_production_slot(*, settings, scheduled_at, now, clock, timer=mono
                     scheduled_at=scheduled_at, fetch_signals=scan, fetch_protection=protect,
                     arr_sync_requests=None, clock=clock, timer=timer, maximum_titles=100000,
                     maximum_run_seconds=3600, maximum_protection_seconds=30,
-                    verify_claim=verify_claim, started_tick=started)
+                    verify_claim=verify_claim, started_tick=started, resolve_arr_requests=resolve_arr)
                 # The common body reports fixture-only until release validation.
                 # Do not relabel its evidence as production authorization.
                 return result
