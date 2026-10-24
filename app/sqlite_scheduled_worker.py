@@ -64,6 +64,9 @@ class ScheduledWorkerPreparation:
     bindings: tuple
     untracked: tuple
     clock_proposal: object = None
+    root_bindings: tuple = ()
+    title_identities: tuple = ()
+    configuration: object = None
     production_authorized: bool = False
     production_activation: str = 'disabled'
 
@@ -248,4 +251,7 @@ def prepare_scheduled_worker(*, config, snapshot, revision, fetch_signals,
         verify_inventory()
         untracked = tuple(binding.media_key for binding in bindings
             if not any(binding.media_key in snapshot[clock] for clock in CLOCKS.values()))
-        return ScheduledWorkerPreparation(plan, tuple(bindings), untracked, proposal)
+        return ScheduledWorkerPreparation(plan, tuple(bindings), untracked, proposal,
+            root_bindings=tuple((name, stage, path, identity) for (name, stage), (_, path, identity) in handles.items()),
+            title_identities=tuple((binding.media_key, inventories[binding.library, binding.stage][binding.folder])
+                                   for binding in bindings), configuration=config)

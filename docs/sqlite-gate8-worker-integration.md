@@ -185,8 +185,9 @@ Linux-only cases passed separately in the isolated Linux run, together with the
 passed for implementation `0ace0da3e47c169a19632c8c51019c123445dc55`: 248 scheduled
 tests and 18 subtests, 23 atomic regressions, 671 SQLite regressions and 204 isolated
 safety tests (separate workflow steps). No image was built/deployed. Tower
-checkpoint acceptance is pending; later documentation-only commits preserve this
-implementation tree.
+that revision still required Tower checkpoint acceptance; the subsequent
+correction and passing native results are recorded below. Later documentation-only
+commits preserve that implementation tree.
 
 ## Native directory-stream failure and correction
 
@@ -195,7 +196,7 @@ At source `af3fd5576549c828ca808ae2189157b501d53648`, Tower's shfs run
 and 11 HTTP cases. The native run (`/mnt/media/sql_test/scheduled-worker.BrGsWL`)
 passed all 14 worker cases and 15 checkpoint cases, but failed
 `test_new_title_during_rebuild_stops_without_second_checkpoint`: no exception
-was raised for the newly created title. Native checkpoint acceptance remains open;
+was raised for the newly created title. Native checkpoint acceptance remained open at that revision;
 that run did not reach its HTTP cases or the success status.
 
 A local reproducer confirmed that `os.scandir(fd)` can interfere with another
@@ -221,14 +222,82 @@ tests and 18 subtests, 23 atomic regressions, 671 SQLite regressions and 204 iso
 safety tests (separate steps). No image was built/deployed. Tower must still confirm
 the correction; rerun the same disposable command above on both views.
 
+The correction was accepted on Tower at source
+`170d11e02410fc12d993277a77cae99e5cc96b67`:
+
+- shfs: `/mnt/user/sql_test/scheduled-worker.HTfNME`, 14 worker tests in 0.274
+  seconds, 16 checkpoint tests in 5.007 seconds and 11 HTTP tests in 0.237 seconds.
+- Native: `/mnt/media/sql_test/scheduled-worker.9FCbp1`, 14 worker tests in 0.065
+  seconds, 16 checkpoint tests in 4.901 seconds and 11 HTTP tests in 0.236 seconds.
+
+Both reached `scheduled_worker_acceptance_complete`, including the unchanged
+previously failing scenario. The disposable checkpoint/rebuild boundary is now
+accepted on both views. Production authorization remained false and activation
+remained disabled; no production media/services/configuration changed.
+
+## Routed multi-library move integration
+
+`execute_disposable_routed_batch` now performs actual movie/TV directory moves
+using one marked lab database and explicit configured stage roots. Preparation
+captures root/title identities and the complete immutable configuration. Changed
+configuration, roots, title identity, state/revision, pending clock proposals,
+protection decisions or expired plans cannot be adopted as a fresh plan.
+
+The batch retains the cooperating runner lock, applies the one scan-wide action
+cap and chains exactly three revisions per successful title: durable intent,
+applied checkpoint, then atomic source/destination clocks, optional Arr retry
+entry and exact intent clearance. Held source and parent descriptors, current
+Linux mount binding, no-overwrite rename and parent directory sync guard each
+operation. The applied session must still match its exact snapshot/revision;
+there is no fresh-session adoption of an intervening writer. Every candidate
+refreshes protection. Configured TV Waiting content is observed again before
+intent, blocking new content that would reset its clock.
+
+Movie/series titles with identical folder names route to their own libraries.
+Earlier completions survive a later failure; the first failed/uncertain candidate
+stops the batch without replay or automatic rollback. Unsupported rename has no
+copy/delete or overwrite fallback. Arr entries are queued only; no network
+mutation is performed. Existing single-tree disposable APIs keep their markers
+and contracts. The production worker still rejects SQLite.
+
+An existing Arr queue entry for a candidate blocks its next move even without a
+new queue request; unrelated entries are preserved.
+
+The new native-only disposable package runs 22 routed cases (including four
+transition subcases and an actual SIGKILL after rename) and 11 HTTP cases:
+
+```bash
+(
+  set -eu
+  cd /mnt/user/sqlite_lab_checkout
+  [ "$(git branch --show-current)" = feature/sqlite ]
+  git pull --ff-only origin feature/sqlite
+  bash scripts/sqlite_scheduled_routed_lab.sh /mnt/media/sql_test
+)
+```
+
+Use the native lab parent, where Gate 6/7 already verified the required rename
+capability. This rename package does not accept shfs as rename-capable; the
+separate worker/clock package remains valid for its non-move scope. The new
+package mounts only its new `scheduled-routed.*` directory, uses a cached immutable
+image, no added capabilities/network/host services, and removes only its new
+fixture container. Expected final status: `scheduled_routed_acceptance_complete`,
+`acceptance_scope=disposable_routed_moves`, production activation disabled and
+authorization false. Production media/configuration/state remain untouched.
+Development-host scheduled checks passed 218 tests and 14 subtests; the 68
+Linux-only cases passed separately. Linux/Python 3.12.15 execution passed all 22
+routed cases, 14 worker cases, 16 checkpoint cases, 19 Gate 7 cases, 27 Gate 6
+cases and 11 HTTP cases in one new cached-image container without host mounts
+or network. Routed native Tower acceptance is pending.
+
 ## Remaining Gate 8 scope
 
-1. Connect real configured roots/database to the guarded intent, descriptor-bound
-   no-overwrite rename and exact atomic reconciliation flow. Preserve Gate 6/7
-   behavior without removing disposable markers from their test-only APIs.
-2. Accept the disposable CAS checkpoint/rebuild adapter on Tower, then connect
-   that ordering to the production worker. Repeat content validation before moves;
-   the production worker still rejects SQLite and performs no SQLite dispatch.
+1. Accept configured multi-library routed moves on native Tower, then connect
+   the guarded ordering to production roots/database behind the disabled cutover
+   boundary. Existing disposable APIs retain their markers and remain test-only.
+2. Connect the accepted disposable CAS checkpoint/rebuild ordering to the
+   production worker. The routed adapter now repeats TV content validation before
+   intent; the production worker still rejects SQLite and performs no SQLite dispatch.
 3. Connect the daily worker/slot ownership and settings path, with one run-wide
    action cap, duplicate-run prevention and no uncertain-operation replay.
 4. Verify both production-shaped movie/TV routing and unchanged JSON execution
