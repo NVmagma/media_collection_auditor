@@ -407,6 +407,12 @@ not treated as authorization. Local Linux execution also passed the existing 14
 slot, 27 rename and 11 HTTP cases. Development-host regression checks passed 249
 tests and 14 subtests, with 87 Linux cases skipped there and separately exercised.
 
+[Test-only CI run 40125775453](https://github.com/NVmagma/media_collection_auditor/actions/runs/40125775453)
+passed for implementation `73b5195e4fe7bab175f645bfecf692dbf16a1ad1`: 322 scheduled
+tests and 27 subtests, 23 atomic regressions, 671 SQLite regressions and 244
+isolated safety tests (separate steps). This includes the actual configured
+settings-to-dispatch Linux test. No production image was built or deployed.
+
 Native Tower acceptance of this combined boundary is pending:
 
 ```bash
