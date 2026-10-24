@@ -241,9 +241,11 @@ def _perform_pinned_move(root, database, operation_id, media_key,
     verify_mount_binding()
     if verify_runner_binding is not None:
         verify_runner_binding()
+    applied_snapshot, applied_revision = session.read_verified_snapshot()
     return reconcile_witnessed_disposable_rename(
         root=root, database=database, operation_id=operation_id,
         media_key=media_key, source_stage=source_stage,
         destination_stage=destination_stage,
-        observed_at=observed_at, witness_fd=fd, require_clock_binding=True,
+        observed_at=observed_at, witness_fd=fd, expected_revision=applied_revision,
+        expected_snapshot=applied_snapshot, require_clock_binding=True,
         title_folder=title_folder, arr_sync_request=arr_sync_request)

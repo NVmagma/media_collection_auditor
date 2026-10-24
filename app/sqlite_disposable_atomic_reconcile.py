@@ -26,7 +26,8 @@ STAGE_NAMES = {"transient": "Waiting", "holding": "Holding",
 def reconcile_witnessed_disposable_rename(*, root, database, operation_id,
                                           media_key, source_stage,
                                           destination_stage, observed_at,
-                                          witness_fd, require_clock_binding=False,
+                                          witness_fd, expected_revision, expected_snapshot,
+                                          require_clock_binding=False,
                                           title_folder="Movie", arr_sync_request=None):
     """Commit clock and intent clearance in one guarded snapshot transaction.
 
@@ -34,6 +35,9 @@ def reconcile_witnessed_disposable_rename(*, root, database, operation_id,
     Caller must retain it across the rename. Never recover this from disk.
     """
     validate_title_folder(title_folder)
+    if (type(expected_revision) is not int or expected_revision < 0
+            or not isinstance(expected_snapshot, dict)):
+        raise ValueError("Exact applied revision and snapshot required")
     root = Path(root)
     database = Path(database)
     if (not root.is_absolute() or root.is_symlink() or not root.is_dir()
@@ -80,7 +84,9 @@ def reconcile_witnessed_disposable_rename(*, root, database, operation_id,
         raise RuntimeError("Witness does not match destination")
 
     session = RevisionedAuditSession(GuardedSQLiteStateStore(database))
-    persisted, _ = session.read_verified_snapshot()
+    persisted, revision = session.read_verified_snapshot()
+    if revision != expected_revision or persisted != expected_snapshot:
+        raise RuntimeError("Applied reconciliation state changed; intent retained")
     intent = persisted.get(INTENTS_KEY)
     if (not isinstance(intent, dict) or intent.get("id") != operation_id
             or intent.get("kind") != "move"

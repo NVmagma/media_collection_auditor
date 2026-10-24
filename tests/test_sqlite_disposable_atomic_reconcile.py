@@ -37,11 +37,12 @@ def _fixture(tmp_path):
 
 
 def _reconcile(root, database, fd):
+    snapshot, revision = GuardedSQLiteStateStore(database).load_with_revision()
     return reconcile_witnessed_disposable_rename(
         root=root, database=database, operation_id="op-1",
         media_key=KEY, source_stage="transient",
         destination_stage="holding", observed_at=datetime(2024, 2, 1),
-        witness_fd=fd)
+        witness_fd=fd, expected_revision=revision, expected_snapshot=snapshot)
 
 
 def _state(database):
@@ -136,10 +137,12 @@ def test_required_clock_binding_rejects_absent_or_changed_plan(tmp_path, binding
             store.save_if_revision(state, revision)
         before = database.read_bytes()
         with pytest.raises(RuntimeError, match="clock binding mismatch"):
+            expected, expected_revision = store.load_with_revision()
             reconcile_witnessed_disposable_rename(
                 root=root, database=database, operation_id="op-1", media_key=KEY,
                 source_stage="transient", destination_stage="holding",
-                observed_at=datetime(2024, 2, 1), witness_fd=fd, require_clock_binding=True)
+                observed_at=datetime(2024, 2, 1), witness_fd=fd, require_clock_binding=True,
+                expected_revision=expected_revision, expected_snapshot=expected)
         assert database.read_bytes() == before
         assert INTENTS_KEY in _state(database)
     finally:
@@ -160,10 +163,12 @@ def test_matching_required_clock_binding_commits_atomically(tmp_path):
             "source_timestamp": "2024-01-01T00:00:00", "observed_at": "2024-02-01T00:00:00",
         }
         store.save_if_revision(state, revision)
+        expected, expected_revision = store.load_with_revision()
         reconcile_witnessed_disposable_rename(
             root=root, database=database, operation_id="op-1", media_key=KEY,
             source_stage="transient", destination_stage="holding",
-            observed_at=datetime(2024, 2, 1), witness_fd=fd, require_clock_binding=True)
+            observed_at=datetime(2024, 2, 1), witness_fd=fd, require_clock_binding=True,
+            expected_revision=expected_revision, expected_snapshot=expected)
         after, after_revision = store.load_with_revision()
         assert after_revision == revision + 2
         assert KEY not in after["first_seen"]
@@ -171,3 +176,37 @@ def test_matching_required_clock_binding_commits_atomically(tmp_path):
         assert INTENTS_KEY not in after
     finally:
         os.close(fd)
+
+
+@pytest.mark.parametrize('change_revision', [False, True])
+def test_exact_applied_binding_rejects_intervening_state_without_clearance(tmp_path, change_revision):
+    import sqlite3
+    root, database, coordinator = _fixture(tmp_path)
+    fd = os.open(root / 'transient/Movie', os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        (root / 'transient/Movie').rename(root / 'holding/Movie')
+        coordinator.mark_applied('op-1')
+        store = GuardedSQLiteStateStore(database)
+        expected, revision = store.load_with_revision()
+        if change_revision:
+            changed = {**expected, 'intervening_writer': {'preserve': True}}
+            store.save_if_revision(changed, revision)
+        else:
+            connection = sqlite3.connect(database)
+            try:
+                connection.execute('INSERT INTO extra_state (key,value_json) VALUES (?,?)',
+                                   ('intervening_writer', '{"preserve":true}'))
+                connection.commit()
+            finally: connection.close()
+        before = database.read_bytes()
+        with pytest.raises(RuntimeError, match='state changed'):
+            reconcile_witnessed_disposable_rename(root=root, database=database,
+                operation_id='op-1', media_key=KEY, source_stage='transient',
+                destination_stage='holding', observed_at=datetime(2024, 2, 1), witness_fd=fd,
+                expected_revision=revision, expected_snapshot=expected)
+        assert database.read_bytes() == before
+        current, _ = store.load_with_revision()
+        assert current['intervening_writer'] == {'preserve': True}
+        assert INTENTS_KEY in current and KEY in current['first_seen']
+        assert KEY not in current['queued']
+    finally: os.close(fd)

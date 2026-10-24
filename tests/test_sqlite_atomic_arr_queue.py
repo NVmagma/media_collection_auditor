@@ -44,10 +44,12 @@ def moved(tmp_path):
 
 
 def reconcile(root, database, fd, request=REQUEST):
+    snapshot, revision = GuardedSQLiteStateStore(database).load_with_revision()
     return reconcile_witnessed_disposable_rename(
         root=root, database=database, operation_id="move", media_key=KEY,
         source_stage="transient", destination_stage="keep", observed_at=NOW,
-        witness_fd=fd, title_folder=KEY, arr_sync_request=request)
+        witness_fd=fd, title_folder=KEY, arr_sync_request=request,
+        expected_revision=revision, expected_snapshot=snapshot)
 
 
 def assert_complete(state):
