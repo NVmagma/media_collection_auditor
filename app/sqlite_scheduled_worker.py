@@ -18,7 +18,7 @@ from time import monotonic
 from app.sqlite_operation_coordinator import INTENTS_KEY
 from app.sqlite_lifecycle_checkpoint_plan import CLOCKS
 from app.sqlite_run_schedule import DailyRunSchedule
-from app.sqlite_scheduled_paths import _canonical, _open_directory
+from app.sqlite_scheduled_paths import _canonical, _open_directory, scan_held_directory
 from app.sqlite_scheduled_plan import LibraryScan, ScannedTitle, ScheduledScanBlocked, collect_scheduled_plan
 from app.sqlite_state import validate_snapshot
 from app.sqlite_title_identity import validate_title_folder
@@ -139,6 +139,9 @@ def prepare_scheduled_worker(*, config, snapshot, revision, fetch_signals,
         if not math.isfinite(elapsed) or not 0 <= elapsed < maximum_scan_seconds:
             raise ScheduledScanBlocked('scan_deadline_exceeded')
     bindings, inventories, handles, identities = [], {}, {}, set()
+    stage_metadata = {}
+    def metadata(info):
+        return info.st_mtime_ns, info.st_ctime_ns, info.st_size
     with ExitStack() as stack:
         # Pin all configured roots before any external collection, including
         # identity aliases that lexical path checks cannot discover.
@@ -152,9 +155,10 @@ def prepare_scheduled_worker(*, config, snapshot, revision, fetch_signals,
                     raise ScheduledScanBlocked('aliased_library_stage_roots')
                 identities.add(identity)
                 handles[library.name, stage] = (fd, path, identity)
+                stage_metadata[library.name, stage] = metadata(info)
         def inventory(fd):
             rows = {}
-            with os.scandir(fd) as entries:
+            with scan_held_directory(fd) as entries:
                 for entry in entries:
                     check_time()
                     validate_title_folder(entry.name)
@@ -186,10 +190,14 @@ def prepare_scheduled_worker(*, config, snapshot, revision, fetch_signals,
                     info = os.fstat(reopened)
                     if (info.st_dev, info.st_ino) != identity:
                         raise ScheduledScanBlocked('configured_stage_changed')
+                    if metadata(info) != stage_metadata[identity_key]:
+                        raise ScheduledScanBlocked('configured_stage_contents_changed')
                 finally:
                     os.close(reopened)
                 if inventory(fd) != inventories[identity_key]:
                     raise ScheduledScanBlocked('title_inventory_changed')
+                if metadata(os.fstat(fd)) != stage_metadata[identity_key]:
+                    raise ScheduledScanBlocked('configured_stage_contents_changed')
         by_name = {library.name: library for library in config.libraries}
         available_keys, content_times = set(), {}
         def scan(name):

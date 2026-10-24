@@ -10,7 +10,7 @@ import os
 import stat
 from time import monotonic
 
-from app.sqlite_scheduled_paths import _canonical, _open_directory
+from app.sqlite_scheduled_paths import _canonical, _open_directory, scan_held_directory
 
 
 class ScheduledContentBlocked(RuntimeError):
@@ -45,7 +45,7 @@ def observe_scheduled_content(*, title_path, now, maximum_entries=100000,
     def entries(fd, *, count_entries):
         nonlocal count
         result = {}
-        with os.scandir(fd) as iterator:
+        with scan_held_directory(fd) as iterator:
             for entry in iterator:
                 check_time()
                 if count_entries:

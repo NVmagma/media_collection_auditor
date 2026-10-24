@@ -117,3 +117,20 @@ def review_scheduled_paths(**kwargs):
                     'rename_capability': 'requires_disposable_acceptance', 'external_writers_excluded': False}
     except Exception:
         return {**base, 'status': 'blocked', 'reason': 'stage_or_title_binding_unavailable_or_changed'}
+
+
+@contextmanager
+def scan_held_directory(fd):
+    """Use an independent directory stream without moving the held FD cursor.
+
+    scandir(fd) duplicates a descriptor, which shares its open-file-description
+    position. Opening '.' relative to the held directory gives each verification
+    pass its own stream, including filesystem-specific iteration state.
+    """
+    scan_fd = os.open('.', os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                      dir_fd=fd)
+    try:
+        with os.scandir(scan_fd) as entries:
+            yield entries
+    finally:
+        os.close(scan_fd)

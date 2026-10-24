@@ -188,6 +188,31 @@ safety tests (separate workflow steps). No image was built/deployed. Tower
 checkpoint acceptance is pending; later documentation-only commits preserve this
 implementation tree.
 
+## Native directory-stream failure and correction
+
+At source `af3fd5576549c828ca808ae2189157b501d53648`, Tower's shfs run
+(`/mnt/user/sql_test/scheduled-worker.O47sOt`) passed all 14 worker, 16 checkpoint
+and 11 HTTP cases. The native run (`/mnt/media/sql_test/scheduled-worker.BrGsWL`)
+passed all 14 worker cases and 15 checkpoint cases, but failed
+`test_new_title_during_rebuild_stops_without_second_checkpoint`: no exception
+was raised for the newly created title. Native checkpoint acceptance remains open;
+that run did not reach its HTTP cases or the success status.
+
+A local reproducer confirmed that `os.scandir(fd)` can interfere with another
+iterator because duplicated descriptors share the same open-file-description
+position. Each scan now opens `.` relative to the held directory to obtain an
+independent directory stream. This preserves descriptor-based path binding while
+avoiding shared cursor/iteration state in repeated inventory and content scans.
+Worker verification also compares stage directory size/mtime/ctime before and
+after collection, blocking observed metadata changes even when the final name
+set is unchanged. It does not claim external writer exclusion.
+
+New regression tests cover an active iterator's cursor, a new entry between
+passes and stage metadata changes without a name change. The originally failing
+checkpoint case is unchanged; it must pass on Tower before accepting this fix.
+No moves, overwrite/copy fallback, skipped scenarios or production changes were
+introduced. Rerun the same disposable command above on both views.
+
 ## Remaining Gate 8 scope
 
 1. Connect real configured roots/database to the guarded intent, descriptor-bound

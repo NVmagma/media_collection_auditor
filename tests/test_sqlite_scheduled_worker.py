@@ -224,3 +224,15 @@ def test_discovery_does_not_start_clocks_without_complete_protection(tmp_path):
     snapshot['first_seen'].clear()
     result = prepare(configure(libraries), snapshot, discover_clocks=True)
     assert result.clock_proposal.changes == () and result.plan.moves == ()
+
+
+def test_stage_metadata_change_is_not_hidden_by_same_inventory(tmp_path):
+    import os
+    libraries, snapshot = setup(tmp_path)
+    root = Path(libraries[0]['transient'])
+    def fetch(binding):
+        if binding.library == 'TV':
+            os.utime(root, (1, 1))
+        return {}
+    with pytest.raises(ScheduledScanBlocked, match='stage_contents_changed'):
+        prepare(configure(libraries), snapshot, fetch_signals=fetch)
