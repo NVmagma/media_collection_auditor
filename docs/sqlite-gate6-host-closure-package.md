@@ -193,3 +193,33 @@ bash scripts/sqlite_control_location_probe.sh /mnt/media/sql_test /mnt/user/sql_
 This selects existing lab directories for exposure discovery, not a production
 control location. No new directory or control state is created. Unavailable tools
 or observations stay explicit; even all commands completing never approves storage.
+
+## Tower exposure snapshot accepted (2026-10-24)
+
+The operator supplied a completed read-only probe for `/mnt/media/sql_test` and
+`/mnt/user/sql_test`. Both directory observations were uid/gid 0:0, mode 0777.
+Neither candidate had a lexical overlap with the observed NFS export roots or
+container bind sources. The potential Unraid share configuration names did not
+include `sql_test`; those names do not enumerate every effective SMB export or
+prove alias coverage. The paths remain disposable lab locations, not approved
+production control stores.
+
+The writable parent is a material unresolved issue: a private child directory's
+0700 mode alone does not prevent another user with write/search access to its
+parent from renaming or replacing its directory entry. No permissions were
+changed. Broad media/appdata exports and container binds also remain unsuitable
+as an assumed private store. Mount topology observations did not independently
+establish the complete relationship between user-share and native pool paths.
+
+The probe now includes every lexical ancestor's device/inode/uid/gid/mode. For a
+focused follow-up without repeating Docker/export inventory:
+
+```bash
+bash scripts/sqlite_control_location_probe.sh --ancestors-only \
+  /mnt/media/sql_test /mnt/user/sql_test
+```
+
+These are detached permission observations, not ACL, race, mount-identity or
+privacy attestations. Production path selection must account for the full parent
+chain and all exposure aliases; it must not chmod existing lab/share parents as
+an automatic remediation. Gate 6 and all controller authority blockers remain open.

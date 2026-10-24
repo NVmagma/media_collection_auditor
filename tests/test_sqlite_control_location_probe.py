@@ -62,3 +62,17 @@ def test_missing_candidate_is_not_created(tmp_path):
     assert result.returncode == 2
     assert not candidate.exists()
     assert 'read_only=true' not in result.stdout
+
+
+def test_ancestor_only_observes_every_parent_without_deployment_inventory(tmp_path):
+    candidate = tmp_path / 'parent' / 'child'
+    candidate.mkdir(parents=True)
+    result = run_probe(tmp_path, '--ancestors-only', candidate)
+    assert result.returncode == 0, result.stderr
+    for path in [candidate, *candidate.parents]:
+        assert f'ancestor_path={path}\n' in result.stdout
+    assert 'container_bind_sources_begin' not in result.stdout
+    assert 'nfs_export_roots_begin' not in result.stdout
+    assert 'potential_unraid_share_paths_begin' not in result.stdout
+    assert 'private_location_verified=false' in result.stdout
+    assert list(candidate.iterdir()) == []

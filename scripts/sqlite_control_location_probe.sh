@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Detached observations only. Never sources configuration or contacts share clients.
 set -eu
-[ "$#" -ge 1 ] || { echo 'Usage: bash SCRIPT EXISTING_DIRECTORY [EXISTING_ALIAS ...]' >&2; exit 2; }
+ancestors_only=false
+if [ "${1:-}" = --ancestors-only ]; then ancestors_only=true; shift; fi
+[ "$#" -ge 1 ] || { echo 'Usage: bash SCRIPT [--ancestors-only] EXISTING_DIRECTORY [EXISTING_ALIAS ...]' >&2; exit 2; }
 # Validate all candidate arguments before collecting deployment metadata.
 for candidate in "$@"; do
   case "$candidate" in /*) ;; *) echo 'Absolute existing directories required.' >&2; exit 2;; esac
@@ -18,7 +20,23 @@ for candidate in "$@"; do
   if ! stat -Lc 'directory_identity=device:%d,inode:%i,mode:%a,uid:%u,gid:%g' -- "$candidate" 2>/dev/null; then
     echo 'directory_identity=unavailable'; complete=false
   fi
+  ancestor=$candidate
+  while :; do
+    printf 'ancestor_path=%q\n' "$ancestor"
+    if ! stat -Lc 'ancestor_identity=device:%d,inode:%i,mode:%a,uid:%u,gid:%g' -- "$ancestor" 2>/dev/null; then
+      echo 'ancestor_identity=unavailable'; complete=false
+    fi
+    [ "$ancestor" != / ] || break
+    ancestor=${ancestor%/*}
+    [ -n "$ancestor" ] || ancestor=/
+  done
 done
+if [ "$ancestors_only" = true ]; then
+  printf 'observation_commands_completed=%s\n' "$complete"
+  printf '%s\n' 'status=control_ancestor_snapshot_review_required' \
+    'Permissions are observations only; ACLs, aliases, races and mount identity remain unverified.'
+  exit 0
+fi
 if command -v timeout >/dev/null 2>&1; then
   echo 'mount_topology_begin'
   if ! timeout 15s findmnt --list --noheadings --output TARGET,FSTYPE 2>/dev/null; then
