@@ -136,6 +136,11 @@ Focused clock/content/worker checks passed 68 tests. Development-host scheduled
 regressions passed 197 tests and 14 subtests, with 46 Linux-only cases verified
 separately. An isolated Linux/Python 3.12.15 container passed all 14 worker cases,
 19 Gate 7 cases, 27 Gate 6 cases and 11 HTTP cases without host mounts/network.
+[Test-only CI run 40105556781](https://github.com/NVmagma/media_collection_auditor/actions/runs/40105556781)
+passed for implementation `d2976bd8a48f4e2409c48a9ccd6caa4a4cb4937e`: 232 scheduled
+tests and 18 subtests, 23 atomic regressions, 671 SQLite regressions and 188
+isolated safety tests (separate workflow steps). No image was built/deployed.
+
 The six new filesystem/discovery cases still require Tower acceptance through
 the command above; the accepted original eight-case boundary remains recorded.
 
