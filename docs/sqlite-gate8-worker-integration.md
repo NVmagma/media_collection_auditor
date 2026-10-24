@@ -356,7 +356,35 @@ production mounts, service controls or kernel changes. Expected final status is
 `scheduled_routed_slot_acceptance_complete`, `acceptance_scope=disposable_daily_slot`,
 with production activation disabled and authorization false. It performs actual
 fixture renames, so use the native parent with previously accepted rename support.
-The read-only/clock shfs package is separate. Composed native acceptance is pending.
+The read-only/clock shfs package is separate. Composed native acceptance passed
+at source `e3a513f60b6b2c96612f917896c96fb9441499a8`, lab
+`/mnt/media/sql_test/scheduled-routed-slot.808jzw`: all 14 daily-slot tests in
+7.500 seconds and 11 HTTP tests in 0.235 seconds. Final status was
+`scheduled_routed_slot_acceptance_complete`, scoped to `disposable_daily_slot`;
+production remained disabled/unauthorized and unchanged.
+
+## Effective application settings bridge
+
+`scheduled_worker_from_settings` now maps effective application settings to the
+immutable scheduled policy without importing the production worker, opening paths,
+initializing clients or retaining credentials. Existing `MEDIA_PATH`, individual
+Radarr/Sonarr stage overrides, movie/TV enable switches, wait/holding timers,
+TV new-content resets, favorites and the shared action cap are preserved. Arr
+application paths remain distinct from filesystem paths. Invalid policy, overlapping
+roots and enabled deletion/cross-filesystem/season-pruning options are rejected.
+
+The saved-settings schema now accepts `SQLITE_DAILY_RUN_TIME` (HH:MM) and
+`SQLITE_DAILY_RUN_TIMEZONE` (IANA). Fields are labeled preparatory: saving them
+neither activates SQLite nor changes JSON interval/manual execution. Blank values
+can be saved while JSON is in use; scheduled preparation requires both explicit
+values and never infers them from `TZ` or `RUN_INTERVAL_HOURS`. No daily defaults
+are imposed on existing users. The runtime backend guard remains unchanged.
+
+Tests cover saved-settings round trips, actual production-library-builder parity,
+unsupported policies, detachment and credential exclusion. Linux CI also exercises
+a policy built from these settings through an actual claimed movie/TV fixture run
+with a shared cap and retained daily claim. This configuration-only bridge needs
+no additional Tower run; production root/database/entry-point dispatch remains open.
 
 ## Remaining Gate 8 scope
 
@@ -365,8 +393,7 @@ The read-only/clock shfs package is separate. Composed native acceptance is pend
 2. Connect the accepted disposable CAS checkpoint/rebuild ordering to the
    production worker. The routed adapter now repeats TV content validation before
    intent; the production worker still rejects SQLite and performs no SQLite dispatch.
-3. Accept the composed daily-slot workflow on native Tower, then connect the
-   production worker/settings path. Disposable due-slot ownership now spans every
+3. Connect the production worker/settings path after the accepted native daily-slot workflow. Disposable due-slot ownership now spans every
    phase with one action cap and no uncertain-operation replay.
 4. Verify both production-shaped movie/TV routing and unchanged JSON execution
    through end-to-end disposable acceptance. Keep backend activation blocked
