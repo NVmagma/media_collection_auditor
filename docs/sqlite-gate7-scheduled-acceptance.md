@@ -1,7 +1,7 @@
 # Gate 7 scheduled reconciliation acceptance
 
-Status: implementation and local acceptance complete; exact-commit test CI and
-a native Tower acceptance result remain required before closure. Gate 6 stays
+Status: implementation, local acceptance and exact-implementation test CI passed.
+Only a native Tower acceptance result remains required before closure. Gate 6 stays
 closed. No production backend selection, image deployment or deletion is enabled.
 
 ## Atomicity boundary
@@ -59,9 +59,24 @@ checks passed 151 tests and 14 subtests; its 46 Linux-only cases were exercised
 separately by the Linux fixture. Existing direct reconciliation and queue tests
 were updated to require the new applied-state binding rather than bypass it.
 
+## Test-only CI evidence
+
+[Run 40103818231](https://github.com/NVmagma/media_collection_auditor/actions/runs/40103818231)
+passed for implementation commit `7d6823cf211f22490fc0ed9bb984e8105c705ade`:
+
+- Scheduled suite: 164 tests and 18 subtests passed.
+- Atomic Gate 7 regressions: 23 tests passed.
+- Existing SQLite regressions: 671 tests passed.
+- Isolated safety suite: 174 tests passed.
+
+These are separate workflow steps, not a claim that the final release suite ran.
+No Docker image was built or published. Later acceptance-document-only commits
+retain the same app/scripts/tests/workflow implementation tree. No further Gate 7
+implementation item remains after a successful native result from this package.
+
 ## Native Tower acceptance
 
-After the test-only Python safety CI passes, run from the pulled `feature/sqlite`
+The test-only Python safety CI has passed. Run from the pulled `feature/sqlite`
 checkout on Tower:
 
 ```bash
