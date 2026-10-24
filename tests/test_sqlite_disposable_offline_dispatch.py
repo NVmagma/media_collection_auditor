@@ -121,3 +121,34 @@ def test_every_fixed_route_is_in_fake_host_tree(root):
         assert root/'host' in target.parents
         assert b'UNGUARDED FIXTURE' in target.read_bytes()
     assert targets['move-helper']==root/'host/usr/libexec/unraid/move'
+
+
+@pytest.mark.parametrize('change',[
+    lambda r:r.update(schema_version=True),
+    lambda r:r.update(production_authorized=True),
+    lambda r:r.update(writer_exclusion_verified=True),
+    lambda r:r.update(unexpected='field'),
+    lambda r:r['originals'].pop('mover'),
+    lambda r:r['originals']['mover'].update(identity=[True,1,2,3,4]),
+    lambda r:r['originals']['mover'].update(sha256='unknown'),
+])
+def test_invalid_retained_record_rejected_before_mount_observation(root,monkeypatch,change):
+    def fail(*args,**kwargs):raise RuntimeError('fixture mount interruption')
+    monkeypatch.setattr(dispatch.subprocess,'run',fail)
+    with pytest.raises(RuntimeError,match='interruption'):
+        with dispatch.install_disposable_offline_dispatch(root):pass
+    path=root/'pending-request.json'
+    request=json.loads(path.read_bytes())
+    assert dispatch._pending_request(path.read_bytes())==request
+    change(request)
+    path.write_text(json.dumps(request))
+    before=path.read_bytes()
+    monkeypatch.setattr(dispatch,'_mounts',lambda *a:pytest.fail('No mount observation'))
+    with pytest.raises(RuntimeError,match='Invalid retained fixture request'):
+        dispatch.verify_disposable_offline_dispatch(root)
+    assert path.read_bytes()==before
+
+
+def test_duplicate_nested_request_key_is_rejected():
+    with pytest.raises(RuntimeError,match='Invalid retained fixture request'):
+        dispatch._pending_request(b'{"originals":{"mover":1,"mover":2}}')

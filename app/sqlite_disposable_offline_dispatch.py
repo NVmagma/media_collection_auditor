@@ -79,6 +79,42 @@ def _mounts(targets):
     return tuple(result)
 
 
+def _pending_request(content):
+    """Reject ambiguous or incomplete recovery evidence before inspecting mounts."""
+    def unique(pairs):
+        result={}
+        for key,value in pairs:
+            if key in result:raise ValueError('Duplicate request key')
+            result[key]=value
+        return result
+    try:
+        request=json.loads(content,object_pairs_hook=unique)
+        expected={'schema_version','fixture_only','phase','scope','root_identity',
+                  'guard_sha256','originals','production_authorized','writer_exclusion_verified'}
+        if not isinstance(request,dict) or set(request)!=expected:raise ValueError()
+        if (type(request['schema_version']) is not int or request['schema_version']!=1
+                or request['fixture_only'] is not True
+                or request['production_authorized'] is not False
+                or request['writer_exclusion_verified'] is not False
+                or request['phase']!='fence_requested'):raise ValueError()
+        def integers(value,length):
+            return (isinstance(value,list) and len(value)==length
+                    and all(type(n) is int and n>=0 for n in value))
+        if not integers(request['root_identity'],2):raise ValueError()
+        if (not isinstance(request['scope'],list) or len(request['scope'])!=3
+                or not all(isinstance(v,str) and v for v in request['scope'])):raise ValueError()
+        originals=request['originals']
+        if not isinstance(originals,dict) or set(originals)!=set(ROUTES):raise ValueError()
+        for original in originals.values():
+            if (not isinstance(original,dict) or set(original)!={'sha256','identity'}
+                    or not isinstance(original['sha256'],str)
+                    or not re.fullmatch('[0-9a-f]{64}',original['sha256'])
+                    or not integers(original['identity'],5)):raise ValueError()
+        return request
+    except (ValueError,TypeError,KeyError,UnicodeError) as error:
+        raise RuntimeError('Invalid retained fixture request; review required') from error
+
+
 def verify_disposable_offline_dispatch(root):
     """Read only; returning None is never an exclusion or recovery permit."""
     root=_root(root)
@@ -88,7 +124,7 @@ def verify_disposable_offline_dispatch(root):
         marker=_read(directory,'.disposable_offline_dispatch')
         request_bytes,request_identity=_read(directory,'pending-request.json')
         if marker[0]!=MARKER:raise RuntimeError('Marked offline fixture required')
-        request=json.loads(request_bytes)
+        request=_pending_request(request_bytes)
         if (request.get('schema_version')!=1 or request.get('fixture_only') is not True
                 or request.get('phase')!='fence_requested'
                 or request.get('scope')!=list(_scope())

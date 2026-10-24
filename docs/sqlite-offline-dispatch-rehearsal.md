@@ -62,3 +62,19 @@ stopping Docker does not fence Unraid's own mover/scheduler. The actual host
 observations determine whether additional fixed controls belong in the reviewed
 installer package. No approval to change those services is inferred from the
 Docker/NFS pause design.
+
+### Retained request validation
+
+The disposable verifier now requires the exact request schema and all six original
+route records. Duplicate JSON keys (including nested keys), boolean schema or
+identity numbers, malformed content digests, missing routes, extra fields and
+changed production/exclusion flags fail before mount inspection. Rejection leaves
+the retained request untouched; it never repairs, adopts or clears an interrupted
+installation. This validates record structure, not authenticity or permission to
+restore services. Expanded Linux mount acceptance and the production host package
+remain pending.
+
+The refreshed Tower scope observation confirmed single enabled SMB/NFS settings
+with CRLF line endings and a single enabled Docker setting. Reviewed Samba/mover
+script hashes matched; the move-helper hash remains observed without an independent
+source match. These observations do not establish writer exclusion.
