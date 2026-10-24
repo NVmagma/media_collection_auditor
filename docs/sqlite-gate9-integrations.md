@@ -330,3 +330,62 @@ checks, 671 SQLite regressions and 300 isolated safety tests (separate steps).
 Local focused checks passed 132 tests. Final isolated Linux checks passed 14
 completion, 27 rename and 11 HTTP cases; the preceding combined package also
 passed 11 delivery and 6 queue cases. Tower completion acceptance is pending.
+
+
+### Tower known-outcome completion acceptance
+
+Source `5f7a773a5d75ba795fa668e40a51d17f6194f7aa` passed both parents:
+`/mnt/user/sql_test/arr-completion.rAlX9Q`: 14 completion cases in 8.018s and
+11 HTTP cases in 0.238s; `/mnt/media/sql_test/arr-completion.pQiUfc`: 14 completion
+cases in 8.442s and 11 HTTP cases in 0.281s. Both ended with
+`arr_completion_acceptance_complete`. Production was unchanged.
+
+## Configured scheduled Arr worker integration
+
+The sealed candidate worker now composes scan, globally capped moves, atomic
+queue creation, one-shot Arr updates, two exact readbacks and per-title queue/
+intent clearance while retaining the daily claim, shared JSON lock and bound
+SQLite control lock. The batch supplies its exact final snapshot/revision to
+the Arr layer; a fresh read cannot silently replace that authority. Original
+scan root/title identities are required before and throughout HTTP. All library
+roots stay pinned, and the same run deadline covers collection through final
+Arr completion rather than resetting per title.
+
+Only the completed capped batch is eligible. Arr delivery occurs after all
+planned moves; a move failure prevents all Arr delivery. A first delivery failure
+leaves completed move clocks and both queue entries intact, retains its own
+intent, stops before the second delivery, and prevents next-day HTTP replay.
+Successful per-title completion advances the shared revision by three while
+preserving unrelated state. Existing uncertain intents/old queue requests are
+never automatically adopted. No permanent deletion or season pruning is added.
+
+The public production release gate remains unconditional. The configured marked
+single-layout lab accepts `deliver_arr=True` explicitly; the private candidate
+runtime composes the same callback. The historical GET-only catalog/queue fixture
+explicitly disables this callback to retain its earlier queue-only contract;
+full delivery uses a separate fake-HTTP fixture.
+
+Nine Linux end-to-end cases cover both identical-name movie/TV identities,
+correct application path aliases, source JSON preservation, global cap,
+post-move title replacement, first/later lost acknowledgement, mismatched readback, failed
+scan, changed per-move protection and shared-lock coverage. The focused transport
+suite additionally verifies an expired outer deadline cannot start HTTP.
+
+Native Tower acceptance is pending (actual disposable renames are required):
+
+```bash
+(
+  set -eu
+  cd /mnt/user/sqlite_lab_checkout
+  [ "$(git branch --show-current)" = feature/sqlite ]
+  git pull --ff-only origin feature/sqlite
+  bash scripts/sqlite_scheduled_arr_lab.sh /mnt/media/sql_test
+)
+```
+
+Expected: 9 configured worker cases and 11 HTTP regressions, final
+`scheduled_arr_acceptance_complete`, scope `configured_scheduled_arr_worker`.
+Only new fixture media/state and one new isolated container are used. All HTTP
+is synthetic private loopback; production services, media, JSON state, settings,
+exports and kernel controls remain unchanged. Gate 9 remains open pending this
+acceptance plus coordinator/history authority and TV-season compatibility.

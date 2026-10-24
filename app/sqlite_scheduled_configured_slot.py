@@ -1,7 +1,7 @@
 """Configured settings + real GET collector + daily dispatch in marked labs only.
 
 Not imported by the production audit entry point. SQLite activation remains
-blocked there. This integration creates no Arr clients and delivers no mutations.
+blocked there. Arr delivery requires the explicit disposable deliver_arr option.
 """
 from datetime import datetime
 from time import monotonic
@@ -16,20 +16,24 @@ from app.sqlite_scheduled_transport import ScheduledJellyfinGET
 
 
 def run_configured_disposable_slot(*, root, settings, scheduled_at, now,
-        clock=datetime.now, timer=monotonic, maximum_run_seconds=3600):
+        clock=datetime.now, timer=monotonic, maximum_run_seconds=3600, deliver_arr=False):
     """Detach effective policy once, then freshly collect on scan and each move.
 
     DRY_RUN=false is mandatory for this disposable rename acceptance entry point;
     no production execution or implicit live selection is introduced. Transport
     request limits span all scans, rebuilds and move checks within this attempt.
     """
+    if type(deliver_arr) is not bool:
+        raise ValueError('Explicit disposable Arr delivery selection required')
+    from app.sqlite_scheduled_arr_delivery import configured_arr_delivery
     values = dict(settings)
     config, scan, protect = _configured_run_inputs(settings=values, clock=clock)
     return run_disposable_routed_slot(root=root, config=config,
         scheduled_at=scheduled_at, now=now, fetch_signals=scan,
         fetch_protection=protect, clock=clock, timer=timer,
         maximum_run_seconds=maximum_run_seconds,
-        resolve_arr_requests=configured_arr_queue_resolver(settings=values, config=config))
+        resolve_arr_requests=configured_arr_queue_resolver(settings=values, config=config),
+        complete_arr_requests=configured_arr_delivery(settings=values, config=config) if deliver_arr else None)
 
 
 def _configured_run_inputs(*, settings, clock):

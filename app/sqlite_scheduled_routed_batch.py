@@ -1,7 +1,7 @@
 """Actual configured movie/TV renames with one DB, in marked disposable labs.
 
 No production backend selection, copy/delete fallback, season pruning, Arr
-network delivery, saved-plan adoption or restart replay. Existing disposable
+delivery without an explicit completion callback, saved-plan adoption or replay. Existing disposable
 single-tree executors keep their markers and contracts unchanged.
 """
 from contextlib import ExitStack
@@ -65,7 +65,7 @@ def _execute_routed_batch_locked(*, root, config, preparation, fetch_protection,
 
 
 def _execute_configured_batch_locked(*, database, config, preparation, fetch_protection,
-        arr_sync_requests, clock, timer, maximum_protection_seconds, verify_binding):
+        arr_sync_requests, clock, timer, maximum_protection_seconds, verify_binding, complete_arr_requests=None):
     """Shared routed ordering; caller pins control/database independently of media."""
     if (not isinstance(config, ScheduledWorkerConfig) or not isinstance(preparation, ScheduledWorkerPreparation)
             or preparation.configuration != config
@@ -142,8 +142,12 @@ def _execute_configured_batch_locked(*, database, config, preparation, fetch_pro
                           'operation_id': operation_id, 'revision': after_revision})
         expected, revision = after, after_revision
         chained = replace(chained, revision=revision)
+    delivery = {}
+    if complete_arr_requests is not None:
+        delivery = complete_arr_requests(preparation=preparation, completed=tuple(completed),
+            requests=deepcopy(requests), expected_tracking=(deepcopy(expected), revision))
     return {**base, 'status': 'disposable_routed_batch_complete', 'completed': tuple(completed),
-            'final_revision': revision, 'capped_moves': plan.capped_moves}
+            'final_revision': revision, 'capped_moves': plan.capped_moves, **delivery}
 
 
 def _move(*, store, library, roots, captured_roots, title_identity, folder, plan, move,

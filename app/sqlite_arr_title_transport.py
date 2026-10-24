@@ -6,6 +6,7 @@ clears SQLite intents/queues. No retry, redirects, proxies, delete or moveFiles.
 from copy import deepcopy
 from http.client import HTTPException
 import json
+import math
 from time import monotonic
 from urllib.error import HTTPError, URLError
 from urllib.request import Request
@@ -27,7 +28,7 @@ class ArrTitleUpdate:
     The expected source path comes from the bound preparation, not remote title
     search. Other resource fields, including Sonarr seasons, remain unchanged.
     """
-    def __init__(self, *, service, base_url, token, source_path, title_folder, verify_binding=None):
+    def __init__(self, *, service, base_url, token, source_path, title_folder, verify_binding=None, deadline_tick=None):
         client = ArrCatalogGET(service=service, base_url=base_url, token=token)
         self._url, self._token, self._opener = client._url, client._token, client._opener
         self._service = service
@@ -38,6 +39,10 @@ class ArrTitleUpdate:
         if verify_binding is not None and not callable(verify_binding):
             raise ValueError('Callable binding verifier required')
         self._verify = verify_binding or (lambda: None)
+        if deadline_tick is not None and (type(deadline_tick) not in (int, float)
+                or not math.isfinite(deadline_tick)):
+            raise ValueError('Finite Arr deadline required')
+        self._deadline = deadline_tick
         self._used = False
 
     def __repr__(self):
@@ -91,6 +96,8 @@ class ArrTitleUpdate:
         url = self._url + '/' + str(request['title_id'])
         # One deadline spans the initial read, update and both independent reads.
         deadline = monotonic() + 10
+        if self._deadline is not None:
+            deadline = min(deadline, self._deadline)
         record = self._request('GET', url, deadline)
         if (type(record.get('id')) is not int or record['id'] != request['title_id']
                 or record.get('path') != self._source or type(record.get('monitored')) is not bool):

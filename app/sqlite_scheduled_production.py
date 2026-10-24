@@ -14,6 +14,7 @@ from app.sqlite_arr_catalog import configured_arr_queue_resolver
 from app.sqlite_backend_gate import require_sqlite_production_activation
 from app.sqlite_lock import _exclusive_lock, audit_run_lock
 from app.sqlite_scheduled_configured_slot import _configured_run_inputs
+from app.sqlite_scheduled_arr_delivery import configured_arr_delivery
 from app.sqlite_scheduled_paths import _canonical, _open_directory
 from app.sqlite_scheduled_routed_slot import _run_routed_slot_locked
 from app.sqlite_scheduled_slot import _claim_scheduled_slot_locked
@@ -63,7 +64,8 @@ def _run_bound_production_slot(*, settings, scheduled_at, now, clock, timer=mono
                     scheduled_at=scheduled_at, fetch_signals=scan, fetch_protection=protect,
                     arr_sync_requests=None, clock=clock, timer=timer, maximum_titles=100000,
                     maximum_run_seconds=3600, maximum_protection_seconds=30,
-                    verify_claim=verify_claim, started_tick=started, resolve_arr_requests=resolve_arr)
+                    verify_claim=verify_claim, started_tick=started, resolve_arr_requests=resolve_arr,
+                    complete_arr_requests=configured_arr_delivery(settings=settings, config=config))
                 # The common body reports fixture-only until release validation.
                 # Do not relabel its evidence as production authorization.
                 return result

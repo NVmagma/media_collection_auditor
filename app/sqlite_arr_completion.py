@@ -1,7 +1,8 @@
-"""Known-outcome Arr completion in marked disposable labs only.
+"""Known-outcome Arr completion for disposable and sealed candidate composition.
 
 Owns the transport attempt and SQLite revision chain. This is not recovery:
-pre-existing intents are refused, never adopted or replayed. Production is sealed.
+pre-existing intents are refused, never adopted or replayed. The public API
+requires a marked lab; production selection remains sealed.
 """
 from contextlib import ExitStack
 from copy import deepcopy
@@ -31,17 +32,33 @@ def complete_disposable_arr_request(*, root, operation_id, media_key, title_fold
     Any exception propagates without retry or cleanup of uncertain state.
     """
     root = Path(root)
+    with isolated_runner_lock(root) as verify_control:
+        return _complete_arr_request_locked(database=root / 'state.db',
+            stage_roots={name: str(root / name) for name in ('transient', 'holding', 'keep', 'removal')},
+            operation_id=operation_id, media_key=media_key, title_folder=title_folder,
+            details=details, source_path=source_path, base_url=base_url, token=token,
+            verify_control=verify_control)
+
+
+def _complete_arr_request_locked(*, database, stage_roots, operation_id, media_key,
+        title_folder, details, source_path, base_url, token, verify_control,
+        expected_tracking=None, expected_parents=None, expected_title=None, deadline_tick=None):
+    """Internal composition; caller holds and verifies its bound control lock."""
+    database = Path(database)
     folder = validate_title_folder(title_folder)
     request = deepcopy(details)
-    # Strict shape/service/key validation happens before acquiring/creating lock.
     planned_arr_queue_entry(request=request, media_key=media_key,
         title_folder=folder, destination_stage='keep')
-    with isolated_runner_lock(root) as verify_control, ExitStack() as stack:
-        database = root / 'state.db'
+    if set(stage_roots) != {'transient', 'holding', 'keep', 'removal'}:
+        raise ValueError('All explicit stage roots required')
+    verify_control()
+    with ExitStack() as stack:
         database_fd = os.open(database, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         stack.callback(os.close, database_fd)
         session = RevisionedAuditSession(GuardedSQLiteStateStore(database))
-        before, _ = session.read_verified_snapshot()
+        before, revision = session.read_verified_snapshot()
+        if expected_tracking is not None and (before, revision) != expected_tracking:
+            raise RuntimeError('Arr post-move tracking chain changed')
         if INTENTS_KEY in before:
             raise RuntimeError('Unresolved operation; Arr completion cannot replay')
         queued = before['arr_sync_pending'].get(media_key)
@@ -57,13 +74,19 @@ def complete_disposable_arr_request(*, root, operation_id, media_key, title_fold
                 for other in CLOCKS.values() if other != section):
             raise RuntimeError('Unique destination clock required')
         parents = {}
-        for name in ('transient', 'holding', 'keep', 'removal'):
-            fd = _open_directory(str(root / name))
+        for name, path in stage_roots.items():
+            fd = _open_directory(path)
             stack.callback(os.close, fd)
             parents[name] = fd
+            held = os.fstat(fd)
+            if expected_parents is not None and (held.st_dev, held.st_ino) != expected_parents[name]:
+                raise RuntimeError('Arr stage identity differs from scan')
         title_fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK,
                            dir_fd=parents[stage])
         stack.callback(os.close, title_fd)
+        title_info = os.fstat(title_fd)
+        if expected_title is not None and (title_info.st_dev, title_info.st_ino) != expected_title:
+            raise RuntimeError('Arr title identity differs from scan')
 
         def same_identity(info, held):
             return (info.st_dev, info.st_ino) == (held.st_dev, held.st_ino)
@@ -74,7 +97,7 @@ def complete_disposable_arr_request(*, root, operation_id, media_key, title_fold
                 raise RuntimeError('Arr control database replaced')
             present = []
             for name, fd in parents.items():
-                if not same_identity(os.stat(root / name, follow_symlinks=False), os.fstat(fd)):
+                if not same_identity(os.stat(stage_roots[name], follow_symlinks=False), os.fstat(fd)):
                     raise RuntimeError('Arr stage root replaced')
                 try:
                     info = os.stat(folder, dir_fd=fd, follow_symlinks=False)
@@ -90,7 +113,7 @@ def complete_disposable_arr_request(*, root, operation_id, media_key, title_fold
             session.read_verified_snapshot()
 
         transport = ArrTitleUpdate(service=request['service'], base_url=base_url, token=token,
-            source_path=source_path, title_folder=folder, verify_binding=verify)
+            source_path=source_path, title_folder=folder, verify_binding=verify, deadline_tick=deadline_tick)
         verify()
         coordinator = SQLiteOperationCoordinator(session)
         coordinator.begin(operation_id, 'arr_sync', {**request, 'media_key': media_key,

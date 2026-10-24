@@ -68,3 +68,11 @@ def test_service_mismatch_cannot_send():
     with patch.object(transport._opener, 'open') as opened:
         with pytest.raises(ArrTitleTransportError): transport(dict(DETAILS, service='sonarr'))
         opened.assert_not_called()
+
+
+def test_outer_run_deadline_prevents_new_http_without_reset():
+    transport = ArrTitleUpdate(service='radarr', base_url='http://private-host',
+        token='private-token', source_path='/arr/holding/Title', title_folder='Title', deadline_tick=0)
+    with patch.object(transport._opener, 'open') as opened:
+        with pytest.raises(ArrTitleTransportError): transport(DETAILS)
+        opened.assert_not_called()

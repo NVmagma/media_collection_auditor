@@ -1,7 +1,7 @@
 """One claimed daily slot: full scan, guarded clocks, fresh rebuild, routed moves.
 
 Marked disposable roots only. No production worker selection, sleeps, catch-up,
-claim deletion, automatic replay or service mutation. The claim retains one
+claim deletion or automatic replay. Configured Arr delivery is explicitly composed. The claim retains one
 cooperating runner lock across the whole operation; it does not fence media writers.
 """
 from copy import deepcopy
@@ -20,7 +20,7 @@ from app.sqlite_scheduled_slot import claim_disposable_scheduled_slot
 def run_disposable_routed_slot(*, root, config, scheduled_at, now, fetch_signals,
         fetch_protection, arr_sync_requests=None, clock=datetime.now, timer=monotonic,
         maximum_titles=100000, maximum_run_seconds=3600, maximum_protection_seconds=30,
-        resolve_arr_requests=None):
+        resolve_arr_requests=None, complete_arr_requests=None):
     """Attempt one due slot once; any failure leaves its claim in place.
 
     All-library collection and any clock checkpoint precede all moves. Requests
@@ -39,17 +39,20 @@ def run_disposable_routed_slot(*, root, config, scheduled_at, now, fetch_signals
             clock=clock, timer=timer, maximum_titles=maximum_titles,
             maximum_run_seconds=maximum_run_seconds,
             maximum_protection_seconds=maximum_protection_seconds, verify_claim=verify_claim,
-            started_tick=started, resolve_arr_requests=resolve_arr_requests)
+            started_tick=started, resolve_arr_requests=resolve_arr_requests,
+            complete_arr_requests=complete_arr_requests)
 
 
 def _run_routed_slot_locked(*, database, config, scheduled_at, fetch_signals,
         fetch_protection, arr_sync_requests, clock, timer, maximum_titles,
         maximum_run_seconds, maximum_protection_seconds, verify_claim, started_tick=None,
-        resolve_arr_requests=None):
+        resolve_arr_requests=None, complete_arr_requests=None):
     """Shared attempt body after a caller has durably claimed its bound control slot."""
     _validate_routed_limits(fetch_protection, maximum_titles, maximum_protection_seconds)
     if resolve_arr_requests is not None and (not callable(resolve_arr_requests) or arr_sync_requests is not None):
         raise ValueError('One explicit Arr request source required')
+    if complete_arr_requests is not None and not callable(complete_arr_requests):
+        raise ValueError('Callable Arr completion required')
     requests = deepcopy({} if arr_sync_requests is None else arr_sync_requests)
     if not isinstance(requests, dict):
         raise ValueError('Explicit Arr request mapping required')
@@ -79,11 +82,16 @@ def _run_routed_slot_locked(*, database, config, scheduled_at, fetch_signals,
     keys = {move.media_key for move in prepared.plan.moves}
     prepared = replace(prepared, plan=replace(prepared.plan,
         deadline_tick=min(prepared.plan.deadline_tick, started + maximum_run_seconds)))
+    def complete(**kwargs):
+        verify_claim(); remaining()
+        return complete_arr_requests(database=database, verify_binding=verify_claim,
+            remaining=remaining, deadline_tick=started + maximum_run_seconds, **kwargs)
     result = _execute_configured_batch_locked(database=database, config=config, preparation=prepared,
         fetch_protection=fetch_protection,
         arr_sync_requests={key: value for key, value in requests.items() if key in keys},
         clock=clock, timer=timer, maximum_protection_seconds=maximum_protection_seconds,
-        verify_binding=verify_claim)
+        verify_binding=verify_claim,
+        complete_arr_requests=complete if complete_arr_requests is not None else None)
     verify_claim(); remaining()
     return {**result, 'status': ('disposable_scheduled_routed_slot_complete'
         if result['status'] == 'disposable_routed_batch_complete' else result['status']),

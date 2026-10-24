@@ -4,6 +4,7 @@ import json
 import sys
 from threading import Thread
 import unittest
+from unittest.mock import patch
 
 from app.sqlite_operation_coordinator import INTENTS_KEY
 from scripts.sqlite_scheduled_runtime_fixture import ScheduledRuntimeFixtureTests
@@ -48,7 +49,10 @@ class ArrQueueFixtureTests(unittest.TestCase):
         self.case.values['SONARR_APP_HOLDING_PATH'] = '/arr-view/TV_hold'
 
     def run_due(self):
-        return self.case.step(self.case.slot)
+        # This historical boundary intentionally accepts queue preparation only.
+        # Full configured delivery has its own private HTTP acceptance fixture.
+        with patch('app.sqlite_scheduled_production.configured_arr_delivery', return_value=None):
+            return self.case.step(self.case.slot)
 
     def test_both_ids_and_app_paths_commit_with_their_own_move_clocks(self):
         result = self.run_due()
