@@ -328,6 +328,15 @@ on the next date, and an actual controller SIGKILL after rename with retained cl
 Scheduling dates are injected independently of the past lifecycle fixture clock;
 production future-clock rejection is unchanged.
 
+Development-host regression checks passed 220 tests and 14 subtests; 82
+Linux-only cases were skipped there and exercised separately in the isolated
+Linux package. That package passed 14 slot, 22 routed, 14 worker, 16 checkpoint,
+19 reconciliation, 27 rename and 11 HTTP cases.
+[Test-only CI run 40125278741](https://github.com/NVmagma/media_collection_auditor/actions/runs/40125278741)
+passed for implementation `d762583da72a4df27c910adcfe76dac71613ffe3`: 291 scheduled
+tests and 24 subtests, 23 atomic regressions, 671 SQLite regressions and 240
+isolated safety tests (separate workflow steps). No image was built or deployed.
+
 Native Tower acceptance of the composed workflow is required:
 
 ```bash
