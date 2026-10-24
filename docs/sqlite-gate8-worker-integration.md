@@ -211,7 +211,15 @@ New regression tests cover an active iterator's cursor, a new entry between
 passes and stage metadata changes without a name change. The originally failing
 checkpoint case is unchanged; it must pass on Tower before accepting this fix.
 No moves, overwrite/copy fallback, skipped scenarios or production changes were
-introduced. Rerun the same disposable command above on both views.
+introduced. Development-host scheduled tests passed 216 tests and 14 subtests;
+46 Linux-only cases passed separately with the 14 worker, 16 checkpoint and
+11 HTTP fixtures in an isolated Linux container.
+
+[Test-only CI run 40106982646](https://github.com/NVmagma/media_collection_auditor/actions/runs/40106982646)
+passed for correction `7c2a747ff86107cb9baa7dbe440b37f55b7474ae`: 251 scheduled
+tests and 18 subtests, 23 atomic regressions, 671 SQLite regressions and 204 isolated
+safety tests (separate steps). No image was built/deployed. Tower must still confirm
+the correction; rerun the same disposable command above on both views.
 
 ## Remaining Gate 8 scope
 
