@@ -74,7 +74,8 @@ Run the committed acceptance package on Tower to verify both filesystem views:
 Each run uses an immutable cached Python image, a new `scheduled-worker.*`
 directory and a new fixture container. Only that new directory is bound writable;
 there is no network, package installation, image pull, Docker socket mount or
-production credential/configuration access. It now runs 14 worker/discovery cases and 11 read-only HTTP cases. It does not
+production credential/configuration access. It now runs 14 worker/discovery cases, 16 disposable clock-checkpoint cases and
+11 read-only HTTP cases. It does not
 claim rename capability or rerun the native-only Gate 6/7 rename suites. Expected final status:
 `scheduled_worker_acceptance_complete`. Production activation remains disabled.
 Existing media, state, services, exports, boot settings and kernel controls are
@@ -141,17 +142,53 @@ passed for implementation `d2976bd8a48f4e2409c48a9ccd6caa4a4cb4937e`: 232 schedu
 tests and 18 subtests, 23 atomic regressions, 671 SQLite regressions and 188
 isolated safety tests (separate workflow steps). No image was built/deployed.
 
-The six new filesystem/discovery cases still require Tower acceptance through
-the command above; the accepted original eight-case boundary remains recorded.
+The expanded 14-case worker/discovery boundary passed on both Tower views at
+source `0963d560dfb8f9bdb2c7e9c8a670a621492999f8`:
+
+- shfs: `/mnt/user/sql_test/scheduled-worker.TD5P4N`, 14 tests in 0.259 seconds,
+  plus 11 HTTP tests in 0.233 seconds.
+- Native: `/mnt/media/sql_test/scheduled-worker.2VEq8l`, 14 tests in 0.063 seconds,
+  plus 11 HTTP tests in 0.241 seconds.
+
+Both ended in `scheduled_worker_acceptance_complete`, with activation disabled
+and production authorization false. Discovery/content observation is accepted;
+this does not accept the later checkpoint integration below.
+
+## Guarded clock checkpoint and plan rebuild
+
+`prepare_checkpointed_disposable_worker` connects complete preparation to a real
+SQLite compare-and-swap checkpoint under the existing cooperating runner lock.
+All roots and the database must belong to a marked disposable lab. It accepts
+no saved proposal, performs no moves and cannot activate the production backend.
+
+The adapter binds the exact source snapshot/revision, checkpoints at most once,
+then recollects every configured library and rebuilds the plan at the verified
+new revision. It never lifts an old plan to a new revision or reuses cached
+protections. No-change runs perform no checkpoint. One total scan budget covers
+both passes. An exception before or after commit stops without retry/rebuild or
+dispatch; committed clocks remain committed if later collection fails. Another
+clock change during rebuild stops without a second checkpoint.
+
+The 16-case stdlib checkpoint fixture uses real SQLite files and transactions:
+SQL abort rollback, after-commit acknowledgement loss, stale revision and raw
+same-revision mutation, a CAS competitor inside save, fresh protections during
+rebuild, repeated TV content changes, later-library failures, stage-specific
+clock mapping, queue/unknown-field preservation, shared deadlines, missing lab
+markers and external-root rejection. The expanded Tower command above now runs
+these cases too. They write only the newly created disposable database; production
+state/media/services remain unchanged. Focused checkpoint checks passed 16 tests;
+development-host scheduled regressions passed 213 tests and 14 subtests. The 46
+Linux-only cases passed separately in the isolated Linux run, together with the
+14 worker, 16 checkpoint and 11 HTTP cases. Tower checkpoint acceptance is pending.
 
 ## Remaining Gate 8 scope
 
 1. Connect real configured roots/database to the guarded intent, descriptor-bound
    no-overwrite rename and exact atomic reconciliation flow. Preserve Gate 6/7
    behavior without removing disposable markers from their test-only APIs.
-2. Connect discovery/reset proposals to durable CAS checkpoints and post-checkpoint
-   plan rebuilds. The complete content reader and pure proposals are implemented;
-   retain the all-library scan barrier and repeat content validation before moves.
+2. Accept the disposable CAS checkpoint/rebuild adapter on Tower, then connect
+   that ordering to the production worker. Repeat content validation before moves;
+   the production worker still rejects SQLite and performs no SQLite dispatch.
 3. Connect the daily worker/slot ownership and settings path, with one run-wide
    action cap, duplicate-run prevention and no uncertain-operation replay.
 4. Verify both production-shaped movie/TV routing and unchanged JSON execution

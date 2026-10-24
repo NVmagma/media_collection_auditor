@@ -19,7 +19,7 @@ def run(image, *, gate7=False, worker=False):
     fixtures = (['scripts.sqlite_scheduled_gate7_fixture'] if gate7 else []) + [
         'scripts.sqlite_scheduled_move_fixture', 'scripts.sqlite_scheduled_transport_fixture']
     if worker:
-        fixtures.insert(0, 'scripts.sqlite_scheduled_worker_fixture')
+        fixtures[0:0] = ['scripts.sqlite_scheduled_worker_fixture', 'scripts.sqlite_scheduled_checkpoint_fixture']
     source = source_archive(Path(__file__).resolve().parents[1])
     container = command('docker', 'create', '--pull=never', '--network', 'none',
         '--user', '0:0', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
