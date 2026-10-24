@@ -50,6 +50,13 @@ if __name__ == "__main__":
     if read_only_service_enabled():
         start_web()
         raise SystemExit(0)
+    if os.environ.get("AUDITOR_STATE_BACKEND", "json") == "sqlite":
+        from sqlite_backend_gate import require_sqlite_production_activation
+        require_sqlite_production_activation()
+        from app.sqlite_scheduled_service import run_daily_service
+        threading.Thread(target=start_web, name="web-ui", daemon=True).start()
+        run_daily_service(apply_settings=apply_settings)
+        raise SystemExit(0)
     threading.Thread(target=start_web, name="web-ui", daemon=True).start()
     auditor = None
     while True:

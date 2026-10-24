@@ -470,7 +470,13 @@ passed for implementation `f68189dc25d202c242ccb5ec08daf675bf00039c`: 333 schedu
 tests and 27 subtests, 23 atomic regressions, 671 SQLite regressions and 252
 isolated safety tests (separate workflow steps). No image was built/deployed.
 
-Native Tower acceptance for this separated layout is required:
+Native Tower acceptance for this separated layout passed at source
+`04964d1453b368f6f53506510a6efefccc0e522d`, lab
+`/mnt/media/sql_test/scheduled-worker-layout.aJpgAO`: all 8 layout tests in
+3.039 seconds and 11 HTTP tests in 0.245 seconds. Final status was
+`scheduled_worker_layout_acceptance_complete`, scope
+`disposable_separate_control_media`; production remained unchanged.
+The accepted command is retained for reference:
 
 ```bash
 (
@@ -489,18 +495,72 @@ are used; no external Jellyfin, production media/database/settings/services,
 exports, kernel controls or boot settings are touched. Native rename capability
 remains required; there is no copy/delete fallback.
 
+## Candidate daily worker/service connection
+
+The service entry point now selects the SQLite daily-service path only behind an
+unconditional release activation gate. No environment value bypasses that gate.
+JSON retains its existing interval/manual loop and `run_once` behavior. Selecting
+SQLite currently fails before starting a web/worker thread, importing the auditor,
+loading worker settings or opening state through this branch. The separate
+read-only API service branch retains its existing behavior.
+
+Behind that sealed boundary, `ScheduledWorkerCycle` schedules the next strictly
+future daily time on startup/configuration change, never runs early on a manual
+wake, skips a slot delayed by 60 seconds or more, and advances before invoking its
+worker callback. Exceptions therefore cannot trigger an automatic retry. Clock
+rewind recomputes a future wall time, while durable local-date claims independently
+reject any already attempted date. The daily service polls settings with bounded
+waits; it never bootstraps or migrates a database.
+
+The candidate production worker resolves effective settings, binds an existing
+`SQLITE_STATE_FILE` (default `/app/logs/sqlite_worker/state.db`, dedicated
+`state.db` filename), retains the shared legacy JSON/migration lock derived from
+`STATE_FILE`, then binds the control-directory/database inode and persistent
+worker lock. Control/media roots must be disjoint. The same accepted claim,
+clock checkpoint/rebuild and routed execution internals perform the due attempt.
+Missing/replaced state is never adopted or initialized. The original JSON state
+is neither read for migration nor modified during this path. Its output remains
+non-authorizing while release activation is disabled. The candidate rename path
+requires explicit `DRY_RUN=false`; default dry-run settings cannot select live
+execution. Arr delivery, deletion, season pruning and service controls remain absent.
+
+Eight stdlib end-to-end runtime fixture tests explicitly construct marked disposable
+paths and synthetic credentials, then call these private candidate internals without
+changing the public activation gate. They verify startup/early wakes, actual due
+movie/TV renames with unchanged JSON, missed slots/restart, shared JSON lock
+contention, uncertain rename followed by next-date pending-intent refusal before
+HTTP, clock rewind/repeated-date refusal, database replacement and invalid state
+binding. Ten pure cycle tests cover timing/configuration/failure semantics. Public
+production/service gate tests verify no callback/settings side effects; a subprocess
+runs the real `main.py` with tripwire thread/auditor/history stubs to verify rejection.
+The actual read-only API entry-point regression remains passing.
+
+Native Tower acceptance of this final candidate runtime is required:
+
+```bash
+(
+  set -eu
+  cd /mnt/user/sqlite_lab_checkout
+  [ "$(git branch --show-current)" = feature/sqlite ]
+  git pull --ff-only origin feature/sqlite
+  bash scripts/sqlite_scheduled_runtime_lab.sh /mnt/media/sql_test
+)
+```
+
+Expected: 8 candidate runtime tests and 11 HTTP transport tests, final
+`scheduled_runtime_acceptance_complete`, scope `candidate_daily_worker_runtime`.
+Only newly created fixture files/container/private loopback HTTP are used. Public
+production activation remains sealed throughout. No production roots, state,
+credentials, service controls, exports, boot settings or kernel controls are used.
+
 ## Remaining Gate 8 scope
 
-1. Connect the accepted configured multi-library routed ordering to production
-   roots/database behind the disabled cutover boundary. Existing disposable APIs retain their markers and remain test-only.
-2. Connect the accepted disposable CAS checkpoint/rebuild ordering to the
-   production worker. The routed adapter now repeats TV content validation before
-   intent; the production worker still rejects SQLite and performs no SQLite dispatch.
-3. Connect the production worker/settings path after the accepted native daily-slot workflow. Disposable due-slot ownership now spans every
-   phase with one action cap and no uncertain-operation replay.
-4. Verify both production-shaped movie/TV routing and unchanged JSON execution
-   through end-to-end disposable acceptance. Keep backend activation blocked
-   until the later integration/release gates and explicit approval.
+The worker/service connection is implemented behind the release gate. Native Tower
+acceptance of the candidate runtime above is the remaining Gate 8 evidence before
+closure. The earlier native layout, configured HTTP/slot, routed moves and clock
+boundaries remain accepted; the original JSON interval/manual path is unchanged.
 
-Configured Arr delivery and dashboard authority belong to Gate 9; final image,
-backup/rollback and activation approval remain Gate 10 work.
+Configured Arr delivery and dashboard/status authority belong to Gate 9. Final
+image packaging, persistent-path setup, migration/backup/rollback, release runtime
+selection and explicit activation approval remain Gate 10 work. Gate 8 closure
+will not authorize deployment, migration or SQLite production execution.
