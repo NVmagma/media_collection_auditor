@@ -288,7 +288,14 @@ Development-host scheduled checks passed 218 tests and 14 subtests; the 68
 Linux-only cases passed separately. Linux/Python 3.12.15 execution passed all 22
 routed cases, 14 worker cases, 16 checkpoint cases, 19 Gate 7 cases, 27 Gate 6
 cases and 11 HTTP cases in one new cached-image container without host mounts
-or network. Routed native Tower acceptance is pending.
+or network.
+
+[Test-only CI run 40116233933](https://github.com/NVmagma/media_collection_auditor/actions/runs/40116233933)
+passed for implementation `1af16f6fb3bda89ed4de2921eae92c66a8bcad13`: 275 scheduled
+tests and 22 subtests, 23 atomic regressions, 671 SQLite regressions and 226 isolated
+safety tests (separate workflow steps). No image was built/deployed. Later
+acceptance-document-only commits retain that implementation tree. Routed native
+Tower acceptance is pending.
 
 ## Remaining Gate 8 scope
 
