@@ -168,9 +168,10 @@ claim prevents automatic same-date retry. Unknown outcomes and earlier unresolve
 queues retain their existing blocking behavior; there is no delivery or clearance
 in this increment.
 
-Seventeen pure/transport tests verify identities, aliases, monitoring policy,
+Nineteen pure/transport tests verify identities, aliases, monitoring policy,
 configuration detachment, service separation, ambiguity/missing-source refusal,
-one-read-per-service, invalid URLs and redacted no-retry failures. Six end-to-end
+one-read-per-service, invalid URLs, redacted no-retry failures, explicit HTTP
+error-body closure and response deadline enforcement. Six end-to-end
 stdlib Linux tests combine synthetic private GET catalogs, actual two-library
 media renames, durable claims and SQLite queue/clock reconciliation. They cover
 both queued identities, later-service failure, ambiguity, global cap, partial

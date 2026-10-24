@@ -116,3 +116,30 @@ def test_multiple_planned_movies_share_one_bounded_catalog_read():
     prepared.plan.moves.append(Object(media_key='Other', library='Movies', source_stage='Waiting', destination_stage='Holding'))
     assert len(resolver(settings, config, data, calls)(prepared)) == 3
     assert calls == ['radarr', 'sonarr']
+
+
+def test_http_error_response_is_closed_without_garbage_collection():
+    from io import BytesIO
+    from urllib.error import HTTPError
+    body = BytesIO(b'private response')
+    error = HTTPError('http://fixture', 401, 'private message', {}, body)
+    client = ArrCatalogGET(service='radarr', base_url='http://fixture', token='private-key')
+    with patch.object(client._opener, 'open', side_effect=error):
+        with pytest.raises(ArrCatalogError):
+            client()
+    assert body.closed
+
+
+def test_total_response_deadline_closes_body_and_does_not_retry():
+    from io import BytesIO
+    body = BytesIO(b'[]')
+    body.status = 200
+    client = ArrCatalogGET(service='radarr', base_url='http://fixture', token='private-key')
+    with patch.object(client._opener, 'open', return_value=body) as opened:
+        with patch.object(module, 'monotonic', side_effect=[0, 11]):
+            with pytest.raises(ArrCatalogError):
+                client()
+        assert body.closed
+        with pytest.raises(ArrCatalogError, match='no retry'):
+            client()
+        assert opened.call_count == 1

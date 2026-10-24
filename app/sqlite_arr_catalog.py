@@ -7,6 +7,7 @@ from copy import deepcopy
 from http.client import HTTPException
 import json
 from pathlib import PurePosixPath
+from time import monotonic
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, ProxyHandler, build_opener
@@ -53,19 +54,30 @@ class ArrCatalogGET:
         try:
             request = Request(self._url, method='GET', headers={
                 'X-Api-Key': self._token, 'Cache-Control': 'no-cache', 'Accept': 'application/json'})
+            started = monotonic()
             with self._opener.open(request, timeout=10) as response:
                 if response.status != 200:
                     raise ValueError('response')
-                raw = response.read(8 * 1024 * 1024 + 1)
-                if len(raw) > 8 * 1024 * 1024:
-                    raise ValueError('size')
+                raw = bytearray()
+                while True:
+                    chunk = response.read1(min(65536, 8 * 1024 * 1024 + 1 - len(raw)))
+                    if monotonic() - started >= 10:
+                        raise ValueError('deadline')
+                    raw.extend(chunk)
+                    if len(raw) > 8 * 1024 * 1024:
+                        raise ValueError('size')
+                    if not chunk:
+                        break
             def invalid(value):
                 raise ValueError('nonfinite')
             data = json.loads(raw, object_pairs_hook=_object, parse_constant=invalid)
             if not isinstance(data, list) or len(data) > 100000:
                 raise ValueError('catalog shape')
             return data
-        except (HTTPError, URLError, HTTPException, OSError, ValueError, TypeError, RuntimeError):
+        except HTTPError as error:
+            error.close()
+            raise ArrCatalogError('Arr catalog unavailable or invalid') from None
+        except (URLError, HTTPException, OSError, ValueError, TypeError, RuntimeError):
             raise ArrCatalogError('Arr catalog unavailable or invalid') from None
 
 
