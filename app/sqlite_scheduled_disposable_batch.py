@@ -13,6 +13,7 @@ from pathlib import Path
 import secrets
 from time import monotonic
 
+from app.sqlite_arr_queue_plan import planned_arr_queue_entry
 from app.sqlite_isolated_lifecycle_runner import isolated_runner_lock
 from app.sqlite_lifecycle_checkpoint_plan import CLOCKS
 from app.sqlite_operation_coordinator import INTENTS_KEY
@@ -24,7 +25,7 @@ from app.state_store import GuardedSQLiteStateStore
 
 def execute_scheduled_disposable_batch(*, root, database, plan, title_folders,
         fetch_protection, clock=datetime.now, timer=monotonic,
-        maximum_protection_seconds=30, fault_at=None):
+        maximum_protection_seconds=30, fault_at=None, arr_sync_requests=None):
     """Consume this process's complete plan once; stop on the first uncertainty.
 
     fault_at=(candidate_index, boundary) is disposable fault injection only.
@@ -35,11 +36,11 @@ def execute_scheduled_disposable_batch(*, root, database, plan, title_folders,
         return _execute_scheduled_batch_locked(root=root, database=database, plan=plan,
             title_folders=title_folders, fetch_protection=fetch_protection, clock=clock,
             timer=timer, maximum_protection_seconds=maximum_protection_seconds,
-            fault_at=fault_at, verify_binding=verify_binding)
+            fault_at=fault_at, verify_binding=verify_binding, arr_sync_requests=arr_sync_requests)
 
 
 def _execute_scheduled_batch_locked(*, root, database, plan, title_folders,
-        fetch_protection, clock, timer, maximum_protection_seconds, fault_at, verify_binding):
+        fetch_protection, clock, timer, maximum_protection_seconds, fault_at, verify_binding, arr_sync_requests=None):
     """Internal integration used while a full scheduled slot retains the lock."""
     root, database = Path(root), Path(database)
     if database != root / 'state.db' or not isinstance(plan, ScheduledPlan):
@@ -59,6 +60,16 @@ def _execute_scheduled_batch_locked(*, root, database, plan, title_folders,
             or type(fault_at[0]) is not int or not 0 <= fault_at[0] < len(plan.moves)
             or fault_at[1] not in ('after_intent', 'after_rename', 'after_applied')):
         raise ValueError('Invalid batch fault boundary')
+    requests = deepcopy({} if arr_sync_requests is None else arr_sync_requests)
+    if not isinstance(requests, dict) or not set(requests).issubset(title_folders):
+        raise ValueError('Only planned candidate Arr queue requests are accepted')
+    queue_entries = {}
+    stage_names = {'Holding': 'holding', 'Keep': 'keep', 'Removal': 'removal'}
+    for move in plan.moves:
+        if move.media_key in requests:
+            queue_entries[move.media_key] = planned_arr_queue_entry(request=requests[move.media_key],
+                media_key=move.media_key, title_folder=title_folders[move.media_key],
+                destination_stage=stage_names[move.destination_stage])
     base = {'fixture_only': True, 'production_authorized': False,
             'production_activation': 'disabled', 'replay_allowed': False}
     completed = []
@@ -90,7 +101,7 @@ def _execute_scheduled_batch_locked(*, root, database, plan, title_folders,
                 clock=lambda: observed_at, timer=timer,
                 maximum_protection_seconds=maximum_protection_seconds,
                 fault_at=fault_at[1] if fault_at and fault_at[0] == index else None,
-                verify_binding=verify_binding)
+                verify_binding=verify_binding, arr_sync_request=requests.get(move.media_key))
         except Exception:
             # No cleanup, intent clearance, retry or exception/credential dump.
             return stopped('move_failed_or_uncertain', index)
@@ -99,6 +110,8 @@ def _execute_scheduled_batch_locked(*, root, database, plan, title_folders,
             return stopped('planned_clock_binding_changed', index)
         expected_after[CLOCKS[move.source_stage]].pop(move.media_key)
         expected_after[CLOCKS[move.destination_stage]][move.media_key] = observed_at.isoformat()
+        if move.media_key in queue_entries:
+            expected_after['arr_sync_pending'][move.media_key] = queue_entries[move.media_key]
         verify_binding()
         after, after_revision = store.load_with_revision()
         if (result.get('status') != 'disposable_reconciled'

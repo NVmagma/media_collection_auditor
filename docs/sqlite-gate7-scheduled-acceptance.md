@@ -1,0 +1,95 @@
+# Gate 7 scheduled reconciliation acceptance
+
+Status: implementation and local acceptance complete; exact-commit test CI and
+a native Tower acceptance result remain required before closure. Gate 6 stays
+closed. No production backend selection, image deployment or deletion is enabled.
+
+## Atomicity boundary
+
+One title's final guarded SQLite transaction removes its source clock, writes
+its destination clock, clears its exact applied move intent and, when supplied,
+adds the bound Arr retry entry. Unrelated clocks, queue entries and unknown state
+fields remain intact. The final transaction advances the applied revision once;
+intent and applied checkpoints precede it, so a complete move advances three
+revisions. A batch consists of independent per-title transactions, not one
+all-or-nothing transaction covering all titles or the filesystem.
+
+Reconciliation now requires the exact applied revision **and** full snapshot
+captured by the in-process move session. Previously the final reconciler opened
+a fresh session and could adopt an intervening writer's revision. A changed
+revision or same-revision state mutation now blocks intent clearance. The final
+CAS still rejects a writer racing after that comparison. No caller boolean
+bypasses this binding, and a live held directory witness is still mandatory.
+Stored fingerprints cannot recreate that witness after restart.
+
+Optional Arr queue requests now pass through the scheduled single-move, batch
+and full-slot adapters. They are detached, validated, bound into the durable
+intent and included in the exact expected post-move snapshot. Existing target
+queue entries are preserved and block a conflicting operation. This persists
+retry information only: no Arr API call, automatic delivery or acknowledgement
+clearance is performed by Gate 7.
+
+## Exit checks
+
+| Criterion | Acceptance |
+| --- | --- |
+| Correct lifecycle/queue mapping | Waiting→Holding, Waiting→Keep, Holding→Removal and Holding→Keep, including a TV/Sonarr case, commit the correct clocks and queue fields |
+| No partial final state | Actual SQLite triggers abort destination-clock insertion, Arr insertion, intent deletion and revision update; all leave old clocks/queue and applied intent intact |
+| Read isolation | An independent connection sees the old applied state before final commit and the entire new state afterward, never an intermediate clock/queue/intent combination |
+| Stale-writer protection | Intervening revision, same-revision snapshot mutation and a final-save CAS race cannot clear intent or overwrite the other writer |
+| Uncertain acknowledgement | Failure before commit retains old state; failure after actual commit leaves complete new state. Both stop execution, with no automatic retry or guessed rollback |
+| Crash behavior | Actual SIGKILL immediately before/after final commit yields complete old/new state respectively; the retained daily slot prevents another attempt |
+| Batch behavior | A second-title failure preserves the first atomic result and leaves the second pending; uncertain first acknowledgement stops before the next title |
+| Preservation | Unknown state, unrelated Arr entries and bound request contents remain intact; existing target queue data is not overwritten |
+
+The process-kill fixture explicitly opens only its new disposable database for
+SQLite rollback-journal recovery, then inspects the recovered state. That is a
+storage-engine acceptance step, not an application replay, a production recovery
+API or permission to clear a pending operation. Hardware power-loss behavior is
+not claimed by process-kill tests.
+
+## Local evidence
+
+The finalized Linux/Python 3.12.15 fixture passed 19 Gate 7 cases, including four
+transition subcases. It also passed all 27 Gate 6 regression cases and 11 private
+HTTP transport cases. Execution used a new cached-image container with no host
+binds, network access, added capabilities, production credentials or site-package
+dependencies; the container was removed. Development-host focused regression
+checks passed 151 tests and 14 subtests; its 46 Linux-only cases were exercised
+separately by the Linux fixture. Existing direct reconciliation and queue tests
+were updated to require the new applied-state binding rather than bypass it.
+
+## Native Tower acceptance
+
+After the test-only Python safety CI passes, run from the pulled `feature/sqlite`
+checkout on Tower:
+
+```bash
+cd /mnt/user/sqlite_lab_checkout
+git pull --ff-only origin feature/sqlite
+bash scripts/sqlite_scheduled_gate7_lab.sh /mnt/media/sql_test
+```
+
+This follows the accepted Gate 6 lab boundary: immutable cached Python image,
+no pulls/builds/package installation, committed Python sources, one new 0700
+`scheduled-gate7.*` lab directory and one new unprivileged fixture container.
+Only that new directory is bound writable. It runs the 19-case Gate 7 fixture,
+27-case Gate 6 regression fixture and private-loopback HTTP fixture. Container
+cleanup occurs on success/failure; the new lab marker and log remain. Existing
+media, auditor state, exports, services, boot settings, storage permissions and
+kernel/module controls remain untouched.
+
+Expected final status: `scheduled_gate7_acceptance_complete`, with
+`fixture_only=true`, `production_activation=disabled`, `production_authorized=false`.
+Any failing/unsupported scenario prevents that success status. A passing native
+result plus passing implementation CI closes Gate 7 without another feature round.
+Tower's existing non-interactive SSH authentication is unavailable to this agent,
+so this final host acceptance requires the operator to run the command.
+
+## Later gates
+
+Production worker/settings/backend wiring, multi-library root routing, configured
+credentials and Arr delivery belong to Gates 8–9. Full release/image verification,
+operator restore procedures, backup/rollback acceptance and activation approval
+remain Gate 10 work. Gate 7 does not enable permanent deletion, season pruning,
+cross-filesystem copy-and-delete or automatic recovery of an uncertain move.

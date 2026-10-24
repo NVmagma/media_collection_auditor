@@ -28,11 +28,16 @@ jobs:
         run: python -m compileall -q app tests
       - name: Install pytest
         run: python -m pip install pytest
-      - name: Run scheduled SQLite Gate 6 acceptance
+      - name: Run scheduled SQLite acceptance
         if: github.ref == 'refs/heads/feature/sqlite'
         env:
           PYTHONPATH: ${{ github.workspace }}
         run: python -m pytest -q tests/test_sqlite_scheduled*.py tests/test_sqlite_run_schedule.py
+      - name: Run atomic SQLite Gate 7 regression tests
+        if: github.ref == 'refs/heads/feature/sqlite'
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: python -m pytest -q tests/test_sqlite_disposable_atomic_reconcile.py tests/test_sqlite_atomic_arr_queue.py tests/test_sqlite_disposable_transaction_failures.py tests/test_sqlite_checkpoint_failure.py
       - name: Run SQLite regression tests
         env:
           PYTHONPATH: ${{ github.workspace }}

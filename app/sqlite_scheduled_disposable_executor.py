@@ -1,7 +1,8 @@
 """Scheduled-plan rename integration for marked disposable media ONLY.
 
 Uses the existing no-overwrite, held-directory, live-witness SQLite flow. There
-is no production path, deletion, copy fallback, Arr request or restart replay.
+is no production path, deletion, copy fallback, Arr network delivery or restart replay. Optional Arr queue data
+is persisted with the lifecycle clock and intent clearance, not sent to a service.
 External writers are not excluded; source-entry substitution remains a race and
 post-rename identity checks can detect uncertainty rather than undo a rename.
 """
@@ -22,7 +23,7 @@ _STAGES = {'Waiting': 'transient', 'Holding': 'holding', 'Keep': 'keep', 'Remova
 
 def execute_scheduled_disposable_move(*, root, database, operation_id, plan, move,
         title_folder, fetch_protection, clock=datetime.now, timer=monotonic,
-        maximum_protection_seconds=30, fault_at=None):
+        maximum_protection_seconds=30, fault_at=None, arr_sync_request=None):
     """Run one scheduled candidate; any post-intent failure remains pending.
 
     Each successful move changes the revision. This API intentionally rejects
@@ -39,12 +40,12 @@ def execute_scheduled_disposable_move(*, root, database, operation_id, plan, mov
         return _execute_scheduled_move_locked(root=root, database=database, operation_id=operation_id,
             plan=plan, move=move, title_folder=title_folder, fetch_protection=fetch_protection,
             clock=clock, timer=timer, maximum_protection_seconds=maximum_protection_seconds,
-            fault_at=fault_at, verify_binding=verify_binding)
+            fault_at=fault_at, verify_binding=verify_binding, arr_sync_request=arr_sync_request)
 
 
 def _execute_scheduled_move_locked(*, root, database, operation_id, plan, move,
         title_folder, fetch_protection, clock, timer, maximum_protection_seconds,
-        fault_at, verify_binding):
+        fault_at, verify_binding, arr_sync_request=None):
     """Internal operation; caller retains the existing runner lock throughout."""
     store = GuardedSQLiteStateStore(database)
     def read_tracking():
@@ -82,5 +83,5 @@ def _execute_scheduled_move_locked(*, root, database, operation_id, plan, move,
         expected_revision=plan.revision, observed_at=clock(), fault_at=fault_at,
         _use_directory_handles=True, _verify_runner_binding=verify_binding,
         _before_intent_review=before_intent, _before_rename_review=before_rename,
-        _sync_rename_parents=True)
+        _sync_rename_parents=True, arr_sync_request=arr_sync_request)
     return {**result, 'fixture_only': True, 'production_authorized': False}

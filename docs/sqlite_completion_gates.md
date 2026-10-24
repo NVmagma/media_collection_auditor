@@ -20,7 +20,7 @@ Tower acceptance on 2026-10-24 under this scheduled-run scope.
 | 4. Lifecycle decision parity | Representative movie/season clocks and read-only rehearsal | Complete: isolated tests |
 | 5. Restart and failure rehearsals | Pending intents persist, crashes fail closed, no automatic replay | Complete: disposable Unraid tests |
 | 6. Scheduled move verification | Complete scan before dispatch; fresh protection/decision/source checks; supported same-filesystem rename; durable intent and crash recovery; accepted concurrency limits | Complete for the scheduled model: local checks, exact-implementation CI, and native Tower acceptance passed (27 filesystem/integration tests and 11 HTTP transport tests). Production activation remains disabled; worker/root routing is Gate 8 work |
-| 7. Atomic lifecycle reconciliation | Verified move clock change and intent clearance commit together; failure injection proves all-or-nothing | In progress: Unraid verifies atomic Waiting/Holding destination clocks, stable Arr queue, retained-original ledger and intent clearance, including uncertain commits. Gate 6 prerequisite is met; this gate still needs its own reconciliation/integration acceptance |
+| 7. Atomic lifecycle reconciliation | Bound applied revision/snapshot; source/destination clocks, exact intent clearance and optional Arr queue share one CAS commit; real SQL/process-failure tests prove old-or-new outcomes | Implementation/local acceptance complete for scheduled runs: 19 Linux Gate 7 cases plus 27 Gate 6 regressions passed. Exact-commit CI and native Tower acceptance remain before closure. See scheduled Gate 7 acceptance |
 | 8. Production lifecycle integration | Real Waiting/Holding/Keep/Removal moves use guarded ordering; existing JSON path unaffected until cutover | Not wired: capped, revision-chained isolated batches support Waiting/Holding decisions and stop on uncertainty; production audit paths still reject SQLite |
 | 9. External integrations | Arr uncertain outcomes, Jellyfin protection, dashboard authoritative reads, TV-season behavior | In progress: 539-title live advisory coverage, bounded fresh protection scans, one-shot Arr uncertainty, and whole-show copy preservation are verified. Production Arr verification, dashboard authority and season-pruning execution remain open |
 | 10. Deployment and rollback | Disposable Unraid end-to-end tests, full CI, Docker build, backup/rollback, explicit activation approval | Incomplete: full native Unraid suite passed 1,650 tests and 22 subtests through d67b7da; maintained shfs suite passed 475 tests and 19 subtests. Accepted operational restore, final release CI/image and explicit activation approval remain open |
@@ -33,7 +33,15 @@ operator's native Tower result received on 2026-10-24. The final status was
 `scheduled_gate6_acceptance_complete`; all 27 filesystem/integration tests and
 11 HTTP transport tests passed. Gate 6 is closed under the approved scheduled
 model. Historical host-wide controller/boot requirements below do not reopen it.
-Gate 7 is next; production behavior and activation remain unchanged.
+Gate 7 is in acceptance; production behavior and activation remain unchanged.
+
+## Current scheduled Gate 7 exit checklist
+
+The [scheduled Gate 7 acceptance record](sqlite-gate7-scheduled-acceptance.md)
+defines the remaining checks: test-only CI for the exact implementation and one
+native Tower disposable fixture run. Reconciliation is now bound to the applied
+revision/snapshot and optional Arr queue data is atomic with the clock/intent.
+No production image update or host-service change is required for acceptance.
 
 ## Current decision
 
