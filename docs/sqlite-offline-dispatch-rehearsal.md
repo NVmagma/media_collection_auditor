@@ -147,3 +147,9 @@ only after the assertions above. No Tower service or setting was touched. This
 container shares Docker Desktop's Linux kernel: it proves mount/installer-death
 behavior, not an independent reboot, Unraid normal/Safe Mode startup inhibition,
 existing writer quiescence, fresh protection collection or production ownership.
+
+The controller/recovery integration now adds durable per-route receipts, lock
+coordination and non-reused mount identities. The same actual Linux crash fixture
+also verifies the integrated recovery handoff and identical-guard replacement
+rejection. See the [current integration contract](sqlite-dispatch-controller-recovery.md).
+The command above now uses that lock-coordinated review, with restoration disabled.

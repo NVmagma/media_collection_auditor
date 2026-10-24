@@ -9,6 +9,7 @@ from scripts.sqlite_offline_dispatch_guest_lab import prepare
 @pytest.fixture
 def root(tmp_path,monkeypatch):
     monkeypatch.setattr(dispatch,'_scope',lambda:('boot','net:[1]','mnt:[2]'))
+    monkeypatch.setattr(dispatch,'_unique_mount_id',lambda path:1000)
     monkeypatch.setattr(dispatch,'_mount_rows',lambda:(('1','0','0:1','/','/','rw'),))
     return prepare(tmp_path.resolve()/'fixture')
 

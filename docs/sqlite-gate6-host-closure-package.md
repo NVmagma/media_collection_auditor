@@ -116,3 +116,14 @@ fence. Offline preparation/recovery alone does not supply it. Cached pre-stop
 observations cannot be promoted to trusted protection evidence. This requirement
 must be solved before production move wiring; the permission to pause services
 does not waive it. No production cutover blocker is removed by these design choices.
+
+## Controller/recovery component progress
+
+The disposable installer now persists per-route request-bound receipts and the
+recovery entry point coordinates with its existing controller lock. Complete and
+partial real Linux controller-death acceptance passes, including rejection of an
+identical replacement guard using a unique mount identity. See
+[controller/recovery integration](sqlite-dispatch-controller-recovery.md).
+This completes the evidence handoff component only. Hidden-original verification,
+actionable restoration and the actual Unraid host package remain required; none
+of the four production deliverables above is declared complete by this fixture.

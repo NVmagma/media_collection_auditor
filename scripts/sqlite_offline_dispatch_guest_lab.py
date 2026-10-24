@@ -11,6 +11,7 @@ import subprocess
 import sys
 
 from app import sqlite_disposable_offline_dispatch as dispatch
+from app.sqlite_disposable_dispatch_recovery import review_disposable_controller_recovery
 from app.sqlite_disposable_offline_dispatch import (
     GUARD, MARKER, install_disposable_offline_dispatch, verify_disposable_offline_dispatch,
 )
@@ -102,6 +103,10 @@ def run(root, *, partial=False):
         if worker.stdout.readline().strip()!=expected:
             raise RuntimeError('Fixture installer failed before readiness')
         before=dispatches(root,partial=partial)
+        try:review_disposable_controller_recovery(root)
+        except RuntimeError as error:
+            if str(error)!='Controller lock held; recovery review refused':raise
+        else:raise RuntimeError('Recovery review raced live controller')
         request=(root/'pending-request.json').read_bytes()
         worker.kill();worker.wait(timeout=10)
         if worker.returncode!=-signal.SIGKILL:
@@ -114,6 +119,13 @@ def run(root, *, partial=False):
         if (guarded!=expected_guards or review['restoration_authorized'] is not False
                 or review['blockers']!=['fixture_review_never_authorizes_restoration']):
             raise RuntimeError('Crash recovery review inconsistent with fixture')
+        controller_review=review_disposable_controller_recovery(root)
+        owned=sum(value=='request_bound_guard_mount_observed'
+                  for value in controller_review['mount_evidence'].values())
+        if (owned!=(0 if partial else len(dispatch.ROUTES))
+                or controller_review['restoration_authorized'] is not False
+                or (partial and controller_review['mount_evidence']['rc.docker']!='unreceipted_mount')):
+            raise RuntimeError('Controller receipt recovery review inconsistent')
         try:
             with install_disposable_offline_dispatch(root):
                 raise RuntimeError('Retained request unexpectedly adopted')
@@ -121,12 +133,35 @@ def run(root, *, partial=False):
             if str(error)!='Retained request requires review; no reinstall':raise
         if (root/'pending-request.json').read_bytes()!=request:
             raise RuntimeError('Pending request changed after installer death')
+        replacement_rejected=False
+        if not partial:
+            # Only this fake route: identical guard bytes with a new mount ID
+            # must not inherit the dead controller's recorded ownership.
+            target=root/'host'/dispatch.ROUTES['mover'][0]
+            previous=dispatch._unique_mount_id(target)
+            subprocess.run(['umount',str(target)],check=True,capture_output=True,timeout=10)
+            subprocess.run(['mount','--bind',str(root/'deny-guard'),str(target)],
+                           check=True,capture_output=True,timeout=10)
+            subprocess.run(['mount','-o','remount,bind,ro,nosuid,nodev',str(target)],
+                           check=True,capture_output=True,timeout=10)
+            if dispatch._unique_mount_id(target)==previous:
+                raise RuntimeError('Fixture replacement mount identity did not change')
+            try:verify_disposable_offline_dispatch(root)
+            except RuntimeError as error:
+                if str(error)!='Owned guard mount changed; retain fence':raise
+            else:raise RuntimeError('Equivalent replacement guard inherited ownership')
+            changed=review_disposable_controller_recovery(root)
+            if changed['mount_evidence']['mover']!='receipt_mount_conflict':
+                raise RuntimeError('Recovery accepted replaced guard mount')
+            replacement_rejected=True
         result=dict(status=('private_guest_partial_dispatch_crash_verified' if partial
                             else 'private_guest_offline_dispatch_crash_verified'),fixture_only=True,
                     partial_installation=partial,complete_binding_rejected=partial,
                     dispatches_denied_before_death=before,dispatches_denied_after_death=after,
                     installer_sigkill_verified=True,pending_request_unchanged=True,
                     recovery_review_guard_routes=guarded,restoration_authorized=False,
+                    controller_receipt_mounts_observed=owned,live_controller_review_rejected=True,
+                    identical_guard_replacement_rejected=replacement_rejected,
                     execution_environment=('dedicated_container' if socket.gethostname()=='mca-dispatch-fixture'
                                            else 'dedicated_vm'),
                     replacement_install_rejected=True,controller_death_removed_guards=False,

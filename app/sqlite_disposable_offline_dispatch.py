@@ -14,6 +14,9 @@ import stat
 import subprocess
 
 from app.sqlite_disposable_nfs_config_plan import _read, _write
+from app.sqlite_disposable_dispatch_recovery import (
+    receipt_name, record_installed_mount, read_installed_mount, unique_mount_id as _unique_mount_id,
+)
 from app.sqlite_disposable_maintenance_journal import _linux_boot_id, _linux_network_namespace
 
 MARKER=b'DISPOSABLE OFFLINE DISPATCH ONLY\n'
@@ -148,6 +151,12 @@ def verify_disposable_offline_dispatch(root):
             raise RuntimeError('Pending fixture scope changed')
         targets=_targets(root)
         first=_mounts(targets)
+        receipts={}
+        for name,mount in first:
+            recorded,unique_id,artifact=read_installed_mount(directory,name,(request_bytes,request_identity))
+            if recorded!=mount or _unique_mount_id(targets[name])!=unique_id:
+                raise RuntimeError('Owned guard mount changed; retain fence')
+            receipts[name]=(artifact,unique_id)
         for target in targets.values():
             parent=os.open(target.parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
             try:
@@ -159,6 +168,8 @@ def verify_disposable_offline_dispatch(root):
                 or (current.st_dev,current.st_ino)!=(held.st_dev,held.st_ino)
                 or _read(directory,'.disposable_offline_dispatch')!=marker
                 or _read(directory,'pending-request.json')!=(request_bytes,request_identity)
+                or any(_read(directory,receipt_name(name))!=artifact or _unique_mount_id(targets[name])!=unique_id
+                       for name,(artifact,unique_id) in receipts.items())
                 or _mounts(_targets(root))!=first or request['scope']!=list(_scope())):
             raise RuntimeError('Offline dispatch fixture binding changed')
     finally:os.close(directory)
@@ -240,6 +251,9 @@ def install_disposable_offline_dispatch(root):
         if os.path.lexists(root/'pending-request.json'):
             raise RuntimeError('Retained request requires review; no reinstall')
         targets=_targets(root)
+        _unique_mount_id(root)  # Capability check before recording intent or mounting.
+        if any(os.path.lexists(root/receipt_name(name)) for name in ROUTES):
+            raise RuntimeError('Retained mount receipt requires review; no reinstall')
         _require_unmounted_targets(targets)
         originals={}
         for name,target in targets.items():
@@ -261,6 +275,7 @@ def install_disposable_offline_dispatch(root):
         _write(directory,'pending-request.json',(json.dumps(request,sort_keys=True)+'\n').encode())
         os.fsync(directory)  # MUST precede every external mount action.
         pending=_read(directory,'pending-request.json')
+        receipts={}
         def binding():
             current=root.lstat()
             current_lock=os.stat('controller.lock',dir_fd=directory,follow_symlinks=False)
@@ -271,6 +286,7 @@ def install_disposable_offline_dispatch(root):
                     or _read(directory,'.disposable_offline_dispatch')!=marker
                     or _read(directory,'pending-request.json')!=pending
                     or _read(directory,'deny-guard')!=(guard,guard_identity)
+                    or any(_read(directory,receipt_name(name))!=artifact for name,artifact in receipts.items())
                     or _targets(root)!=targets or request['scope']!=_scope()):
                 raise RuntimeError('Fixture binding changed; request retained')
         for name,target in targets.items():
@@ -288,6 +304,9 @@ def install_disposable_offline_dispatch(root):
             binding()
             subprocess.run(['mount','-o','remount,bind,ro,nosuid,nodev',str(target)],
                            check=True,capture_output=True,timeout=10)
+            binding()
+            mount=dict(_mounts({name:target}))[name]
+            receipts[name]=record_installed_mount(directory,name,pending,mount,_unique_mount_id(target))
         binding()
         verify_disposable_offline_dispatch(root)
         yield
