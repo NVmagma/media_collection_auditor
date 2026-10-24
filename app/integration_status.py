@@ -1,5 +1,6 @@
 """Offline, redacted status contract; no network endpoint or action authority."""
 from datetime import datetime, timezone, timedelta
+import os
 if __package__:
     from .dashboard_tracking_snapshot import read_json_dashboard_snapshot
 else:
@@ -7,6 +8,10 @@ else:
 
 
 def read_tracking_status(path):
+    return _project_tracking_status(lambda: read_json_dashboard_snapshot(path, require_existing=True))
+
+
+def _project_tracking_status(capture):
     """Capture authoritative JSON once; counts are records, not live inventory.
 
     Missing state is unavailable even though the legacy dashboard permits a
@@ -20,7 +25,7 @@ def read_tracking_status(path):
         "pending_operation_present": None,
     }
     try:
-        state = read_json_dashboard_snapshot(path, require_existing=True).state
+        state = capture().state
     except RuntimeError:
         return report
     report.update(
@@ -67,6 +72,11 @@ def audit_status_report(current):
 
 
 def read_tracking_titles(path, view, *, holding_days=7):
+    return _project_tracking_titles(lambda: read_json_dashboard_snapshot(path, require_existing=True),
+                                    view, holding_days=holding_days)
+
+
+def _project_tracking_titles(capture, view, *, holding_days=7):
     """Bounded opt-in title projection from one JSON read, without collection.
 
     Legacy timestamps are local wall time without an offset. Preserve that
@@ -83,7 +93,7 @@ def read_tracking_titles(path, view, *, holding_days=7):
     try:
         if type(holding_days) is not int or not 1 <= holding_days <= 36500:
             return report
-        state = read_json_dashboard_snapshot(path, require_existing=True).state
+        state = capture().state
         section = "first_seen" if view == "oldest-waiting" else "queued"
         entries = []
         for key, value in state.get(section, {}).items():
@@ -237,3 +247,61 @@ def widget_media_urls(item, index, public_base):
     except (ValueError, TypeError, KeyError):
         pass
     return result
+
+
+def _unavailable():
+    raise RuntimeError('Selected tracking source unavailable')
+
+
+def _selected_report(path, view, holding_days):
+    backend = os.environ.get('AUDITOR_STATE_BACKEND', 'json')
+    if backend == 'json':
+        return read_tracking_status(path) if view == 'summary' else read_tracking_titles(path, view, holding_days=holding_days)
+    try:
+        if backend != 'sqlite':
+            raise RuntimeError('Unsupported backend')
+        _require_sqlite_authority()
+        from app.sqlite_tracking_view import capture_candidate_tracking_view
+        report = capture_candidate_tracking_view(os.environ.get('SQLITE_STATE_FILE',
+            '/app/logs/sqlite_worker/state.db'), holding_days=holding_days)[
+                {'summary': 'summary', 'oldest-waiting': 'oldest_waiting', 'leaving-soon': 'leaving_soon'}[view]]
+        return {**report, 'storage_authority': 'sqlite'}
+    except RuntimeError:
+        report = (_project_tracking_status(_unavailable) if view == 'summary' else
+                  _project_tracking_titles(_unavailable, view, holding_days=holding_days))
+        return {**report, 'storage_authority': 'sqlite' if backend == 'sqlite' else 'unavailable',
+                'state_revision': None}
+
+
+def read_selected_tracking_status(path):
+    return _selected_report(path, 'summary', 7)
+
+
+def read_selected_tracking_titles(path, view, *, holding_days=7):
+    if view not in ('oldest-waiting', 'leaving-soon'):
+        raise ValueError('Unknown title view')
+    return _selected_report(path, view, holding_days)
+
+
+def read_selected_dashboard_state(path):
+    backend = os.environ.get('AUDITOR_STATE_BACKEND', 'json')
+    if backend not in ('json', 'sqlite'):
+        raise RuntimeError('Unsupported tracking backend')
+    if backend == 'json':
+        if __package__:
+            from .dashboard_tracking_snapshot import read_json_dashboard_snapshot
+        else:
+            from dashboard_tracking_snapshot import read_json_dashboard_snapshot
+        return read_json_dashboard_snapshot(path).state
+    _require_sqlite_authority()
+    from app.sqlite_tracking_view import capture_candidate_dashboard_state
+    return capture_candidate_dashboard_state(os.environ.get('SQLITE_STATE_FILE',
+        '/app/logs/sqlite_worker/state.db'))
+
+
+def _require_sqlite_authority():
+    if __package__:
+        from .sqlite_backend_gate import require_sqlite_production_activation
+    else:
+        from sqlite_backend_gate import require_sqlite_production_activation
+    require_sqlite_production_activation()

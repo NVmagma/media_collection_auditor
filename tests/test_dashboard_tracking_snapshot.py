@@ -65,7 +65,7 @@ def test_experimental_sqlite_revision_is_checked_without_json_fallback(tmp_path)
         read_experimental_sqlite_dashboard_snapshot(tmp_path / "missing.db")
 
 
-def test_live_dashboard_never_selects_sqlite_from_backend_environment(tmp_path, monkeypatch):
+def test_live_dashboard_never_falls_back_to_json_when_sqlite_is_unapproved(tmp_path, monkeypatch):
     import sys
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
@@ -75,4 +75,5 @@ def test_live_dashboard_never_selects_sqlite_from_backend_environment(tmp_path, 
     source.write_text('{"legacy":{"authority":"json"}}')
     monkeypatch.setattr(web, "STATE_FILE", str(source))
     monkeypatch.setenv("AUDITOR_STATE_BACKEND", "sqlite")
-    assert web.load_state() == {"legacy": {"authority": "json"}}
+    with pytest.raises(RuntimeError, match="SQLite production activation is disabled"):
+        web.load_state()

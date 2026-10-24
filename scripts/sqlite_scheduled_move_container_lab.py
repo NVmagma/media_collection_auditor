@@ -10,7 +10,7 @@ import re
 from scripts.sqlite_offline_dispatch_container_lab import command, source_archive
 
 
-def run(image, *, gate7=False, worker=False, routed=False, slot=False, configured=False, layout=False, runtime=False):
+def run(image, *, gate7=False, worker=False, routed=False, slot=False, configured=False, layout=False, runtime=False, tracking=False):
     if not re.fullmatch(r'sha256:[0-9a-f]{64}', image):
         raise ValueError('Full cached image ID required')
     metadata = json.loads(command('docker', 'image', 'inspect', image))
@@ -30,6 +30,8 @@ def run(image, *, gate7=False, worker=False, routed=False, slot=False, configure
         fixtures.insert(0, 'scripts.sqlite_scheduled_worker_layout_fixture')
     if runtime:
         fixtures.insert(0, 'scripts.sqlite_scheduled_runtime_fixture')
+    if tracking:
+        fixtures.insert(0, 'scripts.sqlite_tracking_view_fixture')
     source = source_archive(Path(__file__).resolve().parents[1])
     container = command('docker', 'create', '--pull=never', '--network', 'none',
         '--user', '0:0', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
@@ -63,5 +65,6 @@ if __name__ == '__main__':
     parser.add_argument('--configured', action='store_true')
     parser.add_argument('--layout', action='store_true')
     parser.add_argument('--runtime', action='store_true')
+    parser.add_argument('--tracking', action='store_true')
     args = parser.parse_args()
-    print(run(args.image, gate7=args.gate7, worker=args.worker, routed=args.routed, slot=args.slot, configured=args.configured, layout=args.layout, runtime=args.runtime), end='')
+    print(run(args.image, gate7=args.gate7, worker=args.worker, routed=args.routed, slot=args.slot, configured=args.configured, layout=args.layout, runtime=args.runtime, tracking=args.tracking), end='')

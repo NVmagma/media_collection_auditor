@@ -55,14 +55,14 @@ def test_browser_session_and_query_token_are_not_api_credentials(api, monkeypatc
     assert client.get('/api/v1/summary?token=' + TOKEN).status_code == 401
 
 
-def test_summary_is_redacted_json_only_and_leaves_state_unchanged(api, monkeypatch):
+def test_sqlite_selection_never_falls_back_to_json_and_leaves_state_unchanged(api, monkeypatch):
     client, path = api
     raw = path.read_bytes()
     monkeypatch.setenv('AUDITOR_STATE_BACKEND', 'sqlite')
     response = client.get('/api/v1/summary?state=/some/other/file', headers=AUTH)
-    assert response.status_code == 200
-    assert response.json['tracking_counts']['holding'] == 1
-    assert response.json['storage_authority'] == 'json'
+    assert response.status_code == 503
+    assert response.json['tracking_counts'] is None
+    assert response.json['storage_authority'] == 'sqlite'
     assert response.json['freshness_verified'] is False
     assert response.json['production_authorized'] is False
     assert 'private-title' not in response.text

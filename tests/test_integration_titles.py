@@ -124,3 +124,17 @@ def test_one_snapshot_and_stable_ties(tmp_path, monkeypatch):
     assert calls == [True]
     assert [(i['library'], i['title']) for i in report['items']] == [
         ('Movies', 'A'), ('Movies', 'Z'), ('TV', 'A')]
+
+
+@pytest.mark.parametrize('view', ['oldest-waiting', 'leaving-soon'])
+def test_unapproved_sqlite_titles_never_fall_back_to_json(api, monkeypatch, view):
+    client, path = api
+    original = path.read_bytes()
+    monkeypatch.setenv('AUDITOR_STATE_BACKEND', 'sqlite')
+    monkeypatch.setenv('INTEGRATION_API_TITLE_DETAILS', 'true')
+    response = client.get('/api/v1/titles/' + view, headers=AUTH)
+    assert response.status_code == 503
+    assert response.json['storage_authority'] == 'sqlite'
+    assert response.json['items'] is None
+    assert 'private-title' not in response.text
+    assert path.read_bytes() == original

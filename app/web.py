@@ -23,7 +23,10 @@ from auth import session_key, jellyfin_login, current_user, store_token, discard
 from run_control import snapshot, request_run
 from config_store import FIELDS, KEYS, SECRETS, BOOLS, DEFAULTS, FIELD_HELP, load_config, save_config, validate, redacted_config
 from integration_api import authorize_summary, read_only_service_enabled
-from integration_status import read_tracking_status, audit_status_report, read_tracking_titles, collect_widget_media_index, widget_media_urls, widget_media_base
+from integration_status import (audit_status_report, collect_widget_media_index, widget_media_urls, widget_media_base,
+    read_selected_tracking_status as read_tracking_status,
+    read_selected_tracking_titles as read_tracking_titles,
+    read_selected_dashboard_state as read_dashboard_state)
 
 app = Flask(__name__)
 app.secret_key = os.urandom(32).hex() if read_only_service_enabled() else session_key()
@@ -238,9 +241,7 @@ def load_actions(limit=250):
 
 
 def load_state():
-    from dashboard_tracking_snapshot import read_json_dashboard_snapshot
-    # The live dashboard has one authority. SQLite reads are separate rehearsals.
-    return read_json_dashboard_snapshot(STATE_FILE).state
+    return read_dashboard_state(STATE_FILE)
 
 
 

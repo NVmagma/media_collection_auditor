@@ -22,7 +22,7 @@ Tower acceptance on 2026-10-24 under this scheduled-run scope.
 | 6. Scheduled move verification | Complete scan before dispatch; fresh protection/decision/source checks; supported same-filesystem rename; durable intent and crash recovery; accepted concurrency limits | Complete for the scheduled model: local checks, exact-implementation CI, and native Tower acceptance passed (27 filesystem/integration tests and 11 HTTP transport tests). Production activation remains disabled; worker/root routing is Gate 8 work |
 | 7. Atomic lifecycle reconciliation | Bound applied revision/snapshot; source/destination clocks, exact intent clearance and optional Arr queue share one CAS commit; real SQL/process-failure tests prove old-or-new outcomes | Complete for the scheduled model: exact-implementation CI for 7d6823c and native Tower acceptance passed (19 atomic reconciliation, 27 move regression and 11 HTTP transport tests). See scheduled Gate 7 acceptance; production activation remains disabled |
 | 8. Production lifecycle integration | Real Waiting/Holding/Keep/Removal moves use guarded ordering; existing JSON path unaffected until cutover | Complete for the scheduled model: configured multi-library clocks, fresh Jellyfin reads, routed moves, daily claims, separate control/database/media layout and candidate worker/service integration passed exact-implementation CI and native Tower acceptance. Final runtime acceptance at cad51d8 passed 8 runtime and 11 HTTP tests. Production activation remains sealed; see the worker integration record |
-| 9. External integrations | Arr uncertain outcomes, Jellyfin protection, dashboard authoritative reads, TV-season behavior | In progress: 539-title live advisory coverage, bounded fresh protection scans, one-shot Arr uncertainty, and whole-show copy preservation are verified. Production Arr verification, dashboard authority and season-pruning execution remain open |
+| 9. External integrations | Arr uncertain outcomes, Jellyfin protection, dashboard authoritative reads, TV-season behavior | In progress: prior live protection/Arr uncertainty/whole-show preservation evidence retained. Single-revision candidate dashboard/API reads and fail-closed source selection implemented, native/shfs reader acceptance pending. Configured Arr delivery/readback, coordinator authority and remaining TV-season compatibility are open; see the Gate 9 integration record |
 | 10. Deployment and rollback | Disposable Unraid end-to-end tests, full CI, Docker build, backup/rollback, explicit activation approval | Incomplete: full native Unraid suite passed 1,650 tests and 22 subtests through d67b7da; maintained shfs suite passed 475 tests and 19 subtests. Accepted operational restore, final release CI/image and explicit activation approval remain open |
 
 ## Current scheduled Gate 6 exit checklist
@@ -55,6 +55,12 @@ CI for implementation `e5b0cde` and native Tower runtime acceptance from source
 move and separated-layout boundaries are also accepted. Gate 8 is closed under
 the scheduled model. The original JSON path remains unchanged; SQLite production
 selection stays sealed. Gates 9–10 and explicit activation approval remain open.
+
+## Current Gate 9 work
+
+The [external integration record](sqlite-gate9-integrations.md) tracks remaining
+Arr, state/coordinator authority and TV-season acceptance. No production backend
+or service change is authorized by its disposable fixtures.
 
 ## Current decision
 
