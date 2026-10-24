@@ -74,11 +74,29 @@ Run the committed acceptance package on Tower to verify both filesystem views:
 Each run uses an immutable cached Python image, a new `scheduled-worker.*`
 directory and a new fixture container. Only that new directory is bound writable;
 there is no network, package installation, image pull, Docker socket mount or
-production credential/configuration access. It runs eight worker cases, 19 atomic
-Gate 7 cases, 27 Gate 6 cases and 11 HTTP cases. Expected final status:
+production credential/configuration access. It runs eight worker inventory cases and 11 read-only HTTP cases. It does not
+claim rename capability or rerun the native-only Gate 6/7 rename suites. Expected final status:
 `scheduled_worker_acceptance_complete`. Production activation remains disabled.
 Existing media, state, services, exports, boot settings and kernel controls are
 unchanged. This accepts the worker preparation boundary, not all of Gate 8.
+
+## Tower result received 2026-10-24
+
+The first run used `/mnt/user/sql_test/scheduled-worker.n0Dd2i`, source
+`e6e530edbadc833858482b44aeb0b628d86ce168`. All eight new worker inventory cases
+passed in 0.215 seconds. The package then incorrectly attempted the Gate 7 rename
+regressions on shfs. The actual no-overwrite rename returned `EINVAL`, classified
+as unsupported; the ensuing reconciliation assertions failed because execution
+never reached their commit boundaries. The package failed, and the outer loop
+stopped before running the native filesystem. This is not a complete acceptance.
+
+The worker-only Tower package now explicitly accepts preparation/read-only
+transport, not media rename capability. Removing the unrelated rename suites
+from this package changes no move safeguards and skips no inventory/HTTP tests.
+Native Gate 6/7 acceptance remains recorded separately; shfs no-overwrite moves
+remain blocked. Any eventual production dispatch must check the actual configured
+root capability and must not substitute overwrite-prone rename or copy/delete.
+The corrected worker package still requires passing results from both views.
 
 ## Remaining Gate 8 scope
 

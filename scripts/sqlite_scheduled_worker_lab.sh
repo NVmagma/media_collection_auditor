@@ -37,7 +37,7 @@ container=$(docker create --pull=never --network none --user 0:0 --read-only \
   --tmpfs /fixture:rw,noexec,nosuid,nodev,size=64m \
   --mount "type=bind,src=$lab,dst=/lab" --env TMPDIR=/lab \
   --interactive --workdir /fixture --entrypoint /usr/local/bin/python3 "$image_id" \
-  -I -S -B -c 'import sys,tarfile,io,os,subprocess; tarfile.open(fileobj=io.BytesIO(sys.stdin.buffer.read()),mode="r:").extractall("/fixture/code",filter="data"); os.chdir("/fixture/code"); subprocess.run([sys.executable,"-S","-B","-m","scripts.sqlite_scheduled_worker_fixture"],check=True,timeout=120); subprocess.run([sys.executable,"-S","-B","-m","scripts.sqlite_scheduled_gate7_fixture"],check=True,timeout=180); subprocess.run([sys.executable,"-S","-B","-m","scripts.sqlite_scheduled_move_fixture"],check=True,timeout=120); subprocess.run([sys.executable,"-S","-B","-m","scripts.sqlite_scheduled_transport_fixture"],check=True,timeout=30)')
+  -I -S -B -c 'import sys,tarfile,io,os,subprocess; tarfile.open(fileobj=io.BytesIO(sys.stdin.buffer.read()),mode="r:").extractall("/fixture/code",filter="data"); os.chdir("/fixture/code"); subprocess.run([sys.executable,"-S","-B","-m","scripts.sqlite_scheduled_worker_fixture"],check=True,timeout=120); subprocess.run([sys.executable,"-S","-B","-m","scripts.sqlite_scheduled_transport_fixture"],check=True,timeout=30)')
 [[ "$container" =~ ^[0-9a-f]{64}$ ]] || { echo 'New fixture container identity unavailable.' >&2; exit 2; }
 cleanup() { docker rm --force "$container" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
@@ -45,6 +45,7 @@ COPYFILE_DISABLE=1 tar -cf - -- "${files[@]}" |
   docker start --attach --interactive "$container" | tee "$lab/acceptance.log"
 [ "$(docker inspect --format '{{.State.ExitCode}} {{.State.OOMKilled}}' "$container")" = '0 false' ] || exit 1
 printf '%s\n' 'status=scheduled_worker_acceptance_complete' \
+  'acceptance_scope=worker_preparation_and_read_only_transport' \
   'fixture_only=true' 'production_activation=disabled' 'production_authorized=false' \
   'Only newly created lab files and a new fixture container were used.' \
   'Production media/configuration/services, exports, boot settings and kernel controls were unchanged.'
