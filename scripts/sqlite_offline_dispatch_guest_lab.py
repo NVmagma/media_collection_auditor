@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import select
 import signal
+import socket
 import subprocess
 import sys
 
@@ -14,6 +15,22 @@ from app.sqlite_disposable_offline_dispatch import (
     GUARD, MARKER, install_disposable_offline_dispatch, verify_disposable_offline_dispatch,
 )
 from scripts.sqlite_nfs4_guest_lab import require_guest
+
+
+def require_dispatch_lab(root):
+    """Also accept the dedicated, host-mount-free dispatch test container."""
+    if (sys.platform=='linux' and os.geteuid()==0
+            and socket.gethostname()=='mca-dispatch-fixture'
+            and Path('/.dockerenv').is_file()
+            and Path(root).parent==Path('/fixture')
+            and Path('/fixture/code/dispatch-container-fixture').read_bytes()==b'DISPOSABLE DISPATCH CONTAINER ONLY\n'):
+        rows=Path('/proc/self/mountinfo').read_text().splitlines()
+        fixture=[row for row in rows if row.split()[4]=='/fixture']
+        if (len(fixture)!=1 or fixture[0].split(' - ')[1].split()[0]!='tmpfs'
+                or any('shared:' in row.split(' - ')[0] for row in rows)):
+            raise RuntimeError('Private disposable tmpfs mount namespace required')
+        return
+    require_guest()
 
 
 def prepare(root):
@@ -72,7 +89,7 @@ def dispatches(root, *, partial=False):
 
 
 def run(root, *, partial=False):
-    require_guest()
+    require_dispatch_lab(root)
     root=prepare(root)
     diagnostic=(root/'installer.log').open('xb')
     worker=subprocess.Popen([sys.executable,'-B','-m','scripts.sqlite_offline_dispatch_guest_lab',
@@ -90,6 +107,13 @@ def run(root, *, partial=False):
         if worker.returncode!=-signal.SIGKILL:
             raise RuntimeError('Real installer termination not established')
         after=dispatches(root,partial=partial)
+        review=dispatch.review_disposable_offline_dispatch(root)
+        guarded=sum(value=='guard_bytes_observed_mount_ownership_unverified'
+                    for value in review['routes'].values())
+        expected_guards=1 if partial else len(dispatch.ROUTES)
+        if (guarded!=expected_guards or review['restoration_authorized'] is not False
+                or review['blockers']!=['fixture_review_never_authorizes_restoration']):
+            raise RuntimeError('Crash recovery review inconsistent with fixture')
         try:
             with install_disposable_offline_dispatch(root):
                 raise RuntimeError('Retained request unexpectedly adopted')
@@ -102,6 +126,9 @@ def run(root, *, partial=False):
                     partial_installation=partial,complete_binding_rejected=partial,
                     dispatches_denied_before_death=before,dispatches_denied_after_death=after,
                     installer_sigkill_verified=True,pending_request_unchanged=True,
+                    recovery_review_guard_routes=guarded,restoration_authorized=False,
+                    execution_environment=('dedicated_container' if socket.gethostname()=='mca-dispatch-fixture'
+                                           else 'dedicated_vm'),
                     replacement_install_rejected=True,controller_death_removed_guards=False,
                     production_service_changes=False,
                     production_authorized=False,production_activation='disabled',
@@ -120,7 +147,7 @@ if __name__=='__main__':
     parser.add_argument('--installer',action='store_true')
     parser.add_argument('--partial',action='store_true')
     args=parser.parse_args()
-    require_guest()
+    require_dispatch_lab(args.root)
     if args.installer:
         if args.partial:
             real_command=dispatch.subprocess.run

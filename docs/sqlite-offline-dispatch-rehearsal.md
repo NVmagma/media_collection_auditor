@@ -1,8 +1,8 @@
 # Offline-service dispatch guard rehearsal
 
-This page records the original two-service Linux acceptance. The current
-expanded six-route fixture and its pending Linux acceptance are described in
-the [SMB/mover source review](sqlite-smb-mover-source-review.md).
+This page records the original two-service Linux acceptance and the expanded
+six-route Linux acceptance below. The scope review is in the
+[SMB/mover source review](sqlite-smb-mover-source-review.md).
 
 Tower's disposable controller runtime passed with Python 3.12.15, SQLite 3.46.1,
 exclusive locking and a persisted synthetic checkpoint. That confirms the cached
@@ -71,8 +71,8 @@ identity numbers, malformed content digests, missing routes, extra fields and
 changed production/exclusion flags fail before mount inspection. Rejection leaves
 the retained request untouched; it never repairs, adopts or clears an interrupted
 installation. This validates record structure, not authenticity or permission to
-restore services. Expanded Linux mount acceptance and the production host package
-remain pending.
+restore services. Expanded Linux mount acceptance is recorded below; the production host package
+remains pending.
 
 The refreshed Tower scope observation confirmed single enabled SMB/NFS settings
 with CRLF line endings and a single enabled Docker setting. Reviewed Samba/mover
@@ -111,6 +111,39 @@ fail closed. The same bounded parser supplies complete guard verification.
 
 These are admission checks, not continuous mount exclusion: an external actor
 can still race an observation. They neither make another installer's mount owned
-nor enable automatic recovery. Actual Linux acceptance of this expanded installer
-remains pending; portable tests use synthetic mount inventories and never mount
-anything on the development Mac.
+nor enable automatic recovery. The Linux acceptance below exercises the expanded installer. Portable unit tests
+use synthetic mount inventories and never mount anything on the development Mac.
+
+
+## Expanded real Linux acceptance (2026-10-23)
+
+The expanded installer and recovery review passed in a newly created local Docker
+Desktop Linux container, using cached immutable image ID
+`sha256:01b4f1f7237d28a502d8cf43dd6d3bb47c61ffdd4189bf6a3d24e9a256307fcf`.
+No image was downloaded or built. The fixture uses the image's Python 3.10 runtime;
+it does not replace the separately accepted Tower Python 3.12 runtime test.
+
+| Actual check | Result |
+| --- | --- |
+| Complete six-route installation | 49 dispatches denied before and after real installer SIGKILL |
+| Partial installation, killed after first bind | 10 Docker dispatches denied before and after death; complete binding rejected |
+| Retained recovery review | Six guard routes in complete case, one in partial; restoration denied in both |
+| Replacement installer | Refused retained request in both cases |
+| Durable pending record | Bytes unchanged after controller death and review |
+| Underlying inert originals | Original hashes match after the private mount namespace exits |
+
+The launcher `scripts/sqlite_offline_dispatch_container_lab.py --image FULL_IMAGE_ID`
+streams only Python sources and a fixed fixture marker into new container tmpfs.
+It requires a cached full image ID and never pulls, builds or installs dependencies.
+There are no host binds, devices, service sockets, host namespaces or network.
+The image filesystem is read-only. Only `SYS_ADMIN` is added after dropping all
+capabilities; seccomp/AppArmor restrictions are lifted for the fixture's actual
+private mount/unshare operations. This is a disposable test capability, not an
+application deployment profile. A dedicated hostname, container marker, tmpfs root
+and absence of shared mount propagation are checked before rehearsal dispatch.
+
+The new container is removed on completion/failure; fixture tmpfs is discarded
+only after the assertions above. No Tower service or setting was touched. This
+container shares Docker Desktop's Linux kernel: it proves mount/installer-death
+behavior, not an independent reboot, Unraid normal/Safe Mode startup inhibition,
+existing writer quiescence, fresh protection collection or production ownership.

@@ -55,9 +55,11 @@ entry is an inert stub. Partial installation still rejects the complete binding,
 and retained requests remain non-adoptable.
 
 The earlier two-service 22-invocation Linux/SIGKILL acceptance remains historical
-component evidence. This expanded six-route mount fixture has portable tests,
-including executing the actual fixed deny script for Samba actions; Linux mount
-acceptance of the expanded route set remains pending. No additional Linux VM
-was downloaded or built for this increment. Actual Unraid installation, all-mode
+component evidence. The expanded six-route mount fixture now also passed actual local Linux mount
+and SIGKILL acceptance: 49 complete-case and 10 partial-case denials before and
+after installer death, with retained request/originals unchanged and restoration
+denied. See the [acceptance record](sqlite-offline-dispatch-rehearsal.md). No
+additional Linux VM was downloaded or built; a new private container used a cached
+image, no host mounts and no network. Actual Unraid installation, all-mode
 boot coverage, quiescence of existing writers and production verification remain
 open. No new production authority is introduced.
