@@ -46,14 +46,29 @@ root replacement, later-library failure, incomplete Jellyfin coverage and
 untracked-clock preservation. Additional focused tests cover custom tags,
 configuration detachment, inventory limits and the total deadline.
 
+Linux/Python 3.12.15 execution in a new cached-image container passed all eight
+worker cases, 19 Gate 7 cases, 27 Gate 6 cases and 11 HTTP cases. No host paths
+were mounted and the fixture container was removed.
+
+[Test-only CI run 40104602109](https://github.com/NVmagma/media_collection_auditor/actions/runs/40104602109)
+passed for implementation `917f08454489c16a82d39042aa6eaec4837f1578`:
+195 scheduled tests and 18 subtests, 23 atomic regressions, 671 existing SQLite
+regressions and 182 isolated safety tests. These are separate, potentially
+overlapping workflow steps, not a full release-suite count. No image was built
+or deployed. Subsequent acceptance-document-only commits retain that implementation.
+
 Run the committed acceptance package on Tower to verify both filesystem views:
 
 ```bash
-cd /mnt/user/sqlite_lab_checkout
-git pull --ff-only origin feature/sqlite
-for lab_parent in /mnt/user/sql_test /mnt/media/sql_test; do
-  bash scripts/sqlite_scheduled_worker_lab.sh "$lab_parent" || break
-done
+(
+  set -eu
+  cd /mnt/user/sqlite_lab_checkout
+  [ "$(git branch --show-current)" = feature/sqlite ]
+  git pull --ff-only origin feature/sqlite
+  for lab_parent in /mnt/user/sql_test /mnt/media/sql_test; do
+    bash scripts/sqlite_scheduled_worker_lab.sh "$lab_parent"
+  done
+)
 ```
 
 Each run uses an immutable cached Python image, a new `scheduled-worker.*`
