@@ -152,3 +152,68 @@ def test_invalid_retained_record_rejected_before_mount_observation(root,monkeypa
 def test_duplicate_nested_request_key_is_rejected():
     with pytest.raises(RuntimeError,match='Invalid retained fixture request'):
         dispatch._pending_request(b'{"originals":{"mover":1,"mover":2}}')
+
+
+@pytest.mark.parametrize('change',['none','route','scope','guard'])
+def test_interrupted_install_review_retains_every_record(root,monkeypatch,change):
+    def fail(*args,**kwargs):raise RuntimeError('interrupted')
+    monkeypatch.setattr(dispatch.subprocess,'run',fail)
+    with pytest.raises(RuntimeError,match='interrupted'):
+        with dispatch.install_disposable_offline_dispatch(root):pass
+    if change=='route':
+        target=root/'host/usr/local/sbin/mover'
+        target.unlink();target.write_bytes(b'changed')
+    if change=='scope':monkeypatch.setattr(dispatch,'_scope',lambda:('other','net:[1]','mnt:[2]'))
+    if change=='guard':
+        path=root/'pending-request.json'
+        record=json.loads(path.read_bytes());record['guard_sha256']='0'*64
+        path.write_text(json.dumps(record))
+    paths=[root/'pending-request.json',root/'.disposable_offline_dispatch',root/'deny-guard']
+    before={p:p.read_bytes() for p in paths}
+    result=dispatch.review_disposable_offline_dispatch(root)
+    assert result['restoration_authorized'] is False
+    assert result['automatic_action']=='none'
+    assert result['writer_exclusion_verified'] is False
+    assert set(result['routes'])==set(dispatch.ROUTES)
+    if change=='route':assert 'route_conflict:mover' in result['blockers']
+    elif change=='scope':assert 'controller_scope_changed' in result['blockers']
+    elif change=='guard':assert 'guard_digest_changed' in result['blockers']
+    else:
+        assert set(result['routes'].values())=={'original_identity_and_bytes_observed'}
+        assert result['blockers']==['fixture_review_never_authorizes_restoration']
+    assert {p:p.read_bytes() for p in paths}==before
+
+
+def test_guard_bytes_without_mount_proof_never_authorize_recovery(root,monkeypatch):
+    def fail(*args,**kwargs):raise RuntimeError('interrupted')
+    monkeypatch.setattr(dispatch.subprocess,'run',fail)
+    with pytest.raises(RuntimeError,match='interrupted'):
+        with dispatch.install_disposable_offline_dispatch(root):pass
+    target=root/'host/usr/local/sbin/mover'
+    target.unlink();target.write_bytes(dispatch.GUARD)
+    result=dispatch.review_disposable_offline_dispatch(root)
+    assert result['routes']['mover']=='guard_bytes_observed_mount_ownership_unverified'
+    assert result['restoration_authorized'] is False
+
+
+def test_review_rejects_artifact_drift_instead_of_returning_mixed_snapshot(root,monkeypatch):
+    def fail(*args,**kwargs):raise RuntimeError('interrupted')
+    monkeypatch.setattr(dispatch.subprocess,'run',fail)
+    with pytest.raises(RuntimeError,match='interrupted'):
+        with dispatch.install_disposable_offline_dispatch(root):pass
+    original=dispatch._read
+    reads=0
+    def drift(directory,name):
+        nonlocal reads
+        result=original(directory,name)
+        if name=='mover':
+            reads+=1
+            if reads==1:
+                target=root/'host/usr/local/sbin/mover'
+                target.unlink();target.write_bytes(b'changed during review')
+        return result
+    monkeypatch.setattr(dispatch,'_read',drift)
+    pending=(root/'pending-request.json').read_bytes()
+    with pytest.raises(RuntimeError,match='Review route changed'):
+        dispatch.review_disposable_offline_dispatch(root)
+    assert (root/'pending-request.json').read_bytes()==pending

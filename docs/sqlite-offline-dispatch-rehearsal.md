@@ -78,3 +78,24 @@ The refreshed Tower scope observation confirmed single enabled SMB/NFS settings
 with CRLF line endings and a single enabled Docker setting. Reviewed Samba/mover
 script hashes matched; the move-helper hash remains observed without an independent
 source match. These observations do not establish writer exclusion.
+
+### Read-only interrupted-install review
+
+For a retained **disposable fake-host tree**, run from the checkout:
+
+```sh
+python -B -m scripts.sqlite_offline_dispatch_review --root /absolute/disposable/fixture
+```
+
+This command never mounts, unmounts, executes a service, edits a record or takes
+ownership of the interrupted attempt. It requires the marker and strict retained
+request. Each fixed route is reported as its original identity and bytes,
+guard bytes with mount ownership unverified, or a conflict. Root/scope/digest
+mismatches remain explicit blockers. Repeated artifact reads reject detected drift
+rather than returning mixed evidence. The report omits source content and hashes.
+
+Every report remains `review_required` with `restoration_authorized=false`.
+Matching original files is not proof that no mount was installed; matching guard
+bytes is not proof that a mount belongs to this request. Mount ownership and an
+explicit owned-change recovery implementation remain required before restoration.
+This report is not a production host recovery tool and supplies no writer permit.

@@ -149,6 +149,61 @@ def verify_disposable_offline_dispatch(root):
     finally:os.close(directory)
 
 
+def review_disposable_offline_dispatch(root):
+    """Describe retained evidence without clearing, adopting or restoring it."""
+    root=_root(root)
+    directory=os.open(root,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+    try:
+        held=os.fstat(directory)
+        marker=_read(directory,'.disposable_offline_dispatch')
+        if marker[0]!=MARKER:raise RuntimeError('Marked offline fixture required')
+        pending=_read(directory,'pending-request.json')
+        request=_pending_request(pending[0])
+        scope=list(_scope())
+        blockers=['fixture_review_never_authorizes_restoration']
+        if request['scope']!=scope:blockers.append('controller_scope_changed')
+        if request['root_identity']!=[held.st_dev,held.st_ino]:blockers.append('root_identity_changed')
+        if request['guard_sha256']!=hashlib.sha256(GUARD).hexdigest():
+            blockers.append('guard_digest_changed')
+        routes={}
+        observations={}
+        targets=_targets(root)
+        for name,target in targets.items():
+            parent=os.open(target.parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+            try:content,identity=_read(parent,target.name)
+            finally:os.close(parent)
+            observations[name]=(content,identity)
+            original=request['originals'][name]
+            if (list(identity)==original['identity']
+                    and hashlib.sha256(content).hexdigest()==original['sha256']):
+                routes[name]='original_identity_and_bytes_observed'
+            elif content==GUARD:
+                routes[name]='guard_bytes_observed_mount_ownership_unverified'
+            else:
+                routes[name]='conflict'
+                blockers.append('route_conflict:'+name)
+        # Repeat every artifact read so mixed observations never become a review.
+        for name,target in _targets(root).items():
+            parent=os.open(target.parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+            try:
+                if _read(parent,target.name)!=observations[name]:
+                    raise RuntimeError('Review route changed; retain request')
+            finally:os.close(parent)
+        current=root.lstat()
+        if (not stat.S_ISDIR(current.st_mode)
+                or (current.st_dev,current.st_ino)!=(held.st_dev,held.st_ino)
+                or _read(directory,'.disposable_offline_dispatch')!=marker
+                or _read(directory,'pending-request.json')!=pending
+                or list(_scope())!=scope):
+            raise RuntimeError('Review binding changed; retain request')
+        return dict(status='review_required',routes=routes,blockers=blockers,
+                    read_only=True,fixture_only=True,automatic_action='none',
+                    restoration_authorized=False,production_authorized=False,
+                    production_activation='disabled',writer_exclusion_verified=False,
+                    restart_inhibition_verified=False)
+    finally:os.close(directory)
+
+
 @contextmanager
 def install_disposable_offline_dispatch(root):
     """Retain mounts/request on all exits; no automatic restoration or adoption."""
