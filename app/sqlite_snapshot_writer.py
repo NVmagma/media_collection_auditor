@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import closing
 import json
 import os
 from pathlib import Path
@@ -27,7 +28,7 @@ def write_offline_snapshot(state: dict, destination: str | Path) -> None:
         with destination.open("xb"):
             pass
         created = True
-        with sqlite3.connect(destination) as connection:
+        with closing(sqlite3.connect(destination)) as connection, connection:
             connection.execute("PRAGMA journal_mode=DELETE")
             connection.execute("PRAGMA synchronous=FULL")
             connection.executescript(SCHEMA_SQL)

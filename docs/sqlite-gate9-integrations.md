@@ -53,11 +53,11 @@ records, not live inventory. The selector is not an activation switch.
 
 ## Disposable Tower acceptance
 
-Eight stdlib fixture tests cover one capture for all views, detached dashboard
+Nine stdlib fixture tests cover one capture for all views, detached dashboard
 state, an actual independent-process checkpoint during projection, identical-byte
 database replacement, missing SQLite with valid adjacent JSON, pending/secret
 redaction, symlink refusal, whole-response projection failure, and same-revision
-raw mutation. Read-only projection creates no missing database or retry action.
+raw mutation, plus connection closure without relying on garbage collection. Read-only projection creates no missing database or retry action.
 
 Run on either existing disposable filesystem view; both views are useful for this
 SQLite reader boundary (no media rename capability is needed):
@@ -73,7 +73,7 @@ SQLite reader boundary (no media rename capability is needed):
 )
 ```
 
-Expected per view: 8 tests, final `tracking_view_acceptance_complete`, scope
+Expected per view: 9 tests, final `tracking_view_acceptance_complete`, scope
 `candidate_tracking_views`. The launcher uses only one new directory and new
 cached-image container per invocation, without network, host mounts outside that
 new directory, packages, production settings/credentials or service operations.
@@ -95,3 +95,28 @@ commits retain the tested app/scripts/tests/workflow implementation tree.
 Arr configured queue/delivery/readback reconciliation, coordinator/history authority,
 and the remaining TV-season compatibility checks. This increment does not close
 Gate 9 or enable SQLite, Arr mutations, pruning or deletion in production.
+
+
+## First shfs run: cleanup failure and connection-lifetime repair
+
+Source `c5d2106c277b561c268fb95e0fbb0155676230b0`, lab
+`/mnt/user/sql_test/tracking-views.GY1bsc`, failed all eight cases during
+`TemporaryDirectory` cleanup with `ENOTEMPTY`. No test-assertion failure was
+reported, but the lab is **not accepted**. The enclosing `set -eu` command stopped
+before the native invocation; native acceptance was not received.
+
+Inspection found SQLite connection-lifetime defects: `_revision()` and offline
+snapshot creation used transaction context managers without explicitly closing the
+connections. A fixture raw-SQL mutation did the same. On FUSE, retained open files
+can prevent directory cleanup after unlink/replacement; the exact remaining file
+names were not supplied. The confirmed lifetime defects are repaired with explicit
+`contextlib.closing`, preserving transaction commit/rollback and failed-artifact
+retention. Cleanup errors are not ignored, and no broad deletion/retry workaround
+is added. Existing failed fixture artifacts need not be manually removed to rerun.
+
+Four regression tests keep strong references to all connections so garbage
+collection cannot hide leaks. They verify closure after success/failure, revision
+and projection reads, file replacement/removal, and failed-output retention. A
+ninth stdlib fixture case checks this same lifetime contract on Tower before
+cleanup. All nine cases still require successful cleanup. Rerun the two-view
+command above after pulling the repair; production remains unchanged.

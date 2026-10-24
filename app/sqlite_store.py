@@ -6,6 +6,7 @@ snapshot; missing or damaged databases are never initialized as empty state.
 
 from __future__ import annotations
 
+from contextlib import closing
 import json
 from pathlib import Path
 import sqlite3
@@ -25,9 +26,9 @@ class SQLiteStateStore:
 
     def _revision(self) -> int:
         try:
-            with sqlite3.connect(
+            with closing(sqlite3.connect(
                 f"file:{self.database.resolve().as_posix()}?mode=ro", uri=True
-            ) as connection:
+            )) as connection:
                 row = connection.execute(
                     "SELECT value FROM metadata WHERE key='state_revision'"
                 ).fetchone()

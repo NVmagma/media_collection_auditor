@@ -1,4 +1,5 @@
 """One revision for summary/widgets/dashboard; only new disposable SQLite files."""
+from contextlib import closing
 import json
 from pathlib import Path
 import subprocess
@@ -23,6 +24,27 @@ class TrackingViewFixtureTests(unittest.TestCase):
             'queued': {'C': '2024-01-03'}, 'keep_seen': {}, 'in_removal': {},
             'arr_sync_pending': {}, 'unknown': {'token': 'fixture-private-token', 'path': '/fixture/private'}}
         write_offline_snapshot(self.state, self.database)
+
+    def test_connections_close_before_replacement_without_garbage_collection(self):
+        import sqlite3
+        connect = sqlite3.connect
+        held = []
+        def record(*args, **kwargs):
+            connection = connect(*args, **kwargs)
+            held.append(connection)
+            return connection
+        try:
+            with patch.object(sqlite3, 'connect', record):
+                write_offline_snapshot(self.state, self.root / 'extra.db')
+                SQLiteStateStore(self.database).load_with_revision()
+                capture_candidate_tracking_view(self.database)
+            self.assertTrue(held)
+            for connection in held:
+                with self.assertRaisesRegex(sqlite3.ProgrammingError, 'closed'):
+                    connection.execute('SELECT 1')
+        finally:
+            for connection in held:
+                connection.close()
 
     def test_one_capture_drives_summary_both_widgets_and_detached_dashboard(self):
         original = module.read_experimental_sqlite_dashboard_snapshot
@@ -102,7 +124,7 @@ class TrackingViewFixtureTests(unittest.TestCase):
             state, revision = store.load_with_revision()
             state['queued']['Added'] = '2024-02-01'
             store.save_if_revision(state, revision)
-            with sqlite3.connect(self.database) as connection:
+            with closing(sqlite3.connect(self.database)) as connection, connection:
                 connection.execute("UPDATE metadata SET value=? WHERE key='state_revision'", (str(revision),))
             return original(capture)
         with patch.object(module, '_project_tracking_status', mutate):
@@ -113,7 +135,7 @@ class TrackingViewFixtureTests(unittest.TestCase):
 if __name__ == '__main__':
     result = unittest.TextTestRunner(verbosity=2).run(
         unittest.defaultTestLoader.loadTestsFromTestCase(TrackingViewFixtureTests))
-    if not result.wasSuccessful() or result.testsRun != 8 or result.skipped:
+    if not result.wasSuccessful() or result.testsRun != 9 or result.skipped:
         raise SystemExit(1)
     print(json.dumps({'status': 'candidate_tracking_views_verified', 'tests': result.testsRun,
         'fixture_only': True, 'production_authorized': False, 'production_activation': 'disabled'}))
