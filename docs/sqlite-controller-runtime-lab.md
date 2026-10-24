@@ -58,3 +58,13 @@ Existing services and production files were unchanged. The swap-limit warning
 did not affect these assertions. This accepts the interpreter mechanism for
 further packaging; actual application dependencies, host scope/bindings and
 fence implementation remain required.
+
+## Preparation controller bundle available
+
+The [host preparation core](sqlite-host-controller-preparation.md) now has an
+explicit six-module standard-library bundle and prepare/hold/review entry point.
+It passed actual Linux/Python 3.12.15 controller-death acceptance independently of
+Flask/site packages and without Docker socket access. The exported-runtime smoke
+above is unchanged: copying the bundle alone does not supply host scope or private
+persistent control mappings. Those bindings require a separate reviewed launcher;
+no production mounts or service controls have been added to this runtime lab.

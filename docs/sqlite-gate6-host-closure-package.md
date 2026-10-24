@@ -137,3 +137,14 @@ fail-closed barrier. No late-hook installer is claimed as complete enforcement.
 Exact disposable SMB/NFS/mover persistent opt-out review artifacts are prepared;
 actual settings application and normal/Safe Mode enforcement remain unimplemented.
 See [boot enforcement review](sqlite-unraid-boot-enforcement-review.md).
+
+## Runnable host preparation core
+
+A stdlib-only preparation core and hash-verified bundle now retain a private
+request under an exclusive lock, validate boot/namespace/directory/mount bindings,
+and provide non-adopting review after interruption. The actual packaged entry
+point passed Linux/Python 3.12.15 SIGKILL and competing-controller acceptance with
+all external-action flags false. See
+[host controller preparation](sqlite-host-controller-preparation.md).
+Native host scope/control mappings and service adapters are still absent; this
+component does not satisfy the complete runnable production-controller deliverable.
