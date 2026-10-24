@@ -58,3 +58,20 @@ def test_bindings_are_detached_from_caller_changes():
 def test_bad_title_binding_rejected(binding):
     with pytest.raises((ValueError, RuntimeError)):
         scheduled_protection_provider(fetch=lambda *a: None, bindings={'Movie': binding})
+
+
+def test_custom_tag_names_are_used_and_detached():
+    names = {'keep': 'save', 'protected': 'protect-all', 'disliked': 'leave', 'keep_all': 'whole-show'}
+    provider = scheduled_protection_provider(fetch=lambda p, _: [{'Id': 'user'}] if p == '/Users'
+        else {'TotalRecordCount': 1, 'Items': [item(['protect-all'])]},
+        bindings={'Movie': ('Movie', 'Movie')}, clock=lambda: NOW, tag_names=names)
+    names['protected'] = 'changed-after-construction'
+    result = provider(MOVE)
+    assert result.available and result.signals['protected'] and result.signals['keep_all']
+
+
+def test_conflicting_tag_policy_fails_before_collection():
+    with pytest.raises(ValueError, match='Conflicting'):
+        scheduled_protection_provider(fetch=lambda *a: pytest.fail('Invalid policy fetched'),
+            bindings={'Movie': ('Movie', 'Movie')}, tag_names={'keep': 'same',
+            'protected': 'SAME', 'disliked': 'leave', 'keep_all': 'whole'})

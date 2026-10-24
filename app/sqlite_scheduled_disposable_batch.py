@@ -31,6 +31,16 @@ def execute_scheduled_disposable_batch(*, root, database, plan, title_folders,
     Reported completed entries passed exact post-operation state/revision checks.
     A stopped candidate may already have moved: never infer replay permission.
     """
+    with isolated_runner_lock(root) as verify_binding:
+        return _execute_scheduled_batch_locked(root=root, database=database, plan=plan,
+            title_folders=title_folders, fetch_protection=fetch_protection, clock=clock,
+            timer=timer, maximum_protection_seconds=maximum_protection_seconds,
+            fault_at=fault_at, verify_binding=verify_binding)
+
+
+def _execute_scheduled_batch_locked(*, root, database, plan, title_folders,
+        fetch_protection, clock, timer, maximum_protection_seconds, fault_at, verify_binding):
+    """Internal integration used while a full scheduled slot retains the lock."""
     root, database = Path(root), Path(database)
     if database != root / 'state.db' or not isinstance(plan, ScheduledPlan):
         raise ValueError('Disposable database and scheduled plan required')
@@ -55,50 +65,49 @@ def execute_scheduled_disposable_batch(*, root, database, plan, title_folders,
     def stopped(reason, index):
         return {**base, 'status': 'stopped', 'reason': reason,
                 'completed': tuple(completed), 'stopped_index': index}
-    with isolated_runner_lock(root) as verify_binding:
-        store = GuardedSQLiteStateStore(database)
-        expected, revision = store.load_with_revision()
-        if plan.process_id != os.getpid():
-            return stopped('plan_process_changed', None)
-        if revision != plan.revision or expected.get(INTENTS_KEY):
-            return stopped('stale_plan_or_pending_operation', None)
-        chained = plan
-        batch_id = secrets.token_hex(16)
-        for index, move in enumerate(plan.moves):
-            verify_binding()
-            tick = timer()
-            if not math.isfinite(tick) or not plan.created_tick <= tick < plan.deadline_tick:
-                return stopped('plan_expired_or_clock_changed', index)
-            current, current_revision = store.load_with_revision()
-            if current_revision != revision or current != expected or current.get(INTENTS_KEY):
-                return stopped('tracking_chain_changed', index)
-            observed_at = clock()
-            operation_id = batch_id + ':' + str(index)
-            try:
-                result = _execute_scheduled_move_locked(root=root, database=database,
-                    operation_id=operation_id, plan=chained, move=move,
-                    title_folder=title_folders[move.media_key], fetch_protection=fetch_protection,
-                    clock=lambda: observed_at, timer=timer,
-                    maximum_protection_seconds=maximum_protection_seconds,
-                    fault_at=fault_at[1] if fault_at and fault_at[0] == index else None,
-                    verify_binding=verify_binding)
-            except Exception:
-                # No cleanup, intent clearance, retry or exception/credential dump.
-                return stopped('move_failed_or_uncertain', index)
-            expected_after = deepcopy(expected)
-            if expected_after[CLOCKS[move.source_stage]].get(move.media_key) != move.source_clock:
-                return stopped('planned_clock_binding_changed', index)
-            expected_after[CLOCKS[move.source_stage]].pop(move.media_key)
-            expected_after[CLOCKS[move.destination_stage]][move.media_key] = observed_at.isoformat()
-            verify_binding()
-            after, after_revision = store.load_with_revision()
-            if (result.get('status') != 'disposable_reconciled'
-                    or after_revision != revision + 3 or after != expected_after):
-                return stopped('post_move_revision_or_state_changed', index)
-            completed.append({'media_key': move.media_key, 'operation_id': operation_id,
-                              'revision': after_revision})
-            expected, revision = after, after_revision
-            # Only advance after the exact guarded in-process result is observed.
-            chained = replace(chained, revision=revision)
-        return {**base, 'status': 'disposable_batch_complete', 'completed': tuple(completed),
-                'final_revision': revision, 'capped_moves': plan.capped_moves}
+    store = GuardedSQLiteStateStore(database)
+    expected, revision = store.load_with_revision()
+    if plan.process_id != os.getpid():
+        return stopped('plan_process_changed', None)
+    if revision != plan.revision or expected.get(INTENTS_KEY):
+        return stopped('stale_plan_or_pending_operation', None)
+    chained = plan
+    batch_id = secrets.token_hex(16)
+    for index, move in enumerate(plan.moves):
+        verify_binding()
+        tick = timer()
+        if not math.isfinite(tick) or not plan.created_tick <= tick < plan.deadline_tick:
+            return stopped('plan_expired_or_clock_changed', index)
+        current, current_revision = store.load_with_revision()
+        if current_revision != revision or current != expected or current.get(INTENTS_KEY):
+            return stopped('tracking_chain_changed', index)
+        observed_at = clock()
+        operation_id = batch_id + ':' + str(index)
+        try:
+            result = _execute_scheduled_move_locked(root=root, database=database,
+                operation_id=operation_id, plan=chained, move=move,
+                title_folder=title_folders[move.media_key], fetch_protection=fetch_protection,
+                clock=lambda: observed_at, timer=timer,
+                maximum_protection_seconds=maximum_protection_seconds,
+                fault_at=fault_at[1] if fault_at and fault_at[0] == index else None,
+                verify_binding=verify_binding)
+        except Exception:
+            # No cleanup, intent clearance, retry or exception/credential dump.
+            return stopped('move_failed_or_uncertain', index)
+        expected_after = deepcopy(expected)
+        if expected_after[CLOCKS[move.source_stage]].get(move.media_key) != move.source_clock:
+            return stopped('planned_clock_binding_changed', index)
+        expected_after[CLOCKS[move.source_stage]].pop(move.media_key)
+        expected_after[CLOCKS[move.destination_stage]][move.media_key] = observed_at.isoformat()
+        verify_binding()
+        after, after_revision = store.load_with_revision()
+        if (result.get('status') != 'disposable_reconciled'
+                or after_revision != revision + 3 or after != expected_after):
+            return stopped('post_move_revision_or_state_changed', index)
+        completed.append({'media_key': move.media_key, 'operation_id': operation_id,
+                          'revision': after_revision})
+        expected, revision = after, after_revision
+        # Only advance after the exact guarded in-process result is observed.
+        chained = replace(chained, revision=revision)
+    return {**base, 'status': 'disposable_batch_complete', 'completed': tuple(completed),
+            'final_revision': revision, 'capped_moves': plan.capped_moves}

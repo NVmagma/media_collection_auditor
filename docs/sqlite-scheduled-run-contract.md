@@ -209,3 +209,37 @@ and after rename, caps, a competing cooperating runner, an unexpected writer
 changing tracking after completion, and an integrated collector refresh that
 sees a new keep-forever tag after the scan. These extend the earlier 12-scenario
 acceptance. All are disposable; no production behavior or gate status changed.
+
+
+## Final core integration and acceptance boundary
+
+The [Gate 6 acceptance record](sqlite-gate6-scheduled-acceptance.md) now owns the
+current exit checklist. Earlier progress subsections above describe intermediate
+states; batch chaining, configured-root observations, transport, pending review
+and slot orchestration are now implemented and locally verified.
+
+`sqlite_scheduled_disposable_run` retains one cooperating runner lock from the
+durable slot claim through full collection and batch execution. Daily zone/date
+claims use exclusive creation plus file/parent fsync; failed or partial claims
+remain and are never replayed automatically. Claims suppress duplicate scheduled
+attempts for the same zone/local date, even after an in-day time-setting change.
+They are not move permits or proof against hostile storage modification.
+
+`sqlite_scheduled_transport` supplies GET-only network requests with explicit
+credentials, no proxy inheritance/redirects/retries/signal cache, bounded bodies,
+request counts and socket/read budgets. Its actual private-loopback HTTP tests
+exercise the collector/protection refresh. Custom tag mappings are now validated,
+detached and supported by the collector adapter. Worker settings must explicitly
+supply them; no settings are silently read or changed here.
+
+`sqlite_scheduled_paths` observes explicitly configured roots without a disposable
+marker or filesystem-name policy and never mutates them. The actual executor
+remains restricted to marked disposable roots. `sqlite_scheduled_pending_review`
+never follows retained media paths or clears/replays an operation. It refuses
+WAL/hot-journal snapshots rather than creating SQLite recovery sidecars.
+
+These implementations do not wire the live worker or change JSON authority.
+Native Tower acceptance and exact-commit test CI remain the Gate 6 exit checks.
+Production multi-library routing/settings/credentials and release activation stay
+in Gates 8–10. The former host-wide maintenance fence is not required by this
+scheduled operating model.

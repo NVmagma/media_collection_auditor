@@ -25,7 +25,8 @@ def run(image):
         'import sys,tarfile,io,os,subprocess; '
         'tarfile.open(fileobj=io.BytesIO(sys.stdin.buffer.read()),mode="r:").extractall("/fixture/code",filter="data"); '
         'os.chdir("/fixture/code"); '
-        'subprocess.run([sys.executable,"-B","-m","scripts.sqlite_scheduled_move_fixture"],check=True,timeout=90)'
+        'subprocess.run([sys.executable,"-S","-B","-m","scripts.sqlite_scheduled_move_fixture"],check=True,timeout=90); '
+        'subprocess.run([sys.executable,"-S","-B","-m","scripts.sqlite_scheduled_transport_fixture"],check=True,timeout=30)'
         ).decode().strip()
     if not re.fullmatch(r'[0-9a-f]{64}', container):
         raise RuntimeError('Full newly created container ID required')

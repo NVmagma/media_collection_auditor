@@ -1,5 +1,5 @@
 """Standard-library acceptance tests using only new disposable Linux media."""
-from datetime import datetime
+from datetime import datetime, timezone
 import errno
 import json
 import os
@@ -181,6 +181,87 @@ class ScheduledMoveFixtureTests(unittest.TestCase):
         self.assertEqual(requests.count('/Users'), 2)
         self.assertTrue((self.root / 'transient/Second').exists())
         self.assertNotIn(INTENTS_KEY, self.store.load_with_revision()[0])
+
+    def test_configured_paths_are_read_only_observations(self):
+        from app.sqlite_scheduled_paths import review_scheduled_paths
+        roots = {name: str(self.root / folder) for name, folder in
+                 [('Waiting', 'transient'), ('Holding', 'holding'), ('Keep', 'keep'), ('Removal', 'removal')]}
+        before = self.store.load_with_revision()
+        report = review_scheduled_paths(stage_roots=roots, source_stage='Waiting',
+            destination_stage='Holding', title_folder='Movie')
+        self.assertEqual(report['status'], 'observed_advisory')
+        self.assertFalse(report['production_authorized'])
+        self.assertFalse(report['external_writers_excluded'])
+        self.assertEqual(self.store.load_with_revision(), before)
+        self.assertTrue(self.source.exists()); self.assertFalse(self.destination.exists())
+
+    def test_configured_paths_detect_parent_replacement(self):
+        from app.sqlite_scheduled_paths import hold_scheduled_paths
+        roots = {name: str(self.root / folder) for name, folder in
+                 [('Waiting', 'transient'), ('Holding', 'holding'), ('Keep', 'keep'), ('Removal', 'removal')]}
+        with self.assertRaisesRegex(RuntimeError, 'identity changed'):
+            with hold_scheduled_paths(stage_roots=roots, source_stage='Waiting',
+                    destination_stage='Holding', title_folder='Movie') as held:
+                (self.root / 'holding').rename(self.root / 'old-holding')
+                (self.root / 'holding').mkdir()
+                held.assert_unchanged()
+
+    def test_pending_review_after_crash_retains_bytes_and_denies_clearance(self):
+        from app.sqlite_scheduled_pending_review import review_scheduled_pending
+        with self.assertRaises(RuntimeError): self.execute(fault_at='after_rename')
+        before = self.database.read_bytes()
+        report = review_scheduled_pending(self.database)
+        self.assertEqual(report['status'], 'operator_review_required')
+        self.assertFalse(report['clearance_authorized']); self.assertFalse(report['replay_allowed'])
+        self.assertEqual(self.database.read_bytes(), before)
+
+    def run_slot(self, **kwargs):
+        from app.sqlite_scheduled_disposable_run import run_disposable_scheduled_slot
+        from app.sqlite_run_schedule import DailyRunSchedule
+        slot = datetime(2024, 2, 1, 2, tzinfo=timezone.utc)
+        values = dict(root=self.root, schedule=DailyRunSchedule('02:00', 'UTC'), scheduled_at=slot,
+            now=slot, libraries=['Movies'], clock=lambda: NOW, timer=lambda: 101,
+            scan_library=lambda _: LibraryScan(True, [ScannedTitle('Movie', 'Waiting', 7, {})]),
+            title_folders={'Movie': 'Movie'}, fetch_protection=lambda _: self.protection())
+        values.update(kwargs)
+        return run_disposable_scheduled_slot(**values)
+
+    def test_full_scheduled_slot_claim_scan_move_and_no_duplicate(self):
+        report = self.run_slot()
+        self.assertEqual(report['status'], 'disposable_batch_complete')
+        self.assertTrue(self.destination.exists())
+        snapshot = self.store.load_with_revision()
+        with self.assertRaises(FileExistsError): self.run_slot()
+        self.assertEqual(self.store.load_with_revision(), snapshot)
+
+    def test_full_slot_later_library_failure_never_dispatches_first_move(self):
+        def scan(library):
+            if library == 'Movies': return LibraryScan(True, [ScannedTitle('Movie', 'Waiting', 7, {})])
+            raise TimeoutError('synthetic incomplete second library')
+        with self.assertRaises(TimeoutError): self.run_slot(libraries=['Movies', 'TV'], scan_library=scan)
+        self.assertTrue(self.source.exists()); self.assertFalse(self.destination.exists())
+        self.assertEqual(self.store.load_with_revision()[0], self.initial)
+        with self.assertRaises(FileExistsError): self.run_slot()
+
+    def test_full_slot_holds_lock_while_collecting(self):
+        from app.sqlite_isolated_lifecycle_runner import isolated_runner_lock
+        def scan(library):
+            with self.assertRaisesRegex(RuntimeError, 'runner is active'):
+                with isolated_runner_lock(self.root): pass
+            return LibraryScan(True, [ScannedTitle('Movie', 'Waiting', 7, {})])
+        self.assertEqual(self.run_slot(scan_library=scan)['status'], 'disposable_batch_complete')
+
+    def test_configured_cross_mount_destination_is_blocked_without_changes(self):
+        from app.sqlite_scheduled_paths import review_scheduled_paths
+        with tempfile.TemporaryDirectory(prefix='scheduled-destination-', dir='/dev/shm') as elsewhere:
+            roots = {name: str(self.root / folder) for name, folder in
+                 [('Waiting', 'transient'), ('Holding', 'holding'), ('Keep', 'keep'), ('Removal', 'removal')]}
+            roots['Holding'] = elsewhere
+            report = review_scheduled_paths(stage_roots=roots, source_stage='Waiting',
+                destination_stage='Holding', title_folder='Movie')
+            self.assertEqual(report['status'], 'blocked')
+            self.assertEqual(list(Path(elsewhere).iterdir()), [])
+            self.assertTrue(self.source.exists())
 
     def test_real_rename_commits_clock_and_clears_intent(self):
         result = self.execute()

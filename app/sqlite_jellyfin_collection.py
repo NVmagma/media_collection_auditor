@@ -13,10 +13,25 @@ from app.sqlite_jellyfin_signal_contract import review_jellyfin_observation
 
 PAGE_SIZE = 100
 FIELDS = ("played", "favorite", "disliked", "keep", "keep_all", "protected")
+DEFAULT_TAG_NAMES = {"keep": "keep", "disliked": "not-at-all",
+                     "keep_all": "keep-all-seasons", "protected": "keep-forever"}
+
+
+def validated_tag_names(tag_names=None):
+    names = DEFAULT_TAG_NAMES if tag_names is None else tag_names
+    if (not isinstance(names, dict) or set(names) != set(DEFAULT_TAG_NAMES)
+            or any(not isinstance(value, str) or not value or value.strip() != value
+                   or len(value) > 128 or any(ord(c) < 32 or ord(c) == 127 for c in value)
+                   for value in names.values())):
+        raise ValueError("Explicit valid Jellyfin tag mapping required")
+    result = {key: value.lower() for key, value in names.items()}
+    if len(set(result.values())) != len(result):
+        raise ValueError("Conflicting Jellyfin tag names")
+    return result
 
 
 def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
-                              page_size=PAGE_SIZE):
+                              page_size=PAGE_SIZE, tag_names=None):
     if (jellyfin_type not in ("Movie", "Series") or not isinstance(folder, str)
             or not folder or folder in (".", "..") or "/" in folder or chr(92) in folder):
         raise ValueError("Movie/Series and single folder name required")
@@ -24,6 +39,7 @@ def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
         raise ValueError("Invalid Jellyfin collection configuration")
     if not isinstance(now, datetime) or now.tzinfo is not None:
         raise ValueError("Naive observation clock required")
+    tag_names = validated_tag_names(tag_names)
     blockers = []
     matched = []
     try:
@@ -113,10 +129,10 @@ def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
             normalized = {tag.lower() for tag in tags}
             signals["played"] |= data["Played"] or data["PlayCount"] > 0
             signals["favorite"] |= data["IsFavorite"]
-            signals["keep"] |= "keep" in normalized
-            signals["disliked"] |= "not-at-all" in normalized
-            signals["keep_all"] |= "keep-all-seasons" in normalized
-            signals["protected"] |= "keep-forever" in normalized
+            signals["keep"] |= tag_names["keep"] in normalized
+            signals["disliked"] |= tag_names["disliked"] in normalized
+            signals["keep_all"] |= tag_names["keep_all"] in normalized
+            signals["protected"] |= tag_names["protected"] in normalized
         if signals["protected"]:
             signals["keep_all"] = True
     observation = {
