@@ -21,6 +21,7 @@ IMPLEMENTATION_BLOCKERS = (
     "portable_production_move_completion_unimplemented",
     "sqlite_production_lifecycle_not_wired",
     "production_restart_clearance_not_implemented",
+    "production_boot_writer_fence_unimplemented",
     "release_image_verification_pending",
 )
 

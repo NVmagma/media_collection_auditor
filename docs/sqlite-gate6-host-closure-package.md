@@ -127,3 +127,13 @@ identical replacement guard using a unique mount identity. See
 This completes the evidence handoff component only. Hidden-original verification,
 actionable restoration and the actual Unraid host package remain required; none
 of the four production deliverables above is declared complete by this fixture.
+
+## Storage auto-start requirement and boot source review
+
+The operator declined leaving the array/managed pools stopped after a maintenance
+reboot. Preserve automatic storage startup, web management and SSH. The pinned
+startup review confirms cron and Samba precede rc.local, and udev is not a
+fail-closed barrier. No late-hook installer is claimed as complete enforcement.
+Exact disposable SMB/NFS/mover persistent opt-out review artifacts are prepared;
+actual settings application and normal/Safe Mode enforcement remain unimplemented.
+See [boot enforcement review](sqlite-unraid-boot-enforcement-review.md).
