@@ -31,3 +31,41 @@ def test_selected_settings_and_redacted_cron_never_execute_content(tmp_path):
     assert not sentinel.exists()
     assert 'writer_exclusion_verified=false' in result.stdout
     assert 'not_collected_for_fixture' in result.stdout
+
+
+def run_preference_fixture(tmp_path,content):
+    root=tmp_path.resolve()/'host';root.mkdir()
+    (root/'boot/config').mkdir(parents=True)
+    (root/'boot/config/share.cfg').write_bytes(content)
+    tools=tmp_path/'tools';tools.mkdir()
+    for name,body in {
+        'timeout':'shift\nexec "$@"',
+        'realpath':'for value do :; done; printf "%s\\n" "$value"',
+    }.items():
+        path=tools/name;path.write_text('#!/bin/sh\n'+body+'\n');path.chmod(0o700)
+    result=subprocess.run(['/bin/bash',str(SCRIPT),str(root)],capture_output=True,text=True,
+        env={**os.environ,'PATH':str(tools)+os.pathsep+os.defpath})
+    assert result.returncode==0,result.stderr
+    return result.stdout
+
+
+def test_crlf_preferences_are_observed_without_modifying_source(tmp_path):
+    before=b'shareSMBEnabled="yes"\r\nshareNFSEnabled="no"\r\n'
+    output=run_preference_fixture(tmp_path,before)
+    assert 'key=shareSMBEnabled observed=yes assignments=1 terminal_cr_lines=2' in output
+    assert 'key=shareNFSEnabled observed=no assignments=1 terminal_cr_lines=2' in output
+    assert (tmp_path/'host/boot/config/share.cfg').read_bytes()==before
+
+
+def test_unquoted_canonical_values_are_observed(tmp_path):
+    output=run_preference_fixture(tmp_path,b'shareSMBEnabled=yes\nshareNFSEnabled=no\n')
+    assert 'key=shareSMBEnabled observed=yes assignments=1' in output
+    assert 'key=shareNFSEnabled observed=no assignments=1' in output
+
+
+def test_duplicate_and_executable_looking_values_stay_unverified(tmp_path):
+    output=run_preference_fixture(tmp_path,
+        b'shareSMBEnabled="yes"\nshareSMBEnabled="no"\nshareNFSEnabled=$(must_not_execute)\n')
+    assert 'key=shareSMBEnabled observed=unverified assignments=2' in output
+    assert 'key=shareNFSEnabled observed=unverified assignments=1' in output
+    assert 'must_not_execute' not in output
