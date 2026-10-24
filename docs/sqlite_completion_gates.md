@@ -4,6 +4,13 @@ This is the fixed-scope checklist for `feature/sqlite`. Do not equate a
 percentage of tests passing with readiness to run SQLite in production.
 A gate is complete only when its acceptance criteria are verified.
 
+**Current scope, approved 2026-10-24:** adopt the
+[scheduled-run contract](sqlite-scheduled-run-contract.md). Gate 6 now targets a
+complete scan before moves, fresh per-move checks, capability-verified same-filesystem
+renames and retained uncertainty. Host-wide writer exclusion and boot/service
+fences are no longer required for this initial operating model. Later historical
+maintenance-fence entries do not override this contract. No gate is newly complete.
+
 | Gate | Acceptance criteria | Current state |
 | --- | --- | --- |
 | 1. Storage and schema | Validated SQLite snapshot, durable revisioned persistence | Complete: isolated tests |
@@ -11,7 +18,7 @@ A gate is complete only when its acceptance criteria are verified.
 | 3. Guarded checkpoints | Compare-and-swap, stale-writer rejection, uncertain checkpoint quarantine | Complete: isolated tests |
 | 4. Lifecycle decision parity | Representative movie/season clocks and read-only rehearsal | Complete: isolated tests |
 | 5. Restart and failure rehearsals | Pending intents persist, crashes fail closed, no automatic replay | Complete: disposable Unraid tests |
-| 6. Trusted move verification | Bind identity and paths, independently prove the moved object, reject races and ambiguous outcomes | In progress: native Unraid tests verify live source-retaining Waiting/Holding completion, held paths, fresh protections and failure retention. shfs rejects no-replace publication and retains source/intent. Real Mac NFSv3 pause/recovery passed without module loads. External-writer ownership, atomic source-entry fencing and production crash trust remain open |
+| 6. Scheduled move verification | Complete scan before dispatch; fresh protection/decision/source checks; supported same-filesystem rename; durable intent and crash recovery; accepted concurrency limits | In progress: daily schedule calculator implemented/tested; scan barrier, bounded move executor, fresh checks, recovery and worker integration remain open. Historical maintenance fixtures do not establish these requirements |
 | 7. Atomic lifecycle reconciliation | Verified move clock change and intent clearance commit together; failure injection proves all-or-nothing | In progress: Unraid verifies atomic Waiting/Holding destination clocks, stable Arr queue, retained-original ledger and intent clearance, including uncertain commits. Production completion still depends on gate 6 and live integration |
 | 8. Production lifecycle integration | Real Waiting/Holding/Keep/Removal moves use guarded ordering; existing JSON path unaffected until cutover | Not wired: capped, revision-chained isolated batches support Waiting/Holding decisions and stop on uncertainty; production audit paths still reject SQLite |
 | 9. External integrations | Arr uncertain outcomes, Jellyfin protection, dashboard authoritative reads, TV-season behavior | In progress: 539-title live advisory coverage, bounded fresh protection scans, one-shot Arr uncertainty, and whole-show copy preservation are verified. Production Arr verification, dashboard authority and season-pruning execution remain open |
@@ -27,7 +34,7 @@ used different scopes and should not be compared or treated as reliable.
 Production authority remains JSON. SQLite production activation and permanent
 filesystem deletion remain disabled.
 
-## Current host closure package
+## Historical host closure package — superseded as the initial rollout target
 
 The consolidated [host implementation and acceptance package](sqlite-gate6-host-closure-package.md)
 separates accepted live-observer/copy/recovery evidence from the remaining host
@@ -36,7 +43,7 @@ recovery deliverables. Those implementations remain absent; additional isolated
 smoke tests cannot close Gate 6. Tower changes and boot acceptance need a
 reviewable implementation package and separately approved maintenance window.
 
-## Gate 6 current exit checklist
+## Historical maintenance-fence exit checklist
 
 This is the current summary; the later entries preserve the evidence history.
 A passing disposable scenario does not establish the corresponding production
@@ -82,7 +89,7 @@ Real FIFO/symlink/directory substitutions and a post-intent failure are tested
 in bounded children. No production execution is wired and no gate is newly
 complete. See the latest subsection in the [move trust contract](sqlite-production-move-trust-contract.md).
 
-## Next engineering task
+## Historical maintenance-fence engineering task
 
 Extend the disposable witnessed-move contract into a production-reviewed,
 trusted verification design **before** permitting production intent clearance. The existing directory fingerprints, unique-location checks,

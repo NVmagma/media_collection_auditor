@@ -1,3 +1,8 @@
+> Historical maintenance-fence work. The user approved the
+> [scheduled-run model](sqlite-scheduled-run-contract.md) on 2026-10-24.
+> This package is no longer a required Gate 6 closure path for the initial rollout.
+> It does not authorize service changes or production activation.
+
 # Gate 6: host implementation and acceptance package
 
 Status: design review; **not approved for installation or execution**. No host
