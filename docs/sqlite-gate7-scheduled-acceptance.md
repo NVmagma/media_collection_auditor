@@ -1,8 +1,9 @@
 # Gate 7 scheduled reconciliation acceptance
 
-Status: implementation, local acceptance and exact-implementation test CI passed.
-Only a native Tower acceptance result remains required before closure. Gate 6 stays
-closed. No production backend selection, image deployment or deletion is enabled.
+Status: **Gate 7 complete for the scheduled model, 2026-10-24.** Implementation,
+local acceptance, exact-implementation test CI and native Tower acceptance passed.
+Gate 6 stays closed. No production backend selection, image deployment or deletion
+is enabled.
 
 ## Atomicity boundary
 
@@ -72,12 +73,28 @@ passed for implementation commit `7d6823cf211f22490fc0ed9bb984e8105c705ade`:
 These are separate workflow steps, not a claim that the final release suite ran.
 No Docker image was built or published. Later acceptance-document-only commits
 retain the same app/scripts/tests/workflow implementation tree. No further Gate 7
-implementation item remains after a successful native result from this package.
+implementation item remains; the native result below completes acceptance.
 
 ## Native Tower acceptance
 
-The test-only Python safety CI has passed. Run from the pulled `feature/sqlite`
-checkout on Tower:
+The operator supplied passing native acceptance on 2026-10-24:
+
+- Lab: `/mnt/media/sql_test/scheduled-gate7.vPTBGq`.
+- Source revision: `0c3336bc570ed83d798c5c6e6e6f22b7e51215ce`, a documentation-only
+  descendant with the same implementation tree as the passing CI revision.
+- Atomic reconciliation: 19 tests passed in 13.551 seconds.
+- Scheduled move regressions: 27 tests passed in 13.517 seconds.
+- Private HTTP transport: 11 tests passed in 0.241 seconds.
+- Final status: `scheduled_gate7_acceptance_complete`, `fixture_only=true`,
+  `production_activation=disabled`, `production_authorized=false`.
+
+The swap-limit warning did not prevent any checks from passing. Only new lab files
+and a new fixture container were used; production media, configuration, services,
+exports, boot settings and kernel controls were unchanged. Together with passing
+implementation CI, this closes Gate 7. No further Gate 7 feature round is required.
+
+The accepted procedure, retained for reproducibility, runs from the pulled
+`feature/sqlite` checkout on Tower:
 
 ```bash
 cd /mnt/user/sqlite_lab_checkout
@@ -96,14 +113,12 @@ kernel/module controls remain untouched.
 
 Expected final status: `scheduled_gate7_acceptance_complete`, with
 `fixture_only=true`, `production_activation=disabled`, `production_authorized=false`.
-Any failing/unsupported scenario prevents that success status. A passing native
-result plus passing implementation CI closes Gate 7 without another feature round.
-Tower's existing non-interactive SSH authentication is unavailable to this agent,
-so this final host acceptance requires the operator to run the command.
+Any failing/unsupported scenario prevents that success status. The operator
+executed this host acceptance and supplied the passing result recorded above.
 
 ## Later gates
 
-Production worker/settings/backend wiring, multi-library root routing, configured
+Gate 8 production lifecycle integration is next. Production worker/settings/backend wiring, multi-library root routing, configured
 credentials and Arr delivery belong to Gates 8–9. Full release/image verification,
 operator restore procedures, backup/rollback acceptance and activation approval
 remain Gate 10 work. Gate 7 does not enable permanent deletion, season pruning,
