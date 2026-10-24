@@ -27,7 +27,7 @@ class ArrTitleUpdate:
     The expected source path comes from the bound preparation, not remote title
     search. Other resource fields, including Sonarr seasons, remain unchanged.
     """
-    def __init__(self, *, service, base_url, token, source_path, title_folder):
+    def __init__(self, *, service, base_url, token, source_path, title_folder, verify_binding=None):
         client = ArrCatalogGET(service=service, base_url=base_url, token=token)
         self._url, self._token, self._opener = client._url, client._token, client._opener
         self._service = service
@@ -35,12 +35,16 @@ class ArrTitleUpdate:
         self._source = _canonical(source_path)
         if self._source.rsplit('/', 1)[-1] != self._folder:
             raise ValueError('Bound Arr source folder required')
+        if verify_binding is not None and not callable(verify_binding):
+            raise ValueError('Callable binding verifier required')
+        self._verify = verify_binding or (lambda: None)
         self._used = False
 
     def __repr__(self):
         return '<ArrTitleUpdate redacted>'
 
     def _request(self, method, url, deadline, body=None):
+        self._verify()
         try:
             remaining = deadline - monotonic()
             if remaining <= 0:
@@ -67,6 +71,7 @@ class ArrTitleUpdate:
             record = json.loads(raw, object_pairs_hook=_object, parse_constant=invalid)
             if not isinstance(record, dict):
                 raise ValueError('shape')
+            self._verify()
             return record
         except HTTPError as error:
             error.close()

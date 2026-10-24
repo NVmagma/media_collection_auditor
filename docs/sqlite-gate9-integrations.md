@@ -272,3 +272,53 @@ checks, 671 SQLite regressions and 286 isolated safety tests (separate steps).
 Local focused checks passed 90 tests. The isolated Linux container passed 11
 delivery, 6 configured queue, 27 rename and 11 HTTP cases, including actual
 SIGKILL. Tower acceptance remains pending; production activation stays disabled.
+
+
+### Tower delivery acceptance
+
+Source `be9e0d37e6e837d36aa150e1f82754d61fb07d55` passed both parents:
+`/mnt/user/sql_test/arr-delivery.4i7hkQ`: 11 delivery cases in 6.280s and
+11 HTTP cases in 0.238s; `/mnt/media/sql_test/arr-delivery.huSUY8`: 11 delivery
+cases in 5.406s and 11 HTTP cases in 0.285s. Both ended with
+`arr_delivery_acceptance_complete`, retaining pending state as designed.
+
+## Known-outcome completion in disposable labs
+
+`complete_disposable_arr_request` owns a new transport attempt, pinned database,
+stage-parent/title descriptors and one cooperating runner lock. It requires an
+exact stable-ID queue and unique destination clock/location before intent. Every
+HTTP request checks the same local identities and verified SQLite session.
+After acknowledged PUT and two exact independent readbacks, it records the applied
+phase, rechecks the chain, and clears only its own queue and intent in one CAS.
+Clocks, unrelated queue entries and unknown fields are preserved. Existing
+intents are never adopted. The old diagnostic inspector and generic recovery
+clearance remain blocked. This helper is not wired to the configured worker or
+production entry point; production activation remains sealed.
+
+Fourteen private HTTP/SQLite tests cover Holding/Keep/Removal and movie/TV completion, season preservation,
+uncertain PUT/readback, title/root/database replacement, concurrent tracking/queue
+changes, final SQL failure, lost final commit acknowledgement and old-intent
+refusal. On final SQL failure, the applied intent and queue remain. A lost final
+commit acknowledgement may leave the atomic completed state; it raises and stops,
+and its missing queue prevents resending. No automatic retry is introduced.
+
+Tower acceptance for this next boundary is pending:
+
+```bash
+(
+  set -eu
+  cd /mnt/user/sqlite_lab_checkout
+  [ "$(git branch --show-current)" = feature/sqlite ]
+  git pull --ff-only origin feature/sqlite
+  for parent in /mnt/user/sql_test /mnt/media/sql_test; do
+    bash scripts/sqlite_arr_completion_lab.sh "$parent"
+  done
+)
+```
+
+Expected per parent: 14 completion tests and 11 HTTP regressions, ending with
+`arr_completion_acceptance_complete`, scope `known_outcome_arr_completion`. Only
+new fixture files/container and private fake Arr HTTP are used; no real services,
+production media/state/settings or kernel controls change. Gate 9 remains open
+for configured-worker delivery integration, coordinator/history authority and
+remaining TV-season compatibility.
