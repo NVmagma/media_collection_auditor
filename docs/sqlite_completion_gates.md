@@ -21,7 +21,7 @@ Tower acceptance on 2026-10-24 under this scheduled-run scope.
 | 5. Restart and failure rehearsals | Pending intents persist, crashes fail closed, no automatic replay | Complete: disposable Unraid tests |
 | 6. Scheduled move verification | Complete scan before dispatch; fresh protection/decision/source checks; supported same-filesystem rename; durable intent and crash recovery; accepted concurrency limits | Complete for the scheduled model: local checks, exact-implementation CI, and native Tower acceptance passed (27 filesystem/integration tests and 11 HTTP transport tests). Production activation remains disabled; worker/root routing is Gate 8 work |
 | 7. Atomic lifecycle reconciliation | Bound applied revision/snapshot; source/destination clocks, exact intent clearance and optional Arr queue share one CAS commit; real SQL/process-failure tests prove old-or-new outcomes | Complete for the scheduled model: exact-implementation CI for 7d6823c and native Tower acceptance passed (19 atomic reconciliation, 27 move regression and 11 HTTP transport tests). See scheduled Gate 7 acceptance; production activation remains disabled |
-| 8. Production lifecycle integration | Real Waiting/Holding/Keep/Removal moves use guarded ordering; existing JSON path unaffected until cutover | In progress: production-shaped configuration, held multi-library inventory, global cap and configured Jellyfin scan adapter implemented; worker preparation accepted on both Tower filesystem views. Discovery/content observation also accepted on Tower; disposable clock checkpoint/rebuild accepted on both views. Configured multi-library routed renames also accepted on native Tower. Composed daily-slot workflow accepted on native Tower; effective settings bridge and preparatory schedule fields implemented; configured GET collection/slot composition accepted on native Tower; separated control/database/media worker layout accepted on native Tower; candidate daily worker/service and database binding implemented behind sealed activation gate, final native runtime acceptance pending; production audit paths still reject SQLite |
+| 8. Production lifecycle integration | Real Waiting/Holding/Keep/Removal moves use guarded ordering; existing JSON path unaffected until cutover | Complete for the scheduled model: configured multi-library clocks, fresh Jellyfin reads, routed moves, daily claims, separate control/database/media layout and candidate worker/service integration passed exact-implementation CI and native Tower acceptance. Final runtime acceptance at cad51d8 passed 8 runtime and 11 HTTP tests. Production activation remains sealed; see the worker integration record |
 | 9. External integrations | Arr uncertain outcomes, Jellyfin protection, dashboard authoritative reads, TV-season behavior | In progress: 539-title live advisory coverage, bounded fresh protection scans, one-shot Arr uncertainty, and whole-show copy preservation are verified. Production Arr verification, dashboard authority and season-pruning execution remain open |
 | 10. Deployment and rollback | Disposable Unraid end-to-end tests, full CI, Docker build, backup/rollback, explicit activation approval | Incomplete: full native Unraid suite passed 1,650 tests and 22 subtests through d67b7da; maintained shfs suite passed 475 tests and 19 subtests. Accepted operational restore, final release CI/image and explicit activation approval remain open |
 
@@ -33,7 +33,7 @@ operator's native Tower result received on 2026-10-24. The final status was
 `scheduled_gate6_acceptance_complete`; all 27 filesystem/integration tests and
 11 HTTP transport tests passed. Gate 6 is closed under the approved scheduled
 model. Historical host-wide controller/boot requirements below do not reopen it.
-Gate 7 is also closed; Gate 8 production integration is next. Production behavior and activation remain unchanged.
+Gates 7–8 are also closed; Gate 9 external integration is next. Production behavior and activation remain unchanged.
 
 ## Current scheduled Gate 7 exit checklist
 
@@ -45,15 +45,20 @@ reconciliation, 27 move regression and 11 HTTP transport tests passed, ending in
 to the applied revision/snapshot and optional Arr queue data is atomic with the
 clock/intent. No production image or host-service change was made.
 
-## Current Gate 8 integration
+## Current scheduled Gate 8 exit checklist
 
-The [worker integration record](sqlite-gate8-worker-integration.md) tracks the
-production-shaped configuration/inventory boundary and its disposable acceptance.
-This milestone does not enable production moves or reopen Gates 6–7.
+The [worker integration record](sqlite-gate8-worker-integration.md) records passing
+CI for implementation `e5b0cde` and native Tower runtime acceptance from source
+`cad51d8`, lab `/mnt/media/sql_test/scheduled-runtime.0IDSbG`, received on
+2026-10-24. All 8 runtime and 11 HTTP tests passed, ending in
+`scheduled_runtime_acceptance_complete`. Prior clock, configured HTTP, routed
+move and separated-layout boundaries are also accepted. Gate 8 is closed under
+the scheduled model. The original JSON path remains unchanged; SQLite production
+selection stays sealed. Gates 9–10 and explicit activation approval remain open.
 
 ## Current decision
 
-Seven of ten *gates* have been met, but these gates do not represent equal
+Eight of ten *gates* have been met, but these gates do not represent equal
 amounts of work. Do not publish an overall percent complete without a
 documented weighting and stable denominator. Earlier 90% and 65–70% estimates
 used different scopes and should not be compared or treated as reliable.

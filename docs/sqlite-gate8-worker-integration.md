@@ -546,7 +546,14 @@ and backend-gate tests with 27 subtests, 23 atomic regressions, 671 SQLite
 regressions and 260 isolated safety tests (separate workflow steps). No image was
 built or deployed.
 
-Native Tower acceptance of this final candidate runtime is required:
+Native Tower acceptance of this final candidate runtime passed at source
+`cad51d8ea03da47289514eb4e48524936c57ddc8`, lab
+`/mnt/media/sql_test/scheduled-runtime.0IDSbG`: all 8 runtime tests in 2.993 seconds
+and 11 HTTP transport tests in 0.236 seconds. Final status was
+`scheduled_runtime_acceptance_complete`, scope `candidate_daily_worker_runtime`.
+Production activation remained disabled and authorization false; production
+media/configuration/services, exports, boot settings and kernel controls were
+unchanged. The accepted command is retained for reference:
 
 ```bash
 (
@@ -564,14 +571,16 @@ Only newly created fixture files/container/private loopback HTTP are used. Publi
 production activation remains sealed throughout. No production roots, state,
 credentials, service controls, exports, boot settings or kernel controls are used.
 
-## Remaining Gate 8 scope
+## Gate 8 closure — 2026-10-24
 
-The worker/service connection is implemented behind the release gate. Native Tower
-acceptance of the candidate runtime above is the remaining Gate 8 evidence before
-closure. The earlier native layout, configured HTTP/slot, routed moves and clock
+Gate 8 is complete under the approved scheduled-run contract. The final candidate
+worker/service connection passed exact-implementation CI and native Tower
+acceptance. The earlier native layout, configured HTTP/slot, routed moves and clock
 boundaries remain accepted; the original JSON interval/manual path is unchanged.
+No Gate 8 acceptance work remains. Production selection stays sealed by the
+unconditional release gate; completion is integration acceptance, not activation.
 
 Configured Arr delivery and dashboard/status authority belong to Gate 9. Final
 image packaging, persistent-path setup, migration/backup/rollback, release runtime
 selection and explicit activation approval remain Gate 10 work. Gate 8 closure
-will not authorize deployment, migration or SQLite production execution.
+does not authorize deployment, migration or SQLite production execution.
