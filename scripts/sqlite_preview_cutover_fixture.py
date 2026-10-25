@@ -162,7 +162,8 @@ class PreviewCutoverFixtureTests(unittest.TestCase):
     def test_managed_template_capture_is_private_and_name_bound(self):
         self.inputs()
         template = self.root / 'original-template.xml'
-        template.write_text('<Container><Name>media_collection_auditor</Name><Config>' + SECRET + '</Config></Container>')
+        template.write_text('<Container><Name>media_collection_auditor</Name>'
+            '<Config Type="Variable" Target="INTEGRATION_API_TOKEN">' + SECRET + '</Config></Container>')
         report = self.write()
         self.assertEqual(report['managed_template'], 'captured_for_review')
         self.assertNotIn(SECRET, json.dumps(report))

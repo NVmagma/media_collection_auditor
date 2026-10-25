@@ -151,6 +151,21 @@ class PreviewInstallFixtureTests(unittest.TestCase):
                                         preview_image='sha256:' + 'd' * 64)
         self.assertEqual(list(self.root.iterdir()), [])
 
+    def test_changed_proposed_unraid_template_blocks_before_installation(self):
+        from app import sqlite_preview_cutover as packet
+        case = PreviewCutoverFixtureTests(); case.setUp(); self.addCleanup(case.doCleanups)
+        case.inputs()
+        (case.root / 'original-template.xml').write_text('<Container><Name>media_collection_auditor</Name></Container>')
+        packet.write_review_packet(directory=case.root, preview_image='sha256:' + 'd' * 64,
+            rollback_image=OLD, control_host='/mnt/user/appdata/media_collection_auditor_sqlite_control',
+            source_revision='b' * 40)
+        (case.root / packet.TEMPLATE_FILE).write_text('<Container><Name>changed</Name></Container>')
+        info = case.root.stat()
+        with self.assertRaisesRegex(RuntimeError, 'proposed managed template changed'):
+            install.read_install_packet(directory=case.root, expected_identity=(info.st_dev, info.st_ino),
+                                        preview_image='sha256:' + 'd' * 64)
+        self.assertEqual(list(self.root.iterdir()), [])
+
 
 def actual_image_cli():
     """Invoke the packaged CLI with actual private Docker bind layout, never mocks."""
@@ -203,7 +218,7 @@ def actual_image_cli():
 
 if __name__ == '__main__':
     result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(PreviewInstallFixtureTests))
-    if not result.wasSuccessful() or result.testsRun != 12 or result.skipped: raise SystemExit(1)
+    if not result.wasSuccessful() or result.testsRun != 13 or result.skipped: raise SystemExit(1)
     print(json.dumps({'status': 'offline_preview_install_recovery_verified', 'tests': result.testsRun,
         'fixture_only': True, 'service_actions_performed': False, 'media_actions_authorized': False}))
     if '--actual-image' in sys.argv:

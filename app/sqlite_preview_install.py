@@ -192,6 +192,14 @@ def read_install_packet(*, directory, expected_identity, preview_image):
             preview_image=preview_image, rollback_image=report['original_image_id'],
             control_host=report['control_host_path'], source_revision=_revision())
         plan['input_sha256'] = hashes
+        if report.get('managed_template') == 'captured_for_review':
+            from app.sqlite_preview_template import render_preview_template
+            proposed_xml, _ = render_preview_template(original=_local(parent, 'original-template.xml')[0],
+                env=env, plan=plan, review=report)
+            plan['proposed_template_sha256'] = _sha(proposed_xml)
+            if (_local(parent, packet.TEMPLATE_FILE)[0] != proposed_xml
+                    or report.get('proposed_template_sha256') != _sha(proposed_xml)):
+                raise RuntimeError('Private proposed managed template changed')
         if (parse_unique_json(_local(parent, packet.SPEC_FILE)[0]) != plan
                 or _local(parent, packet.CONFIG_FILE)[0] != _encode(proposed)
                 or _local(parent, packet.ENV_FILE)[0] != ''.join(k + '=' + v + '\n' for k, v in sorted(env.items())).encode()):

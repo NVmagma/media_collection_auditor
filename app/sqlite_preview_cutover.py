@@ -27,6 +27,7 @@ ENV_FILE = 'preview.env'
 CONFIG_FILE = 'proposed-config.json'
 SPEC_FILE = 'container-plan.json'
 REPORT_FILE = 'review.json'
+TEMPLATE_FILE = 'proposed-template.xml'
 ENV_MARKER = '@PRIVATE_PACKET_ENV_FILE@'
 
 
@@ -306,14 +307,27 @@ def write_review_packet(*, directory, preview_image, rollback_image, control_hos
         inputs_sha = {name: hashlib.sha256(raw).hexdigest() for name, (raw, _) in captured.items()}
         report.update(input_sha256=inputs_sha, original_settings_preserved=True, managed_template=template_status)
         plan['input_sha256'] = inputs_sha
+        proposed_template = None
+        if template_status == 'captured_for_review':
+            from app.sqlite_preview_template import render_preview_template, TemplateReviewBlocked
+            try:
+                proposed_template, summary = render_preview_template(original=captured['original-template.xml'][0],
+                    env=env, plan=plan, review=report)
+            except TemplateReviewBlocked as error:
+                _block(str(error))
+            plan['proposed_template_sha256'] = hashlib.sha256(proposed_template).hexdigest()
+            report.update(summary)
+            report['proposed_template_sha256'] = plan['proposed_template_sha256']
         # The fixed output set is exclusive; a partial or completed packet is never reused.
-        for name in (ENV_FILE, CONFIG_FILE, SPEC_FILE, REPORT_FILE):
+        for name in (ENV_FILE, CONFIG_FILE, SPEC_FILE, REPORT_FILE, TEMPLATE_FILE):
             try: os.stat(name, dir_fd=parent, follow_symlinks=False)
             except FileNotFoundError: continue
             _block('existing_packet_output')
         _write_private(parent, ENV_FILE, ''.join(key + '=' + value + '\n' for key, value in sorted(env.items())).encode('utf-8'))
         _write_private(parent, CONFIG_FILE, _encode(proposed))
         _write_private(parent, SPEC_FILE, _encode(plan))
+        if proposed_template is not None:
+            _write_private(parent, TEMPLATE_FILE, proposed_template)
         for name, (raw, original_info) in captured.items():
             current, current_info = _local(parent, name)
             if current != raw or current_info.st_ino != original_info.st_ino or current_info.st_dev != original_info.st_dev:

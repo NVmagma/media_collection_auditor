@@ -747,3 +747,47 @@ CLIs on new separate `/packet`, `/app/logs`, `/sqlite-control` and read-only
 `/media` mounts. Tower filesystem acceptance of this new atomic settings boundary
 remains pending. The final host service controller, managed-template integration,
 immutable registry selection and explicit production approval remain outstanding.
+
+### Tower offline install/recovery accepted
+
+Both Tower paths passed the twelve offline install/recovery cases and actual
+packaged CLI checks at `8daffc87ef369782b411c3dc03f94fc878a0516e`, image
+`sha256:b9461061e71f8612a58c91e88cb5b35bf4242eb9ba0890ad1df15ab90e881797`.
+Evidence: `/mnt/user/sql_test/preview-install.s6cG8u` and
+`/mnt/media/sql_test/preview-install.Dl7ek9`, each with
+`actual_offline_install_cli_verified` and
+`offline_preview_install_acceptance_complete`. Fresh JSON was preserved and
+original settings restored inside disposable mounts; production stayed unchanged.
+
+### Private managed-template integration
+
+The private review now emits `proposed-template.xml` when the original managed
+template is captured. `app.sqlite_preview_template` rebuilds the runtime fields
+from the same reviewed container plan and environment: SQLite backend/control
+mount, read-only media, preserved published port and application variables,
+frozen schedule, restart=no and read-only root filesystem. Original XML remains
+byte-exact. Unknown display metadata is preserved; stale extra/post arguments
+cannot override the generated runtime plan. Unsupported devices, duplicate fields,
+custom network controls or variables absent from the running container block
+review. Secrets remain in protected private files; only compatibility metadata
+and hashes reach the report. The installer recomputes and compares this proposed
+XML before accepting the packet.
+
+The renderer was checked against the upstream
+[Unraid DockerMan template translation](https://github.com/unraid/webgui/blob/master/emhttp/plugins/dynamix.docker.manager/include/Helpers.php).
+Its additional entity decoding/tag filtering is why values that cannot roundtrip
+losslessly are rejected, rather than modifying credentials. Bind propagation
+uses the template's supported `slave` spelling. This is a format review, not a
+claim that Tower's installed helper bytes or a future Apply have been executed.
+
+The repository remains an explicit `@APPROVED_PREVIEW_REFERENCE@` placeholder in
+the proposal. A separate pure transformation accepts only an immutable digest
+under `ghcr.io/nvmagma/media_collection_auditor`; it performs no publication or
+installation and does not establish that the digest matches the cached image.
+The final host controller must verify that identity before any service change.
+
+Tower's real private XML compatibility must be reviewed through a fresh private
+capture before selecting the final service/template installation procedure.
+The helper does not source Unraid PHP, execute its Docker commands, overwrite a
+managed template or change services. Gate 10 remains open for final control,
+registry identity, cutover/recovery review and explicit production approval.
