@@ -20,9 +20,11 @@ on:
       - 'scripts/sqlite_preview_packet_render.sh'
       - 'scripts/sqlite_preview_install*'
       - 'scripts/sqlite_preview_template*'
+      - 'scripts/sqlite_preview_service*'
       - 'tests/test_sqlite_preview_cutover.py'
       - 'tests/test_sqlite_preview_install.py'
       - 'tests/test_sqlite_preview_template.py'
+      - 'tests/test_sqlite_preview_service.py'
       - 'requirements.txt'
   workflow_dispatch:
 
@@ -101,6 +103,10 @@ jobs:
           image=$(cat "$RUNNER_TEMP/preview-release-image.txt")
           install_parent=$(mktemp -d "$RUNNER_TEMP/install-parent.XXXXXX")
           bash scripts/sqlite_preview_install_lab.sh "$image" "$install_parent" | tee "$RUNNER_TEMP/preview-install-acceptance.log"
+      - name: Exercise scoped actual Docker handoff and explicit recovery
+        run: |
+          image=$(cat "$RUNNER_TEMP/preview-release-image.txt")
+          sudo bash scripts/sqlite_preview_service_lab.sh "$image" | tee "$RUNNER_TEMP/preview-service-acceptance.log"
       - name: Retain build and acceptance evidence
         uses: actions/upload-artifact@v4
         with:
@@ -117,3 +123,4 @@ jobs:
             ${{ runner.temp }}/preview-release-acceptance.log
             ${{ runner.temp }}/private-packet-acceptance.log
             ${{ runner.temp }}/preview-install-acceptance.log
+            ${{ runner.temp }}/preview-service-acceptance.log

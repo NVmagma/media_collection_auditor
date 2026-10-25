@@ -791,3 +791,57 @@ capture before selecting the final service/template installation procedure.
 The helper does not source Unraid PHP, execute its Docker commands, overwrite a
 managed template or change services. Gate 10 remains open for final control,
 registry identity, cutover/recovery review and explicit production approval.
+
+### Tower managed-template compatibility accepted
+
+Tower completed the private managed-template review at
+`54372f8b476b8affcb7b51e705bfc5cdbcb39381`, worker image
+`sha256:83933b4aa1819ec156f8432f6ac64c234a21a32123de8655c893dd797c8c2db8`,
+packet `/mnt/user/sql_test/cutover-review.sSK5fF`. The output confirms
+`managed_template_plan=prepared_not_installed`, 53 environment entries, read-only
+media, private control bind and host port 8089. The registry digest remains an
+approval placeholder. Existing configuration/services stayed unchanged.
+
+### Service transaction and explicit recovery
+
+`scripts/sqlite_preview_service.py` now composes the offline installer with exact
+Docker service identities and private managed-template replacement. It validates
+the cached published digest against the reviewed image and source label before
+any service action. A private exclusive journal records intent before each stop,
+offline preparation, rename, create, start and template replacement. The original
+container is archived and retained, never removed. Health requires private-bridge
+authenticated preview APIs and unauthenticated 401 responses before template
+installation. Exceptions and lost acknowledgements do not retry or automatically
+restore services. External API errors and payloads are not printed.
+
+Explicit recovery stops the recorded preview first, then verifies/restores settings
+and template before naming/starting the retained original. Advanced/changed SQL
+or JSON blocks settings recovery. An uncertain create requires a human-supplied,
+fully validated preview ID; no container is automatically adopted by name. A
+corrupt history or a changed original image/config/mount scope blocks replay.
+The service client implements only inspect/image reads and scoped stop/rename/
+create/start; no daemon controls, container removal, kernel or export operations.
+
+The service fixture uses a fresh local Docker volume under protected daemon data
+ancestors, two uniquely named new containers and a strictly scoped name/ID adapter.
+One is an idle stand-in, not the legacy worker; the second runs the actual preview
+image and real authenticated APIs. The registry attestation is synthetic and no
+image is published. No host port is published. The fixture proves real Docker
+handoff, offline migration, template replacement, explicit recovery and unchanged
+JSON/SQL. It also models logs owned by 99:100 (0755). The transient helper needs
+DAC_OVERRIDE to stage files there without changing existing directory permissions;
+CHOWN is used only to prepare this disposable ownership fixture.
+
+Only the fixture's recorded IDs and new volume subtree are admitted by its adapter.
+On success it removes its own new containers/volume; on failure it retains the
+volume for review. The Docker API access is a control capability; a read-only
+socket mount would not restrict API methods. This is script-enforced fixture scope,
+not a Docker daemon authorization policy. Production names, appdata, media and
+Unraid templates are not mounted or selected by the fixture.
+
+The worker image can remain the already accepted image: the fixture requires its
+tracked app code to match current app code, while controller scripts have their
+own recorded revision. Tower's Docker 29.8.2 acceptance of this service boundary
+is pending. The final production host launcher/publication selection and explicit
+activation approval remain outstanding; no production service command is issued
+by this documentation or by the fixture.
