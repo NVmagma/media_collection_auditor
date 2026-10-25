@@ -75,7 +75,7 @@ def run(*, image, source_revision, checkout):
         raise RuntimeError('Candidate identity mismatch')
     config = metadata[0]['Config']
     labels = config.get('Labels') or {}
-    if (config.get('Volumes') or config.get('Entrypoint') != ['python', '-m', 'app.main']
+    if (config.get('StopSignal') != 'SIGINT' or config.get('Volumes') or config.get('Entrypoint') != ['python', '-m', 'app.main']
             or labels.get('org.opencontainers.image.revision') != source_revision
             or labels.get('io.media-collection-auditor.sqlite-activation') != 'disabled'):
         raise RuntimeError('Sealed candidate metadata required')

@@ -9,7 +9,7 @@ CONTAINER = 'c' * 64
 
 
 def metadata(**overrides):
-    config = {'Entrypoint': ['python', '-m', 'app.main'], 'Volumes': None,
+    config = {'StopSignal': 'SIGINT', 'Entrypoint': ['python', '-m', 'app.main'], 'Volumes': None,
         'Labels': {'org.opencontainers.image.revision': REVISION,
                    'io.media-collection-auditor.sqlite-activation': 'disabled'}}
     config.update(overrides)

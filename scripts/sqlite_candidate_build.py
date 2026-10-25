@@ -21,7 +21,7 @@ def build(*, checkout, base_image):
     if not re.fullmatch(r'[0-9a-f]{40}', revision):
         raise RuntimeError('Exact source revision required')
     git('diff', '--exit-code', 'HEAD', '--', 'app', 'requirements.txt',
-        'docker/sqlite-candidate.Dockerfile', 'unraid/assets/Media_Collection_Auditor_Badge.png')
+        'docker/sqlite-candidate.Dockerfile', 'docker/sqlite-candidate-constraints.txt', 'unraid/assets/Media_Collection_Auditor_Badge.png')
     archive = git('archive', '--format=tar', revision)
     with TemporaryDirectory(prefix='mca-candidate-build.') as temporary:
         iid = Path(temporary) / 'image-id'

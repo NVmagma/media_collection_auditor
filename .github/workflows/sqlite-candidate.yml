@@ -20,7 +20,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install test dependencies
-        run: python -m pip install -r requirements.txt pytest
+        run: python -m pip install -r requirements.txt -c docker/sqlite-candidate-constraints.txt pytest
       - name: Run complete disposable regression suite
         run: python -B scripts/run_sqlite_integration_checks.py --full-suite --basetemp "$RUNNER_TEMP/sqlite-release-fixtures"
       - name: Build sealed candidate without publishing

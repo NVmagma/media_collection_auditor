@@ -37,8 +37,10 @@ the unconditional activation gate. No new environment bypass exists.
 `scripts/sqlite_candidate_build.py` accepts only `feature/sqlite`, clean runtime
 inputs and a pinned official Python base. It builds from `git archive`, not the
 potentially colliding/dirty working tree, creates an untagged image, and never
-pushes to a registry. The source's requirements are installed; final resolved
-package versions still need to be frozen/recorded before a production release.
+pushes to a registry. The source's requirements are installed with the version-pinned
+`docker/sqlite-candidate-constraints.txt`, including transitive runtime packages.
+The candidate uses `STOPSIGNAL SIGINT` so Python handles Docker stop explicitly;
+the image lab refuses unclean/forced shutdown rather than hiding it.
 
 `scripts/sqlite_candidate_image_lab.py` accepts an exact cached image ID and
 matching revision label. It starts only a new constrained container, with no
