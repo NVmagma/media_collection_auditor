@@ -60,7 +60,8 @@ os.chdir(target)
 os.environ['PYTHONPATH'] = str(target) + ':/app:/app/app'
 os.environ['TMPDIR'] = '/tmp'
 for module in ('scripts.sqlite_coordinator_fixture','scripts.sqlite_scheduled_arr_fixture',
-               'scripts.sqlite_tv_compatibility_fixture','scripts.sqlite_scheduled_transport_fixture'):
+               'scripts.sqlite_tv_compatibility_fixture','scripts.sqlite_restore_fixture',
+               'scripts.sqlite_scheduled_transport_fixture'):
     subprocess.run([sys.executable,'-S','-B','-m',module],check=True,timeout=120)
 '''
 

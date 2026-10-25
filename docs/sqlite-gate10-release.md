@@ -115,3 +115,72 @@ production authority and the unconditional SQLite gate are unchanged.
 **Tower candidate packaging acceptance is pending.** Gate 10 remains open for
 that result, operational backup/migration/advanced-state restore acceptance,
 final production cutover/rollback review and explicit activation approval.
+
+## Tower candidate image acceptance
+
+Source `9b8dfbf5122a8bed4ba4606c847dcbd7f468b2c4` passed on Tower with cached
+candidate image `sha256:f03a299e190dbc3660642398904ba5c8fd53413bb93c7c1eb8bfbdd72def8f53`.
+The actual entrypoint verified 401/200 authentication, SQLite activation refusal
+and unchanged JSON bytes. All 10 coordinator, 9 Arr, 10 TV and 11 HTTP cases
+passed, ending with `candidate_image_acceptance_complete`; clean shutdown passed.
+No production container, tag, mount, port, service or configuration was changed.
+This closes the initial Tower packaging boundary, not Gate 10 as a whole.
+
+## Disposable advanced-state restore boundary
+
+`restore_disposable_json` accepts only a marked lab and single private basenames:
+`rollback-candidate-*.json` to a **new** `restored-state-*.json`. It cannot accept
+an arbitrary destination path, overwrite original JSON/backup/current output,
+activate a backend or control services. The source database, export, original JSON,
+backup and request journal stay bound to their held identities and unchanged
+bytes; the SQLite session also checks its full snapshot/revision throughout.
+Pending operations and stale exports block before creating a restore request.
+Both source/output JSON writer locks and the SQLite runner lock are held.
+
+A durable private request precedes staging. Fully written/synced/readback-verified
+staging is published with a same-directory atomic no-overwrite hard link; no
+copy/replace fallback is used. Only this attempt's staging link is removed after
+verified publication. Directory sync, output parity and current-source checks
+precede the completion receipt. Every request remains as a no-replay record.
+A failed/crashed publication may leave an output and staging link, but no success
+is reported and no automatic cleanup, retry or production use is authorized.
+Existing completion/request artifacts also block a second attempt.
+
+Sixteen cases verify advanced revision/clock/Arr/unknown-field parity, fresh JSON
+load/save/load in separate network-forbidden processes, stale/pending refusal,
+occupied and concurrently occupied destinations, escaping names, symlink and
+identity substitution refusal, concurrent SQLite changes, partial writes, sync
+failure, writer contention and actual SIGKILL immediately after publication.
+A standalone rehearsal retains successful and interrupted examples under a new
+`restore-evidence.*` directory, including source/backup/database/export, restored
+JSON and private request/completion evidence. Synthetic tracking advances are
+not claims that production media moved; actual media ordering was accepted in
+Gates 6–9. Existing advisory export/inspection functions remain non-authorizing.
+
+The candidate image includes this helper and exercises the restore fixture in
+its image acceptance. Tower testing additionally binds only a newly created lab
+on each requested filesystem, so backup/publication/restart are tested on the
+actual native and shfs paths. No host Python, Docker-socket mount, published
+port, production folder, configuration edit or service control is needed.
+
+After exact-implementation CI passes, run on Tower:
+
+```bash
+(
+  set -eu
+  cd /mnt/user/sqlite_lab_checkout
+  [ "$(git branch --show-current)" = feature/sqlite ]
+  git pull --ff-only origin feature/sqlite
+  candidate_image=$(bash scripts/sqlite_candidate_build.sh)
+  for parent in /mnt/user/sql_test /mnt/media/sql_test; do
+    bash scripts/sqlite_restore_lab.sh "$candidate_image" "$parent"
+  done
+)
+```
+
+Expected per filesystem: 16 restore cases plus retained success/interrupted
+rehearsals; final `restore_acceptance_complete`, scope
+`disposable_advanced_state_restore`. Logs and retained examples remain only in
+the newly created host lab. Unsupported publication blocks without fallback.
+Tower restore acceptance, concrete live cutover/rollback review and explicit
+activation approval remain open. This helper performs no live restore/cutover.

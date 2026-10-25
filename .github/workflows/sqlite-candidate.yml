@@ -8,6 +8,7 @@ on:
       - 'docker/sqlite-candidate*'
       - 'app/**'
       - 'scripts/sqlite_candidate_*'
+      - 'scripts/sqlite_restore*'
       - 'requirements.txt'
   workflow_dispatch:
 
