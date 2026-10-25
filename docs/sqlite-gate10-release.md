@@ -334,3 +334,42 @@ one deadline covering claims/collection. They pass locally, alongside
 54 focused tests (five Linux-only checks skipped on macOS). Packaged-image and
 host-backed CI now exercise the preview fixture. Actual Tower preview acceptance,
 activation-capable release work and final cutover/rollback tooling remain open.
+
+### Preview CI and Tower handoff
+
+Final implementation/workflow revision `a0cb5e8e2d1be8e4cda1acf1858122e8b14dff6f`
+passed [CI run 40197836676](https://github.com/NVmagma/media_collection_auditor/actions/runs/40197836676):
+**3,181 tests and 53 subtests** in 93.14s, candidate image/entrypoint checks,
+packaged preview fixtures through both image wrappers, retained restore acceptance,
+and actual host-backed `scheduled_preview_acceptance_complete`.
+
+Earlier runs 40197375282 and 40197536507 passed the suite and packaged fixtures,
+but their new host-backed preview step did not execute: BuildKit had not retained
+the base as a locally inspectable image, and the default workflow shell hid the
+failed left side of a `tee` pipeline. These runs are not host-preview acceptance.
+The correction selects the built candidate image and sets explicit Bash for every
+run step; the verified logs show `-e -o pipefail`. The final run contains both the
+ten-case preview marker and the host-wrapper completion marker.
+
+Run the same disposable wrapper on Tower's actual filesystem paths next. The
+build creates an untagged candidate only, without publishing/recreating services;
+the labs bind only their own new directories. Host Python is not required:
+
+```bash
+(
+  set -eu
+  cd /mnt/user/sqlite_lab_checkout
+  [ "$(git branch --show-current)" = feature/sqlite ]
+  git pull --ff-only origin feature/sqlite
+  candidate_image=$(bash scripts/sqlite_candidate_build.sh)
+  for parent in /mnt/user/sql_test /mnt/media/sql_test; do
+    SQLITE_LAB_IMAGE="$candidate_image" bash scripts/sqlite_scheduled_preview_lab.sh "$parent"
+  done
+)
+```
+
+Expected on each filesystem: ten preview cases, eleven private HTTP transport
+cases, then `scheduled_preview_acceptance_complete`. Share both outputs. Existing
+production JSON, media, configuration, services, exports and kernel controls are
+unchanged. Gate 10 still requires the activation-capable release and final live
+cutover/rollback tooling/review before explicit activation approval.
