@@ -21,22 +21,43 @@ from app.sqlite_scheduled_slot import _claim_scheduled_slot_locked
 from app.sqlite_scheduled_worker_cycle import ScheduledWorkerCycle
 
 
-def production_cycle_step(*, cycle, settings, now, clock=datetime.now):
+def production_cycle_step(*, cycle, settings, now, clock=datetime.now, observer=None):
     """Candidate daily selection, rejected before parsing settings or opening paths."""
     require_sqlite_production_activation()
-    return _configured_cycle_step(cycle=cycle, settings=settings, now=now, clock=clock)
+    return _configured_cycle_step(cycle=cycle, settings=settings, now=now, clock=clock, observer=observer)
 
 
-def _configured_cycle_step(*, cycle, settings, now, clock):
+def _configured_cycle_step(*, cycle, settings, now, clock, observer=None):
     from app.sqlite_scheduled_settings import scheduled_worker_from_settings
     values = dict(settings)
-    config = scheduled_worker_from_settings(values)
+    if observer is not None:
+        from app.sqlite_scheduled_observations import ScheduledRunObservations
+        if not isinstance(observer, ScheduledRunObservations):
+            raise ValueError('Scheduled process observations required')
+    try:
+        config = scheduled_worker_from_settings(values)
+    except (ValueError, TypeError):
+        if observer is not None:
+            observer.invalidate_schedule()
+        raise
     if not isinstance(cycle, ScheduledWorkerCycle):
         raise ValueError('Daily worker cycle required')
-    return cycle.step(now=now, local_time=config.schedule.local_time,
-        timezone_name=config.schedule.timezone_name,
-        run_due=lambda slot, current: _run_bound_production_slot(settings=values,
-            scheduled_at=slot, now=current, clock=clock))
+    def due(slot, current):
+        if observer is not None:
+            observer.observe_cycle(next_run=cycle.next_run, status='attempted')
+        def execute():
+            return _run_bound_production_slot(settings=values, scheduled_at=slot, now=current, clock=clock)
+        return execute() if observer is None else observer.run_attempt(scheduled_at=slot, execute=execute)
+    try:
+        result = cycle.step(now=now, local_time=config.schedule.local_time,
+            timezone_name=config.schedule.timezone_name, run_due=due)
+    except Exception:
+        if observer is not None and cycle.next_run is not None:
+            observer.observe_cycle(next_run=cycle.next_run, status='blocked')
+        raise
+    if observer is not None:
+        observer.observe_cycle(next_run=result.next_run, status=result.status)
+    return result
 
 
 def _run_bound_production_slot(*, settings, scheduled_at, now, clock, timer=monotonic):

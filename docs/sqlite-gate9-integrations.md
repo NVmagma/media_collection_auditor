@@ -450,3 +450,57 @@ checks, 671 SQLite regressions and 319 isolated safety tests (separate steps).
 Local focused checks passed 50 tests (11 Linux-specific cases skipped on macOS).
 Isolated Linux checks passed all 10 TV, 27 rename and 11 HTTP cases. Tower TV
 acceptance remains pending; no production application code or policy changed.
+
+### Tower TV acceptance
+
+Source `fe71702f4e57c19b26094c9e15aa1d7ddfa13df6` passed native lab
+`/mnt/media/sql_test/tv-compatibility.k42jF6`: 10 TV cases in 4.075s and 11 HTTP
+cases in 0.237s, ending with `tv_compatibility_acceptance_complete`.
+Whole-show compatibility is accepted with season pruning/deletion disabled.
+
+## Scheduler process and history authority
+
+`ScheduledRunObservations` records only bounded, detached process observations:
+active attempt, aware start/finish/next-slot times, completed move/Arr counts and
+verified final revision when the worker returns it. Completed worker return is
+not live inventory freshness. Stopped/exceptional attempts are failed observations;
+exceptions, URLs, title payloads and credentials are never stored. Early/manual
+wakes do not produce attempt history; invalid settings invalidate the next-slot
+observation. The service composes this observer only behind the unchanged
+production release gate, with no changes to claims, state revisions or replay.
+
+History is intentionally **current process only**, bounded to 100 records and
+not persistent. Restart begins unobserved, without reconstructing completed runs
+from JSON history. Durable claims/intents, not these observations, remain the
+execution/recovery authority. This increment does not promise durable audit-log
+retention; release packaging/operations and any future persistent-history contract
+remain outside this evidence. The dashboard discloses this scope and avoids
+showing unavailable/blocked SQL scheduler state as a successful waiting worker.
+
+Selected SQLite coordinator/history reads never call legacy JSON readers or
+fall back to JSON. With the release gate closed, API status is unavailable (503),
+flags/results are unknown and selected history is empty. Candidate test seams
+read the process observer directly. JSON coordinator/history behavior remains
+unchanged. SQLite manual Run Now returns 409 without queuing the legacy worker;
+the dashboard labels it daily-only. API authentication/redaction is unchanged.
+
+Ten stdlib cases combine restart/bounded-history/running/failure projection with
+actual candidate scan/move/Arr execution, lost acknowledgement, early wake and
+invalid settings. Focused API/dashboard checks verify selected authority and
+manual-run refusal. Native Tower acceptance of the final Gate 9 boundary is pending:
+
+```bash
+(
+  set -eu
+  cd /mnt/user/sqlite_lab_checkout
+  [ "$(git branch --show-current)" = feature/sqlite ]
+  git pull --ff-only origin feature/sqlite
+  bash scripts/sqlite_coordinator_lab.sh /mnt/media/sql_test
+)
+```
+
+Expected: 10 coordinator cases and 11 HTTP regressions, final
+`coordinator_acceptance_complete`, scope `scheduled_process_observations`.
+Only disposable media/state/container and private fake HTTP are used. Production
+services, settings, media/state and kernel controls remain unchanged. Gate 9
+closure awaits this acceptance and the final exact-implementation CI record.

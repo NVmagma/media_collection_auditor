@@ -305,3 +305,43 @@ def _require_sqlite_authority():
     else:
         from sqlite_backend_gate import require_sqlite_production_activation
     require_sqlite_production_activation()
+
+
+def selected_run_snapshot(legacy_snapshot):
+    """Select process observations without reading legacy history for SQLite."""
+    backend = os.environ.get('AUDITOR_STATE_BACKEND', 'json')
+    if backend == 'json':
+        return legacy_snapshot()
+    try:
+        if backend != 'sqlite':
+            raise RuntimeError('Unsupported backend')
+        _require_sqlite_authority()
+        from app.sqlite_scheduled_observations import COORDINATOR
+        return {**COORDINATOR.report(), 'storage_authority': 'sqlite'}
+    except RuntimeError:
+        return {**audit_status_report(None), 'source': 'selected_coordinator_unavailable',
+                'storage_authority': 'sqlite' if backend == 'sqlite' else 'unavailable',
+                'history_scope': 'unavailable', 'history_persistent': False}
+
+
+def selected_audit_status_report(legacy_snapshot):
+    if os.environ.get('AUDITOR_STATE_BACKEND', 'json') == 'json':
+        try:
+            current = legacy_snapshot()
+        except (OSError, UnicodeError, ValueError, TypeError, RuntimeError):
+            current = None
+        return audit_status_report(current)
+    return selected_run_snapshot(legacy_snapshot)
+
+
+def selected_run_history(legacy_history, limit=100):
+    if os.environ.get('AUDITOR_STATE_BACKEND', 'json') == 'json':
+        return legacy_history(limit)
+    try:
+        if os.environ.get('AUDITOR_STATE_BACKEND') != 'sqlite':
+            raise RuntimeError('Unsupported backend')
+        _require_sqlite_authority()
+        from app.sqlite_scheduled_observations import COORDINATOR
+        return COORDINATOR.history(limit)
+    except RuntimeError:
+        return []

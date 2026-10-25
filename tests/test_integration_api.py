@@ -178,3 +178,24 @@ def test_audit_status_disabled_and_browser_session_not_sufficient(api, monkeypat
     assert client.get('/api/v1/audit-status').status_code == 401
     monkeypatch.delenv('INTEGRATION_API_TOKEN')
     assert client.get('/api/v1/audit-status', headers=AUTH).status_code == 404
+
+
+def test_sqlite_audit_status_never_reads_json_coordinator_history(api, monkeypatch):
+    client, _ = api
+    monkeypatch.setenv('AUDITOR_STATE_BACKEND', 'sqlite')
+    monkeypatch.setattr(web, 'snapshot', lambda: pytest.fail('No JSON coordinator fallback'))
+    response = client.get('/api/v1/audit-status', headers=AUTH)
+    assert response.status_code == 503
+    assert response.json['storage_authority'] == 'sqlite'
+    assert response.json['last_result'] is None and response.json['running'] is None
+
+
+def test_sqlite_manual_run_does_not_queue_legacy_worker(api, monkeypatch):
+    client, _ = api
+    monkeypatch.setenv('AUDITOR_STATE_BACKEND', 'sqlite')
+    monkeypatch.setattr(web, 'current_user', lambda: {'admin': True})
+    monkeypatch.setattr(web, 'admin_authorized', lambda: True)
+    monkeypatch.setattr(web, 'request_run', lambda: pytest.fail('Daily-only backend cannot queue legacy worker'))
+    response = client.post('/api/run-now', headers={'Origin': 'http://localhost'})
+    assert response.status_code == 409
+    assert 'daily time' in response.json['message']

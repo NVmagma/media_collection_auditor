@@ -16,6 +16,7 @@ def run_daily_service(*, apply_settings):
     """
     require_sqlite_production_activation()
     from run_control import wait_for_run
+    from app.sqlite_scheduled_observations import COORDINATOR
     cycle = ScheduledWorkerCycle()
     while True:
         apply_settings()
@@ -23,7 +24,7 @@ def run_daily_service(*, apply_settings):
             return
         now = datetime.now(timezone.utc)
         try:
-            result = production_cycle_step(cycle=cycle, settings=dict(os.environ), now=now)
+            result = production_cycle_step(cycle=cycle, settings=dict(os.environ), now=now, observer=COORDINATOR)
             delay = max(0, (result.next_run - datetime.now(timezone.utc)).total_seconds())
         except Exception:
             # No raw connection errors/settings/token details in worker logs.

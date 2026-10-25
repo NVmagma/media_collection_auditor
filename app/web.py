@@ -23,7 +23,7 @@ from auth import session_key, jellyfin_login, current_user, store_token, discard
 from run_control import snapshot, request_run
 from config_store import FIELDS, KEYS, SECRETS, BOOLS, DEFAULTS, FIELD_HELP, load_config, save_config, validate, redacted_config
 from integration_api import authorize_summary, read_only_service_enabled
-from integration_status import (audit_status_report, collect_widget_media_index, widget_media_urls, widget_media_base,
+from integration_status import (selected_run_snapshot, selected_run_history, selected_audit_status_report, audit_status_report, collect_widget_media_index, widget_media_urls, widget_media_base,
     read_selected_tracking_status as read_tracking_status,
     read_selected_tracking_titles as read_tracking_titles,
     read_selected_dashboard_state as read_dashboard_state)
@@ -215,11 +215,7 @@ def integration_audit_status():
         report = audit_status_report(None)
         report["source"] = "coordinator_unavailable_in_read_only_service"
         return report, 503
-    try:
-        current = snapshot()
-    except (OSError, UnicodeError, ValueError, TypeError, RuntimeError):
-        current = None
-    report = audit_status_report(current)
+    report = selected_audit_status_report(snapshot)
     return report, 503 if report["status"] == "unavailable" else 200
 
 
@@ -499,7 +495,7 @@ def dashboard():
                     preview.append({"title": item["title"], "library": item["library"],
                                     "stage": stage, "action": action})
     preview.sort(key=lambda item: (item["library"], item["stage"], item["title"].casefold()))
-    return render_template("dashboard.html", actions=actions, state=state, state_error=state_error, stages=stages, inventory_warnings=inventory_warnings, health_issues=health_issues, run=snapshot(), history=read_history(100),
+    return render_template("dashboard.html", actions=actions, state=state, state_error=state_error, stages=stages, inventory_warnings=inventory_warnings, health_issues=health_issues, run=selected_run_snapshot(snapshot), history=selected_run_history(read_history, 100),
                            preview=preview, dry_run=load_config().get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "true")
 
 
@@ -808,6 +804,8 @@ def run_now():
     origin = request.headers.get("Origin") or request.headers.get("Referer")
     if not origin or urlsplit(origin).netloc != request.host:
         return {"ok": False, "message": "Invalid request origin."}, 403
+    if os.environ.get('AUDITOR_STATE_BACKEND', 'json') != 'json':
+        return {'ok': False, 'message': 'This backend runs only at its configured daily time.'}, 409
     if request_run():
         return {"ok": True, "message": "Audit queued. Refresh the dashboard for results."}, 202
     return {"ok": False, "message": "An audit is already running or queued."}, 409

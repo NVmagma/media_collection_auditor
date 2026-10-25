@@ -10,7 +10,7 @@ import re
 from scripts.sqlite_offline_dispatch_container_lab import command, source_archive
 
 
-def run(image, *, gate7=False, worker=False, routed=False, slot=False, configured=False, layout=False, runtime=False, tracking=False, arr_queue=False, arr_delivery=False, arr_completion=False, scheduled_arr=False, tv_compatibility=False):
+def run(image, *, gate7=False, worker=False, routed=False, slot=False, configured=False, layout=False, runtime=False, tracking=False, arr_queue=False, arr_delivery=False, arr_completion=False, scheduled_arr=False, tv_compatibility=False, coordinator=False):
     if not re.fullmatch(r'sha256:[0-9a-f]{64}', image):
         raise ValueError('Full cached image ID required')
     metadata = json.loads(command('docker', 'image', 'inspect', image))
@@ -42,6 +42,8 @@ def run(image, *, gate7=False, worker=False, routed=False, slot=False, configure
         fixtures.insert(0, 'scripts.sqlite_scheduled_arr_fixture')
     if tv_compatibility:
         fixtures.insert(0, 'scripts.sqlite_tv_compatibility_fixture')
+    if coordinator:
+        fixtures.insert(0, 'scripts.sqlite_coordinator_fixture')
     source = source_archive(Path(__file__).resolve().parents[1])
     container = command('docker', 'create', '--pull=never', '--network', 'none',
         '--user', '0:0', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
@@ -81,5 +83,6 @@ if __name__ == '__main__':
     parser.add_argument('--arr-completion', action='store_true')
     parser.add_argument('--scheduled-arr', action='store_true')
     parser.add_argument('--tv-compatibility', action='store_true')
+    parser.add_argument('--coordinator', action='store_true')
     args = parser.parse_args()
-    print(run(args.image, gate7=args.gate7, worker=args.worker, routed=args.routed, slot=args.slot, configured=args.configured, layout=args.layout, runtime=args.runtime, tracking=args.tracking, arr_queue=args.arr_queue, arr_delivery=args.arr_delivery, arr_completion=args.arr_completion, scheduled_arr=args.scheduled_arr, tv_compatibility=args.tv_compatibility), end='')
+    print(run(args.image, gate7=args.gate7, worker=args.worker, routed=args.routed, slot=args.slot, configured=args.configured, layout=args.layout, runtime=args.runtime, tracking=args.tracking, arr_queue=args.arr_queue, arr_delivery=args.arr_delivery, arr_completion=args.arr_completion, scheduled_arr=args.scheduled_arr, tv_compatibility=args.tv_compatibility, coordinator=args.coordinator), end='')
