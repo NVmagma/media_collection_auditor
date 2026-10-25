@@ -243,3 +243,12 @@ checks and four subtests passed locally after repair. The new standalone suite
 contains 17 cases. Rebuild the candidate from the repaired source and rerun both
 filesystem labs using the command above; real shfs/native acceptance is still
 required. Existing failed labs are not automatically retried, repaired or deleted.
+
+Repair implementation `a4194ad66a883cb05b30266cea2620444c7dccc8` passed
+[CI run 40154500531](https://github.com/NVmagma/media_collection_auditor/actions/runs/40154500531):
+**3,161 tests and 53 subtests** passed in 94.82s, followed by the candidate image,
+actual entrypoint, packaged fixtures, Bash image wrapper and host-backed restore
+wrapper (`restore_acceptance_complete`). Local linux/arm64 candidate acceptance
+also passed all 17 restore cases, the retained evidence rehearsal and prior
+worker/API checks. This verifies the repair on native/container filesystems and
+the descriptor-retention model; actual Tower shfs/native confirmation is pending.
