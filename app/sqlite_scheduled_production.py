@@ -47,7 +47,8 @@ def _configured_cycle_step(*, cycle, settings, now, clock, observer=None):
             observer.observe_cycle(next_run=cycle.next_run, status='attempted')
         def execute():
             return _run_bound_production_slot(settings=values, scheduled_at=slot, now=current, clock=clock)
-        return execute() if observer is None else observer.run_attempt(scheduled_at=slot, execute=execute)
+        return execute() if observer is None else observer.run_attempt(scheduled_at=slot,
+            execute=execute, dry_run=values.get('DRY_RUN', 'true').strip().lower() == 'true')
     try:
         result = cycle.step(now=now, local_time=config.schedule.local_time,
             timezone_name=config.schedule.timezone_name, run_due=due)
@@ -62,8 +63,9 @@ def _configured_cycle_step(*, cycle, settings, now, clock, observer=None):
 
 def _run_bound_production_slot(*, settings, scheduled_at, now, clock, timer=monotonic):
     """Private candidate implementation; the public entry above remains sealed."""
-    config, scan, protect = _configured_run_inputs(settings=settings, clock=clock)
-    resolve_arr = configured_arr_queue_resolver(settings=settings, config=config)
+    config, scan, protect = _configured_run_inputs(settings=settings, clock=clock, allow_dry_run=True)
+    dry_run = settings.get('DRY_RUN', 'true').strip().lower() == 'true'
+    resolve_arr = None if dry_run else configured_arr_queue_resolver(settings=settings, config=config)
     source = Path(_canonical(settings.get('STATE_FILE', '/app/logs/auditor_state.json')))
     database = Path(_canonical(settings.get('SQLITE_STATE_FILE', '/app/logs/sqlite_worker/state.db')))
     control = database.parent
@@ -81,6 +83,11 @@ def _run_bound_production_slot(*, settings, scheduled_at, now, clock, timer=mono
                 verify_json(); verify_control()
             with _claim_scheduled_slot_locked(root=control, schedule=config.schedule,
                     scheduled_at=scheduled_at, now=now, verify_binding=verify_binding) as verify_claim:
+                if dry_run:
+                    from app.sqlite_scheduled_preview import prepare_scheduled_preview
+                    return prepare_scheduled_preview(database=database, config=config,
+                        fetch_signals=scan, scheduled_at=scheduled_at, clock=clock,
+                        timer=timer, verify_binding=verify_claim)
                 result = _run_routed_slot_locked(database=database, config=config,
                     scheduled_at=scheduled_at, fetch_signals=scan, fetch_protection=protect,
                     arr_sync_requests=None, clock=clock, timer=timer, maximum_titles=100000,

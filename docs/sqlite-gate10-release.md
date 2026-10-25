@@ -313,3 +313,23 @@ Python 3.12 and reported `read_only_release_preflight_verified`. All ten focused
 preflight cases passed locally; combined candidate/preflight guards passed 28.
 The next required input is the read-only production binding packet above, not
 another restore/image rebuild. No production snapshot or activation is yet bound.
+
+## Scheduled preview release work
+
+The candidate runtime now branches on validated `DRY_RUN` while retaining the
+sealed production activation boundary. A due dry-run takes the same JSON/control
+locks and durable daily claim, then performs fresh read-only Jellyfin collection
+for every enabled library. It returns capped advisory moves without invoking the
+rename/Arr dispatcher, creating operation intents, or checkpointing lifecycle
+clocks. Discovery changes are explicitly reported and remain uncommitted; when
+present, the existing preparation suppresses move proposals until a future live
+checkpoint/rebuild. Protection unavailability fails the preview rather than
+appearing as a healthy empty list. Process history records preview mode and
+separate proposed/completed counts. Changing mode cannot reuse a daily claim.
+
+Eight new disposable cases cover real HTTP collection, discovery non-persistence,
+protection failure, pending intent refusal, database replacement, lock contention,
+mode-toggle replay refusal and the shared action cap. They pass locally, alongside
+54 focused tests (five Linux-only checks skipped on macOS). Packaged-image and
+host-backed CI now exercise the preview fixture. Actual Tower preview acceptance,
+activation-capable release work and final cutover/rollback tooling remain open.

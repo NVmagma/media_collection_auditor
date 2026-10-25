@@ -42,14 +42,17 @@ class ScheduledRunObservations:
             self._next_run = None
             self._scheduler_state = 'blocked'
 
-    def run_attempt(self, *, scheduled_at, execute):
+    def run_attempt(self, *, scheduled_at, execute, dry_run=False):
+        if type(dry_run) is not bool:
+            raise ValueError('Explicit dry-run observation required')
         if not callable(execute) or not isinstance(scheduled_at, datetime) or scheduled_at.tzinfo is None:
             raise ValueError('Bound scheduled attempt required')
-        record = {'id': uuid4().hex, 'trigger': 'scheduled', 'dry_run': False,
+        record = {'id': uuid4().hex, 'trigger': 'scheduled', 'dry_run': dry_run,
             'scheduled_at': scheduled_at.astimezone(timezone.utc).isoformat(),
             'started_at': self._now(), 'finished_at': None, 'result': None,
             'movies_processed': None, 'tv_processed': None,
             'moves_completed': None, 'arr_completed': None, 'state_revision': None,
+            'moves_proposed': None, 'discovery_changes': None,
             'result_basis': 'worker_return', 'freshness_verified': False,
             'history_scope': 'current_process'}
         with self._lock:
@@ -59,9 +62,17 @@ class ScheduledRunObservations:
         result = None
         try:
             result = execute()
-            success = isinstance(result, dict) and result.get('status') == 'disposable_scheduled_routed_slot_complete'
+            expected = 'scheduled_preview_complete' if dry_run else 'disposable_scheduled_routed_slot_complete'
+            success = isinstance(result, dict) and result.get('status') == expected
             record['result'] = 'completed' if success else 'failed'
             if isinstance(result, dict):
+                if dry_run:
+                    proposed = result.get('proposed_moves')
+                    if isinstance(proposed, tuple) and len(proposed) <= 100000:
+                        record['moves_proposed'] = len(proposed)
+                    changes = result.get('discovery_changes')
+                    if type(changes) is int and 0 <= changes <= 100000:
+                        record['discovery_changes'] = changes
                 moves = result.get('completed')
                 if isinstance(moves, tuple) and len(moves) <= 100000:
                     record['moves_completed'] = len(moves)
@@ -106,7 +117,9 @@ class ScheduledRunObservations:
                 'scheduler_state': self._scheduler_state, 'next_run': self._next_run,
                 'last_started': latest.get('started_at'), 'last_finished': None if self._running else latest.get('finished_at'),
                 'last_result': None if self._running else latest.get('result'), 'result_basis': latest.get('result_basis'),
-                'state_revision': latest.get('state_revision'), 'moves_completed': latest.get('moves_completed')}
+                'state_revision': latest.get('state_revision'), 'moves_completed': latest.get('moves_completed'),
+                'dry_run': latest.get('dry_run'), 'moves_proposed': latest.get('moves_proposed'),
+                'discovery_changes': latest.get('discovery_changes')}
 
 
 COORDINATOR = ScheduledRunObservations()

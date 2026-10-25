@@ -48,6 +48,10 @@ jobs:
           image=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate-build.json")
           restore_parent=$(mktemp -d "$RUNNER_TEMP/restore-parent.XXXXXX")
           bash scripts/sqlite_restore_lab.sh "$image" "$restore_parent" | tee "$RUNNER_TEMP/candidate-restore.log"
+      - name: Exercise preview on a new host-backed disposable directory
+        run: |
+          preview_parent=$(mktemp -d "$RUNNER_TEMP/preview-parent.XXXXXX")
+          SQLITE_LAB_IMAGE="$BASE_IMAGE" bash scripts/sqlite_scheduled_preview_lab.sh "$preview_parent" | tee "$RUNNER_TEMP/candidate-preview.log"
       - name: Retain build and acceptance evidence
         uses: actions/upload-artifact@v4
         with:
@@ -57,3 +61,4 @@ jobs:
             ${{ runner.temp }}/candidate-acceptance.log
             ${{ runner.temp }}/candidate-tower-wrapper.log
             ${{ runner.temp }}/candidate-restore.log
+            ${{ runner.temp }}/candidate-preview.log

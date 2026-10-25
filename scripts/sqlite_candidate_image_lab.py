@@ -68,6 +68,7 @@ assert observed['source_json']['counts']['first_seen'] == 1
 assert observed['production_authorized'] is False
 print(json.dumps({'status':'read_only_release_preflight_verified'}))
 for module in ('scripts.sqlite_coordinator_fixture','scripts.sqlite_scheduled_arr_fixture',
+               'scripts.sqlite_scheduled_preview_fixture',
                'scripts.sqlite_tv_compatibility_fixture','scripts.sqlite_restore_fixture',
                'scripts.sqlite_scheduled_transport_fixture'):
     subprocess.run([sys.executable,'-S','-B','-m',module],check=True,timeout=120)

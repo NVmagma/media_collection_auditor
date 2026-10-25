@@ -36,11 +36,13 @@ def run_configured_disposable_slot(*, root, settings, scheduled_at, now,
         complete_arr_requests=configured_arr_delivery(settings=values, config=config) if deliver_arr else None)
 
 
-def _configured_run_inputs(*, settings, clock):
+def _configured_run_inputs(*, settings, clock, allow_dry_run=False):
     """Shared detached settings and fresh collectors; construction performs no HTTP."""
     values = dict(settings)
     config = scheduled_worker_from_settings(values)
-    if values.get('DRY_RUN', 'true').strip().lower() != 'false':
+    if type(allow_dry_run) is not bool:
+        raise ValueError('Explicit preview selection required')
+    if not allow_dry_run and values.get('DRY_RUN', 'true').strip().lower() != 'false':
         raise ValueError('Disposable rename acceptance requires explicit DRY_RUN=false')
     tags = validated_tag_names({field: values.get(key, default) for field, key, default in (
         ('keep', 'KEEP_TAG', 'keep'), ('disliked', 'DISLIKE_TAG', 'not-at-all'),
