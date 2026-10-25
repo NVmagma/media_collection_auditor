@@ -303,3 +303,13 @@ docker exec -i media_collection_auditor python -B - < scripts/sqlite_release_pre
 Only the named production container is inspected/read; it is not stopped,
 recreated or reconfigured. Do not substitute a full environment/configuration
 dump for these commands.
+
+Preflight implementation `6d9256fee62728f34d3f63c7aafafef8ec223c9c` passed
+[CI run 40155267584](https://github.com/NVmagma/media_collection_auditor/actions/runs/40155267584):
+**3,171 tests and 53 subtests** passed in 102.81s, followed by candidate image,
+entrypoint, packaged fixtures, Bash image wrapper and host-backed restore checks.
+Both actual image acceptance paths executed the standalone preflight using image
+Python 3.12 and reported `read_only_release_preflight_verified`. All ten focused
+preflight cases passed locally; combined candidate/preflight guards passed 28.
+The next required input is the read-only production binding packet above, not
+another restore/image rebuild. No production snapshot or activation is yet bound.
