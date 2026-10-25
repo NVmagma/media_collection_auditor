@@ -18,7 +18,7 @@ from app import sqlite_preview_cutover as packet
 from app.sqlite_preview_activation import _revision
 from app.sqlite_preview_template import render_preview_template
 from app.state_store import GuardedSQLiteStateStore
-from scripts.sqlite_preview_service import Docker, execute_approved, NAME, LABEL, container_id
+from scripts.sqlite_preview_service import Docker, execute_approved, NAME, LABEL, container_id, mount_records
 from scripts.sqlite_preview_cutover_fixture import PreviewCutoverFixtureTests
 
 REFERENCE = 'ghcr.io/nvmagma/media_collection_auditor@sha256:' + '9' * 64
@@ -157,7 +157,8 @@ def verify():
                                      if result.get(key, {}).get(field) != observed.get(key, {}).get(field)]
                                for key in ('Config', 'HostConfig')}
                     changed = {key: value for key, value in changed.items() if value}
-                    if result.get('Mounts') != observed.get('Mounts'): changed['Mounts'] = ['mount_metadata']
+                    if mount_records(result.get('Mounts')) != mount_records(observed.get('Mounts')):
+                        changed['Mounts'] = ['mount_metadata']
                     if changed:
                         print(json.dumps({'fixture_observation_changed_fields': changed}))
             return result

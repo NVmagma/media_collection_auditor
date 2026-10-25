@@ -217,9 +217,24 @@ class PreviewServiceFixtureTests(unittest.TestCase):
         self.assertIsNone(scope.inspect(NAME, optional=True))
         self.assertEqual(raw.names, ['auditor-service-' + 'a' * 16])
 
+    def test_reordered_original_mount_records_preserve_full_identity_checks(self):
+        self.engine.containers[IDENTIFIER]['Mounts'].reverse()
+        self.assertEqual(self.apply()['status'], 'preview_service_cutover_complete')
+
+    def test_changed_original_mount_mode_is_not_hidden_by_order_normalization(self):
+        self.engine.containers[IDENTIFIER]['Mounts'].reverse()
+        self.engine.containers[IDENTIFIER]['Mounts'][0]['RW'] = False
+        with self.assertRaises(RuntimeError): self.apply()
+        self.assertEqual(self.engine.calls, [])
+
+    def test_duplicate_preview_mount_target_blocks_before_start(self):
+        self.engine.on_create = lambda item: item['Mounts'].append(deepcopy(item['Mounts'][0]))
+        with self.assertRaises(RuntimeError): self.apply()
+        self.assertFalse(self.engine.inspect(NEW_ID)['State']['Running'])
+
 
 if __name__ == '__main__':
     result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(PreviewServiceFixtureTests))
-    if not result.wasSuccessful() or result.testsRun != 18 or result.skipped: raise SystemExit(1)
+    if not result.wasSuccessful() or result.testsRun != 21 or result.skipped: raise SystemExit(1)
     print(json.dumps({'status': 'service_cutover_fault_contract_verified', 'tests': result.testsRun,
         'fixture_only': True, 'docker_api_accessed': False, 'production_authorized': False}))

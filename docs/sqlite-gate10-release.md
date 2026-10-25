@@ -845,3 +845,12 @@ own recorded revision. Tower's Docker 29.8.2 acceptance of this service boundary
 is pending. The final production host launcher/publication selection and explicit
 activation approval remain outstanding; no production service command is issued
 by this documentation or by the fixture.
+
+The local Docker end-to-end handoff/API/recovery probe passed. Initial CI exposed
+an order-sensitive comparison of Docker's mount list. Original mount observations
+now compare complete canonical records independent of list order, retaining all
+fields and duplicate rows. Reordered mounts pass; changed modes and duplicate
+preview targets remain rejected. No mount field or identity safeguard is dropped.
+The synthetic integration token was also brought into the API's accepted format;
+production now checks credential format before any stop. Occupied control roots
+are refused before service changes, not deferred to offline preparation.

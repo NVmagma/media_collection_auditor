@@ -132,11 +132,19 @@ class Journal:
         self.previous = sha(raw)
 
 
+def mount_records(value):
+    # Docker inspection does not promise array order. Retain every field and
+    # duplicate row, comparing complete canonical records rather than positions.
+    if not isinstance(value, list): return None
+    return tuple(sorted(_encode(item) for item in value))
+
+
 def validate_original(live, captured, *, name, running):
     if (live.get('Id') != captured['Id'] or live.get('Image') != captured['Image']
             or live.get('Name') != '/' + name or live.get('State', {}).get('Running') is not running
             or any(live.get('State', {}).get(key) for key in ('Paused', 'Restarting', 'Dead'))
-            or any(live.get(key) != captured.get(key) for key in ('Config', 'HostConfig', 'Mounts'))):
+            or any(live.get(key) != captured.get(key) for key in ('Config', 'HostConfig'))
+            or mount_records(live.get('Mounts')) != mount_records(captured.get('Mounts'))):
         raise RuntimeError('Original auditor changed since private review')
 
 
@@ -185,7 +193,7 @@ def validate_preview(live, *, identity, image_id, request_id, payload, running):
             or host.get('ReadonlyRootfs') is not True or host.get('RestartPolicy', {}).get('Name') != 'no'
             or host.get('Privileged') is not False or host.get('NetworkMode') != 'bridge'
             or host.get('PortBindings') != payload['HostConfig'].get('PortBindings')
-            or actual_mounts != expected_mounts):
+            or actual_mounts != expected_mounts or len(live.get('Mounts', [])) != len(actual_mounts)):
         raise RuntimeError('Created preview differs from reviewed layout')
 
 
@@ -263,6 +271,8 @@ PHASES = ('original_stop_requested', 'original_stopped', 'offline_preparation_re
 
 def read_service_history(parent):
     raw = _local(parent, REQUEST)[0]; request = parse_unique_json(raw)
+    if type(request.get('schema_version')) is not int or request['schema_version'] != 1:
+        raise RuntimeError('Service request schema invalid')
     previous, events, new_id = sha(raw), [], None
     names = sorted(name for name in os.listdir(parent) if re.fullmatch(r'service-[0-9]{4}\.json', name))
     if len(names) > len(PHASES): raise RuntimeError('Unexpected service history length')
@@ -411,6 +421,8 @@ def execute_approved(*, action, directory, packet_identity, control_identity, im
         original_xml = _local(parent, 'original-template.xml')[0]
         final_xml = bind_published_reference(proposed=_local(parent, 'proposed-template.xml')[0], reference=reference)
         control = _private_root(Path('/sqlite-control'), control_identity); stack.callback(os.close, control)
+        if action == 'apply' and os.listdir(control):
+            raise RuntimeError('Fresh empty control root required before stopping any service')
         templates = _open_directory('/unraid-templates'); stack.callback(os.close, templates)
         template_name = 'my-media_collection_auditor.xml'
         current_xml, template_info = _local(templates, template_name)
@@ -439,6 +451,7 @@ def execute_approved(*, action, directory, packet_identity, control_identity, im
         if (request.get('context', {}).get('approved_review_sha256') != approved_review_sha
                 or request.get('context', {}).get('daemon_id') != daemon_id
                 or request.get('reference') != reference or request.get('preview_image_id') != image_id
+                or request.get('source_revision') != report['source_revision']
                 or request.get('original_container_id') != captured['Id']):
             raise RuntimeError('Recovery scope differs from original approved transaction')
         if request.get('request_id') != sha(_encode({**request['context'], 'reference': reference, 'preview_image_id': image_id})):
