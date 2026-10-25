@@ -87,7 +87,7 @@ def _run_bound_production_slot(*, settings, scheduled_at, now, clock, timer=mono
                     from app.sqlite_scheduled_preview import prepare_scheduled_preview
                     return prepare_scheduled_preview(database=database, config=config,
                         fetch_signals=scan, scheduled_at=scheduled_at, clock=clock,
-                        timer=timer, verify_binding=verify_claim)
+                        timer=timer, verify_binding=verify_claim, started_tick=started)
                 result = _run_routed_slot_locked(database=database, config=config,
                     scheduled_at=scheduled_at, fetch_signals=scan, fetch_protection=protect,
                     arr_sync_requests=None, clock=clock, timer=timer, maximum_titles=100000,

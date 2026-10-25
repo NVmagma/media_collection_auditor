@@ -129,7 +129,8 @@ candidate `_configured_run_inputs` rejects that value: its disposable rename
 acceptance path requires explicit false. This refusal must not be bypassed by
 flipping production settings or simply deleting the check.
 
-Before activation, implement and test a genuine scheduled preview path. It must
+The candidate now implements a scheduled preview path, covered by private HTTP
+fixtures and packaged-image/host-backed CI. Tower acceptance is pending. It must
 complete fresh collection and report the capped proposed actions without media
 rename, Arr PUT, move intent creation or lifecycle clock advancement. Discovery
 clock proposals must remain advisory in that preview; failures must not appear as

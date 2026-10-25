@@ -327,9 +327,10 @@ checkpoint/rebuild. Protection unavailability fails the preview rather than
 appearing as a healthy empty list. Process history records preview mode and
 separate proposed/completed counts. Changing mode cannot reuse a daily claim.
 
-Eight new disposable cases cover real HTTP collection, discovery non-persistence,
+Ten new disposable cases cover real HTTP collection, discovery non-persistence,
 protection failure, pending intent refusal, database replacement, lock contention,
-mode-toggle replay refusal and the shared action cap. They pass locally, alongside
+mode-toggle replay refusal, the shared action cap, later-library failure and the
+one deadline covering claims/collection. They pass locally, alongside
 54 focused tests (five Linux-only checks skipped on macOS). Packaged-image and
 host-backed CI now exercise the preview fixture. Actual Tower preview acceptance,
 activation-capable release work and final cutover/rollback tooling remain open.

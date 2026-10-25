@@ -8,6 +8,7 @@ from app.sqlite_lock import audit_run_lock
 from app.sqlite_operation_coordinator import INTENTS_KEY
 from app.sqlite_scheduled_observations import ScheduledRunObservations
 from app.sqlite_scheduled_production import _configured_cycle_step
+from app.sqlite_scheduled_production import _run_bound_production_slot
 from app.sqlite_scheduled_worker_cycle import ScheduledWorkerCycle
 from scripts import sqlite_scheduled_worker_layout_fixture as layout_fixture
 from scripts.sqlite_scheduled_configured_slot_fixture import NOW
@@ -126,11 +127,30 @@ class ScheduledPreviewFixtureTests(unittest.TestCase):
         self.assertEqual(report['scanned_titles'], 2)
         self.assert_unchanged()
 
+    def test_later_library_failure_never_returns_first_library_partial_plan(self):
+        def fail_tv():
+            if len(self.layout.case.server.calls) == 3:
+                self.layout.case.server.mode = 'unauthorized'
+        self.layout.case.server.on_request = fail_tv
+        with self.assertRaisesRegex(RuntimeError, 'protection unavailable'):
+            self.step(self.slot)
+        self.assertEqual(self.observer.history()[0]['result'], 'failed')
+        self.assert_unchanged()
+
+    def test_one_deadline_includes_claim_and_collection(self):
+        ticks = [0.0]
+        self.layout.case.server.on_request = lambda: ticks.__setitem__(0, 3601.0)
+        with self.assertRaises(RuntimeError):
+            _run_bound_production_slot(settings=self.values, scheduled_at=self.slot,
+                now=self.slot, clock=lambda: NOW, timer=lambda: ticks[0])
+        self.assertEqual(len(self.layout.claims()), 1)
+        self.assert_unchanged()
+
 
 if __name__ == '__main__':
     result = unittest.TextTestRunner(verbosity=2).run(
         unittest.defaultTestLoader.loadTestsFromTestCase(ScheduledPreviewFixtureTests))
-    if not result.wasSuccessful() or result.testsRun != 8 or result.skipped:
+    if not result.wasSuccessful() or result.testsRun != 10 or result.skipped:
         raise SystemExit(1)
     print(json.dumps({'status': 'scheduled_preview_verified', 'tests': result.testsRun,
         'fixture_only': True, 'production_authorized': False, 'production_activation': 'disabled'}))

@@ -5,6 +5,7 @@ proposals remain advisory; their presence suppresses move proposals until a live
 run can checkpoint and freshly rebuild. A preview never authorizes execution.
 """
 from datetime import timezone
+import math
 
 from app.sqlite_audit_session import RevisionedAuditSession
 from app.sqlite_operation_coordinator import INTENTS_KEY
@@ -13,7 +14,14 @@ from app.state_store import GuardedSQLiteStateStore
 
 
 def prepare_scheduled_preview(*, database, config, fetch_signals, scheduled_at,
-        clock, timer, verify_binding, maximum_scan_seconds=3600):
+        clock, timer, verify_binding, maximum_scan_seconds=3600, started_tick=None):
+    started = timer() if started_tick is None else started_tick
+    def remaining():
+        elapsed = timer() - started
+        if not math.isfinite(elapsed) or not 0 <= elapsed < maximum_scan_seconds:
+            raise RuntimeError('Scheduled preview deadline exceeded')
+        return maximum_scan_seconds - elapsed
+    remaining()
     verify_binding()
     session = RevisionedAuditSession(GuardedSQLiteStateStore(database))
     snapshot, revision = session.read_verified_snapshot()
@@ -27,10 +35,11 @@ def prepare_scheduled_preview(*, database, config, fetch_signals, scheduled_at,
         return signals
     prepared = prepare_scheduled_worker(config=config, snapshot=snapshot,
         revision=revision, fetch_signals=read, now=clock(), timer=timer,
-        maximum_scan_seconds=maximum_scan_seconds, discover_clocks=True)
+        maximum_scan_seconds=remaining(), discover_clocks=True)
     verify_binding()
     # Includes raw same-revision changes and independent checkpoint races.
     session.read_verified_snapshot()
+    remaining()
     return {'status': 'scheduled_preview_complete', 'dry_run': True,
         'scheduled_at': scheduled_at.astimezone(timezone.utc).isoformat(),
         'scanned_titles': prepared.plan.scanned_titles,
