@@ -703,3 +703,47 @@ production JSON, media, settings, mounts, exports and services remain unchanged.
 After this acceptance, finish the concrete production cutover/rollback packet and
 obtain explicit deployment approval. Gate 10 remains open; no live move capability
 is authorized by this preview release.
+
+## Tower private review accepted; offline installation/recovery integration
+
+Tower completed `cutover_review_capture_complete` at
+`d7ac49f6db8cd72ba7a01f0865591fcfe038fa43`, packet
+`/mnt/user/sql_test/cutover-review.Jl9KUa`, preview image
+`sha256:7a4910689d310bff3dfa2927f0bf169733daa003475b7585ae16300547e57eca`.
+The read-only review confirms bridge network, host port 8089 to container 8080,
+53 preserved environment entries, a captured managed Unraid template, Movies
+only, cap 10 and 02:00 America/Los_Angeles. Counts remain 522 waiting, 4 holding,
+13 keep, 0 removal and 0 Arr pending. The exact cached rollback image passed its
+synthetic JSON roundtrip. No production state/configuration/services changed;
+the observation is not a stopped-writer migration source or activation approval.
+
+`app.sqlite_preview_install` now composes fresh-source backup/parity, byte-exact
+saved settings backup, approved settings staging and the frozen preview binding.
+It re-derives the private container plan/environment from captured inputs before
+accepting a packet; private generated outputs cannot be edited into commands.
+The caller must stop auditor writers before production invocation. This helper
+does not stop, start, rename, remove or publish any container or image and does
+not edit Unraid templates. It cannot authorize media operations.
+
+The new private control root must be empty and identity-bound. A durable install
+request precedes migration/settings writes. Interrupted roots remain in place
+and refuse retry. The original JSON is never overwritten: a fresh source rather
+than the earlier live observation becomes the revision-zero SQLite snapshot.
+The settings file is replaced atomically only if its reviewed bytes/identity
+still match, preserving unknown settings in the proposed config and retaining a
+byte-exact original backup. Any failure retains evidence without auto-restoration.
+
+Explicit `restore-settings` requires the original tracking JSON and prepared SQL
+to agree at revision zero with no pending operation. An advanced revision,
+same-revision raw payload mutation, changed settings/source, replaced control or
+incomplete preparation blocks recovery. Recovery never restores old tracking
+clocks, deletes SQLite or starts a worker. Existing latest-state export/review is
+required for advanced state instead of using an old backup.
+
+The disposable installer fixture covers fresh-source changes, settings parity,
+partial requests, failure after settings replacement, changed inputs and blocked
+rollback. Its actual-image path also invokes the packaged stage/check/recovery
+CLIs on new separate `/packet`, `/app/logs`, `/sqlite-control` and read-only
+`/media` mounts. Tower filesystem acceptance of this new atomic settings boundary
+remains pending. The final host service controller, managed-template integration,
+immutable registry selection and explicit production approval remain outstanding.
