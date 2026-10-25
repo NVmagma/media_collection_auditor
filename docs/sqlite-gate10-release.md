@@ -478,3 +478,49 @@ migration preparation only; latest-state export/recovery integration, the
 activation-capable release and final review/approval still remain before Gate 10
 can close. Do not invoke the preparation CLI against live state from these lab
 instructions or treat its receipt as activation permission.
+
+## Tower preparation accepted
+
+Source `ce41fc74c21da5811df989ee80f4eff8a3c87621`, candidate image
+`sha256:5cccd8466506d628d0041a008bacdce6deec95b59f7956c9c86ac00c71948665`,
+passed all nineteen preparation cases on both actual Tower paths:
+
+- `/mnt/user/sql_test/release-preparation.N0wty5`: 3.226s, retained synthetic
+  evidence `preparation-evidence.635x29nm`.
+- `/mnt/media/sql_test/release-preparation.n9s7cW`: 3.553s, retained synthetic
+  evidence `preparation-evidence.bwyov0id`.
+
+Both reported `release_preparation_acceptance_complete`. This accepts backup-first
+preparation on actual shfs/native storage. Production remains unchanged.
+
+## Prepared-release recovery implementation
+
+`app/sqlite_release_recovery.py` now provides explicit offline `export` and
+`inspect` operations for the latest SQLite state. It validates the prepared
+control directory, original JSON/backup and durable preparation records, then
+holds the shared JSON writer lock and scheduled-worker lock. Current database
+identity, input identities/bytes and snapshot revision/content are checked across
+the operation. Unresolved intent presence always blocks export or inspection.
+
+Preparation completion receipts now also record `database_identity` (device and
+inode); recovery refuses an unbound older receipt or an identical replacement DB.
+The previously accepted synthetic receipts are historical evidence, not inputs
+automatically adopted by the new tool. New fixtures prepare their own bound roots.
+
+Every export has a new `rollback-candidate-*.json` plus durable request/completion
+records. Partial outputs are retained and cannot be overwritten or replayed.
+Inspection requires all three records and rejects stale revisions, same-revision
+raw state changes, aliases, incomplete/corrupt receipts and candidate replacement.
+The payload preserves latest clocks, Arr queues and unknown fields; the original
+JSON and database remain untouched. Successful export/inspection is explicitly
+advisory: it does not restore files, select authority, start a service, verify
+writer quiescence or authorize production activation.
+
+Eighteen new fixture cases include actual CLI redaction, actual SIGKILL after
+candidate creation, concurrent checkpoint/control replacement, no overwrite,
+pending/lock refusal, stale/alias/corrupt candidates and real fresh-process JSON
+load/save/restart parity on a copy of advanced tracking. Synthetic retained
+evidence includes an earlier stale candidate and a current advanced candidate.
+All eighteen cases pass under an unprivileged Linux UID; root Linux testing also
+passed the preceding sixteen-case set. Full image/host-backed CI and actual Tower
+recovery acceptance are the next validation boundaries.

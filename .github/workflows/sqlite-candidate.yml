@@ -11,6 +11,7 @@ on:
       - 'scripts/sqlite_restore*'
       - 'scripts/sqlite_release_preflight.py'
       - 'scripts/sqlite_release_preparation*'
+      - 'scripts/sqlite_release_recovery*'
       - 'requirements.txt'
   workflow_dispatch:
 
@@ -62,6 +63,11 @@ jobs:
           image=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate-build.json")
           preparation_parent=$(mktemp -d "$RUNNER_TEMP/preparation-parent.XXXXXX")
           bash scripts/sqlite_release_preparation_lab.sh "$image" "$preparation_parent" | tee "$RUNNER_TEMP/candidate-preparation.log"
+      - name: Exercise latest-state release recovery on a new host directory
+        run: |
+          image=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate-build.json")
+          recovery_parent=$(mktemp -d "$RUNNER_TEMP/recovery-parent.XXXXXX")
+          bash scripts/sqlite_release_recovery_lab.sh "$image" "$recovery_parent" | tee "$RUNNER_TEMP/candidate-recovery.log"
       - name: Retain build and acceptance evidence
         uses: actions/upload-artifact@v4
         with:
@@ -73,3 +79,4 @@ jobs:
             ${{ runner.temp }}/candidate-restore.log
             ${{ runner.temp }}/candidate-preview.log
             ${{ runner.temp }}/candidate-preparation.log
+            ${{ runner.temp }}/candidate-recovery.log

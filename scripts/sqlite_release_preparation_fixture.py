@@ -60,6 +60,8 @@ class ReleasePreparationFixtureTests(unittest.TestCase):
         self.assertFalse(report['production_authorized'])
         self.assertFalse(report['writer_quiescence_verified'])
         self.assertEqual(report['status'], 'release_state_prepared_not_activated')
+        database = (self.control / 'state.db').stat()
+        self.assertEqual(report['database_identity'], [database.st_dev, database.st_ino])
         self.assertNotIn('Fixture Movie', json.dumps(report))
         self.assertEqual(json.loads((self.control / preparation.COMPLETE).read_bytes()), report)
 

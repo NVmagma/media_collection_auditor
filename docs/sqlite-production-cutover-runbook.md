@@ -155,3 +155,20 @@ Scheduled preview acceptance has passed on both Tower filesystem paths at
 `5599aad`; the accepted initial schedule and rollback image remain as recorded.
 The production selection gate remains sealed. Latest SQLite export/recovery
 binding and activation-capable release review are still separate outstanding work.
+
+## Latest-state recovery tooling boundary
+
+The candidate now includes `app.sqlite_release_recovery` with explicit export and
+inspection actions. It requires a successful preparation receipt bound to the
+same database inode, a preserved original JSON/backup, current private control
+identity, and the cooperating source/worker locks. It exports the current advanced
+snapshot into a new candidate/request/completion triplet, without overwriting
+original JSON or switching a backend. Incomplete or stale candidates and pending
+operations block recovery; an old backup is never substituted automatically.
+
+The final authority-switch package must run current-candidate inspection again
+with every auditor writer stopped before selecting any new JSON `STATE_FILE`.
+A prior matching report is not a permit: a later SQLite revision invalidates it.
+The production activation gate remains sealed; running this CLI on live state
+still awaits the final concrete cutover/recovery review and approval. The new
+recovery body has only been exercised against disposable inputs so far.

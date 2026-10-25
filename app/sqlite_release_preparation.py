@@ -191,6 +191,7 @@ def prepare_release_state(*, source, control_directory, expected_source_sha256):
                 or _identity(os.stat('state.db', dir_fd=control_fd, follow_symlinks=False)) != _identity(database_info)):
             raise RuntimeError('Release output changed during verification')
         receipt = {**request, 'status': 'release_state_prepared_not_activated',
+            'database_identity': [database_info.st_dev, database_info.st_ino],
             'database_revision': 0, 'backup_verified': True, 'migration_parity': True,
             'writer_quiescence_verified': False, 'automatic_action': 'none'}
         _write_private(control_fd, COMPLETE, encode(receipt))
