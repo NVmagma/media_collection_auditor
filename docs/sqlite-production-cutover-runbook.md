@@ -86,3 +86,55 @@ Rollback cannot undo already completed media/Arr actions. Matching restored
 tracking must describe those completed actions rather than rewind their clocks.
 Current-process coordinator history is advisory and is never a substitute for
 the durable tracking snapshot, daily claims or operation intents.
+
+## Tower binding observation — 2026-10-25
+
+The read-only preflight observed the following current deployment inputs. These
+are planning bindings, not a quiescent backup or activation permission:
+
+- Container `media_collection_auditor` running, restart policy `no`. Follow-up
+  inspect supplied rollback reference
+  `ghcr.io/nvmagma/media_collection_auditor@sha256:4575aa35c0998aec937f1145b19c685af50d83fb00829f99be0a1a2017997db4`
+  and local image ID
+  `sha256:c33a4aedd8531234bb2d5bd67e5c81657e2a9a313852c970da9e5d1f9969a85b`.
+  Preserve both: the registry digest and local image ID identify different
+  image objects and are not expected to match. Recheck before cutover.
+- `/mnt/user/media_storage` maps writable to `/media`;
+  `/mnt/user/appdata/media_collection_auditor` maps writable to `/app/logs`.
+- Movies enabled, TV disabled. Movie stage roots are `/media/Movies`,
+  `/media/Movies_hold`, `/media/Movies_keep`, `/media/Movies_removal`.
+  All were observed on device 47 (shfs); matching device numbers alone do not
+  prove atomic no-overwrite rename support for an eventual production move.
+- JSON authority, `DRY_RUN=true`, action cap 10, movie waiting 30 days,
+  Holding 7 days, Removal 7 days, favorites enabled. Permanent/filesystem
+  deletion, cross-filesystem moves and season pruning are disabled.
+- `/app/logs/auditor_state.json`: 33,532 bytes; observed counts first_seen 522,
+  queued 4, keep_seen 13, in_removal 0, arr_sync_pending 0; no pending-operation
+  key observed. Hash `da683968d5945e3e26aba2fae40aaa317a5f0cf97eba96847124220dce208bb5`
+  is historical metadata only; a final quiescent capture must be revalidated.
+- Probe ran as UID/GID 0. Proposed `/app/logs/sqlite_worker` was unavailable or
+  aliased; do not assume it exists, create it implicitly, or adopt an existing
+  database. The eventual new control directory belongs beneath the persisted
+  appdata mapping and must pass identity/disjointness checks.
+- Daily time and zone were blank in the observation. The user subsequently
+  selected `02:00 America/Los_Angeles`, with initial dry-run retained. These are
+  approved deployment inputs, not settings already written to Tower. Schedule
+  handling must use the existing daily-slot rules across daylight saving changes,
+  with no immediate startup/catch-up dispatch.
+
+### Dry-run release requirement
+
+Preserve the observed `DRY_RUN=true` policy for initial deployment. The current
+candidate `_configured_run_inputs` rejects that value: its disposable rename
+acceptance path requires explicit false. This refusal must not be bypassed by
+flipping production settings or simply deleting the check.
+
+Before activation, implement and test a genuine scheduled preview path. It must
+complete fresh collection and report the capped proposed actions without media
+rename, Arr PUT, move intent creation or lifecycle clock advancement. Discovery
+clock proposals must remain advisory in that preview; failures must not appear as
+a successful empty run. Daily claims and process history must accurately identify
+preview attempts, and history must not report completed moves. Existing live
+rename acceptance stays explicit and separately tested. This is implementation
+work still outstanding, in addition to the sealed activation boundary and live
+backup/migration/rollback tooling.
