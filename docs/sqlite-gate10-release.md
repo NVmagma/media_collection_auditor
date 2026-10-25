@@ -184,3 +184,20 @@ rehearsals; final `restore_acceptance_complete`, scope
 the newly created host lab. Unsupported publication blocks without fallback.
 Tower restore acceptance, concrete live cutover/rollback review and explicit
 activation approval remain open. This helper performs no live restore/cutover.
+
+Restore implementation `848672e52fd5d2a7e4d1f143a1ba9c40c2b48ecf` passed
+[CI run 40153655744](https://github.com/NVmagma/media_collection_auditor/actions/runs/40153655744):
+**3,160 tests and 53 subtests** passed in 83.74s, followed by the linux/amd64
+candidate build, packaged worker/restore tests, actual Bash image wrapper and
+actual Bash restore wrapper against new host-backed storage. The final restore
+status was `restore_acceptance_complete`. The untagged CI image was
+`sha256:416a0a551afdcd0db30d4ce1eda231fa22b88ee6e9bec86f98592fbd3cbb1f2c`;
+it was not published or deployed.
+
+Local focused restore/export/restart checks passed 41 tests with 4 subtests.
+The standalone 16-case rehearsal retained both completed and interrupted
+examples. Local linux/arm64 image acceptance also passed with the packaged
+restore helper; its application/fixture bytes match the final implementation
+(the final workflow-only change adds the host-backed wrapper check).
+Tower restore acceptance on shfs/native remains pending. This evidence does
+not authorize a live restore, source-file replacement or backend activation.
