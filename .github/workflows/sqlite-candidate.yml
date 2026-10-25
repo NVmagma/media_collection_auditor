@@ -1,0 +1,38 @@
+name: SQLite candidate image acceptance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    if: github.ref == 'refs/heads/feature/sqlite'
+    runs-on: ubuntu-latest
+    env:
+      BASE_IMAGE: python@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704
+      WEB_SESSION_SECRET: ci-only-candidate-test-secret
+      PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test dependencies
+        run: python -m pip install -r requirements.txt pytest
+      - name: Run complete disposable regression suite
+        run: python -B scripts/run_sqlite_integration_checks.py --full-suite --basetemp "$RUNNER_TEMP/sqlite-release-fixtures"
+      - name: Build sealed candidate without publishing
+        run: python -B scripts/sqlite_candidate_build.py --base-image "$BASE_IMAGE" > "$RUNNER_TEMP/candidate-build.json"
+      - name: Exercise actual candidate entrypoint and packaged worker
+        run: |
+          image=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate-build.json")
+          python -B scripts/sqlite_candidate_image_lab.py --image "$image" --source-revision "$GITHUB_SHA" | tee "$RUNNER_TEMP/candidate-acceptance.log"
+      - name: Retain build and acceptance evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: sqlite-candidate-evidence-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/candidate-build.json
+            ${{ runner.temp }}/candidate-acceptance.log
