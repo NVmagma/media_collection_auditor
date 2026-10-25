@@ -86,3 +86,32 @@ production bind mounts, published host ports, external fixture network, registry
 pushes, service controls or state migration. The untagged image remains cached;
 only the newly created fixture container and temporary image-ID file are removed.
 This is candidate packaging acceptance, not operational restore or activation.
+
+## Candidate packaging evidence
+
+Implementation `9c1ae1d9735b2828fc276c11595be58d378c674d` passed
+[workflow run 40152538090](https://github.com/NVmagma/media_collection_auditor/actions/runs/40152538090):
+**3,141 tests and 49 subtests** passed in 82.15s before the linux/amd64 image build.
+The actual default entrypoint, authentication/gate checks and all 40 packaged
+coordinator/Arr/TV/HTTP cases passed, followed by the same image's Tower Bash
+wrapper. Candidate image ID on that CI host:
+`sha256:e6c4d4d2091a2bbe27437e60cc53c53dc2ca842ad69b1004c3bfdfd5a2e0c90c`.
+It was not published to a registry; it is not a production pull reference.
+
+Local linux/arm64 build and the actual Bash build/acceptance wrappers passed at
+the same source revision, image ID:
+`sha256:5472f503e184225fe81a6ffb502ef49755b6aecdda71398f2d11d6d72cbce41c`.
+All 18 build/wrapper guard unit cases passed locally. The earlier first-build
+trial at `32e0144` passed API/worker checks but failed clean shutdown because the
+PID-1 Python process outlasted Docker's default stop signal; that result is not
+accepted evidence. The pinned `STOPSIGNAL SIGINT` recipe repaired this boundary,
+and both final architecture checks verified clean shutdown without forced kill.
+
+The Python base and all 13 runtime package versions are pinned in the candidate
+recipe/constraints. Runtime modules were loaded from the image, not the fixture
+archive. Both tracked legacy Docker recipes, existing containers/tags, JSON
+production authority and the unconditional SQLite gate are unchanged.
+
+**Tower candidate packaging acceptance is pending.** Gate 10 remains open for
+that result, operational backup/migration/advanced-state restore acceptance,
+final production cutover/rollback review and explicit activation approval.
