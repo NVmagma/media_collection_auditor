@@ -7,7 +7,6 @@ import threading
 from config_store import KEYS, load_config
 from audit_history import new_record, finish_record, summarize_actions
 from run_control import begin_run, finish_run, wait_for_run
-from web import app
 from integration_api import read_only_service_enabled
 
 WEB_PORT = int(os.environ.get("WEB_PORT", "8080"))
@@ -24,6 +23,7 @@ def apply_settings():
 
 
 def start_web():
+    from web import app  # Validate a preview release before session/UI initialization.
     app.run(host="0.0.0.0", port=WEB_PORT, debug=False, use_reloader=False)
 
 
@@ -47,6 +47,11 @@ def audit_counts(path, offset):
 
 
 if __name__ == "__main__":
+    from sqlite_backend_gate import preview_release_enabled, require_sqlite_production_activation
+    if preview_release_enabled():
+        # A preview release cannot fall back to the legacy JSON worker, even if
+        # its environment/configuration is incomplete or changed at restart.
+        require_sqlite_production_activation()
     if read_only_service_enabled():
         start_web()
         raise SystemExit(0)
@@ -55,7 +60,10 @@ if __name__ == "__main__":
         require_sqlite_production_activation()
         from app.sqlite_scheduled_service import run_daily_service
         threading.Thread(target=start_web, name="web-ui", daemon=True).start()
-        run_daily_service(apply_settings=apply_settings)
+        try:
+            run_daily_service(apply_settings=apply_settings)
+        except KeyboardInterrupt:
+            pass  # SIGINT is the image's explicit clean-stop signal.
         raise SystemExit(0)
     threading.Thread(target=start_web, name="web-ui", daemon=True).start()
     auditor = None

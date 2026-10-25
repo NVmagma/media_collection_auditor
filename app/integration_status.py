@@ -253,6 +253,17 @@ def _unavailable():
     raise RuntimeError('Selected tracking source unavailable')
 
 
+def _preview_metadata():
+    try:
+        from app.sqlite_backend_gate import preview_release_enabled
+        if preview_release_enabled():
+            return {'production_activation': 'preview_only', 'execution_mode': 'scheduled_preview',
+                    'media_actions_authorized': False}
+    except ImportError:
+        pass
+    return {}
+
+
 def _selected_report(path, view, holding_days):
     backend = os.environ.get('AUDITOR_STATE_BACKEND', 'json')
     if backend == 'json':
@@ -265,7 +276,9 @@ def _selected_report(path, view, holding_days):
         report = capture_candidate_tracking_view(os.environ.get('SQLITE_STATE_FILE',
             '/app/logs/sqlite_worker/state.db'), holding_days=holding_days)[
                 {'summary': 'summary', 'oldest-waiting': 'oldest_waiting', 'leaving-soon': 'leaving_soon'}[view]]
-        return {**report, 'storage_authority': 'sqlite'}
+        if _preview_metadata():
+            _require_sqlite_authority()  # Do not project an intervening unbound snapshot.
+        return {**report, 'storage_authority': 'sqlite', **_preview_metadata()}
     except RuntimeError:
         report = (_project_tracking_status(_unavailable) if view == 'summary' else
                   _project_tracking_titles(_unavailable, view, holding_days=holding_days))
@@ -295,8 +308,11 @@ def read_selected_dashboard_state(path):
         return read_json_dashboard_snapshot(path).state
     _require_sqlite_authority()
     from app.sqlite_tracking_view import capture_candidate_dashboard_state
-    return capture_candidate_dashboard_state(os.environ.get('SQLITE_STATE_FILE',
+    state = capture_candidate_dashboard_state(os.environ.get('SQLITE_STATE_FILE',
         '/app/logs/sqlite_worker/state.db'))
+    if _preview_metadata():
+        _require_sqlite_authority()
+    return state
 
 
 def _require_sqlite_authority():
@@ -317,7 +333,7 @@ def selected_run_snapshot(legacy_snapshot):
             raise RuntimeError('Unsupported backend')
         _require_sqlite_authority()
         from app.sqlite_scheduled_observations import COORDINATOR
-        return {**COORDINATOR.report(), 'storage_authority': 'sqlite'}
+        return {**COORDINATOR.report(), 'storage_authority': 'sqlite', **_preview_metadata()}
     except RuntimeError:
         return {**audit_status_report(None), 'source': 'selected_coordinator_unavailable',
                 'storage_authority': 'sqlite' if backend == 'sqlite' else 'unavailable',

@@ -22,7 +22,7 @@ if [ "$1 $2" = 'image inspect' ]; then
     *StopSignal*) echo SIGINT;;
     *Volumes*) echo null;;
     *revision*) echo "$FIXTURE_REVISION";;
-    *sqlite-activation*) echo disabled;;
+    *sqlite-activation*) echo "${FIXTURE_ACTIVATION:-disabled}";;
     *) echo "$FIXTURE_IMAGE";;
   esac
 elif [ "$1" = create ]; then echo "$FIXTURE_CONTAINER"
@@ -56,22 +56,24 @@ esac
     return env, log
 
 
-def test_host_python_free_build_never_tags_or_publishes(tmp_path):
+@pytest.mark.parametrize('kind', ['candidate', 'preview_release'])
+def test_host_python_free_build_never_tags_or_publishes(tmp_path, kind):
     env, log = fixture(tmp_path)
-    result = subprocess.run(['bash', str(ROOT / 'scripts/sqlite_candidate_build.sh')], env=env,
+    result = subprocess.run(['bash', str(ROOT / f'scripts/sqlite_{kind}_build.sh')], env=env,
                             capture_output=True, text=True, timeout=15)
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == IMAGE
     commands = log.read_text()
     assert '--tag' not in commands and '--push' not in commands
-    assert 'docker/sqlite-candidate.Dockerfile' in commands
+    assert ('docker/sqlite-' + kind.replace('_', '-') + '.Dockerfile') in commands
 
 
 @pytest.mark.parametrize('option', ['BUILD_BRANCH', 'DIRTY_INPUTS'])
-def test_bad_branch_or_dirty_build_cannot_reach_docker(tmp_path, option):
+@pytest.mark.parametrize('kind', ['candidate', 'preview_release'])
+def test_bad_branch_or_dirty_build_cannot_reach_docker(tmp_path, option, kind):
     env, log = fixture(tmp_path)
     env[option] = 'main' if option == 'BUILD_BRANCH' else 'yes'
-    result = subprocess.run(['bash', str(ROOT / 'scripts/sqlite_candidate_build.sh')], env=env,
+    result = subprocess.run(['bash', str(ROOT / f'scripts/sqlite_{kind}_build.sh')], env=env,
                             capture_output=True, text=True, timeout=15)
     assert result.returncode != 0 and not log.exists()
 

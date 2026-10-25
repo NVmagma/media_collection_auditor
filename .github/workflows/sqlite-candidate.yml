@@ -6,12 +6,14 @@ on:
     paths:
       - '.github/workflows/sqlite-candidate.yml'
       - 'docker/sqlite-candidate*'
+      - 'docker/sqlite-preview*'
       - 'app/**'
       - 'scripts/sqlite_candidate_*'
       - 'scripts/sqlite_restore*'
       - 'scripts/sqlite_release_preflight.py'
       - 'scripts/sqlite_release_preparation*'
       - 'scripts/sqlite_release_recovery*'
+      - 'scripts/sqlite_preview_release*'
       - 'requirements.txt'
   workflow_dispatch:
 
@@ -68,6 +70,13 @@ jobs:
           image=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate-build.json")
           recovery_parent=$(mktemp -d "$RUNNER_TEMP/recovery-parent.XXXXXX")
           bash scripts/sqlite_release_recovery_lab.sh "$image" "$recovery_parent" | tee "$RUNNER_TEMP/candidate-recovery.log"
+      - name: Build separate preview-only release without publishing
+        run: bash scripts/sqlite_preview_release_build.sh > "$RUNNER_TEMP/preview-release-image.txt"
+      - name: Exercise actual preview release process and public worker
+        run: |
+          image=$(cat "$RUNNER_TEMP/preview-release-image.txt")
+          preview_release_parent=$(mktemp -d "$RUNNER_TEMP/preview-release-parent.XXXXXX")
+          bash scripts/sqlite_preview_release_lab.sh "$image" "$preview_release_parent" | tee "$RUNNER_TEMP/preview-release-acceptance.log"
       - name: Retain build and acceptance evidence
         uses: actions/upload-artifact@v4
         with:
@@ -80,3 +89,5 @@ jobs:
             ${{ runner.temp }}/candidate-preview.log
             ${{ runner.temp }}/candidate-preparation.log
             ${{ runner.temp }}/candidate-recovery.log
+            ${{ runner.temp }}/preview-release-image.txt
+            ${{ runner.temp }}/preview-release-acceptance.log

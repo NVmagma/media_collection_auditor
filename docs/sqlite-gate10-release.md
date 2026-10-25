@@ -589,3 +589,67 @@ checks. Application recovery/activation code is unchanged; the native reproducer
 now verifies deterministic fixture closure. Rebuild a new candidate from the
 updated branch and rerun the same two-path recovery handoff above. Actual Tower
 shfs/native repair acceptance remains pending; no live files/services are changed.
+
+## Tower recovery accepted
+
+Source `01bba113fcd0759b53ab80306f838dbd6ce2bb74`, image
+`sha256:bef375bfb91ef25426d43a6db462f38d1ce9b5d2f9d0229cbf561973012b01f7`,
+passed all eighteen repaired recovery cases on both actual Tower paths:
+
+- `/mnt/user/sql_test/release-recovery.1ceDnM`: 13.348s, retained
+  `recovery-evidence.xfvt4mjz`.
+- `/mnt/media/sql_test/release-recovery.YvSaDi`: 13.024s, retained
+  `recovery-evidence.9no8spj8`.
+
+Both reported `release_recovery_acceptance_complete`; cleanup passed without GC,
+ignored errors or delays. This accepts latest-state recovery on shfs/native.
+
+## Initial activation-capable release: preview only
+
+The separate `docker/sqlite-preview-release.Dockerfile` bakes
+`scheduled-preview-v1` and the exact source SHA into `sqlite_release_profile.py`.
+The tracked/default profile and candidate image remain sealed. No environment
+flag can turn the sealed image into a preview image or grant media execution.
+The initial release supports only SQLite + `DRY_RUN=true`, with deletion,
+cross-filesystem moves and season pruning disabled. Enabling live moves remains
+outside this first release and requires separate reviewed capability work.
+
+An explicit offline `app.sqlite_preview_activation bind` operation binds a
+successful prepared revision-zero DB to its immutable image revision, effective
+saved/env policy digest, saved-config digest, original source/backup/receipts,
+database/control identities and enabled stage-root identities. Credentials enter
+only the digest, never reports/binding plaintext. Binding creation requires the
+same cooperating source/control locks and does not start/recreate any service.
+Its execution against production remains part of final approved cutover steps.
+
+Startup, every public cycle and selected SQLite API/dashboard access validate the
+binding. Validation is read-only and lock-free, so status remains usable while
+the worker owns its cooperating locks. Changed settings, missing/aliased inputs,
+replaced roots/DB, advanced/raw-mutated state or a different image SHA block
+execution; there is no JSON fallback. The first startup waits for a future daily
+slot; a due public worker cycle only previews and leaves original/SQLite tracking
+unchanged. API responses explicitly show `preview_only` with no media action
+authority. Session/UI initialization follows release validation, and SIGINT
+cleanly stops the scheduled service.
+
+Fifteen fixture cases cover bound public preview, no media/Arr dispatch, policy
+and saved-config refusal, absent/replaced/advanced state, malformed/aliased config,
+image/env spoofing, and API reporting under held worker locks. A separate actual
+image exercise starts `python -m app.main`, verifies missing binding/JSON fallback
+refusal before service startup, 401/200 API behavior, future schedule/no startup
+scan, policy-change 503, original preservation and clean SIGINT shutdown. Both
+recipes build only committed source, untagged, without registry publication.
+
+## Production control-location observation
+
+Tower reported process UID/GID 0:0, `/` and `/app` mode 0755 owned 0:0, and
+`/app/logs` mode 0755 owned 99:100. Keep the existing appdata permissions and
+contents unchanged. Plan a **new**, root-owned 0700 durable host directory
+`/mnt/user/appdata/media_collection_auditor_sqlite_control`, mounted at
+`/sqlite-control`, with prepared control `/sqlite-control/release/state.db`.
+The initial media mount can be read-only as an additional preview constraint.
+These are review inputs only: no directory, mount, setting or service has changed.
+The remaining final package must preserve current private container settings and
+rollback image, quiesce the existing auditor, back up settings, set the approved
+02:00 America/Los_Angeles schedule, prepare/bind new state, verify the exact
+release image and obtain explicit approval before performing the update.

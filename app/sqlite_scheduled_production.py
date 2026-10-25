@@ -23,8 +23,8 @@ from app.sqlite_scheduled_worker_cycle import ScheduledWorkerCycle
 
 def production_cycle_step(*, cycle, settings, now, clock=datetime.now, observer=None):
     """Candidate daily selection, rejected before parsing settings or opening paths."""
-    require_sqlite_production_activation()
-    return _configured_cycle_step(cycle=cycle, settings=settings, now=now, clock=clock, observer=observer)
+    values = require_sqlite_production_activation(settings=settings)
+    return _configured_cycle_step(cycle=cycle, settings=values, now=now, clock=clock, observer=observer)
 
 
 def _configured_cycle_step(*, cycle, settings, now, clock, observer=None):

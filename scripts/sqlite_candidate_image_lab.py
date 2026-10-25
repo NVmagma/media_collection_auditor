@@ -71,6 +71,7 @@ for module in ('scripts.sqlite_coordinator_fixture','scripts.sqlite_scheduled_ar
                'scripts.sqlite_scheduled_preview_fixture',
                'scripts.sqlite_release_preparation_fixture',
                'scripts.sqlite_release_recovery_fixture',
+               'scripts.sqlite_preview_release_fixture',
                'scripts.sqlite_tv_compatibility_fixture','scripts.sqlite_restore_fixture',
                'scripts.sqlite_scheduled_transport_fixture'):
     subprocess.run([sys.executable,'-S','-B','-m',module],check=True,timeout=120)

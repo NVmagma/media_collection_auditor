@@ -9,10 +9,25 @@ def require_json_backend(value: str) -> None:
         )
 
 
-def require_sqlite_production_activation() -> None:
-    """Release boundary: no environment value can authorize SQLite execution.
+def preview_release_enabled() -> bool:
+    """A separate immutable recipe bakes preview support; environment is ignored."""
+    try:
+        from app.sqlite_release_profile import PROFILE
+    except ImportError:
+        return False  # Legacy flat-module images remain JSON-only.
+    return PROFILE == 'scheduled-preview-v1'
 
-    Gate 8 may wire and test the candidate worker, but production remains sealed
-    until release/rollback validation and explicit activation approval.
+
+def require_sqlite_production_activation(*, settings=None):
+    """Sealed by default; the preview image requires its prepared-state binding.
+
+    This returns a detached effective settings mapping only for validated preview
+    execution. It never allows moves, Arr writes, clock checkpoints or deletion.
     """
-    require_json_backend('sqlite')
+    if not preview_release_enabled():
+        require_json_backend('sqlite')
+    try:
+        from app.sqlite_preview_activation import validate_preview_activation
+        return validate_preview_activation(settings=settings)
+    except Exception:
+        raise RuntimeError('SQLite production activation is disabled: preview release binding unavailable') from None

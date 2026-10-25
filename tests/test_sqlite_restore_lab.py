@@ -7,9 +7,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.mark.parametrize('failure', [None, 'START_FAIL'])
-@pytest.mark.parametrize('kind', ['restore', 'release_preparation', 'release_recovery'])
+@pytest.mark.parametrize('kind', ['restore', 'release_preparation', 'release_recovery', 'preview_release'])
 def test_only_new_lab_is_mounted_and_fixture_container_removed(tmp_path, failure, kind):
     env, log = fixture(tmp_path)
+    if kind == 'preview_release': env['FIXTURE_ACTIVATION'] = 'preview-only'
     tools = Path(env['PATH'].split(':')[0])
     (tools/'uname').write_text('#!/usr/bin/env bash\necho Linux\n'); (tools/'uname').chmod(0o755)
     docker = tools/'docker'
@@ -31,7 +32,7 @@ def test_only_new_lab_is_mounted_and_fixture_container_removed(tmp_path, failure
     assert commands.endswith('rm\n--force\n' + CONTAINER + '\n')
 
 
-@pytest.mark.parametrize('kind', ['restore', 'release_preparation', 'release_recovery'])
+@pytest.mark.parametrize('kind', ['restore', 'release_preparation', 'release_recovery', 'preview_release'])
 def test_alias_parent_rejected_before_docker(tmp_path, kind):
     env, log = fixture(tmp_path)
     tools = Path(env['PATH'].split(':')[0])
