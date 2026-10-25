@@ -14,8 +14,10 @@ cd -- "$checkout"
 revision=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image")
 [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || exit 2
 [ "$(docker image inspect --format '{{.Id}}' "$image")" = "$image" ] || exit 2
+[ "$(docker image inspect --format '{{json .Config.Entrypoint}}' "$image")" = '["python","-m","app.main"]' ] || exit 2
+[ "$(docker image inspect --format '{{.Config.StopSignal}}' "$image")" = SIGINT ] || exit 2
 [ "$(docker image inspect --format '{{index .Config.Labels "io.media-collection-auditor.sqlite-activation"}}' "$image")" = preview-only ] || exit 2
-volumes=$(docker image inspect --format '{{json .Config.Volumes}}' "$image")
+volumes=$(docker image inspect --format '{{json (index .Config "Volumes")}}' "$image")
 [ "$volumes" = null ] || [ "$volumes" = '{}' ] || exit 2
 git cat-file -e "$revision:app/sqlite_preview_activation.py"
 git cat-file -e "$revision:scripts/sqlite_preview_release_fixture.py"

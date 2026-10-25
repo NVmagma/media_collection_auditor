@@ -206,6 +206,8 @@ def validate_preview_activation(*, settings=None):
             current, current_info = _local(parent, name)
             if current != payload or _identity(current_info) != _identity(original_info):
                 raise RuntimeError('Preview input changed')
+        if binding['media_roots'] != _roots(config, (original_control.st_dev, original_control.st_ino)):
+            raise RuntimeError('Preview roots changed during validation')
         session.read_verified_snapshot()
         return values
 

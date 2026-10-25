@@ -46,7 +46,13 @@ def _configured_cycle_step(*, cycle, settings, now, clock, observer=None):
         if observer is not None:
             observer.observe_cycle(next_run=cycle.next_run, status='attempted')
         def execute():
-            return _run_bound_production_slot(settings=values, scheduled_at=slot, now=current, clock=clock)
+            result = _run_bound_production_slot(settings=values, scheduled_at=slot, now=current, clock=clock)
+            from app.sqlite_backend_gate import preview_release_enabled
+            if preview_release_enabled():
+                # A changed binding/configuration must fail inside the observer's
+                # attempt, rather than leave a misleading completed history row.
+                require_sqlite_production_activation(settings=values)
+            return result
         return execute() if observer is None else observer.run_attempt(scheduled_at=slot,
             execute=execute, dry_run=values.get('DRY_RUN', 'true').strip().lower() == 'true')
     try:

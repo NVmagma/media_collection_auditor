@@ -632,9 +632,10 @@ unchanged. API responses explicitly show `preview_only` with no media action
 authority. Session/UI initialization follows release validation, and SIGINT
 cleanly stops the scheduled service.
 
-Fifteen fixture cases cover bound public preview, no media/Arr dispatch, policy
+Sixteen fixture cases cover bound public preview, no media/Arr dispatch, policy
 and saved-config refusal, absent/replaced/advanced state, malformed/aliased config,
-image/env spoofing, and API reporting under held worker locks. A separate actual
+image/env spoofing, API reporting under held worker locks, and post-collection
+policy revalidation before completed history. A separate actual
 image exercise starts `python -m app.main`, verifies missing binding/JSON fallback
 refusal before service startup, 401/200 API behavior, future schedule/no startup
 scan, policy-change 503, original preservation and clean SIGINT shutdown. Both
@@ -653,3 +654,11 @@ The remaining final package must preserve current private container settings and
 rollback image, quiesce the existing auditor, back up settings, set the approved
 02:00 America/Los_Angeles schedule, prepare/bind new state, verify the exact
 release image and obtain explicit approval before performing the update.
+
+The preview wrapper also checks that the declared image entrypoint and SIGINT
+stop signal match the exercised process. After collection the public worker
+revalidates the binding inside the observer attempt, so a concurrent settings
+change cannot leave a misleading completed history row. Root identities are also
+checked again at the end of activation validation. The initial implementation
+passed CI 40206450480 and local actual linux/arm64 image startup/API/shutdown;
+the final source with these closing-boundary checks is being verified next.

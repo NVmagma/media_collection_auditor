@@ -181,6 +181,23 @@ class PreviewReleaseFixtureTests(unittest.TestCase):
         with patch.object(activation, '_effective', change):
             with self.assertRaises(RuntimeError): self.gate()
 
+    def test_policy_change_after_scan_is_failed_before_completed_history(self):
+        from app import sqlite_scheduled_production as worker
+        run = worker._run_bound_production_slot
+        def changed(**kwargs):
+            result = run(**kwargs)
+            self.saved.write_text('{} ')
+            return result
+        cycle, observer = ScheduledWorkerCycle(), ScheduledRunObservations()
+        slot = self.case.fixture.slot
+        production_cycle_step(cycle=cycle, settings=self.values, now=slot - timedelta(hours=1), observer=observer)
+        with patch.object(worker, '_run_bound_production_slot', changed):
+            with self.assertRaises(RuntimeError):
+                production_cycle_step(cycle=cycle, settings=self.values, now=slot,
+                    clock=lambda: configured_fixture.NOW, observer=observer)
+        self.assertEqual(observer.history()[0]['result'], 'failed')
+        self.assertEqual(self.store.load_with_revision(), self.before)
+
 
 def actual_image_acceptance():
     if not Path(activation.__file__).is_relative_to('/app/app'):
@@ -264,7 +281,7 @@ def actual_image_acceptance():
 if __name__ == '__main__':
     result = unittest.TextTestRunner(verbosity=2).run(
         unittest.defaultTestLoader.loadTestsFromTestCase(PreviewReleaseFixtureTests))
-    if not result.wasSuccessful() or result.testsRun != 15 or result.skipped:
+    if not result.wasSuccessful() or result.testsRun != 16 or result.skipped:
         raise SystemExit(1)
     if '--actual-image' in sys.argv:
         actual_image_acceptance()
