@@ -389,3 +389,13 @@ Only new fixture media/state and one new isolated container are used. All HTTP
 is synthetic private loopback; production services, media, JSON state, settings,
 exports and kernel controls remain unchanged. Gate 9 remains open pending this
 acceptance plus coordinator/history authority and TV-season compatibility.
+
+Scheduled Arr implementation `78bee331db68ddbb5fba44c6c0c9ae379b72ed96` passed
+[CI run 40135429999](https://github.com/NVmagma/media_collection_auditor/actions/runs/40135429999):
+378 scheduled/backend checks with 27 subtests, 265 Gate 9/API checks, 23 atomic
+checks, 671 SQLite regressions and 309 isolated safety tests (separate steps).
+The broad local package passed 343 tests with 14 subtests (Linux cases skipped
+on macOS). Final isolated Linux checks passed 9 scheduled Arr, 27 rename and
+11 HTTP cases. The combined Linux package also passed 14 completion, 6 queue,
+8 runtime, 4 configured-slot, 14 daily-slot and 22 routed cases before the final
+additional later-delivery case. Native Tower scheduled Arr acceptance is pending.
