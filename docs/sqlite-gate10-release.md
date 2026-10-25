@@ -441,3 +441,40 @@ UID/GID with mode 0700 (and makes `/tmp` explicitly sticky 1777). This was check
 with an actual UID 1001 container and private tmpfs write/read. The `/lab` assertion
 and strict pipeline failure handling remain in place; the failed run is not
 host-backed acceptance.
+
+### Preparation CI accepted; Tower acceptance pending
+
+Implementation/wrapper revision `2181422122a69202a11bc9bcdc461aa8bd34e042`
+passed [CI run 40200725722](https://github.com/NVmagma/media_collection_auditor/actions/runs/40200725722):
+**3,203 tests and 56 subtests** in 93.21s; image/entrypoint acceptance; all nineteen
+preparation cases through both packaged-image wrappers; strict actual `/lab`
+host-backed restore, preview and preparation acceptance. The preparation wrapper
+ended with `release_preparation_acceptance_complete`, retaining synthetic evidence
+`preparation-evidence.5x3rp_f5`. Locally, all nineteen preparation cases passed as
+root and UID 1001, plus twenty focused shell/packaging guards and the explicit
+unprivileged/private-tmpfs permission check.
+
+Next, run only the new preparation acceptance on both actual Tower filesystems.
+No host Python, production mounts/state, service controls or backend changes are
+used. Building creates an untagged cached candidate, without publication:
+
+```bash
+(
+  set -eu
+  cd /mnt/user/sqlite_lab_checkout
+  [ "$(git branch --show-current)" = feature/sqlite ]
+  git pull --ff-only origin feature/sqlite
+  candidate_image=$(bash scripts/sqlite_candidate_build.sh)
+  for parent in /mnt/user/sql_test /mnt/media/sql_test; do
+    bash scripts/sqlite_release_preparation_lab.sh "$candidate_image" "$parent"
+  done
+)
+```
+
+Expected on each: nineteen cases and `release_preparation_acceptance_complete`.
+New synthetic prepared/interrupted evidence directories remain inside each new
+lab. Existing files and production services are preserved. This accepts backup/
+migration preparation only; latest-state export/recovery integration, the
+activation-capable release and final review/approval still remain before Gate 10
+can close. Do not invoke the preparation CLI against live state from these lab
+instructions or treat its receipt as activation permission.

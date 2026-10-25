@@ -81,9 +81,12 @@ The candidate workflow never publishes or deploys an image.
 Tower's read-only production packet now records the current rollback image,
 Movies-only roots, persisted JSON/appdata mappings and approved initial dry-run
 schedule (`02:00 America/Los_Angeles`). The candidate has a genuine scheduled
-preview path with advisory discovery and no media/Arr/clock writes. Tower preview
-acceptance, activation-capable release implementation and the final live
-backup/migration/rollback package remain open before activation approval.
+preview path with advisory discovery and no media/Arr/clock writes; actual Tower
+preview acceptance passed on both filesystems at `5599aad`. Backup-first release
+preparation and its offline CLI now pass full CI and strict host-backed acceptance
+at `2181422` (3,203 tests, 56 subtests). Tower preparation acceptance, latest-state
+recovery integration and activation-capable release review remain open before
+activation approval.
 
 ## Current decision
 
