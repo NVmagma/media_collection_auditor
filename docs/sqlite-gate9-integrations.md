@@ -1,7 +1,8 @@
 # Gate 9 — external integration acceptance
 
-Gate 8 is closed. Gate 9 remains open; production is JSON and SQLite activation
-stays sealed. No production services, database, media, exports or kernel controls
+Gates 8–9 are closed for the approved scheduled model. Production is JSON and
+SQLite activation stays sealed. The closure record at the end supersedes earlier
+pending-acceptance notes. No production services, database, media, exports or kernel controls
 are changed by this work. Permanent deletion remains disabled.
 
 ## Fixed remaining scope
@@ -515,3 +516,36 @@ coordinator, 10 TV, 9 Arr worker, 8 runtime, 27 rename and 11 HTTP cases. Tower
 coordinator acceptance remains pending; all other fixed Gate 9 boundaries have
 recorded Tower acceptance above. Release activation remains a separate Gate 10
 and explicit-approval decision.
+
+
+## Gate 9 closure — accepted on Tower
+
+Final source `31184de48af380deeaf5c5efaffa15883f299223` passed native Tower lab
+`/mnt/media/sql_test/coordinator.wg33nM`: all 10 coordinator cases in 2.499s and
+11 HTTP regressions in 0.239s. The final status was
+`coordinator_acceptance_complete`, scope `scheduled_process_observations`.
+The tested application/scripts/tests/workflow bytes match implementation
+`33cd61f6380946285d86bee72d8a064d019b3323`, whose passing exact-implementation
+CI is recorded above; `31184de` adds evidence documentation only.
+
+All fixed Gate 9 boundaries are accepted:
+
+- Single-revision dashboard/API tracking authority, source selection and connection
+  lifetime on shfs and native filesystems.
+- Configured stable-ID Arr queues, bounded one-shot delivery, independent readbacks,
+  known-outcome atomic completion and scheduled worker integration, including
+  retained uncertainty, partial completion and blocked replay.
+- Configured whole-show tags/favorites, intact season/special folders, new-episode
+  clocks and rejection of enabled unsupported pruning.
+- Selected scheduler/coordinator authority with no legacy JSON history fallback,
+  explicit current-process history scope, redaction, no invented freshness and
+  no manual dispatch outside the daily schedule.
+
+**Gate 9 is closed under the scheduled-run contract.** The accepted scope does
+not include persistent scheduler history, season pruning, cross-filesystem moves,
+permanent deletion or host-wide writer exclusion. No production services,
+configuration, media/state, exports, boot settings or kernel controls changed.
+
+Gate 10 remains open for final release CI/image/runtime packaging, operational
+migration/backup/rollback acceptance and explicit activation approval. Completing
+Gate 9 does not select SQLite in production or authorize production media actions.

@@ -22,7 +22,7 @@ Tower acceptance on 2026-10-24 under this scheduled-run scope.
 | 6. Scheduled move verification | Complete scan before dispatch; fresh protection/decision/source checks; supported same-filesystem rename; durable intent and crash recovery; accepted concurrency limits | Complete for the scheduled model: local checks, exact-implementation CI, and native Tower acceptance passed (27 filesystem/integration tests and 11 HTTP transport tests). Production activation remains disabled; worker/root routing is Gate 8 work |
 | 7. Atomic lifecycle reconciliation | Bound applied revision/snapshot; source/destination clocks, exact intent clearance and optional Arr queue share one CAS commit; real SQL/process-failure tests prove old-or-new outcomes | Complete for the scheduled model: exact-implementation CI for 7d6823c and native Tower acceptance passed (19 atomic reconciliation, 27 move regression and 11 HTTP transport tests). See scheduled Gate 7 acceptance; production activation remains disabled |
 | 8. Production lifecycle integration | Real Waiting/Holding/Keep/Removal moves use guarded ordering; existing JSON path unaffected until cutover | Complete for the scheduled model: configured multi-library clocks, fresh Jellyfin reads, routed moves, daily claims, separate control/database/media layout and candidate worker/service integration passed exact-implementation CI and native Tower acceptance. Final runtime acceptance at cad51d8 passed 8 runtime and 11 HTTP tests. Production activation remains sealed; see the worker integration record |
-| 9. External integrations | Arr uncertain outcomes, Jellyfin protection, dashboard authoritative reads, TV-season behavior | In progress: prior live protection/Arr uncertainty/whole-show preservation evidence retained. Single-revision candidate dashboard/API reads, fail-closed source selection and connection-lifetime repair accepted on native/shfs. Configured Arr GET catalog identity resolution and atomic queue preparation implemented, native queue acceptance passed (6 queue and 11 HTTP tests at 68f0142). One-shot Arr delivery/readback accepted on both filesystems (11 + 11 each at be9e0d3). Known-outcome queue/intent completion accepted on both filesystems (14 + 11 each at 5f7a773). Configured-worker Arr delivery accepted on native Tower (9 + 11 at 3fcb211). Whole-show TV compatibility accepted on native Tower (10 + 11 at fe71702). Coordinator/history process authority implemented with no JSON fallback and explicit ephemeral scope; final native acceptance pending; see the Gate 9 integration record |
+| 9. External integrations | Arr uncertain outcomes, Jellyfin protection, dashboard authoritative reads, TV-season behavior | Complete for the scheduled model: tracking authority accepted on native/shfs; configured Arr queue, one-shot delivery, known-outcome completion and worker integration accepted; whole-show TV compatibility accepted with pruning disabled; process-scoped coordinator/history authority accepted at 31184de (10 coordinator and 11 HTTP cases). Exact implementation 33cd61f passed CI 40151389894. See the Gate 9 integration record; production activation remains sealed |
 | 10. Deployment and rollback | Disposable Unraid end-to-end tests, full CI, Docker build, backup/rollback, explicit activation approval | Incomplete: full native Unraid suite passed 1,650 tests and 22 subtests through d67b7da; maintained shfs suite passed 475 tests and 19 subtests. Accepted operational restore, final release CI/image and explicit activation approval remain open |
 
 ## Current scheduled Gate 6 exit checklist
@@ -33,7 +33,7 @@ operator's native Tower result received on 2026-10-24. The final status was
 `scheduled_gate6_acceptance_complete`; all 27 filesystem/integration tests and
 11 HTTP transport tests passed. Gate 6 is closed under the approved scheduled
 model. Historical host-wide controller/boot requirements below do not reopen it.
-Gates 7–8 are also closed; Gate 9 external integration is next. Production behavior and activation remain unchanged.
+Gates 7–9 are also closed; Gate 10 deployment and rollback is next. Production behavior and activation remain unchanged.
 
 ## Current scheduled Gate 7 exit checklist
 
@@ -54,17 +54,27 @@ CI for implementation `e5b0cde` and native Tower runtime acceptance from source
 `scheduled_runtime_acceptance_complete`. Prior clock, configured HTTP, routed
 move and separated-layout boundaries are also accepted. Gate 8 is closed under
 the scheduled model. The original JSON path remains unchanged; SQLite production
-selection stays sealed. Gates 9–10 and explicit activation approval remain open.
+selection stays sealed. Gate 9 is now also closed; Gate 10 and explicit activation approval remain open.
 
-## Current Gate 9 work
+## Current Gate 9 exit checklist
 
-The [external integration record](sqlite-gate9-integrations.md) tracks remaining
-Arr, state/coordinator authority and TV-season acceptance. No production backend
-or service change is authorized by its disposable fixtures.
+The [external integration record](sqlite-gate9-integrations.md) records all fixed
+integration boundaries and final Tower coordinator acceptance from source
+`31184de48af380deeaf5c5efaffa15883f299223`, lab
+`/mnt/media/sql_test/coordinator.wg33nM`: 10 coordinator tests in 2.499s and
+11 HTTP tests in 0.239s, ending with `coordinator_acceptance_complete`.
+Exact implementation `33cd61f` passed CI run `40151389894`; the accepted
+source differs only in evidence documentation. Gate 9 is closed for the approved
+scheduled model. Coordinator history is explicitly current-process only; it is
+not durable history or live-inventory verification. Season pruning, permanent
+deletion and production SQLite activation remain disabled.
+
+Gate 10 remains responsible for release packaging/image verification, operational
+migration/backup/rollback acceptance and explicit production activation approval.
 
 ## Current decision
 
-Eight of ten *gates* have been met, but these gates do not represent equal
+Nine of ten *gates* have been met, but these gates do not represent equal
 amounts of work. Do not publish an overall percent complete without a
 documented weighting and stable denominator. Earlier 90% and 65–70% estimates
 used different scopes and should not be compared or treated as reliable.
