@@ -131,7 +131,7 @@ def verify():
             'Entrypoint': ['python'], 'Cmd': ['-B', '-c', 'import time; time.sleep(3600)'],
             'Env': ['DRY_RUN=true', 'AUDITOR_STATE_BACKEND=json',
                     'JELLYFIN_HOST_URL=http://127.0.0.1:9', 'JELLYFIN_API_TOKEN=synthetic-token',
-                    'INTEGRATION_API_TOKEN=synthetic-integration-token', 'WEB_PORT=8080'],
+                    'INTEGRATION_API_TOKEN=synthetic-integration-token-0123456789abcdef', 'WEB_PORT=8080'],
             'Labels': {FIXTURE_LABEL: nonce}, 'HostConfig': {'NetworkMode': 'bridge',
                 'RestartPolicy': {'Name': 'no', 'MaximumRetryCount': 0}, 'Memory': 268435456,
                 'PidsLimit': 64, 'Mounts': [{'Type': 'bind', 'Source': str(host_root / name),
@@ -152,6 +152,14 @@ def verify():
             result = original_inspect(value, optional)
             if result is not None:
                 result['HostConfig']['PortBindings'] = deepcopy(observed['HostConfig']['PortBindings'])
+                if result['Id'] == scope.original:
+                    changed = {key: [field for field in sorted(set(result.get(key, {})) | set(observed.get(key, {})))
+                                     if result.get(key, {}).get(field) != observed.get(key, {}).get(field)]
+                               for key in ('Config', 'HostConfig')}
+                    changed = {key: value for key, value in changed.items() if value}
+                    if result.get('Mounts') != observed.get('Mounts'): changed['Mounts'] = ['mount_metadata']
+                    if changed:
+                        print(json.dumps({'fixture_observation_changed_fields': changed}))
             return result
         scope.inspect = model_inspect
         original_create = scope.create

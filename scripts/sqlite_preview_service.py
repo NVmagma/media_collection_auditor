@@ -400,6 +400,8 @@ def execute_approved(*, action, directory, packet_identity, control_identity, im
         review_raw = _local(parent, 'review.json')[0]
         if sha(review_raw) != approved_review_sha: raise RuntimeError('Exact approved private review required')
         report, env, proposed = read_install_packet(directory=packet, expected_identity=packet_identity, preview_image=image_id)
+        if not re.fullmatch('[A-Za-z0-9_-]{32,256}', env.get('INTEGRATION_API_TOKEN', '')):
+            raise RuntimeError('Valid existing integration credential required before service changes')
         if (report.get('managed_template_plan') != 'prepared_not_installed' or report.get('network_mode') != 'bridge'
                 or env.get('STATE_FILE') != '/app/logs/auditor_state.json'
                 or env.get('WEB_CONFIG_FILE') != '/app/logs/auditor_config.json'
