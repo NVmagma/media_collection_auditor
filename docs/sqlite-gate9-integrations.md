@@ -442,3 +442,11 @@ new disposable media/state and one new cached-image container are used, with
 synthetic private-loopback Jellyfin responses. No production changes occur.
 Coordinator/history authority remains open: the candidate scheduler must not
 present legacy JSON history as its own SQLite attempt history or live freshness.
+
+TV compatibility implementation `4081e58cf88156ad4986c9155d72d716239669bd` passed
+[CI run 40150744336](https://github.com/NVmagma/media_collection_auditor/actions/runs/40150744336):
+378 scheduled/backend checks with 27 subtests, 277 Gate 9/API checks, 23 atomic
+checks, 671 SQLite regressions and 319 isolated safety tests (separate steps).
+Local focused checks passed 50 tests (11 Linux-specific cases skipped on macOS).
+Isolated Linux checks passed all 10 TV, 27 rename and 11 HTTP cases. Tower TV
+acceptance remains pending; no production application code or policy changed.
