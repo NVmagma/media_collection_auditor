@@ -113,7 +113,7 @@ def restore_disposable_json(*, root, candidate_name, output_name, fault_at=None)
         staging = '.restore-staging-' + secrets.token_hex(16) + '.json'
         _write_private(parent, staging, payload)
         stage_fd = os.open(staging, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
-        stack.callback(os.close, stage_fd)
+        stage_handle = stack.enter_context(os.fdopen(stage_fd, 'rb'))
         expected_stage = os.fstat(stage_fd)
         if _read_candidate(parent, staging) != state:
             raise RuntimeError('Staged restore parity mismatch')
@@ -130,6 +130,16 @@ def restore_disposable_json(*, root, candidate_name, output_name, fault_at=None)
                 or (current_output.st_dev, current_output.st_ino) != (expected_stage.st_dev, expected_stage.st_ino)
                 or (current_stage.st_dev, current_stage.st_ino) != (expected_stage.st_dev, expected_stage.st_ino)):
             raise RuntimeError('Published restore identity mismatch')
+        # FUSE may retain an unlinked open file under a hidden name. Close this
+        # inode's last file descriptor before removing our staging link; keep
+        # the parent/control/input descriptors pinned and all parity checks.
+        # File-object close is idempotent when ExitStack later unwinds.
+        stage_handle.close()
+        stage_before_unlink = os.stat(staging, dir_fd=parent, follow_symlinks=False)
+        if (not stat.S_ISREG(stage_before_unlink.st_mode) or stage_before_unlink.st_nlink != 2
+                or (stage_before_unlink.st_dev, stage_before_unlink.st_ino) !=
+                   (expected_stage.st_dev, expected_stage.st_ino)):
+            raise RuntimeError('Restore staging changed before unlink')
         # Remove only this attempt's own staging link after verified publication.
         os.unlink(staging, dir_fd=parent)
         os.fsync(parent)

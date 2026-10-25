@@ -245,6 +245,35 @@ m.restore_disposable_json(root=sys.argv[1], candidate_name='rollback-candidate-c
             with self.assertRaises(RuntimeError): self.restore()
         self.assertFalse((self.root / module.REQUEST).exists()); self.assertFalse(self.output.exists())
 
+    def test_open_unlinked_fuse_retention_does_not_leave_a_second_link(self):
+        descriptors = Path('/proc/self/fd')
+        if not descriptors.is_dir(): descriptors = Path('/dev/fd')
+        if not descriptors.is_dir(): self.skipTest('Process descriptor view required')
+        unlink, link = module.os.unlink, module.os.link
+        retained = []
+        def fuse_unlink(name, *, dir_fd=None):
+            if name.startswith('.restore-staging-'):
+                staged = os.stat(name, dir_fd=dir_fd, follow_symlinks=False)
+                # Model FUSE's retained name only when an open file description
+                # still references the inode being unlinked. No ignored cleanup.
+                for entry in os.listdir(descriptors):
+                    try:
+                        held = os.fstat(int(entry))
+                    except (ValueError, OSError):
+                        continue
+                    if (held.st_dev, held.st_ino) == (staged.st_dev, staged.st_ino):
+                        link(name, '.fuse-retained-restore', src_dir_fd=dir_fd,
+                             dst_dir_fd=dir_fd, follow_symlinks=False)
+                        retained.append(True)
+                        break
+            return unlink(name, dir_fd=dir_fd)
+        with patch.object(module.os, 'unlink', fuse_unlink):
+            result = self.restore()
+        self.assertEqual(result['status'], 'disposable_restore_verified')
+        self.assertEqual(retained, [])
+        self.assertEqual(self.output.stat().st_nlink, 1)
+        self.originals_intact()
+
     def test_completed_restore_is_not_automatically_repeated(self):
         self.restore(); self.blocked_retry()
         self.assertTrue((self.root / module.COMPLETE).exists())
@@ -253,7 +282,7 @@ m.restore_disposable_json(root=sys.argv[1], candidate_name='rollback-candidate-c
 
 if __name__ == '__main__':
     result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(RestoreFixtureTests))
-    if not result.wasSuccessful() or result.testsRun != 16 or result.skipped: raise SystemExit(1)
+    if not result.wasSuccessful() or result.testsRun != 17 or result.skipped: raise SystemExit(1)
     evidence = retained_evidence()
     print(json.dumps({'retained_evidence_basename': evidence,
         'status': 'disposable_restore_rehearsal_verified', 'tests': result.testsRun,

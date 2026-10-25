@@ -80,8 +80,8 @@ After CI passes for the implementation, run:
 )
 ```
 
-Expected: entrypoint authentication/gate checks, 10 coordinator, 9 Arr, 10 TV
-and 11 HTTP cases, then `candidate_image_acceptance_complete`. There are no
+Expected: entrypoint authentication/gate checks, 10 coordinator, 9 Arr, 10 TV,
+17 restore and 11 HTTP cases, then `candidate_image_acceptance_complete`. There are no
 production bind mounts, published host ports, external fixture network, registry
 pushes, service controls or state migration. The untagged image remains cached;
 only the newly created fixture container and temporary image-ID file are removed.
@@ -146,7 +146,7 @@ A failed/crashed publication may leave an output and staging link, but no succes
 is reported and no automatic cleanup, retry or production use is authorized.
 Existing completion/request artifacts also block a second attempt.
 
-Sixteen cases verify advanced revision/clock/Arr/unknown-field parity, fresh JSON
+Seventeen cases verify advanced revision/clock/Arr/unknown-field parity, fresh JSON
 load/save/load in separate network-forbidden processes, stale/pending refusal,
 occupied and concurrently occupied destinations, escaping names, symlink and
 identity substitution refusal, concurrent SQLite changes, partial writes, sync
@@ -178,7 +178,7 @@ After exact-implementation CI passes, run on Tower:
 )
 ```
 
-Expected per filesystem: 16 restore cases plus retained success/interrupted
+Expected per filesystem: 17 restore cases plus retained success/interrupted
 rehearsals; final `restore_acceptance_complete`, scope
 `disposable_advanced_state_restore`. Logs and retained examples remain only in
 the newly created host lab. Unsupported publication blocks without fallback.
@@ -216,3 +216,30 @@ records required current bindings, the proposed state-writer/migration sequence
 and rollback decision rules. It contains no authorized live commands. Final
 production bindings, activation implementation/release verification and explicit
 approval remain outstanding alongside the two filesystem acceptance results.
+
+
+## shfs restore lifetime repair — acceptance pending
+
+Tower source `fd9c8f52e283c6e8fb1e15b490e440cb22c20164`, candidate
+`sha256:5a02283168a5afc0b9f39fa7571447c68f63ccf99bf2de3d23a0cd00e76971c3`,
+failed the shfs lab `/mnt/user/sql_test/restore.aebcSq`: 14 cases passed and two
+success-path cases errored at the strict regular-file/single-link check after
+staging unlink. The 16-case run took 8.519s and reported no acceptance. The native
+loop iteration did not run because the first failure stopped the command block.
+No production files or services were involved.
+
+The staging file descriptor was still open when its staging link was removed.
+FUSE can retain an open unlinked inode under a hidden name; this is consistent
+with the observed second-link rejection. A descriptor-aware retention model
+reproduced the identical exception before repair. The restore now closes its
+staging file object before unlinking, while retaining parent/control/input
+handles, rechecking staging identity, and preserving the final strict nlink=1,
+parity, fsync and current-source checks. Idempotent file-object cleanup prevents
+a later ExitStack unwind from closing a reused descriptor number.
+
+The change does not allow extra links, ignore cleanup errors, replace an existing
+file or introduce a publication fallback. All 42 focused restore/export/restart
+checks and four subtests passed locally after repair. The new standalone suite
+contains 17 cases. Rebuild the candidate from the repaired source and rerun both
+filesystem labs using the command above; real shfs/native acceptance is still
+required. Existing failed labs are not automatically retried, repaired or deleted.
