@@ -432,3 +432,12 @@ can otherwise silently fall back from an inaccessible TMPDIR to `/tmp`, which
 would invalidate a host-backed CI claim. Tower's accepted labs ran as root with
 root-owned lab directories; those results are unchanged. CI must prove the
 explicit host-backed assertion under its runner UID.
+
+The first preparation CI run at `990c0ea` passed the full suite and packaged
+fixtures, then the strict host-backed restore step correctly failed: its selected
+unprivileged UID could not extract scripts into the root-owned `/tools` tmpfs.
+The correction assigns each private tools/fixture tmpfs to the selected host
+UID/GID with mode 0700 (and makes `/tmp` explicitly sticky 1777). This was checked
+with an actual UID 1001 container and private tmpfs write/read. The `/lab` assertion
+and strict pipeline failure handling remain in place; the failed run is not
+host-backed acceptance.

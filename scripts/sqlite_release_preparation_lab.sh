@@ -24,7 +24,7 @@ printf 'Lab directory: %s\nsource_revision=%s\nimage_id=%s\n' "$lab" "$revision"
 printf '%s\n' 'production_activation=disabled' 'production_authorized=false'
 container=$(docker create --pull=never --network none --user "$(id -u):$(id -g)" --read-only --cap-drop ALL \
   --security-opt no-new-privileges --pids-limit 64 --memory 256m \
-  --tmpfs /tools:rw,noexec,nosuid,nodev,size=32m --tmpfs /tmp:rw,noexec,nosuid,nodev,size=32m \
+  --tmpfs "/tools:rw,noexec,nosuid,nodev,size=32m,mode=0700,uid=$(id -u),gid=$(id -g)" --tmpfs /tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777 \
   --mount "type=bind,src=$lab,dst=/lab" --env TMPDIR=/lab --env PYTHONPATH=/tools:/app:/app/app \
   --interactive --workdir /tools --entrypoint python "$image" -B -c \
   'import io,os,sys,tarfile,subprocess,tempfile; from pathlib import Path; from pathlib import Path; assert os.stat("/lab").st_uid==os.geteuid() and tempfile.gettempdir()=="/lab", "Actual host-backed temp directory required"; import app.sqlite_release_preparation as m; assert Path(m.__file__).is_relative_to("/app/app"); tarfile.open(fileobj=io.BytesIO(sys.stdin.buffer.read()),mode="r:").extractall("/tools",filter="data"); subprocess.run([sys.executable,"-B","-m","scripts.sqlite_release_preparation_fixture"],check=True,timeout=180)')

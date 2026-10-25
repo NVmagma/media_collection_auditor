@@ -34,7 +34,7 @@ printf 'source_revision=%s\n' "$source_revision"
 printf '%s\n' 'production_activation=disabled' 'production_authorized=false'
 container=$(docker create --pull=never --network none --user "$(id -u):$(id -g)" --read-only \
   --cap-drop ALL --security-opt no-new-privileges --pids-limit 64 --memory 256m \
-  --tmpfs /fixture:rw,noexec,nosuid,nodev,size=64m \
+  --tmpfs "/fixture:rw,noexec,nosuid,nodev,size=64m,mode=0700,uid=$(id -u),gid=$(id -g)" \
   --mount "type=bind,src=$lab,dst=/lab" --env TMPDIR=/lab \
   --interactive --workdir /fixture --entrypoint /usr/local/bin/python3 "$image_id" \
   -I -S -B -c 'import sys,tarfile,io,os,subprocess,tempfile; assert os.stat("/lab").st_uid==os.geteuid() and tempfile.gettempdir()=="/lab", "Actual host-backed temp directory required"; tarfile.open(fileobj=io.BytesIO(sys.stdin.buffer.read()),mode="r:").extractall("/fixture/code",filter="data"); os.chdir("/fixture/code"); subprocess.run([sys.executable,"-S","-B","-m","scripts.sqlite_scheduled_preview_fixture"],check=True,timeout=180); subprocess.run([sys.executable,"-S","-B","-m","scripts.sqlite_scheduled_transport_fixture"],check=True,timeout=30)')
