@@ -399,3 +399,46 @@ on macOS). Final isolated Linux checks passed 9 scheduled Arr, 27 rename and
 11 HTTP cases. The combined Linux package also passed 14 completion, 6 queue,
 8 runtime, 4 configured-slot, 14 daily-slot and 22 routed cases before the final
 additional later-delivery case. Native Tower scheduled Arr acceptance is pending.
+
+
+### Tower configured Arr worker acceptance
+
+Source `3fcb2111e057f42352f858dc4f703ea7b874b9d0` passed native Tower lab
+`/mnt/media/sql_test/scheduled-arr.exULg0`: 9 worker cases in 7.961s and 11 HTTP
+cases in 0.234s, ending with `scheduled_arr_acceptance_complete`. This accepts
+the configured scheduled Arr boundary; production activation remains disabled.
+
+## Whole-show TV compatibility acceptance
+
+Ten additional configured private-HTTP/Linux fixtures exercise multiple season
+folders and specials through real whole-title renames. They verify configured
+show-level keep/keep-forever tags, favorites combined across two users, disabled
+favorite policy, early dislike routing, keep-all-seasons preservation in Keep,
+new-episode clock reset before moving, late protection refusal, unexpected Season
+records blocking title protection, and enabled pruning rejection before any
+claim or HTTP. Episode bytes and season presence are checked after each run.
+
+This preserves the existing JSON scope: tags/favorites belong on the Series
+record, not a Season/Episode. A season-shaped response cannot replace a complete
+show protection read. Season pruning and permanent deletion remain unsupported
+and must stay disabled. This increment tests supported behavior without enabling
+any destructive policy or changing production settings.
+
+Native Tower acceptance is pending:
+
+```bash
+(
+  set -eu
+  cd /mnt/user/sqlite_lab_checkout
+  [ "$(git branch --show-current)" = feature/sqlite ]
+  git pull --ff-only origin feature/sqlite
+  bash scripts/sqlite_tv_compatibility_lab.sh /mnt/media/sql_test
+)
+```
+
+Expected: 10 TV cases and 11 HTTP regressions, final
+`tv_compatibility_acceptance_complete`, scope `configured_whole_show_tv`. Only
+new disposable media/state and one new cached-image container are used, with
+synthetic private-loopback Jellyfin responses. No production changes occur.
+Coordinator/history authority remains open: the candidate scheduler must not
+present legacy JSON history as its own SQLite attempt history or live freshness.
