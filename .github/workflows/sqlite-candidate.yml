@@ -37,6 +37,10 @@ jobs:
         run: |
           image=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate-build.json")
           python -B scripts/sqlite_candidate_image_lab.py --image "$image" --source-revision "$GITHUB_SHA" | tee "$RUNNER_TEMP/candidate-acceptance.log"
+      - name: Verify Tower Bash wrapper against the same image
+        run: |
+          image=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate-build.json")
+          bash scripts/sqlite_candidate_image_lab.sh "$image" | tee "$RUNNER_TEMP/candidate-tower-wrapper.log"
       - name: Retain build and acceptance evidence
         uses: actions/upload-artifact@v4
         with:
@@ -44,3 +48,4 @@ jobs:
           path: |
             ${{ runner.temp }}/candidate-build.json
             ${{ runner.temp }}/candidate-acceptance.log
+            ${{ runner.temp }}/candidate-tower-wrapper.log

@@ -59,3 +59,30 @@ permits branch-only validation without modifying the default branch. It runs the
 building/testing linux/amd64. Local Docker verifies linux/arm64 separately.
 Candidate packaging acceptance is pending. Operational restore/cutover acceptance
 and explicit production approval remain open.
+
+## Tower candidate-image check (no host Python required)
+
+The Bash wrappers use Tower's Git/Docker directly. Python runs only in the new
+image's private test container. Building may download the pinned official base
+and pinned Python packages; it never updates an existing container or image tag.
+No real Docker socket is mounted into a container.
+
+After CI passes for the implementation, run:
+
+```bash
+(
+  set -eu
+  cd /mnt/user/sqlite_lab_checkout
+  [ "$(git branch --show-current)" = feature/sqlite ]
+  git pull --ff-only origin feature/sqlite
+  candidate_image=$(bash scripts/sqlite_candidate_build.sh)
+  bash scripts/sqlite_candidate_image_lab.sh "$candidate_image"
+)
+```
+
+Expected: entrypoint authentication/gate checks, 10 coordinator, 9 Arr, 10 TV
+and 11 HTTP cases, then `candidate_image_acceptance_complete`. There are no
+production bind mounts, published host ports, external fixture network, registry
+pushes, service controls or state migration. The untagged image remains cached;
+only the newly created fixture container and temporary image-ID file are removed.
+This is candidate packaging acceptance, not operational restore or activation.
