@@ -87,8 +87,10 @@ preparation and its offline CLI now pass full CI and strict host-backed acceptan
 at `2181422` (3,203 tests, 56 subtests). Tower preparation acceptance passed on both filesystems at `ce41fc7`. Latest-state
 recovery export/inspection is implemented and passed exact-source CI at `bf7e604`
 (3,224 tests, 56 subtests), including actual host-backed checks. Tower recovery
-acceptance and the activation-capable release/authority-switch review remain open
-before activation approval.
+acceptance passed on both filesystems at `01bba11`. A separate bound preview-only
+release now passes CI `0121ce7` (3,246 tests, 61 subtests), including actual-process
+startup/API/shutdown. Tower preview-image acceptance and the final concrete
+cutover/rollback packet remain open before explicit deployment approval.
 
 ## Current decision
 

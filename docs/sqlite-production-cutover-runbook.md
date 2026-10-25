@@ -172,3 +172,32 @@ A prior matching report is not a permit: a later SQLite revision invalidates it.
 The production activation gate remains sealed; running this CLI on live state
 still awaits the final concrete cutover/recovery review and approval. The new
 recovery body has only been exercised against disposable inputs so far.
+
+## Initial preview release and control mount
+
+The first activation-capable image is a separate immutable
+`scheduled-preview-v1` build, not an environment switch in the sealed candidate.
+It requires a bound prepared revision-zero snapshot and frozen saved/env policy,
+serves SQLite tracking/coordinator observations, and only previews due daily
+runs. It cannot run live moves or Arr delivery, checkpoint lifecycle clocks,
+prune seasons or delete media. Changing saved settings blocks execution until
+reviewed offline rebinding; ordinary configuration edits never grant capability.
+
+Tower's directory observation confirms process UID/GID 0:0 and `/app/logs` owned
+99:100 (0755). Preserve that existing directory and its permissions. Plan a new
+root-owned 0700 host directory
+`/mnt/user/appdata/media_collection_auditor_sqlite_control`, mounted separately at
+`/sqlite-control`, with `SQLITE_STATE_FILE=/sqlite-control/release/state.db`.
+Use exclusive creation and refuse any occupied destination. Existing original
+JSON/config stay under `/app/logs`; the initial media bind can be read-only.
+No such production directory, mount or setting has been created or changed.
+
+Preview implementation and both image recipes pass CI 40207027548 (3,246 tests,
+61 subtests), including actual-process API/future-schedule/refusal/shutdown checks.
+Actual Tower preview-image acceptance remains pending. Before asking for final
+production approval, complete the private existing-container configuration/rollback
+capture, settings backup/schedule update, source-writer quiescence, fresh migration
+hash, new private mount preparation, exact approved image publication/selection,
+and post-start API/next-slot/rollback commands. Never print/paste the private full
+container configuration or env file; they contain credentials. Existing services
+outside the auditor are not part of this cutover.

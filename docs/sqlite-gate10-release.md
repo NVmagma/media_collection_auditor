@@ -662,3 +662,44 @@ change cannot leave a misleading completed history row. Root identities are also
 checked again at the end of activation validation. The initial implementation
 passed CI 40206450480 and local actual linux/arm64 image startup/API/shutdown;
 the final source with these closing-boundary checks is being verified next.
+
+### Preview release CI accepted; Tower actual-image acceptance pending
+
+Final implementation `0121ce747d99efa1897c32d17193a053523dc467` passed
+[CI run 40207027548](https://github.com/NVmagma/media_collection_auditor/actions/runs/40207027548):
+**3,246 tests and 61 subtests** in 102.97s; sealed candidate image checks; both
+packaged sixteen-case preview suites; existing strict host-backed restore,
+preview, preparation and recovery; and the separate preview-only image build/lab.
+The actual `app.main` child in the constrained preview container reported
+`actual_preview_image_verified`: future-slot startup, 401/200 SQLite API,
+changed-policy 503 and clean shutdown. The wrapper verified the declared
+entrypoint and stop signal, and ended `preview_release_acceptance_complete`.
+No image was published or production service reconfigured by this workflow.
+Local linux/arm64 actual-image acceptance also passed at the preceding `2ca8a01`
+implementation; final closing-boundary behavior is verified by exact-source CI.
+
+Run the **separate preview recipe** on Tower next. It remains untagged and is used
+only by new disposable lab containers; this does not select the production image
+or create the proposed production control mount:
+
+```bash
+(
+  set -eu
+  cd /mnt/user/sqlite_lab_checkout
+  [ "$(git branch --show-current)" = feature/sqlite ]
+  git pull --ff-only origin feature/sqlite
+  preview_image=$(bash scripts/sqlite_preview_release_build.sh)
+  for parent in /mnt/user/sql_test /mnt/media/sql_test; do
+    bash scripts/sqlite_preview_release_lab.sh "$preview_image" "$parent"
+  done
+)
+```
+
+Expected per filesystem: sixteen cases, `actual_preview_image_verified`, and
+`preview_release_acceptance_complete`. The test binds and starts only synthetic
+prepared state, preserves it through a due public preview, and starts/stops the
+actual application process inside the new isolated fixture container. Existing
+production JSON, media, settings, mounts, exports and services remain unchanged.
+After this acceptance, finish the concrete production cutover/rollback packet and
+obtain explicit deployment approval. Gate 10 remains open; no live move capability
+is authorized by this preview release.
