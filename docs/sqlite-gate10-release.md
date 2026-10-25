@@ -524,3 +524,39 @@ evidence includes an earlier stale candidate and a current advanced candidate.
 All eighteen cases pass under an unprivileged Linux UID; root Linux testing also
 passed the preceding sixteen-case set. Full image/host-backed CI and actual Tower
 recovery acceptance are the next validation boundaries.
+
+### Recovery CI accepted; Tower acceptance pending
+
+Implementation `bf7e6045d375b2c0e43576341cc4ff6b6813ec69` passed
+[CI run 40202252083](https://github.com/NVmagma/media_collection_auditor/actions/runs/40202252083):
+**3,224 tests and 56 subtests** in 76.21s, candidate image/entrypoint acceptance,
+all eighteen recovery cases through both packaged-image wrappers, and strict
+host-backed restore, preview, preparation and recovery checks. Host-backed recovery
+reported `release_recovery_acceptance_complete` and retained synthetic evidence
+`recovery-evidence.jtilx_wk`. Locally, all eighteen final recovery cases passed as
+UID 1001, plus twenty-one packaging/wrapper guards; root testing passed the prior
+sixteen-case set including real JSON restart parity.
+
+Run the new recovery boundary on Tower's two actual filesystem paths next. It
+creates synthetic prepared state and advanced candidates inside new lab folders;
+it does not read production tracking, restore files, switch backend or control
+services. Host Python is not required:
+
+```bash
+(
+  set -eu
+  cd /mnt/user/sqlite_lab_checkout
+  [ "$(git branch --show-current)" = feature/sqlite ]
+  git pull --ff-only origin feature/sqlite
+  candidate_image=$(bash scripts/sqlite_candidate_build.sh)
+  for parent in /mnt/user/sql_test /mnt/media/sql_test; do
+    bash scripts/sqlite_release_recovery_lab.sh "$candidate_image" "$parent"
+  done
+)
+```
+
+Expected per filesystem: eighteen cases and `release_recovery_acceptance_complete`.
+The retained synthetic earlier/current candidates support private inspection.
+Successful acceptance covers latest-state export and stale/pending/crash refusal;
+the activation-capable release and final concrete authority-switch package/review
+still remain before explicit production approval and Gate 10 closure.

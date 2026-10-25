@@ -84,9 +84,11 @@ schedule (`02:00 America/Los_Angeles`). The candidate has a genuine scheduled
 preview path with advisory discovery and no media/Arr/clock writes; actual Tower
 preview acceptance passed on both filesystems at `5599aad`. Backup-first release
 preparation and its offline CLI now pass full CI and strict host-backed acceptance
-at `2181422` (3,203 tests, 56 subtests). Tower preparation acceptance, latest-state
-recovery integration and activation-capable release review remain open before
-activation approval.
+at `2181422` (3,203 tests, 56 subtests). Tower preparation acceptance passed on both filesystems at `ce41fc7`. Latest-state
+recovery export/inspection is implemented and passed exact-source CI at `bf7e604`
+(3,224 tests, 56 subtests), including actual host-backed checks. Tower recovery
+acceptance and the activation-capable release/authority-switch review remain open
+before activation approval.
 
 ## Current decision
 
