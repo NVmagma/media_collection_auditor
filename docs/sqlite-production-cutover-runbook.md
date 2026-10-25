@@ -216,6 +216,16 @@ The observation is explicitly not a quiescent migration source. The packet
 contains credentials: retain it on Tower and paste only the redacted terminal
 summary. Its held directory descriptor anchors new writes during capture.
 
+Tower rejected the original `/proc/<pid>/fd/<fd>` Docker bind source before the
+renderer started. The renderer now receives an ordinary canonical host path;
+its device/inode must match the held host descriptor before any input read or
+output write. Host capture still uses the descriptor. The shell checks path
+identity before and after the helper. CI exercises this exact Bash bind/CLI
+handoff against a new synthetic host-backed packet with the real preview image,
+and unit tests reject substituted mount identities before reading credentials.
+Failed review packets are retained privately and never reused; retry creates a
+new packet. The failed helper mount did not change the running auditor.
+
 The offline renderer preserves application environment/settings and published
 ports, proposes the approved 02:00 America/Los_Angeles schedule, a separate private
 control bind and read-only media/root filesystem. Unsupported current layouts

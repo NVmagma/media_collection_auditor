@@ -33,6 +33,7 @@ read -r observed_image running original_id <<< "$observed"
 packet=$(mktemp -d "$base/cutover-review.XXXXXX")
 exec {packet_fd}<"$packet"
 anchor="/proc/$$/fd/$packet_fd"
+packet_identity=$(stat -Lc '%d:%i' -- "$anchor")
 printf 'Private review packet: %s\n' "$packet"
 printf '%s\n' 'Do not paste private JSON/env/plan files; only the redacted output below.'
 docker inspect "$original_id" > "$anchor/original.inspect.json"
@@ -52,12 +53,10 @@ control_host=/mnt/user/appdata/media_collection_auditor_sqlite_control
 if [ -e "$control_host" ] || [ -L "$control_host" ]; then
   echo 'Proposed control destination is occupied; review required. No changes made.' >&2; exit 2;
 fi
-# The held host-directory descriptor prevents path replacement redirecting capture.
-docker run --rm --pull=never --network none --read-only --user 0:0 --cap-drop ALL \
-  --security-opt no-new-privileges --pids-limit 64 --memory 256m \
-  --mount "type=bind,src=$anchor,dst=/packet" --entrypoint python "$image" \
-  -B -m app.sqlite_preview_cutover --packet-directory /packet --preview-image "$image" \
-  --rollback-image "$old_image" --control-host-path "$control_host"
+# Keep host capture writes anchored to the descriptor, but hand Docker an ordinary
+# path. Validate the bound directory's device/inode inside the helper before use.
+git show "$revision:scripts/sqlite_preview_packet_render.sh" |
+  bash -s -- "$image" "$packet" "$packet_identity" "$old_image" "$control_host"
 # Probe the actual cached old image with synthetic JSON in private tmpfs only.
 git show "$revision:scripts/sqlite_preview_rollback_probe.py" |
   docker run --rm --pull=never --network none --read-only --user 0:0 --cap-drop ALL \

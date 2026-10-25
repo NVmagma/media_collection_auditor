@@ -195,6 +195,22 @@ class PreviewCutoverFixtureTests(unittest.TestCase):
         self.assertFalse(metadata['quiescent'])
         self.assertNotIn(SECRET, errors.getvalue())
 
+    def test_substituted_mount_identity_refused_before_any_input_read_or_write(self):
+        info = self.root.stat()
+        with patch.object(cutover, '_local', side_effect=AssertionError('Inputs must not be read')):
+            with self.assertRaisesRegex(cutover.ReviewBlocked, 'mounted_packet_identity_mismatch'):
+                cutover.write_review_packet(directory=self.root, preview_image=NEW, rollback_image=OLD,
+                    control_host=CONTROL, source_revision=REVISION,
+                    expected_directory_identity=(info.st_dev, info.st_ino + 1))
+        self.assertEqual(list(self.root.iterdir()), [])
+
+    def test_bound_mount_identity_accepts_only_the_original_private_directory(self):
+        self.inputs(); info = self.root.stat()
+        report = cutover.write_review_packet(directory=self.root, preview_image=NEW, rollback_image=OLD,
+            control_host=CONTROL, source_revision=REVISION,
+            expected_directory_identity=(info.st_dev, info.st_ino))
+        self.assertEqual(report['status'], 'cutover_review_prepared')
+
     def test_live_capture_refuses_alias_and_fifo_without_emitting_private_data(self):
         logs = self.root / 'app' / 'logs'; logs.mkdir(parents=True)
         target = self.root / 'private'; target.write_text(SECRET)
@@ -214,7 +230,7 @@ class PreviewCutoverFixtureTests(unittest.TestCase):
 if __name__ == '__main__':
     result = unittest.TextTestRunner(verbosity=2).run(
         unittest.defaultTestLoader.loadTestsFromTestCase(PreviewCutoverFixtureTests))
-    if not result.wasSuccessful() or result.testsRun != 15 or result.skipped:
+    if not result.wasSuccessful() or result.testsRun != 17 or result.skipped:
         raise SystemExit(1)
     print(json.dumps({'status': 'private_cutover_packet_verified', 'tests': result.testsRun,
         'fixture_only': True, 'deployment_authorized': False, 'service_actions_performed': False}))

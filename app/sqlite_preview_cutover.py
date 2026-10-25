@@ -265,11 +265,15 @@ def render_plan(*, original, saved, source, preview_image, rollback_image, contr
     return report, plan, env, proposed_config
 
 
-def write_review_packet(*, directory, preview_image, rollback_image, control_host, source_revision):
+def write_review_packet(*, directory, preview_image, rollback_image, control_host, source_revision,
+                        expected_directory_identity=None):
     directory = Path(_canonical(str(directory)))
     with ExitStack() as stack:
         parent = _open_directory(str(directory)); stack.callback(os.close, parent)
         info = os.fstat(parent)
+        if (expected_directory_identity is not None
+                and expected_directory_identity != (info.st_dev, info.st_ino)):
+            _block('mounted_packet_identity_mismatch')
         if info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o700:
             _block('new_private_packet_directory_required')
         captured = {name: _local(parent, name) for name in INPUTS}
@@ -325,10 +329,16 @@ def main():
     parser.add_argument('--preview-image', required=True)
     parser.add_argument('--rollback-image', required=True)
     parser.add_argument('--control-host-path', required=True)
+    parser.add_argument('--expected-directory-identity', required=True,
+                        help='Host device:inode captured from the held packet descriptor')
     args = parser.parse_args()
     try:
+        if not re.fullmatch('[0-9]+:[0-9]+', args.expected_directory_identity):
+            _block('invalid_expected_directory_identity')
+        expected = tuple(int(value) for value in args.expected_directory_identity.split(':'))
         report = write_review_packet(directory=args.packet_directory, preview_image=args.preview_image,
-            rollback_image=args.rollback_image, control_host=args.control_host_path, source_revision=_revision())
+            rollback_image=args.rollback_image, control_host=args.control_host_path, source_revision=_revision(),
+            expected_directory_identity=expected)
     except Exception as error:
         print(json.dumps({'status': 'cutover_review_blocked', 'reason': str(error) if isinstance(error, ReviewBlocked)
             else 'invalid_or_unavailable_input', 'deployment_authorized': False, 'service_actions_performed': False}))

@@ -17,6 +17,7 @@ on:
       - 'scripts/sqlite_preview_cutover*'
       - 'scripts/sqlite_preview_capture.py'
       - 'scripts/sqlite_preview_rollback_probe.py'
+      - 'scripts/sqlite_preview_packet_render.sh'
       - 'tests/test_sqlite_preview_cutover.py'
       - 'requirements.txt'
   workflow_dispatch:
@@ -81,6 +82,15 @@ jobs:
           image=$(cat "$RUNNER_TEMP/preview-release-image.txt")
           preview_release_parent=$(mktemp -d "$RUNNER_TEMP/preview-release-parent.XXXXXX")
           bash scripts/sqlite_preview_release_lab.sh "$image" "$preview_release_parent" | tee "$RUNNER_TEMP/preview-release-acceptance.log"
+      - name: Exercise actual private packet bind and renderer
+        run: |
+          image=$(cat "$RUNNER_TEMP/preview-release-image.txt")
+          packet=$(mktemp -d "$RUNNER_TEMP/private-packet.XXXXXX")
+          python -B -c 'import sys; from pathlib import Path; from scripts.sqlite_preview_cutover_fixture import PreviewCutoverFixtureTests; case=PreviewCutoverFixtureTests(); case.setUp(); case.root=Path(sys.argv[1]); case.inputs()' "$packet"
+          identity=$(stat -Lc '%d:%i' "$packet")
+          rollback=sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+          bash scripts/sqlite_preview_packet_render.sh "$image" "$packet" "$identity" "$rollback" /mnt/user/appdata/media_collection_auditor_sqlite_control > "$RUNNER_TEMP/private-packet-acceptance.log"
+          python -B -c 'import json,sys; from pathlib import Path; from scripts.sqlite_preview_cutover_fixture import SECRET; p=Path(sys.argv[1]); r=json.loads((p/"review.json").read_bytes()); assert r["status"]=="cutover_review_prepared" and not r["deployment_authorized"]; assert SECRET not in (p/"review.json").read_text(); assert SECRET in (p/"preview.env").read_text(); assert all((p/n).stat().st_mode & 0o777 == 0o600 for n in ("review.json","preview.env","proposed-config.json","container-plan.json")); print("status=actual_private_packet_bind_verified")' "$packet" | tee -a "$RUNNER_TEMP/private-packet-acceptance.log"
       - name: Retain build and acceptance evidence
         uses: actions/upload-artifact@v4
         with:
@@ -95,3 +105,4 @@ jobs:
             ${{ runner.temp }}/candidate-recovery.log
             ${{ runner.temp }}/preview-release-image.txt
             ${{ runner.temp }}/preview-release-acceptance.log
+            ${{ runner.temp }}/private-packet-acceptance.log
