@@ -26,7 +26,7 @@ from app.sqlite_preview_install import (read_install_packet, stage_preview, rest
     _private_root, _replace_config)
 from app.sqlite_preview_template import bind_published_reference
 from app.sqlite_release_recovery import _encode, _local
-from app.sqlite_scheduled_paths import _open_directory
+from app.sqlite_scheduled_paths import _open_directory, scan_held_directory
 from app.sqlite_state import validate_snapshot
 from app.sqlite_operation_coordinator import INTENTS_KEY
 
@@ -274,7 +274,11 @@ def read_service_history(parent):
     if type(request.get('schema_version')) is not int or request['schema_version'] != 1:
         raise RuntimeError('Service request schema invalid')
     previous, events, new_id = sha(raw), [], None
-    names = sorted(name for name in os.listdir(parent) if re.fullmatch(r'service-[0-9]{4}\.json', name))
+    # Reopen '.' relative to the pinned directory for an independent cursor.
+    # listdir(fd) / dup(fd) can inherit an exhausted or filesystem-cached stream
+    # and incorrectly report an empty journal on Tower's Docker storage.
+    with scan_held_directory(parent) as entries:
+        names = sorted(entry.name for entry in entries if re.fullmatch(r'service-[0-9]{4}\.json', entry.name))
     if len(names) > len(PHASES): raise RuntimeError('Unexpected service history length')
     for number, name in enumerate(names, 1):
         if name != f'service-{number:04d}.json': raise RuntimeError('Incomplete service history')
@@ -286,6 +290,15 @@ def read_service_history(parent):
         if 'container_id' in event and event['container_id'] != new_id:
             raise RuntimeError('Service journal container scope changed')
         events.append(event); previous = sha(raw)
+    # A stale/truncated directory listing must not look like "no more effects".
+    # Every effect has a contiguous durable intent record; verify the next slot
+    # through an independent name lookup before accepting the observed prefix.
+    try:
+        os.stat(f'service-{len(names) + 1:04d}.json', dir_fd=parent, follow_symlinks=False)
+    except FileNotFoundError:
+        pass
+    else:
+        raise RuntimeError('Service history enumeration incomplete')
     return request, events, new_id
 
 
@@ -421,8 +434,10 @@ def execute_approved(*, action, directory, packet_identity, control_identity, im
         original_xml = _local(parent, 'original-template.xml')[0]
         final_xml = bind_published_reference(proposed=_local(parent, 'proposed-template.xml')[0], reference=reference)
         control = _private_root(Path('/sqlite-control'), control_identity); stack.callback(os.close, control)
-        if action == 'apply' and os.listdir(control):
-            raise RuntimeError('Fresh empty control root required before stopping any service')
+        if action == 'apply':
+            with scan_held_directory(control) as entries:
+                if next(entries, None) is not None:
+                    raise RuntimeError('Fresh empty control root required before stopping any service')
         templates = _open_directory('/unraid-templates'); stack.callback(os.close, templates)
         template_name = 'my-media_collection_auditor.xml'
         current_xml, template_info = _local(templates, template_name)

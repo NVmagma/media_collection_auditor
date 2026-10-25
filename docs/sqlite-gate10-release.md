@@ -854,3 +854,22 @@ preview targets remain rejected. No mount field or identity safeguard is dropped
 The synthetic integration token was also brought into the API's accepted format;
 production now checks credential format before any stop. Occupied control roots
 are refused before service changes, not deferred to offline preparation.
+
+### Tower journal-enumeration failure and reader correction
+
+Tower's service fixture at controller `166c772a643b007b4fb4e67a2c65440d94f25442`
+stopped in the synthetic contract tests before the actual Docker handoff ran.
+The journal reader returned no event records, causing missing-history/recovery
+failures. Existing production services/configuration were unchanged. Its fresh
+fixture volume `auditor-service-fixture-c8a2fca466422058` was retained for review.
+
+An exhausted shared directory cursor reproduces the old reader returning zero
+events from a complete fourteen-record journal. The corrected reader uses the
+existing `scan_held_directory` helper to open an independent stream relative to
+the pinned directory, without rewinding another caller's cursor or following a
+new path. It retains all phase/hash/ID validations. A direct lookup of the next
+contiguous journal record rejects stale/truncated enumerations rather than
+inferring an empty history. Service preflight emptiness checks also use a fresh
+scan. Regressions keep an active cursor open, verify all records and cursor
+preservation, and inject a truncated listing to verify refusal. Worker app code
+and the already accepted image remain unchanged. Tower reacceptance is pending.

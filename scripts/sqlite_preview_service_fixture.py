@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from contextlib import contextmanager
+from unittest.mock import patch
 
 from scripts.sqlite_preview_cutover_fixture import PreviewCutoverFixtureTests, OLD, NEW, REVISION, IDENTIFIER
 from scripts.sqlite_preview_service import (apply_service, recover_service, Journal, read_service_history,
@@ -232,9 +234,35 @@ class PreviewServiceFixtureTests(unittest.TestCase):
         with self.assertRaises(RuntimeError): self.apply()
         self.assertFalse(self.engine.inspect(NEW_ID)['State']['Running'])
 
+    def test_exhausted_directory_cursor_never_hides_journal_or_moves_callers_cursor(self):
+        self.apply()
+        # Keep the iterator open: fetching its first entry fills its buffer and
+        # moves the shared kernel directory cursor beyond those buffered names.
+        # Closing/exhausting scandir may rewind it, hiding the original defect.
+        with os.scandir(self.parent) as active:
+            first = next(active).name
+            position = os.lseek(self.parent, 0, os.SEEK_CUR)
+            request, events, new_id = read_service_history(self.parent)
+            self.assertEqual(events[-1]['phase'], 'cutover_complete')
+            self.assertEqual(new_id, NEW_ID)
+            self.assertEqual(os.lseek(self.parent, 0, os.SEEK_CUR), position)
+            self.assertEqual({first} | {entry.name for entry in active},
+                {'service-request.json'} | {f'service-{i:04d}.json' for i in range(1, 15)})
+        self.assertEqual(read_service_history(self.parent)[1], events)
+
+    def test_truncated_listing_is_blocked_by_direct_next_record_lookup(self):
+        from scripts import sqlite_preview_service as service
+        self.apply()
+        @contextmanager
+        def empty_stream(parent):
+            yield iter(())
+        with patch.object(service, 'scan_held_directory', empty_stream):
+            with self.assertRaisesRegex(RuntimeError, 'enumeration incomplete'):
+                read_service_history(self.parent)
+
 
 if __name__ == '__main__':
     result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(PreviewServiceFixtureTests))
-    if not result.wasSuccessful() or result.testsRun != 21 or result.skipped: raise SystemExit(1)
+    if not result.wasSuccessful() or result.testsRun != 23 or result.skipped: raise SystemExit(1)
     print(json.dumps({'status': 'service_cutover_fault_contract_verified', 'tests': result.testsRun,
         'fixture_only': True, 'docker_api_accessed': False, 'production_authorized': False}))
