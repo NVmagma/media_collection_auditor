@@ -14,6 +14,10 @@ on:
       - 'scripts/sqlite_release_preparation*'
       - 'scripts/sqlite_release_recovery*'
       - 'scripts/sqlite_preview_release*'
+      - 'scripts/sqlite_preview_cutover*'
+      - 'scripts/sqlite_preview_capture.py'
+      - 'scripts/sqlite_preview_rollback_probe.py'
+      - 'tests/test_sqlite_preview_cutover.py'
       - 'requirements.txt'
   workflow_dispatch:
 

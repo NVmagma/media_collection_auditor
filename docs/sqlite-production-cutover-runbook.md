@@ -194,10 +194,42 @@ No such production directory, mount or setting has been created or changed.
 
 Preview implementation and both image recipes pass CI 40207027548 (3,246 tests,
 61 subtests), including actual-process API/future-schedule/refusal/shutdown checks.
-Actual Tower preview-image acceptance remains pending. Before asking for final
+Actual Tower preview-image acceptance passed on both filesystem paths at
+`5dbb1d87a238742ec2597d0e057b6bde78953684`, image
+`sha256:108db5f6e13a1a1af273504feeb0af131a5129c8d32017e4331cb0eb9b7bd170`:
+16 cases per path plus actual process/API/future-slot/shutdown checks.
+Before asking for final
 production approval, complete the private existing-container configuration/rollback
 capture, settings backup/schedule update, source-writer quiescence, fresh migration
 hash, new private mount preparation, exact approved image publication/selection,
 and post-start API/next-slot/rollback commands. Never print/paste the private full
 container configuration or env file; they contain credentials. Existing services
 outside the auditor are not part of this cutover.
+
+## Private current-container review packet
+
+`scripts/sqlite_preview_cutover_review.sh` captures the expected running auditor's
+Docker metadata, saved settings and a stable JSON observation into a new private
+0700 directory. It reads those files through the existing Python interpreter
+without importing the worker, changing settings, or acquiring a writer permit.
+The observation is explicitly not a quiescent migration source. The packet
+contains credentials: retain it on Tower and paste only the redacted terminal
+summary. Its held directory descriptor anchors new writes during capture.
+
+The offline renderer preserves application environment/settings and published
+ports, proposes the approved 02:00 America/Los_Angeles schedule, a separate private
+control bind and read-only media/root filesystem. Unsupported current layouts
+block for review. Exact-ID stop/archive/create/rollback argument lists are data,
+not executed commands; the private env-file placeholder is intentionally not an
+executable deployment instruction. Existing Unraid XML, when present, is captured
+privately for a later managed-template update. Partial packets refuse reuse.
+
+The script also launches a new isolated container from the exact cached rollback
+image and tests synthetic JSON load/save parity in private tmpfs. It has no media
+binds, production configuration, network or published ports. This does not prove
+that production state is quiescent or authorize restoring an old snapshot.
+
+Final installation/controller integration, fresh stopped-writer preparation,
+managed-template changes, immutable registry selection and explicit production
+approval remain outstanding. No production services or settings change during
+this review step; Gate 10 is still open.
