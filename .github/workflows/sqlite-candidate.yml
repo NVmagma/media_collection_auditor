@@ -10,6 +10,7 @@ on:
       - 'scripts/sqlite_candidate_*'
       - 'scripts/sqlite_restore*'
       - 'scripts/sqlite_release_preflight.py'
+      - 'scripts/sqlite_release_preparation*'
       - 'requirements.txt'
   workflow_dispatch:
 
@@ -56,6 +57,11 @@ jobs:
           image=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate-build.json")
           preview_parent=$(mktemp -d "$RUNNER_TEMP/preview-parent.XXXXXX")
           SQLITE_LAB_IMAGE="$image" bash scripts/sqlite_scheduled_preview_lab.sh "$preview_parent" | tee "$RUNNER_TEMP/candidate-preview.log"
+      - name: Exercise backup-first release preparation on a new host directory
+        run: |
+          image=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate-build.json")
+          preparation_parent=$(mktemp -d "$RUNNER_TEMP/preparation-parent.XXXXXX")
+          bash scripts/sqlite_release_preparation_lab.sh "$image" "$preparation_parent" | tee "$RUNNER_TEMP/candidate-preparation.log"
       - name: Retain build and acceptance evidence
         uses: actions/upload-artifact@v4
         with:
@@ -66,3 +72,4 @@ jobs:
             ${{ runner.temp }}/candidate-tower-wrapper.log
             ${{ runner.temp }}/candidate-restore.log
             ${{ runner.temp }}/candidate-preview.log
+            ${{ runner.temp }}/candidate-preparation.log

@@ -16,7 +16,8 @@ container, share, service, source state, setting or production tag has changed.
 - Disposable advanced restore on Tower's actual shfs and native directories:
   accepted at `44c1c84` (17 cases on each filesystem), including retained success/
   interruption evidence and the staging-descriptor repair.
-- Final production bindings and the activation-capable release image: pending.
+- Production bindings are recorded below; the activation-capable release image
+  remains pending.
   The existing sealed candidate cannot be made live by changing an environment
   variable. Activation implementation, final tests and approval are distinct
   remaining work, not implied by this draft or a successful lab.
@@ -139,3 +140,18 @@ preview attempts, and history must not report completed moves. Existing live
 rename acceptance stays explicit and separately tested. Tower preview acceptance
 is still outstanding, in addition to the sealed activation boundary and live
 backup/migration/rollback tooling.
+
+## Preparation tooling boundary
+
+The candidate now includes `app.sqlite_release_preparation` as the offline
+backup/migration preparation CLI. It accepts only a source path, new control
+directory and expected source hash; it has no backend/service activation option.
+A new durable request/byte-exact backup/revision-zero database/receipt are created
+while the original JSON is preserved. Any interrupted or completed directory
+refuses reuse. This implementation still needs actual Tower filesystem acceptance
+and final integration/review before live execution is approved.
+
+Scheduled preview acceptance has passed on both Tower filesystem paths at
+`5599aad`; the accepted initial schedule and rollback image remain as recorded.
+The production selection gate remains sealed. Latest SQLite export/recovery
+binding and activation-capable release review are still separate outstanding work.

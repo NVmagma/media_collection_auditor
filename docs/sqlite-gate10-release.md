@@ -373,3 +373,62 @@ cases, then `scheduled_preview_acceptance_complete`. Share both outputs. Existin
 production JSON, media, configuration, services, exports and kernel controls are
 unchanged. Gate 10 still requires the activation-capable release and final live
 cutover/rollback tooling/review before explicit activation approval.
+
+## Tower preview accepted
+
+Source `5599aade77cd33d6fe0f10733ecf96561222485b` (documentation-only descendant
+of tested `a0cb5e8`) passed both actual Tower paths:
+
+- `/mnt/user/sql_test/scheduled-preview.RpJpFr`: ten preview cases in 3.503s,
+  eleven transport cases in 0.232s.
+- `/mnt/media/sql_test/scheduled-preview.lxxgTJ`: ten preview cases in 3.326s,
+  eleven transport cases in 0.239s.
+
+Both reported `scheduled_preview_acceptance_complete`. This closes the actual
+shfs/native scheduled preview acceptance boundary; it does not enable SQLite.
+
+## Backup-first release preparation implementation
+
+`app/sqlite_release_preparation.py` now supplies the concrete preparation body and
+an explicit offline CLI. It takes a fully validated JSON source, a mandatory exact
+SHA-256 and a never-before-used control directory. Linux no-follow parent/source
+handles, source identity/content rechecks and the same adjacent writer lock keep
+the capture bound while writing. SQLite writes use the held directory through
+`/proc/self/fd`, so replacing the visible control name cannot redirect writes into
+the replacement tree. The directory is private 0700; backup and database are 0600.
+
+Preparation creates a durable request, a byte-exact original JSON backup and new
+`state.db`, then verifies all tracking/unknown/Arr fields and revision zero before
+writing its completion receipt. Duplicate/nonfinite JSON, incomplete state,
+pending-operation presence, aliases, hardlinks and occupied destinations are
+refused. Partial artifacts are retained; neither partial nor completed control
+directories can be replayed/adopted. The CLI emits only bounded receipt fields or
+a redacted failure category, never title payloads or exception text.
+
+The receipt explicitly says `release_state_prepared_not_activated` and
+`writer_quiescence_verified=false`: advisory locking does not stop an old or
+noncooperating auditor. All auditor writers must be stopped for an eventual live
+preparation. Receipt/file presence does not permit activation or recovery.
+This tool changes no backend setting, service, export, media or original JSON.
+Its execution against production is still part of the final reviewed cutover and
+requires approval; no live command is being requested now.
+
+Nineteen disposable cases cover preservation, no overwrite/replay, stale hash,
+malformed inputs, pending/alias/FIFO/lock refusal, source/control replacement,
+partial backup, writable-ancestor refusal, receipt corruption, wrong database parity, actual SIGKILL after
+DB creation, and actual CLI success/failure redaction. The lab retains synthetic
+prepared and interrupted examples for private review. Candidate image fixtures
+and a new host-backed CI step exercise the actual image application code. Actual
+Tower acceptance of this new preparation boundary is pending.
+
+The control-parent chain must be root/current-user owned and protected against
+other-user renames (trusted sticky directories are allowed). Existing permissions
+are never changed to pass preparation. This accounts for SQLite potentially
+canonicalizing descriptor paths internally; host administrators remain trusted.
+
+The Gate 10 restore/preview/preparation wrappers now select the invoking host UID
+and GID and assert that Python actually uses `/lab` as its temp directory. Python
+can otherwise silently fall back from an inaccessible TMPDIR to `/tmp`, which
+would invalidate a host-backed CI claim. Tower's accepted labs ran as root with
+root-owned lab directories; those results are unchanged. CI must prove the
+explicit host-backed assertion under its runner UID.
