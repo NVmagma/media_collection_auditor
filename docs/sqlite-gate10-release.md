@@ -252,3 +252,54 @@ wrapper (`restore_acceptance_complete`). Local linux/arm64 candidate acceptance
 also passed all 17 restore cases, the retained evidence rehearsal and prior
 worker/API checks. This verifies the repair on native/container filesystems and
 the descriptor-retention model; actual Tower shfs/native confirmation is pending.
+
+
+## Tower shfs/native restore acceptance
+
+Source `44c1c84cfe075b8c6becdefadd61ea7274ea16cb`, candidate image
+`sha256:167c359668cd002b8926d98d6358411bc943909082b2b0a8fe0900c22c322e78`,
+passed both actual filesystem labs after the staging-descriptor repair:
+
+- `/mnt/user/sql_test/restore.w6BJGm`: all 17 cases in 10.917s; retained evidence
+  `restore-evidence.945eiazi`.
+- `/mnt/media/sql_test/restore.wfGIi2`: all 17 cases in 10.389s; retained evidence
+  `restore-evidence.s2tfzozy`.
+
+Both ended with `restore_acceptance_complete`, scope
+`disposable_advanced_state_restore`. The application/scripts/tests/build inputs
+match the passing repair implementation `a4194ad`; `44c1c84` adds documentation.
+This accepts the disposable advanced backup/migration/restore/restart boundary
+on Tower, including the actual shfs lifetime repair. No live restore or activation
+occurred. Final production binding review and an activation-capable release still
+require implementation/review/tests and explicit approval.
+
+## Read-only production binding observations
+
+`scripts/sqlite_release_preflight.py` is standalone standard-library code, run by
+the existing container's Python through stdin. It imports no auditor/application
+modules, calls no services and writes/locks nothing. It reports only whitelisted
+prospective saved-config/environment settings, directory identities and a bounded
+regular/no-alias source JSON shape/hash/count observation. Tokens, service URLs,
+raw title keys and unknown state values never enter its output. Invalid settings
+are redacted, and malformed/aliased/changing source files are unavailable rather
+than healthy-empty. Full state validation and writer quiescence are explicitly
+false; the source hash is a live observation, not an approved migration snapshot.
+
+The tool does not decide an activation schedule or choose a production database
+location. Current image, mount mapping, schedule/policy and control location must
+be reviewed before the final cutover package can be completed. No changes should
+be made to backend selection, images, service state or saved settings for this
+observation step.
+
+After CI for the helper passes, run on Tower and share the redacted output:
+
+```bash
+cd /mnt/user/sqlite_lab_checkout
+git pull --ff-only origin feature/sqlite
+docker inspect --format 'image_reference={{.Config.Image}} image_id={{.Image}} running={{.State.Running}} restart={{.HostConfig.RestartPolicy.Name}}{{range .Mounts}}{{printf "\nmount=%s -> %s writable=%t" .Source .Destination .RW}}{{end}}' media_collection_auditor
+docker exec -i media_collection_auditor python -B - < scripts/sqlite_release_preflight.py
+```
+
+Only the named production container is inspected/read; it is not stopped,
+recreated or reconfigured. Do not substitute a full environment/configuration
+dump for these commands.

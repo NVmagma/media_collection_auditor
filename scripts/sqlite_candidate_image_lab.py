@@ -59,6 +59,14 @@ tarfile.open(fileobj=io.BytesIO(sys.stdin.buffer.read()),mode='r:').extractall(t
 os.chdir(target)
 os.environ['PYTHONPATH'] = str(target) + ':/app:/app/app'
 os.environ['TMPDIR'] = '/tmp'
+preflight = subprocess.run([sys.executable,'-B',str(target/'scripts/sqlite_release_preflight.py')],
+    capture_output=True,check=True,timeout=15)
+import json
+observed = json.loads(preflight.stdout)
+assert observed['read_only'] is True and observed['source_snapshot_validated'] is False
+assert observed['source_json']['counts']['first_seen'] == 1
+assert observed['production_authorized'] is False
+print(json.dumps({'status':'read_only_release_preflight_verified'}))
 for module in ('scripts.sqlite_coordinator_fixture','scripts.sqlite_scheduled_arr_fixture',
                'scripts.sqlite_tv_compatibility_fixture','scripts.sqlite_restore_fixture',
                'scripts.sqlite_scheduled_transport_fixture'):

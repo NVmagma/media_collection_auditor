@@ -14,8 +14,8 @@ container, share, service, source state, setting or production tag has changed.
 - Current-source full-suite/image/host-backed CI: run 40153655744, 3,160 tests and
   53 subtests; immutable base/runtime dependencies are pinned.
 - Disposable advanced restore on Tower's actual shfs and native directories:
-  still requires both `restore_acceptance_complete` results. An image-only
-  restore test with `host_mounts=false` does not supply this evidence.
+  accepted at `44c1c84` (17 cases on each filesystem), including retained success/
+  interruption evidence and the staging-descriptor repair.
 - Final production bindings and the activation-capable release image: pending.
   The existing sealed candidate cannot be made live by changing an environment
   variable. Activation implementation, final tests and approval are distinct

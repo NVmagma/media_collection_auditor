@@ -9,6 +9,7 @@ on:
       - 'app/**'
       - 'scripts/sqlite_candidate_*'
       - 'scripts/sqlite_restore*'
+      - 'scripts/sqlite_release_preflight.py'
       - 'requirements.txt'
   workflow_dispatch:
 
