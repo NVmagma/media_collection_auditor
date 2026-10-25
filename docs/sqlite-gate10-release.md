@@ -579,3 +579,13 @@ inspection/cleanup. The new assertion reproduced the old bug on native Linux
 No cleanup errors are suppressed, no GC call or delay is introduced, and no
 production recovery/input validation code or deletion safeguards are changed.
 Actual Tower shfs/native confirmation of the fixture repair is pending.
+
+Fixture repair `77ba49e883460365f7a5ff4269edc554f37d6642` passed
+[CI run 40203100361](https://github.com/NVmagma/media_collection_auditor/actions/runs/40203100361):
+**3,224 tests and 56 subtests** in 69.19s, packaged eighteen-case recovery through
+both image wrappers, and strict actual host-backed recovery acceptance (retained
+`recovery-evidence.383tidir`), plus the existing image/restore/preview/preparation
+checks. Application recovery/activation code is unchanged; the native reproducer
+now verifies deterministic fixture closure. Rebuild a new candidate from the
+updated branch and rerun the same two-path recovery handoff above. Actual Tower
+shfs/native repair acceptance remains pending; no live files/services are changed.
