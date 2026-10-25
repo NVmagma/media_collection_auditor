@@ -560,3 +560,22 @@ The retained synthetic earlier/current candidates support private inspection.
 Successful acceptance covers latest-state export and stale/pending/crash refusal;
 the activation-capable release and final concrete authority-switch package/review
 still remain before explicit production approval and Gate 10 closure.
+
+### Tower recovery cleanup failure and fixture repair
+
+The first shfs recovery attempt at source `320d387a38816e1a4d6a829d6b4496d55d50110d`,
+image `sha256:c18c95449d01f49fb1c1553dc8932f9818234b0bd369f77c189de3c5d20044d5`,
+lab `/mnt/user/sql_test/release-recovery.vxXhhQ`, failed during cleanup of the
+same-revision mutation case (`Directory not empty` under its synthetic control
+folder). Its assertions had completed; native acceptance was not reached and
+neither filesystem is counted accepted for recovery.
+
+That fixture used SQLite's transaction context without explicitly closing the
+connection. The context commits/rolls back but retains its descriptor, which can
+leave an open-unlinked FUSE file until garbage collection. The repair wraps the
+connection in `contextlib.closing` and asserts it is already unusable before
+inspection/cleanup. The new assertion reproduced the old bug on native Linux
+(`ProgrammingError not raised`) and all eighteen cases pass after explicit close.
+No cleanup errors are suppressed, no GC call or delay is introduced, and no
+production recovery/input validation code or deletion safeguards are changed.
+Actual Tower shfs/native confirmation of the fixture repair is pending.

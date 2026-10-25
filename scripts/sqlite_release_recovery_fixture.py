@@ -1,4 +1,5 @@
 """Latest-state recovery against new prepared Linux fixture directories only."""
+from contextlib import closing
 import hashlib
 import json
 import os
@@ -71,8 +72,12 @@ class ReleaseRecoveryFixtureTests(unittest.TestCase):
 
     def test_same_revision_raw_mutation_cannot_reuse_candidate(self):
         self.export()
-        with sqlite3.connect(self.control / 'state.db') as connection:
+        with closing(sqlite3.connect(self.control / 'state.db')) as connection, connection:
             connection.execute("UPDATE extra_state SET value_json='{}' WHERE key='unknown'")
+        # A transaction context does not close SQLite's file descriptor. Check
+        # deterministic closure before inspection/cleanup, without waiting for GC.
+        with self.assertRaises(sqlite3.ProgrammingError):
+            connection.execute('SELECT 1')
         self.assertEqual(self.inspect()['status'], 'blocked')
 
     def test_pending_operation_refused_before_any_export_request(self):
