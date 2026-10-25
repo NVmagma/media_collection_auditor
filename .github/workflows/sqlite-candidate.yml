@@ -20,6 +20,9 @@ jobs:
   candidate:
     if: github.ref == 'refs/heads/feature/sqlite'
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
     env:
       BASE_IMAGE: python@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704
       WEB_SESSION_SECRET: ci-only-candidate-test-secret
@@ -50,8 +53,9 @@ jobs:
           bash scripts/sqlite_restore_lab.sh "$image" "$restore_parent" | tee "$RUNNER_TEMP/candidate-restore.log"
       - name: Exercise preview on a new host-backed disposable directory
         run: |
+          image=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate-build.json")
           preview_parent=$(mktemp -d "$RUNNER_TEMP/preview-parent.XXXXXX")
-          SQLITE_LAB_IMAGE="$BASE_IMAGE" bash scripts/sqlite_scheduled_preview_lab.sh "$preview_parent" | tee "$RUNNER_TEMP/candidate-preview.log"
+          SQLITE_LAB_IMAGE="$image" bash scripts/sqlite_scheduled_preview_lab.sh "$preview_parent" | tee "$RUNNER_TEMP/candidate-preview.log"
       - name: Retain build and acceptance evidence
         uses: actions/upload-artifact@v4
         with:

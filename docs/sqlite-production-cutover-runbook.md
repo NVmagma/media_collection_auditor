@@ -124,10 +124,10 @@ are planning bindings, not a quiescent backup or activation permission:
 
 ### Dry-run release requirement
 
-Preserve the observed `DRY_RUN=true` policy for initial deployment. The current
-candidate `_configured_run_inputs` rejects that value: its disposable rename
-acceptance path requires explicit false. This refusal must not be bypassed by
-flipping production settings or simply deleting the check.
+Preserve the observed `DRY_RUN=true` policy for initial deployment. At preflight,
+the candidate rejected that value because its disposable rename acceptance path
+required explicit false. The new preview branch resolves this without changing
+production settings or relaxing the disposable rename entry point.
 
 The candidate now implements a scheduled preview path, covered by private HTTP
 fixtures and packaged-image/host-backed CI. Tower acceptance is pending. It must
@@ -136,6 +136,6 @@ rename, Arr PUT, move intent creation or lifecycle clock advancement. Discovery
 clock proposals must remain advisory in that preview; failures must not appear as
 a successful empty run. Daily claims and process history must accurately identify
 preview attempts, and history must not report completed moves. Existing live
-rename acceptance stays explicit and separately tested. This is implementation
-work still outstanding, in addition to the sealed activation boundary and live
+rename acceptance stays explicit and separately tested. Tower preview acceptance
+is still outstanding, in addition to the sealed activation boundary and live
 backup/migration/rollback tooling.

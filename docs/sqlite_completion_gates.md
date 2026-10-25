@@ -78,6 +78,13 @@ The [release and rollback record](sqlite-gate10-release.md) tracks candidate ima
 packaging and the remaining operational restore/cutover/approval requirements.
 The candidate workflow never publishes or deploys an image.
 
+Tower's read-only production packet now records the current rollback image,
+Movies-only roots, persisted JSON/appdata mappings and approved initial dry-run
+schedule (`02:00 America/Los_Angeles`). The candidate has a genuine scheduled
+preview path with advisory discovery and no media/Arr/clock writes. Tower preview
+acceptance, activation-capable release implementation and the final live
+backup/migration/rollback package remain open before activation approval.
+
 ## Current decision
 
 Nine of ten *gates* have been met, but these gates do not represent equal
