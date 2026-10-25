@@ -1,6 +1,14 @@
 name: SQLite candidate image acceptance
 
 on:
+  push:
+    branches: [feature/sqlite]
+    paths:
+      - '.github/workflows/sqlite-candidate.yml'
+      - 'docker/sqlite-candidate*'
+      - 'app/**'
+      - 'scripts/sqlite_candidate_*'
+      - 'requirements.txt'
   workflow_dispatch:
 
 permissions:

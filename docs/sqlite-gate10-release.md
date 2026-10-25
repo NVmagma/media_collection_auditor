@@ -52,8 +52,10 @@ then import application modules from the image, with only committed fixture
 scripts copied into container tmpfs. The new container is stopped and removed;
 production containers are never inspected for credentials or controlled.
 
-The manual-only `SQLite candidate image acceptance` workflow has contents-read
-permissions and no registry publication. It runs the full disposable suite before
+The branch-scoped `SQLite candidate image acceptance` workflow has contents-read
+permissions and no registry publication. It runs for candidate/runtime build-input
+changes on `feature/sqlite` and also declares manual dispatch. The push trigger
+permits branch-only validation without modifying the default branch. It runs the full disposable suite before
 building/testing linux/amd64. Local Docker verifies linux/arm64 separately.
 Candidate packaging acceptance is pending. Operational restore/cutover acceptance
 and explicit production approval remain open.
