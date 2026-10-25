@@ -201,3 +201,18 @@ restore helper; its application/fixture bytes match the final implementation
 (the final workflow-only change adds the host-backed wrapper check).
 Tower restore acceptance on shfs/native remains pending. This evidence does
 not authorize a live restore, source-file replacement or backend activation.
+
+## Additional Tower image-only restore report
+
+The operator's subsequent output ended with `candidate_image_acceptance_complete`
+and `host_mounts=false`. Its packaged restore suite passed 16 cases in 2.578s,
+retained success/interruption evidence inside the private container, and passed
+11 HTTP cases in 0.232s. The pasted excerpt did not include source/image identity
+or either host lab directory. This is additional image-only evidence; it does
+not close the outstanding shfs/native `restore_acceptance_complete` checks.
+
+The [production cutover review draft](sqlite-production-cutover-runbook.md)
+records required current bindings, the proposed state-writer/migration sequence
+and rollback decision rules. It contains no authorized live commands. Final
+production bindings, activation implementation/release verification and explicit
+approval remain outstanding alongside the two filesystem acceptance results.
