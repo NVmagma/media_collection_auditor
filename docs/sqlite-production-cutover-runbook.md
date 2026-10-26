@@ -592,4 +592,3 @@ and has process-local history. A completed live scheduled scan has not separatel
 been reported. Keep old data, private packets, templates and stopped rollback
 containers. Live media-action activation, any state-changing production rollout,
 and branch merge remain separate work requiring review/authorization.
-
