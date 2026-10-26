@@ -198,12 +198,15 @@ def main():
     from app.sqlite_release_profile import SOURCE_REVISION
     if SOURCE_REVISION != os.environ.get('EXPECTED_REVISION'):
         raise RuntimeError('Matching committed preview image required')
-    result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(UnraidUpdateFixtureTests))
+    from scripts.unraid_update_prepare_fixture import ReplacementPrepareTests
+    suite = unittest.TestSuite([unittest.defaultTestLoader.loadTestsFromTestCase(UnraidUpdateFixtureTests),
+                                unittest.defaultTestLoader.loadTestsFromTestCase(ReplacementPrepareTests)])
+    result = unittest.TextTestRunner(verbosity=2).run(suite)
     if not result.wasSuccessful():
         return 1
     print(json.dumps({'status': 'unraid_update_fixture_verified', 'tests': result.testsRun,
         'fixture_only': True, 'production_authorized': False, 'production_activation': 'disabled',
-        'service_changes_performed': False, 'acceptance_scope': 'template_image_backup_diagnostics_and_icon_http'}))
+        'service_changes_performed': False, 'acceptance_scope': 'template_image_backup_and_replacement_preparation'}))
     return 0
 
 

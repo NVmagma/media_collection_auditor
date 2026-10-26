@@ -195,6 +195,26 @@ class FreshPreviewTests(unittest.TestCase):
                     GuardedSQLiteStateStore('/sqlite-control/release/state.db').load_with_revision()[0])
                 self.assertEqual(Path(folder,'saved-config.json').read_bytes(), Path('/app/logs/auditor_config.json').read_bytes())
                 self.assertEqual(Path(folder,'retained-source.json').read_bytes(), Path('/app/logs/auditor_state.json').read_bytes())
+                from scripts.unraid_update_prepare import prepare_replacement
+                backup_fingerprint = hashlib.sha256(Path(folder,'backup-complete.json').read_bytes()).hexdigest()
+                original_state = GuardedSQLiteStateStore('/sqlite-control/release/state.db').load_with_revision()
+                original_config = Path('/app/logs/auditor_config.json').read_bytes()
+                with tempfile.TemporaryDirectory(prefix='replacement.', dir='/lab') as destination:
+                    new_logs, new_control = Path(destination,'logs'), Path(destination,'control')
+                    new_logs.mkdir(mode=0o700); new_control.mkdir(mode=0o700)
+                    replacement = prepare_replacement(backup=folder, backup_identity=identity(folder),
+                        backup_fingerprint=backup_fingerprint, logs=new_logs, logs_identity=identity(new_logs),
+                        control=new_control, control_identity=identity(new_control), candidate_image=image)
+                    self.assertEqual(replacement['status'], 'replacement_preview_binding_prepared')
+                    self.assertFalse(replacement['update_authorized'])
+                    self.assertEqual(GuardedSQLiteStateStore(new_control/'release'/'state.db').load_with_revision(), original_state)
+                    new_env = dict(line.split('=',1) for line in (new_logs/'runtime.env').read_text().splitlines())
+                    validate_preview_activation(settings=new_env)
+                    self.assertEqual(json.loads((new_logs/'auditor_config.json').read_bytes()), json.loads(original_config))
+                validate_preview_activation(settings=env)
+                self.assertEqual(GuardedSQLiteStateStore('/sqlite-control/release/state.db').load_with_revision(), original_state)
+                self.assertEqual(Path('/app/logs/auditor_config.json').read_bytes(), original_config)
+
             self.assertEqual(observed['Config']['Labels']['net.unraid.docker.webui'],'http://[IP]:[PORT:8080]/')
             with closing(http.client.HTTPConnection(address,8080,timeout=5)) as connection:
                 connection.request('GET','/')

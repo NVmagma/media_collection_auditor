@@ -150,3 +150,7 @@ until the production switch is separately approved.
   full logical tracking/settings snapshots, private files, durable incomplete
   markers, exact-content verification and no automatic replay. Replacement
   binding preparation and the container swap/recovery are not yet implemented.
+
+- Replacement binding preparation now preserves the verified logical snapshot
+  and settings in new private roots; original binding/files are retained.
+  Disposable acceptance is required before the service swap/recovery milestone.

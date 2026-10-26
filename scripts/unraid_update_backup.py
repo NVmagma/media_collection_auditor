@@ -167,3 +167,22 @@ def inspect_backup(*, directory, expected_identity, expected_fingerprint):
                 'tracking_counts': {key: len(state.get(key, {})) for key in SECTIONS}}
     finally:
         os.close(fd)
+
+
+def load_backup_payloads(*, directory, expected_identity, expected_fingerprint):
+    """Private internal input for preparation; caller must never print payloads."""
+    from app.sqlite_json import parse_unique_json
+    inspect_backup(directory=directory, expected_identity=expected_identity, expected_fingerprint=expected_fingerprint)
+    fd = _private_root(Path(directory), expected_identity)
+    try:
+        receipt_raw, _ = _local(fd, 'backup-complete.json')
+        if hashlib.sha256(receipt_raw).hexdigest() != expected_fingerprint:
+            raise RuntimeError('Selected backup changed before loading')
+        receipt = parse_unique_json(receipt_raw)
+        payloads = {name: _local(fd, name)[0] for name in FILES}
+        if any(hashlib.sha256(raw).hexdigest() != receipt['sha256'][name] for name, raw in payloads.items()):
+            raise RuntimeError('Backup changed before preparation')
+    finally:
+        os.close(fd)
+    inspect_backup(directory=directory, expected_identity=expected_identity, expected_fingerprint=expected_fingerprint)
+    return payloads

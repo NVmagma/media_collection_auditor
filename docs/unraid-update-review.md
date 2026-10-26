@@ -126,3 +126,30 @@ lab tests, and nine actual fresh-preview tests, including retained movie/TV cloc
 and unchanged original files. Tower acceptance of the expanded lab is next.
 Creating the replacement binding, a backup-first service transaction, and its
 explicit recovery/recreation rehearsal are still outstanding.
+
+## Replacement binding preparation (disposable acceptance)
+
+`scripts/unraid_update_prepare.py` consumes a receipt-fingerprint-selected verified
+backup and prepares **new empty private logs and control directories** using the
+candidate image's packaged binding implementation. It preserves the complete
+tracking snapshot and saved configuration values, including unknown extensions,
+movie/TV clocks, schedule and API token. Only the three internal state/config/SQL
+path bindings change. Saved JSON may be serialized canonically in the new copy;
+the byte-exact original remains in the backup. Interpreter defaults are inherited
+from the candidate image rather than copied from the old interpreter.
+
+The old files are never edited. Tracking parity is checked at revision zero,
+the candidate binding must pass its complete validator, and the selected backup
+is rechecked before completion. Partial attempts remain marked and cannot replay.
+A wrong image profile, modified backup, occupied destination or aliased root is
+refused. Preparation performs no HTTP or Docker calls and never starts a worker.
+
+The expanded disposable Tower lab exercises old-source to new-source preparation,
+retained old-binding validation, interruption after binding, corruption and
+unchanged clocks/settings. The actual fresh-image suite additionally exercises
+preparation through the packaged implementation without altering the running
+fixture's settings or state. `update_authorized=false` and
+`backup_freshness_verified=false` remain explicit: source freshness at cutover,
+reviewed replacement template/image references, service swap and recovery still
+need their separate transaction and rehearsal. No production preparation command
+is provided by this increment.
