@@ -57,7 +57,7 @@ are distinct operations; use the reviewed update procedure for recreation.
 
 ## Disposable Tower acceptance
 
-The fixture builds a local preview image from committed bytes, then runs seventeen
+The fixture builds a local preview image from committed bytes, then runs twenty-five
 standard-library tests in a new container and a newly marked lab directory.
 It needs no host Python, registry push, GitHub Actions minutes, Docker socket
 mount, production paths or published ports. Static icon delivery is exercised
@@ -73,7 +73,7 @@ container is removed at exit. A successful run ends with
 `status=unraid_update_lab_complete`. This does not validate a production update,
 SQLite rebinding, or DockerMan recreation. GitHub CI remains a separate check.
 
-Local Docker acceptance passed seventeen tests on 2026-10-26; the real fresh-preview suite also passed nine tests with binding-review checks. GitHub Actions could not
+Local Docker acceptance passed twenty-five tests on 2026-10-26; the real fresh-preview suite also passed nine tests with binding-review checks. GitHub Actions could not
 start because of its account billing/spending restriction; no CI pass is claimed.
 
 ## Proposed cached-image binding review
@@ -121,7 +121,7 @@ captured file, refusing missing, corrupt or changed content. It never restores o
 updates a container. Backups contain credentials; only redacted summaries may be
 shared.
 
-Local verification: 38 diagnostic/backup/preparation/launcher regression tests, seventeen isolated
+Local verification: 46 diagnostic/backup/preparation/transaction/launcher regression tests, twenty-five isolated
 lab tests, and nine actual fresh-preview tests, including retained movie/TV clocks
 and unchanged original files. Tower acceptance of the expanded lab is next.
 Replacement binding preparation is covered by the next increment below. A backup-first
@@ -188,7 +188,7 @@ bash scripts/sqlite_preview_service_lab.sh "$image" fresh
 
 This creates a new Docker-managed fixture volume and randomly named containers;
 it does not inherit production mounts or touch Unraid templates. Both workers
-use the same accepted fixture image; this is a service/recovery rehearsal, not a
+use the same locally built fixture image; this is a service/recovery rehearsal, not a
 cross-version compatibility or registry-publication claim. Different source
 revision binding preparation is covered by the separate preparation tests.
 Freshness at production cutover, reviewed registry references, managed-template

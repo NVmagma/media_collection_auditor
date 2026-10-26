@@ -154,3 +154,8 @@ until the production switch is separately approved.
 - Replacement binding preparation now preserves the verified logical snapshot
   and settings in new private roots; original binding/files are retained.
   Disposable acceptance is required before the service swap/recovery milestone.
+
+- Fixture-only container swap/recovery now has durable intent records, explicit
+  recovery, lost-acknowledgement refusal and an actual controller SIGKILL rehearsal.
+  Local 25-case fault lab and actual-image HTTP/recovery tests passed; Tower
+  acceptance is next. Production update orchestration remains a separate step.
