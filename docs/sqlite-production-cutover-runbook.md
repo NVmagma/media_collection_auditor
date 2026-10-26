@@ -425,3 +425,34 @@ The workflow exercises eight fresh-fixture cases, including actual preview web
 login page and authenticated/unauthenticated API readiness, before publication.
 Starting the new container and installing its template use only this new root;
 those operator actions follow successful preparation and review of redacted output.
+
+
+### Fresh Tower runtime verified (2026-10-26)
+
+Implementation `12f0ba4d8952366f5c90b990ad2bbc79defac819` was published by
+[Actions run 40270775704](https://github.com/NVmagma/media_collection_auditor/actions/runs/40270775704)
+after 3,333 tests, 82 subtests, and 8 fresh-start fixture cases passed. The first
+fresh fixture run found Docker's requirement for rslave/rshared propagation for
+binds inside its own daemon storage; the fixture was corrected and actual local
+and CI web/API startup passed. Production mount behavior was not changed.
+
+Published reference:
+`ghcr.io/nvmagma/media_collection_auditor@sha256:6d22760eb22ca6d655216142ac31dcf647a9c5d03e077dded584732282d3acff`.
+New private root: `/mnt/user/appdata/media_collection_auditor_fresh.bXSlJM`,
+with `logs` and `control` children. The operator completed preparation, then
+started `media_collection_auditor` as container
+`b238b53e9f824f8b1e988364f5f80a550a77b0db1f10c71c19d1d596df155baf`.
+Reported mounts were read-only media and writable new logs/control. Both live
+summary/audit-status APIs returned HTTP 200, SQLite/preview_only/scheduled_preview,
+read_only=true, media_actions_authorized=false. All five tracking counts are zero,
+as intended for the clean database. Next run is `2026-10-27T09:00:00+00:00`,
+October 27 at 02:00 America/Los_Angeles. No future scheduled scan completion or
+browser/frontend observation is implied by this API result.
+
+The old data was not imported or removed. The command retained any existing
+stopped failed primary under `media_collection_auditor_before_fresh_<id-prefix>`.
+Do not start that retained container or the original rollback concurrently.
+Installation of the matching generated Unraid template remains pending operator
+confirmation; avoid Edit/Apply until it is persisted. Existing saved configuration
+and policy are frozen by the preview binding. The original service journal belongs
+to the first deployment and is not a recovery journal for this fresh instance.
