@@ -10,7 +10,7 @@ volumes=$(docker image inspect --format '{{json .Config.Volumes}}' "$image")
 checkout=$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 # Inherit only the known directory layout; never inherit an unexpected socket
 # or unrelated mount, even when Docker marks that bind read-only.
-mounts=$(docker inspect --format '{{range .Mounts}}{{printf "%s %s\n" .Type .Destination}}{{end}}' media_collection_auditor | sort)
+mounts=$(docker inspect --format '{{range .Mounts}}{{printf "%s %s\n" .Type .Destination}}{{end}}' media_collection_auditor | sed '/^$/d' | LC_ALL=C sort)
 [ "$mounts" = $'bind /app/logs\nbind /media\nbind /sqlite-control' ] || {
   echo 'Exactly the reviewed three bind mounts are required.' >&2; exit 2;
 }
