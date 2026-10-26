@@ -11,13 +11,22 @@ NAME = 'media_collection_auditor'
 LIMIT = 2 * 1024 * 1024
 
 
+class InventoryFormatError(ValueError):
+    """Only fixed diagnostic codes, never private XML/parser exception text."""
+
+
 def parse_template(raw):
     if (not isinstance(raw, bytes) or len(raw) > LIMIT
             or b'<!DOCTYPE' in raw.upper() or b'<!ENTITY' in raw.upper()):
-        raise ValueError('unsupported_xml')
-    root = ET.fromstring(raw)
-    if root.tag != 'Container' or len(root.findall('Name')) != 1:
-        raise ValueError('invalid_container')
+        raise InventoryFormatError('xml_size_or_declaration_unsupported')
+    try:
+        root = ET.fromstring(raw)
+    except ET.ParseError:
+        raise InventoryFormatError('xml_parse_failed') from None
+    if root.tag != 'Container':
+        raise InventoryFormatError('template_root_unsupported')
+    if len(root.findall('Name')) != 1:
+        raise InventoryFormatError('template_name_count_unsupported')
     return root
 
 
@@ -35,16 +44,35 @@ def review_update(*, templates, container):
     blockers, warnings = [], []
     report = {'read_only': True, 'automatic_action': 'none', 'update_authorized': False,
               'binding_verified': False, 'status': 'review_required'}
+    stage = 'template_inventory'
     try:
-        matches = matching_templates(templates)
+        matches, errors = [], {}
+        for _, raw in templates:
+            try:
+                root = parse_template(raw)
+            except InventoryFormatError as error:
+                code = str(error)  # This class is constructed only with fixed codes above.
+                errors[code] = errors.get(code, 0) + 1
+                continue
+            if root.findtext('Name') == NAME:
+                matches.append(root)
+        report['template_count'] = len(templates)
         report['matching_template_count'] = len(matches)
+        if errors:
+            report['inventory_errors'] = errors
+            report['diagnostic_stage'] = stage
+            report['blockers'] = ['inventory_unreadable_or_unsupported']
+            report['warnings'] = []
+            return report
         if len(matches) != 1:
             blockers.append('duplicate_internal_container_name' if matches else 'managed_template_missing')
         else:
-            _, root = matches[0]
+            root = matches[0]
+            stage = 'container_identity'
             if container.get('Name') != '/' + NAME:
                 raise ValueError('wrong_container')
             config, host = container['Config'], container['HostConfig']
+            stage = 'template_runtime_fields'
             fields = ('Repository', 'Network', 'Privileged', 'ExtraParams', 'PostArgs', 'WebUI', 'Icon')
             if any(len(root.findall(key)) > 1 for key in fields):
                 raise ValueError('duplicate_field')
@@ -59,9 +87,11 @@ def review_update(*, templates, container):
                 blockers.append('privileged_configuration')
             if (root.findtext('PostArgs') or '').strip():
                 blockers.append('custom_post_arguments')
+            stage = 'template_extra_arguments'
             args = shlex.split(root.findtext('ExtraParams') or '')
             if '--read-only' not in args or host.get('ReadonlyRootfs') is not True:
                 blockers.append('read_only_root_missing')
+            stage = 'template_config_entries'
             expected, seen = {}, set()
             for item in root.findall('Config'):
                 key = item.get('Type'), item.get('Target')
@@ -69,6 +99,7 @@ def review_update(*, templates, container):
                     raise ValueError('duplicate_config')
                 seen.add(key)
                 expected[key] = (item.text or '', item.get('Mode', ''))
+            stage = 'container_environment'
             live_env = dict(value.split('=', 1) for value in config.get('Env', []))
             if any(live_env.get(key[1]) != value for key, (value, _) in expected.items() if key[0] == 'Variable'):
                 blockers.append('environment_mismatch')
@@ -79,6 +110,7 @@ def review_update(*, templates, container):
             if any(live_env.get(key, '').lower() != value or expected.get(('Variable', key), (None,))[0] != value
                    for key, value in required.items()):
                 blockers.append('preview_settings_missing_or_unsafe')
+            stage = 'container_mounts'
             mounts = container.get('Mounts', [])
             live_mounts = {item['Destination']: item for item in mounts}
             paths = {key[1]: value for key, value in expected.items() if key[0] == 'Path'}
@@ -92,6 +124,7 @@ def review_update(*, templates, container):
             if (paths.get('/media', ('', ''))[1] != 'ro'
                     or any(paths.get(target, ('', ''))[1] != 'rw' for target in ('/sqlite-control', '/app/logs'))):
                 blockers.append('preview_mount_layout_missing')
+            stage = 'container_ports'
             ports = {key[1] + '/' + mode: [{'HostIp': '', 'HostPort': value}]
                      for key, (value, mode) in expected.items() if key[0] == 'Port'}
             actual_ports = host.get('PortBindings') or {}
@@ -106,6 +139,7 @@ def review_update(*, templates, container):
                 warnings.append('icon_missing')
     except (ValueError, KeyError, TypeError, AttributeError, ET.ParseError):
         blockers.append('inventory_unreadable_or_unsupported')
+        report['diagnostic_stage'] = stage
     report['blockers'] = sorted(set(blockers))
     report['warnings'] = sorted(set(warnings))
     if not blockers:

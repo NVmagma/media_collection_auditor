@@ -11,9 +11,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--templates', required=True)
     args = parser.parse_args()
+    stage = 'template_directory_open'
     try:
         folder = os.open(args.templates, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         try:
+            stage = 'template_file_reads'
             templates = []
             for name in sorted(os.listdir(folder)):
                 if not name.endswith('.xml'):
@@ -23,6 +25,7 @@ def main():
                     if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
                         raise ValueError('regular_file_required')
                     templates.append((name, stream.read(LIMIT + 1)))
+            stage = 'container_inspect_input'
             raw = sys.stdin.buffer.read(8 * LIMIT + 1)
             if len(raw) > 8 * LIMIT:
                 raise ValueError('bounded_inspect_required')
@@ -35,7 +38,7 @@ def main():
     except (OSError, ValueError, TypeError):
         report = {'status': 'review_required', 'read_only': True, 'automatic_action': 'none',
                   'update_authorized': False, 'binding_verified': False,
-                  'blockers': ['inventory_unreadable_or_unsupported']}
+                  'blockers': ['inventory_unreadable_or_unsupported'], 'diagnostic_stage': stage}
     print(json.dumps(report, sort_keys=True))
     return 0 if report['status'] == 'template_matches_observed_container' else 2
 

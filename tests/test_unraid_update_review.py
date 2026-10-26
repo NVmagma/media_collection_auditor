@@ -103,3 +103,26 @@ def test_cli_refuses_symlink_without_leaking_target_or_secret(tmp_path):
     assert json.loads(result.stdout)['status'] == 'review_required'
     assert SECRET not in result.stdout + result.stderr
     assert target.read_bytes() == ET.tostring(root)
+
+
+def test_inventory_diagnostics_count_fixed_codes_without_echoing_xml_or_names():
+    root, container = fixture()
+    result = review(root, container, [
+        (SECRET + '.xml', ('<' + SECRET).encode()),
+        ('other.xml', b'<Containers/>'),
+        ('missing.xml', b'<Container/>'),
+    ])
+    assert result['diagnostic_stage'] == 'template_inventory'
+    assert result['template_count'] == 4 and result['matching_template_count'] == 1
+    assert result['inventory_errors'] == {'xml_parse_failed': 1, 'template_root_unsupported': 1,
+                                          'template_name_count_unsupported': 1}
+    assert result['status'] == 'review_required'
+    assert SECRET not in json.dumps(result)
+
+
+def test_runtime_failure_identifies_stage_without_private_exception_message():
+    root, container = fixture()
+    root.find('ExtraParams').text = "'" + SECRET
+    result = review(root, container)
+    assert result['diagnostic_stage'] == 'template_extra_arguments'
+    assert SECRET not in json.dumps(result)

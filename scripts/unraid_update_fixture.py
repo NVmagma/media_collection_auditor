@@ -95,6 +95,9 @@ class UnraidUpdateFixtureTests(unittest.TestCase):
         code, report = self.run_cli()
         self.assertEqual(code, 2)
         self.assertEqual(report['blockers'], ['inventory_unreadable_or_unsupported'])
+        self.assertEqual(report['diagnostic_stage'], 'template_inventory')
+        self.assertEqual(report['inventory_errors'], {'xml_parse_failed': 1})
+        self.assertEqual(report['matching_template_count'], 1)
 
     def test_real_http_icon_has_no_login_or_token_requirement(self):
         # Static route only: no scheduler, worker, database or external service.
