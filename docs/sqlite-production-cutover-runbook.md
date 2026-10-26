@@ -1,10 +1,10 @@
 # Scheduled SQLite preview production cutover — approval package
 
-**Status: executable launcher prepared; production execution is not authorized.**
+**Status: user approved the preview deployment; GitHub Actions publication path in preparation.**
 Gate 10 remains open until the approved cutover and live verification complete.
 The sealed candidate remains sealed. A separately accepted immutable worker image
-supports scheduled preview only. No production service, setting, media or registry
-tag has been changed by this work. Historical sections below record earlier steps;
+supports scheduled preview only. No production service, setting or media has been changed. Tower registry pushes
+were denied before any service changes. Historical sections below record earlier steps;
 the exact initial release selection and launcher procedure follow here.
 
 ## Exact initial preview selection
@@ -350,3 +350,29 @@ Final installation/controller integration, fresh stopped-writer preparation,
 managed-template changes, immutable registry selection and explicit production
 approval remain outstanding. No production services or settings change during
 this review step; Gate 10 is still open.
+
+
+## GitHub Actions publication instead of Tower push
+
+The user approved publishing through Actions to avoid Tower package-write tokens.
+Manually dispatch `sqlite-candidate.yml` on `feature/sqlite` with
+`publish_preview=true`. Automatic push runs and default manual runs do not publish.
+The workflow runs the full acceptance sequence first, then tags and pushes the
+same tested preview image without rebuilding, using its job-scoped GITHUB_TOKEN.
+It publishes a versioned tag only, never latest or feature-sqlite. The public
+`preview-publication.json` artifact records image ID, source revision and immutable
+repository digest; it contains no private packet or credentials.
+
+Pull that exact digest on Tower. A CI rebuild has a new image identity and source
+revision, so capture a NEW private review packet for it with the existing read-only
+capture script. Do not reuse the earlier packet's fingerprint. After reviewing the
+new packet, invoke the tested controller with:
+
+`deploy-published IMAGE_ID PRIVATE_PACKET NEW_FINGERPRINT CONTROLLER_REVISION PUBLISHED_DIGEST`
+
+This mode requires the same repository's immutable digest and verifies that its
+cached image ID exactly matches the newly reviewed selection before creating any
+control directory or stopping services. It does not tag, push or pull. The original
+cutover/recovery transaction is unchanged. Updating the image field alone is not
+the first SQLite migration procedure. Prior production approval persists for this
+same Movies-only, read-only 02:00 Pacific preview scope.

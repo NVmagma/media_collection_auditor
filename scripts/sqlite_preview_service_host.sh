@@ -6,11 +6,16 @@
 set -euo pipefail
 umask 077
 [ "$(uname -s)" = Linux ] && [ "$(id -u)" = 0 ] || { echo 'Run on Tower as root.' >&2; exit 2; }
-[ "$#" = 5 ] || [ "$#" = 6 ] || { echo 'Usage: bash SCRIPT review|deploy|rollback IMAGE_ID PRIVATE_PACKET SELECTION_FINGERPRINT CONTROLLER_REVISION [REVIEWED_PREVIEW_ID]' >&2; exit 2; }
+[ "$#" = 5 ] || [ "$#" = 6 ] || { echo 'Usage: bash SCRIPT review|deploy|deploy-published|rollback IMAGE_ID PRIVATE_PACKET SELECTION_FINGERPRINT CONTROLLER_REVISION [PUBLISHED_REFERENCE|REVIEWED_PREVIEW_ID]' >&2; exit 2; }
 action=$1 image=$2 packet=$3 selection=$4 controller_revision=$5
-reviewed_preview=${6:-}
-[[ "$action" = review || "$action" = deploy || "$action" = rollback ]] || exit 2
+reviewed_preview=''
+published_reference=''
+if [ "$action" = deploy-published ]; then published_reference=${6:-}; else reviewed_preview=${6:-}; fi
+[[ "$action" = review || "$action" = deploy || "$action" = deploy-published || "$action" = rollback ]] || exit 2
 [[ "$image" =~ ^sha256:[0-9a-f]{64}$ && "$selection" =~ ^[0-9a-f]{64}$ && "$controller_revision" =~ ^[0-9a-f]{40}$ ]] || exit 2
+if [ "$action" = deploy-published ]; then
+  [[ "$published_reference" =~ ^ghcr\.io/nvmagma/media_collection_auditor@sha256:[0-9a-f]{64}$ ]] || exit 2
+fi
 if [ -n "$reviewed_preview" ]; then
   [ "$action" = rollback ] && [[ "$reviewed_preview" =~ ^[0-9a-f]{64}$ ]] || exit 2
 fi
@@ -80,21 +85,26 @@ review_sha=$(request review-sha)
 repository=ghcr.io/nvmagma/media_collection_auditor
 control=$(request control-path)
 [[ "$control" = /* && ! "$control" =~ [[:cntrl:],] ]] || exit 1
-if [ "$action" = deploy ]; then
+if [[ "$action" = deploy || "$action" = deploy-published ]]; then
   [ ! -e "$control" ] && [ ! -L "$control" ] || { echo 'Control destination occupied; no deployment attempted.' >&2; exit 1; }
-  release_tag="$repository:sqlite-preview-${worker_revision:0:12}-${image#sha256:}"
-  docker tag "$image" "$release_tag"
-  docker push "$release_tag"
-  digests=$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$image")
-  reference=''
-  while IFS= read -r candidate; do
-    if [[ "$candidate" =~ ^ghcr\.io/nvmagma/media_collection_auditor@sha256:[0-9a-f]{64}$ ]]; then
-      reference=$candidate
-      break
-    fi
-  done <<< "$digests"
-  [[ "$reference" =~ ^ghcr\.io/nvmagma/media_collection_auditor@sha256:[0-9a-f]{64}$ ]] || exit 1
-  [ "$(docker image inspect --format '{{.Id}}' "$reference")" = "$image" ] || exit 1
+  if [ "$action" = deploy-published ]; then
+    reference=$published_reference
+    [ "$(docker image inspect --format '{{.Id}}' "$reference")" = "$image" ] || exit 1
+  else
+    release_tag="$repository:sqlite-preview-${worker_revision:0:12}-${image#sha256:}"
+    docker tag "$image" "$release_tag"
+    docker push "$release_tag"
+    digests=$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$image")
+    reference=''
+    while IFS= read -r candidate; do
+      if [[ "$candidate" =~ ^ghcr\.io/nvmagma/media_collection_auditor@sha256:[0-9a-f]{64}$ ]]; then
+        reference=$candidate
+        break
+      fi
+    done <<< "$digests"
+    [[ "$reference" =~ ^ghcr\.io/nvmagma/media_collection_auditor@sha256:[0-9a-f]{64}$ ]] || exit 1
+    [ "$(docker image inspect --format '{{.Id}}' "$reference")" = "$image" ] || exit 1
+  fi
   # Exclusive root creation. Existing appdata, media, templates and permissions
   # are not changed here. The offline controller backs up settings before writes.
   mkdir -m 700 -- "$control"

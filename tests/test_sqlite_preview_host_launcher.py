@@ -72,8 +72,8 @@ def host(tmp_path):
     env = {key:value for key,value in os.environ.items() if not key.startswith('DOCKER_')}
     env.update(PATH=str(binaries)+os.pathsep+env.get('PATH',''), CALLS=str(root/'calls.jsonl'),
                CONTROL=str(root/'control'), SCENARIO='normal')
-    def run(mode='review', scenario='normal', **updates):
-        result = subprocess.run([BASH,str(SCRIPT),mode,IMAGE,str(packet),'1'*64,REVISION],
+    def run(mode='review', scenario='normal', reference=None, **updates):
+        result = subprocess.run([BASH,str(SCRIPT),mode,IMAGE,str(packet),'1'*64,REVISION] + ([reference] if reference is not None else []),
             env={**env,'SCENARIO':scenario,**updates},capture_output=True,text=True)
         calls = [json.loads(line) for line in (root/'calls.jsonl').read_text().splitlines()] if (root/'calls.jsonl').exists() else []
         return result,calls
@@ -152,3 +152,29 @@ def test_explicit_rollback_uses_retained_reference_without_tag_push_or_directory
     assert not any(args[0] in ('tag','push') for args in calls)
     create=next(args for args in calls if args[0]=='create')
     assert 'rollback' in create and REFERENCE in create
+
+
+def test_published_deployment_uses_exact_digest_without_registry_writes(host):
+    root,run=host
+    result,calls=run('deploy-published', reference=REFERENCE)
+    assert result.returncode==0,result.stderr
+    assert (root/'control').is_dir()
+    assert not any(args[0] in ('tag','push','pull') for args in calls)
+    assert REFERENCE in next(args for args in calls if args[0]=='create')
+
+
+def test_published_digest_mismatch_stops_before_control_creation(host):
+    root,run=host
+    result,calls=run('deploy-published','wrong_digest',reference=REFERENCE)
+    assert result.returncode!=0
+    assert not (root/'control').exists()
+    assert not any(args[0] in ('tag','push','pull','create','start') for args in calls)
+
+
+@pytest.mark.parametrize('reference', [None, 'ghcr.io/nvmagma/media_collection_auditor:latest',
+    'elsewhere.invalid/repo@sha256:'+'e'*64])
+def test_published_deployment_requires_same_repository_immutable_digest(host,reference):
+    root,run=host
+    result,calls=run('deploy-published',reference=reference)
+    assert result.returncode!=0 and calls==[]
+    assert not (root/'control').exists()
