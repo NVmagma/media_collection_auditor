@@ -57,7 +57,7 @@ are distinct operations; use the reviewed update procedure for recreation.
 
 ## Disposable Tower acceptance
 
-The fixture builds a local preview image from committed bytes, then runs ten
+The fixture builds a local preview image from committed bytes, then runs seventeen
 standard-library tests in a new container and a newly marked lab directory.
 It needs no host Python, registry push, GitHub Actions minutes, Docker socket
 mount, production paths or published ports. Static icon delivery is exercised
@@ -73,7 +73,7 @@ container is removed at exit. A successful run ends with
 `status=unraid_update_lab_complete`. This does not validate a production update,
 SQLite rebinding, or DockerMan recreation. GitHub CI remains a separate check.
 
-Local Docker acceptance passed ten tests on 2026-10-26; the real fresh-preview suite also passed nine tests with binding-review checks. GitHub Actions could not
+Local Docker acceptance passed seventeen tests on 2026-10-26; the real fresh-preview suite also passed nine tests with binding-review checks. GitHub Actions could not
 start because of its account billing/spending restriction; no CI pass is claimed.
 
 ## Proposed cached-image binding review
@@ -121,11 +121,11 @@ captured file, refusing missing, corrupt or changed content. It never restores o
 updates a container. Backups contain credentials; only redacted summaries may be
 shared.
 
-Local verification: 31 diagnostic/backup/launcher regression tests, ten isolated
+Local verification: 38 diagnostic/backup/preparation/launcher regression tests, seventeen isolated
 lab tests, and nine actual fresh-preview tests, including retained movie/TV clocks
 and unchanged original files. Tower acceptance of the expanded lab is next.
-Creating the replacement binding, a backup-first service transaction, and its
-explicit recovery/recreation rehearsal are still outstanding.
+Replacement binding preparation is covered by the next increment below. A backup-first
+service transaction and its explicit recovery/recreation rehearsal remain outstanding.
 
 ## Replacement binding preparation (disposable acceptance)
 
