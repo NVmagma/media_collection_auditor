@@ -1,0 +1,141 @@
+"""Readiness is read-only, fail-closed, and never production authorization."""
+
+import pytest
+
+from app import sqlite_readiness
+from app.sqlite_operation_coordinator import INTENTS_KEY
+from app.sqlite_snapshot_writer import write_offline_snapshot
+from app.sqlite_state import SECTIONS
+from app.state_store import GuardedSQLiteStateStore
+
+
+def _baseline(tmp_path, pending=False):
+    path = tmp_path / "audit.db"
+    state = {section: {} for section in SECTIONS}
+    if pending:
+        state[INTENTS_KEY] = {
+            "id": "move-1", "kind": "move", "phase": "intent_recorded",
+            "details": {"source": "/media/Waiting/Movie"},
+        }
+    write_offline_snapshot(state, path)
+    store = GuardedSQLiteStateStore(path)
+    baseline, revision = store.load_with_revision()
+    return store, baseline, revision
+
+
+def _artifacts(tmp_path):
+    paths = tuple(tmp_path / name for name in ("source.json", "backup.json", "state.db"))
+    for path in paths:
+        path.write_bytes(b"test-only")
+    return paths
+
+
+def test_clean_isolated_snapshot_reports_review_only(tmp_path, monkeypatch):
+    store, baseline, revision = _baseline(tmp_path)
+    monkeypatch.setattr(sqlite_readiness, "prepare_sqlite_audit_state",
+                        lambda *args: (store, baseline, revision))
+    report = sqlite_readiness.inspect_sqlite_readiness(*_artifacts(tmp_path))
+    assert report["ready_for_isolated_review"] is True
+    assert report["production_activation"] == "disabled"
+    assert report["storage_authority"] == "json"
+    assert report["revision"] == revision
+    assert report["blockers"] == []
+    assert store.load_with_revision() == (baseline, revision)
+
+
+def test_pending_operation_blocks_review(tmp_path, monkeypatch):
+    store, baseline, revision = _baseline(tmp_path, pending=True)
+    monkeypatch.setattr(sqlite_readiness, "prepare_sqlite_audit_state",
+                        lambda *args: (store, baseline, revision))
+    report = sqlite_readiness.inspect_sqlite_readiness(*_artifacts(tmp_path))
+    assert not report["ready_for_isolated_review"]
+    assert report["blockers"] == ["unresolved_operation_requires_reconciliation"]
+    assert report["revision"] is None
+    assert store.load_with_revision() == (baseline, revision)
+
+
+def test_stale_snapshot_blocks_review(tmp_path, monkeypatch):
+    store, baseline, revision = _baseline(tmp_path)
+    store.save_if_revision({**baseline, "other": "updated"}, revision)
+    monkeypatch.setattr(sqlite_readiness, "prepare_sqlite_audit_state",
+                        lambda *args: (store, baseline, revision))
+    report = sqlite_readiness.inspect_sqlite_readiness(*_artifacts(tmp_path))
+    assert report["blockers"] == ["state_changed_during_inspection"]
+    assert not report["ready_for_isolated_review"]
+
+
+def test_missing_artifacts_fail_closed(tmp_path):
+    report = sqlite_readiness.inspect_sqlite_readiness(
+        tmp_path / "missing.json", tmp_path / "missing.bak", tmp_path / "missing.db"
+    )
+    assert report["blockers"] == ["migration_artifact_missing"]
+    assert not report["ready_for_isolated_review"]
+    assert report["production_activation"] == "disabled"
+
+
+def test_same_artifact_path_is_reported(tmp_path):
+    source, backup, database = _artifacts(tmp_path)
+    report = sqlite_readiness.inspect_sqlite_readiness(source, source, database)
+    assert report["blockers"] == ["artifact_paths_not_distinct"]
+    assert report["production_activation"] == "disabled"
+
+
+def test_known_integrity_errors_are_categorized(tmp_path, monkeypatch):
+    def failing(*args):
+        raise RuntimeError("Source JSON differs from its original backup")
+
+    monkeypatch.setattr(sqlite_readiness, "prepare_sqlite_audit_state", failing)
+    report = sqlite_readiness.inspect_sqlite_readiness(*_artifacts(tmp_path))
+    assert report["blockers"] == ["json_backup_mismatch"]
+    assert not report["ready_for_isolated_review"]
+
+
+@pytest.mark.parametrize("message,expected", [
+    ("SQLite snapshot differs from JSON backup", "sqlite_snapshot_mismatch"),
+    ("SQLite state already modified; initial parity gate refused",
+     "sqlite_revision_not_initial"),
+    ("unknown failure /private/secret", "migration_or_snapshot_verification_failed"),
+])
+def test_verification_errors_never_expose_raw_message(tmp_path, monkeypatch, message, expected):
+    def failing(*args):
+        raise RuntimeError(message)
+
+    monkeypatch.setattr(sqlite_readiness, "prepare_sqlite_audit_state", failing)
+    report = sqlite_readiness.inspect_sqlite_readiness(*_artifacts(tmp_path))
+    assert report["blockers"] == [expected]
+    assert "/private/" not in str(report)
+
+
+def test_real_artifacts_reject_post_migration_changes_without_mutation(tmp_path):
+    """Use the real parity gate: a changed SQLite snapshot is not activation-ready."""
+    import json
+
+    source = tmp_path / "source.json"
+    backup = tmp_path / "backup.json"
+    database = tmp_path / "state.db"
+    original = {section: {} for section in SECTIONS}
+    original["first_seen"]["DISPOSABLE/Movie"] = "2024-01-01T00:00:00"
+    source.write_text(json.dumps(original))
+    backup.write_bytes(source.read_bytes())
+    write_offline_snapshot(original, database)
+
+    initial = sqlite_readiness.inspect_sqlite_readiness(source, backup, database)
+    assert initial["ready_for_isolated_review"] is True
+    assert initial["production_activation"] == "disabled"
+    assert initial["storage_authority"] == "json"
+
+    store = GuardedSQLiteStateStore(database)
+    state, revision = store.load_with_revision()
+    state["keep_seen"]["DISPOSABLE/Movie"] = state["first_seen"].pop("DISPOSABLE/Movie")
+    store.save_if_revision(state, revision)
+    before_state, before_revision = store.load_with_revision()
+    source_before, backup_before = source.read_bytes(), backup.read_bytes()
+
+    blocked = sqlite_readiness.inspect_sqlite_readiness(source, backup, database)
+    assert blocked["ready_for_isolated_review"] is False
+    assert blocked["blockers"] == ["sqlite_snapshot_mismatch"]
+    assert blocked["production_activation"] == "disabled"
+    assert blocked["storage_authority"] == "json"
+    assert store.load_with_revision() == (before_state, before_revision)
+    assert source.read_bytes() == source_before
+    assert backup.read_bytes() == backup_before

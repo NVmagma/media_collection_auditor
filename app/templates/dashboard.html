@@ -12,19 +12,19 @@
       <h1><img class="brand-icon" src="/static/auditor-badge.png" alt="Auditor logo"> Media Collection Auditor</h1>
       <p>Keep your library clean, organized &amp; complete.</p>
     </div>
-    <nav><a href="/">Dashboard</a><a href="/logs">Logs</a>{% if viewer.admin %}<a href="/settings">Settings</a>{% endif %} <span class="viewer-indicator" title="Signed in as {{ viewer.name }}">{{ viewer.name }} <span class="viewer-role">{{ "Administrator" if viewer.admin else "Read only" }}</span></span> <form method="post" action="/logout" style="display:inline"><button type="submit">Sign out</button></form></nav>
+    <nav><a href="/">Dashboard</a><a href="/logs">Logs</a>{% if viewer.admin %}<a href="/settings">Settings</a>{% if experimental_sqlite_recovery_enabled %}<a href="/experimental/sqlite/recovery">SQLite recovery (experimental)</a>{% endif %}{% endif %} <span class="viewer-indicator" title="Signed in as {{ viewer.name }}">{{ viewer.name }} <span class="viewer-role">{{ "Administrator" if viewer.admin else "Read only" }}</span></span> <form method="post" action="/logout" style="display:inline"><button type="submit">Sign out</button></form></nav>
   </header>
   <main>
     {% if state_error %}<section role="alert" class="notice warning"><strong>Tracking state unavailable:</strong> {{ state_error }}. Dashboard lifecycle ages and predictions may be inaccurate. Do not rely on this display for media removal decisions.</section>{% endif %}
     <section class="hero">
-      <div><span class="status-dot"></span> Auditor is running</div>
-      <strong>Current configuration: {{ 'Dry Run (preview only)' if dry_run else 'LIVE MODE — changes to media are enabled' }}</strong>
-      {% if viewer.admin %}<div class="run-controls"><button id="run-now" type="button">Run Now</button><span id="run-result" role="status" aria-live="polite">Administrator access required.</span></div>{% endif %}
+      <div><span class="status-dot"></span> {% if run.get("storage_authority") == "sqlite" %}Daily scheduler observations{% else %}Auditor is running{% endif %}</div>
+      <strong>{% if run.get('production_activation') == 'preview_only' %}SQLite scheduled preview · media changes disabled{% elif run.get('storage_authority') == 'sqlite' %}Scheduled backend · activation {{ run.get('production_activation', 'unavailable') }}{% else %}Current configuration: {{ 'Dry Run (preview only)' if dry_run else 'LIVE MODE — changes to media are enabled' }}{% endif %}</strong>
+      {% if viewer.admin %}{% set manual_preview = run.get("execution_mode") == "scheduled_preview" %}<div class="run-controls"><button id="run-now" type="button" data-preview="{{ 'true' if manual_preview else 'false' }}" {% if (run.get("storage_authority") == "sqlite" and not manual_preview) or run.get("running") or run.get("queued") %}disabled{% endif %}>{% if manual_preview %}Run Preview Now{% elif run.get("storage_authority") == "sqlite" %}Daily schedule only{% else %}Run Now{% endif %}</button><span id="run-result" role="status" aria-live="polite">{% if manual_preview %}Read-only scan; daily schedule unchanged.{% elif run.get("storage_authority") == "sqlite" %}Runs start only at the configured daily time.{% else %}Administrator access required.{% endif %}</span></div>{% endif %}
     </section>
     <section class="cards run-cards">
-      <article><span>Audit status</span><strong>{{ 'Running' if run.running else 'Queued' if run.queued else run.last_result|capitalize if run.last_result else 'Waiting' }}</strong></article>
+      <article><span>Audit status</span><strong>{{ 'Unavailable' if run.get('storage_authority') == 'sqlite' and run.get('status') == 'unavailable' else 'Blocked' if run.get('storage_authority') == 'sqlite' and run.get('scheduler_state') == 'blocked' else 'Running' if run.running else 'Queued' if run.queued else run.last_result|capitalize if run.last_result else 'Waiting' }}</strong></article>
       <article><span>Last audit</span><strong class="small-metric">{{ run.last_finished or 'Not yet recorded' }}</strong></article>
-      <article><span>Next scheduled audit</span><strong class="small-metric">{{ run.next_run or 'Manual only / pending' }}</strong></article>
+      <article><span>Next scheduled audit</span><strong class="small-metric">{{ run.next_run or ('Unavailable' if run.get('storage_authority') == 'sqlite' else 'Manual only / pending') }}</strong></article>
       <article><span>Mode</span><strong>{{ 'Dry Run' if dry_run else 'Live' }}</strong></article>
       <article><span>Movies processed (last run)</span><strong>{{ run.movies_processed if run.movies_processed is not none else '—' }}</strong></article>
       <article><span>TV folders processed (last run)</span><strong>{{ run.tv_processed if run.tv_processed is not none else '—' }}</strong></article>
@@ -88,7 +88,7 @@
         {% if items %}
         <div class="table-wrap"><table><thead><tr><th>Title</th><th>Tracked since</th>{% if stage == 'Removal' %}<th>Days left</th>{% if viewer.admin %}<th>Rescue</th>{% endif %}{% endif %}</tr></thead><tbody>
           {% for item in items %}
-          <tr><td><strong>{{ item.title }}</strong><details><summary>Why this stage?</summary><p>{{ item.reason }}</p><p><strong>Jellyfin:</strong> {% if item.jellyfin_signals is none %}Unknown / not matched{% else %}{% set sig = item.jellyfin_signals %}{% if sig.protected %}<strong>keep-forever (all seasons protected)</strong> {% endif %}{% if sig.keep %}keep {% endif %}{% if sig.keep_all and not sig.protected %}keep-all-seasons {% endif %}{% if sig.disliked %}not-at-all {% endif %}{% if sig.favorite %}Favorited {% endif %}{% if not sig.protected and not sig.keep and not sig.keep_all and not sig.disliked and not sig.favorite %}No lifecycle tags{% endif %}{% endif %}</p><p><strong>Decision:</strong> {{ item.decision_reason }} {% if item.decision == "unknown" %}(Jellyfin signals are not loaded on this dashboard.){% endif %}</p><p>Tracked: {{ item.elapsed_days if item.elapsed_days is not none else "Unknown" }} days{% if item.next_review_date %} · Next timer review: {{ item.next_review_date }}{% endif %}{% if item.deadline_days is not none %} · {{ item.deadline_days }} days remaining{% endif %}</p></details></td><td>{{ item.since|friendly_date }}</td>
+          <tr><td><a class="media-title-link" href="{{ url_for('jellyfin_link', library=item.library, title=item.title) }}" target="_blank" rel="noopener noreferrer"><strong>{{ item.title }}</strong></a><details><summary>Why this stage?</summary><p>{{ item.reason }}</p><p><strong>Jellyfin:</strong> {% if item.jellyfin_signals is none %}Unknown / not matched{% else %}{% set sig = item.jellyfin_signals %}{% if sig.protected %}<strong>keep-forever (all seasons protected)</strong> {% endif %}{% if sig.keep %}keep {% endif %}{% if sig.keep_all and not sig.protected %}keep-all-seasons {% endif %}{% if sig.disliked %}not-at-all {% endif %}{% if sig.favorite %}Favorited {% endif %}{% if not sig.protected and not sig.keep and not sig.keep_all and not sig.disliked and not sig.favorite %}No lifecycle tags{% endif %}{% endif %}</p><p><strong>Decision:</strong> {{ item.decision_reason }} {% if item.decision == "unknown" %}(Jellyfin signals are not loaded on this dashboard.){% endif %}</p><p>Tracked: {{ item.elapsed_days if item.elapsed_days is not none else "Unknown" }} days{% if item.next_review_date %} · Next timer review: {{ item.next_review_date }}{% endif %}{% if item.deadline_days is not none %} · {{ item.deadline_days }} days remaining{% endif %}</p></details></td><td>{{ item.since|friendly_date }}</td>
             {% if stage == 'Removal' %}<td>{{ item.days_left if item.days_left is not none else 'Unknown' }}</td>
             {% if viewer.admin %}<td><select class="rescue-choice" data-library="{{ item.library }}" data-title="{{ item.title }}"><option value="">Choose action…</option><option value="keep">Move to Keep</option><option value="holding">Return to Holding</option></select></td>{% endif %}{% endif %}
           </tr>
@@ -99,7 +99,7 @@
           <article class="media-poster-row">
             <a class="media-poster-placeholder media-poster-link" href="{{ url_for('jellyfin_link', library=item.library, title=item.title) }}" target="_blank" rel="noopener noreferrer" title="Open {{ item.title }} in Jellyfin"><span>{{ 'TV' if item.library == 'TV' else 'MOVIE' }}</span><img loading="lazy" alt="" src="{{ url_for('poster', library=item.library, title=item.title) }}" onerror="this.remove()"></a>
             <div class="media-poster-info">
-              <h4>{{ item.title }}</h4>
+              <h4><a class="media-title-link" href="{{ url_for('jellyfin_link', library=item.library, title=item.title) }}" target="_blank" rel="noopener noreferrer">{{ item.title }}</a></h4>
               <span class="media-stage-label">{{ stage }}</span><details><summary>Why this stage?</summary><p>{{ item.reason }}</p><p><strong>Jellyfin:</strong> {% if item.jellyfin_signals is none %}Unknown / not matched{% else %}{% set sig = item.jellyfin_signals %}{% if sig.protected %}<strong>keep-forever (all seasons protected)</strong> {% endif %}{% if sig.keep %}keep {% endif %}{% if sig.keep_all and not sig.protected %}keep-all-seasons {% endif %}{% if sig.disliked %}not-at-all {% endif %}{% if sig.favorite %}Favorited {% endif %}{% if not sig.protected and not sig.keep and not sig.keep_all and not sig.disliked and not sig.favorite %}No lifecycle tags{% endif %}{% endif %}</p><p><strong>Decision:</strong> {{ item.decision_reason }} {% if item.decision == "unknown" %}(Jellyfin signals are not loaded on this dashboard.){% endif %}</p><p>Tracked: {{ item.elapsed_days if item.elapsed_days is not none else "Unknown" }} days{% if item.deadline_days is not none %} · {{ item.deadline_days }} days until stage deadline{% endif %}</p></details>
               <p>Tracked since: {{ item.since|friendly_date }}</p>
               {% if stage == 'Removal' %}
@@ -136,12 +136,12 @@
       {% else %}<p class="empty">No action log entries yet.</p>{% endif %}
     </section>
     <section class="panel dashboard-section hidden-section" data-panel="History">
-      <div class="panel-heading"><h2>Audit history</h2><span class="muted">Last {{ history|length }} runs · stored in appdata</span></div>
-      <p class="muted">Movie and TV counts reflect titles appearing in action logs, not every title scanned. Times are UTC.</p>
+      <div class="panel-heading"><h2>Audit history</h2><span class="muted">{% if run.get("storage_authority") == "sqlite" %}Current scheduler process only · live inventory freshness unverified{% else %}Last {{ history|length }} runs · stored in appdata{% endif %}</span></div>
+      <p class="muted">{% if run.get("storage_authority") == "sqlite" %}Scheduled results report completed moves, not a verified live inventory. Times are UTC.{% else %}Movie and TV counts reflect titles appearing in action logs, not every title scanned. Times are UTC.{% endif %}</p>
       {% if history %}
       <div class="table-wrap"><table><thead><tr><th>Started (UTC)</th><th>Duration</th><th>Trigger</th><th>Mode</th><th>Result</th><th>Movies</th><th>TV</th><th>Details</th></tr></thead><tbody>
       {% for entry in history %}
-      <tr><td>{{ entry.get('started_at','') }}</td><td>{{ entry.get('duration_seconds','—') }}s</td><td>{{ entry.get('trigger','') }}</td><td>{{ 'Dry run' if entry.get('dry_run') else 'Live' }}</td><td>{{ entry.get('result','') }}</td><td>{{ entry.get('movies_processed',0) }}</td><td>{{ entry.get('tv_processed',0) }}</td><td>
+      <tr><td>{{ entry.get('started_at','') }}</td><td>{{ entry.get('duration_seconds','—') }}s</td><td>{{ entry.get('trigger','') }}</td><td>{{ 'Dry run' if entry.get('dry_run') else 'Live' }}</td><td>{{ entry.get('result','') }}</td><td>{{ '—' if run.get('storage_authority') == 'sqlite' and entry.get('movies_processed') is none else entry.get('movies_processed',0) }}</td><td>{{ '—' if run.get('storage_authority') == 'sqlite' and entry.get('tv_processed') is none else entry.get('tv_processed',0) }}</td><td>
         <details><summary>View</summary>
         {% if entry.get('error') %}<p class="history-error">Error: {{ entry.error }}</p>{% endif %}
         <p>Actions: {% for action, count in entry.get('action_counts',{}).items() %}{{ action }} ({{ count }}){% if not loop.last %}, {% endif %}{% else %}None logged{% endfor %}</p>
@@ -214,7 +214,7 @@ document.querySelectorAll('.rescue-choice').forEach(choice => choice.addEventLis
 }));
 const button = document.getElementById('run-now');
 button?.addEventListener('click', async () => {
-  if (!confirm('Start an audit using your saved configuration? In Live Mode this may move or delete media.')) return;
+  if (button.dataset.preview !== 'true' && !confirm('Start an audit using your saved configuration? In Live Mode this may move or delete media.')) return;
   button.disabled = true;
   const output = document.getElementById('run-result');
   output.textContent = 'Requesting audit…';

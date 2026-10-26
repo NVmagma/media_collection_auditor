@@ -1,0 +1,57 @@
+"""Read-only comparison of recorded move paths and remote media paths.
+
+String agreement is only advisory: container mount namespaces may differ and
+neither service paths nor directory existence establish filesystem identity.
+"""
+
+from __future__ import annotations
+
+import os
+from typing import Any
+
+
+def _absolute_normal_path(value: Any) -> bool:
+    return (isinstance(value, str) and bool(value) and
+            os.path.isabs(value) and os.path.normpath(value) == value and
+            not any(part in (".", "..") for part in value.split(os.sep)))
+
+
+def inspect_move_path_binding(
+    intent: dict[str, Any], *,
+    jellyfin_record: dict[str, Any] | None,
+    arr_record: dict[str, Any] | None,
+    filesystem_interpretation: str,
+) -> dict[str, str]:
+    """Compare paths without normalizing away traversal or authorizing a move."""
+    base = {"status": "blocked", "authorization": "not_authorized",
+            "path_binding": "unverified"}
+    if not isinstance(intent, dict) or not isinstance(jellyfin_record, dict) or not isinstance(arr_record, dict):
+        return {**base, "reason": "missing_path_evidence"}
+    source, destination = intent.get("source"), intent.get("destination")
+    if (not _absolute_normal_path(source) or not _absolute_normal_path(destination)
+            or source == destination):
+        return {**base, "reason": "invalid_intent_paths"}
+    media_type = intent.get("jellyfin_type")
+    if media_type not in ("Movie", "Series"):
+        return {**base, "reason": "invalid_media_type"}
+    jf_path = jellyfin_record.get("Path")
+    arr_path = arr_record.get("path")
+    if not _absolute_normal_path(jf_path) or not _absolute_normal_path(arr_path):
+        return {**base, "reason": "remote_path_unavailable"}
+    # For movies, Jellyfin's Path is a file while Radarr's path is normally
+    # the title directory. Only compare the literal parent component; never
+    # resolve a symlink or infer file identity from a matching filename.
+    if media_type == "Movie":
+        if jf_path in (source, destination) or os.path.dirname(jf_path) not in (source, destination):
+            return {**base, "reason": "movie_file_parent_mismatch"}
+        jf_path = os.path.dirname(jf_path)
+    if jf_path not in (source, destination) or arr_path not in (source, destination):
+        return {**base, "reason": "remote_path_mismatch"}
+    if jf_path != arr_path:
+        return {**base, "reason": "service_paths_disagree"}
+    if filesystem_interpretation != "destination_only_unverified":
+        return {**base, "reason": "filesystem_not_destination_only"}
+    if jf_path != destination:
+        return {**base, "reason": "destination_path_not_observed"}
+    return {**base, "path_binding": "path_strings_consistent_unverified",
+            "reason": "path_strings_match_not_proof"}

@@ -1,0 +1,132 @@
+"""No network calls: fake transport tests for redacted Jellyfin shape probe."""
+
+from scripts.sqlite_jellyfin_compat_probe import probe
+
+
+def test_compatible_sample_reports_aggregate_only():
+    def fetch(path, params):
+        if path == "/Users":
+            return [{"Id": "private-user"}]
+        return {"TotalRecordCount": 1, "Items": [{
+            "Id": "private-item", "Path": "/private/Media/Title/video.mkv",
+            "Tags": ["keep-forever"], "UserData": {
+                "IsFavorite": True, "Played": False, "PlayCount": 0,
+            },
+        }]}
+    result = probe(fetch)
+    assert result["sampled_items"] == 2
+    assert result["item_tags_list"] is True
+    assert result["scan_complete"] is False
+    assert result["production_authorized"] is False
+    assert "private" not in repr(result)
+    assert not any(key in result for key in ("users", "items", "paths", "tags"))
+
+
+def test_missing_user_data_reports_failure_without_exposing_media():
+    def fetch(path, params):
+        if path == "/Users":
+            return [{"Id": "secret"}]
+        return {"TotalRecordCount": 1, "Items": [{
+            "Id": "item", "Path": "/secret/Title/file.mkv", "Tags": [],
+        }]}
+    result = probe(fetch)
+    assert result["user_data_present"] is False
+    assert result["favorite_boolean"] is False
+    assert "secret" not in repr(result)
+
+
+def test_transport_failure_does_not_expose_exception_text():
+    def fetch(path, params):
+        raise ValueError("token=SECRET")
+    result = probe(fetch)
+    assert result["request_failed"] is True
+    assert "SECRET" not in repr(result)
+
+
+def test_http_error_reports_status_only():
+    import requests
+
+    def fetch(path, params):
+        response = requests.Response()
+        response.status_code = 401
+        response._content = b"secret server details"
+        raise requests.HTTPError("private url token", response=response)
+
+    result = probe(fetch)
+    assert result["failure_category"] == "http_401"
+    assert "secret" not in repr(result)
+    assert "private" not in repr(result)
+
+
+def test_timeout_reports_category_only():
+    import requests
+
+    def fetch(path, params):
+        raise requests.Timeout("private endpoint")
+
+    result = probe(fetch)
+    assert result["failure_category"] == "timeout"
+    assert "private" not in repr(result)
+
+
+def test_users_failure_stage_is_redacted():
+    import requests
+
+    def fetch(path, params):
+        raise requests.ConnectionError("secret network path")
+
+    result = probe(fetch)
+    assert result["failure_stage"] == "users"
+    assert result["failure_category"] == "connection_error"
+    assert "secret" not in repr(result)
+
+
+def test_items_failure_stage_is_redacted():
+    import requests
+
+    def fetch(path, params):
+        if path == "/Users":
+            return [{"Id": "private-user"}]
+        raise requests.ConnectionError("private title path")
+
+    result = probe(fetch)
+    assert result["failure_stage"] == "items"
+    assert result["failure_category"] == "connection_error"
+    assert "private" not in repr(result)
+
+
+def test_main_uses_mediabrowser_authorization_without_leaking_token(monkeypatch, capsys):
+    import json
+    from scripts import sqlite_jellyfin_compat_probe as module
+
+    monkeypatch.setenv("JELLYFIN_HOST_URL", "http://127.0.0.1:8096")
+    monkeypatch.setenv("JELLYFIN_API_TOKEN", "private-test-token")
+    seen = []
+
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return [{"Id": "user-id"}]
+
+    class FakeSession:
+        def __init__(self):
+            self.headers = {}
+            self.trust_env = True
+
+        def get(self, url, params=None, timeout=None):
+            seen.append((url, dict(self.headers), self.trust_env))
+            return FakeResponse()
+
+    monkeypatch.setattr(module.requests, "Session", FakeSession)
+    assert module.main() == 0
+    assert seen
+    assert seen[0][0].endswith("/Users")
+    assert seen[0][2] is False
+    assert seen[0][1]["Authorization"].startswith("MediaBrowser ")
+    assert "Token=private-test-token" in seen[0][1]["Authorization"]
+    assert "X-Emby-Token" not in seen[0][1]
+    output = capsys.readouterr().out
+    assert "private-test-token" not in output
+    assert json.loads(output)["production_authorized"] is False

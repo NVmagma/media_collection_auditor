@@ -1,0 +1,57 @@
+name: Security audit (advisory)
+
+on:
+  push:
+    branches: [feature/sqlite, feature/unraid, feature/interface-api]
+    paths:
+      - requirements.txt
+      - Dockerfile
+      - .github/workflows/security-audit.yml
+  pull_request:
+    branches: [feature/sqlite, feature/unraid, feature/interface-api]
+  schedule:
+    - cron: '17 10 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python-vulnerabilities:
+    name: Audit Python dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependency auditor
+        run: python -m pip install pip-audit
+      - name: Audit resolved Python dependencies
+        run: python -m pip_audit -r requirements.txt --progress-spinner off
+
+  container-vulnerabilities:
+    name: Scan local Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image locally (never publish)
+        run: >-
+          docker build --pull --file docker/sqlite-preview-release.Dockerfile
+          --build-arg SOURCE_REVISION="$GITHUB_SHA"
+          --tag media-collection-auditor:security-check .
+      # Scan an exported image without mounting the Docker socket into
+      # the scanner. A finding still fails the job; no bypass or suppression.
+      - name: Export local image for offline inspection
+        run: docker save media-collection-auditor:security-check -o "$RUNNER_TEMP/media-auditor-image.tar"
+      - name: Scan OS and Python packages with Trivy
+        run: |
+          docker run --rm \
+            -v "$RUNNER_TEMP:/scan:ro" \
+            aquasec/trivy:latest image \
+            --input /scan/media-auditor-image.tar \
+            --format table \
+            --vuln-type os,library \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            --exit-code 1

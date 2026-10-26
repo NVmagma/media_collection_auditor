@@ -194,3 +194,58 @@ class WebSecurityTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class DashboardLinkTests(unittest.TestCase):
+    def test_table_and_poster_titles_link_movie_and_tv_to_authenticated_route(self):
+        from html.parser import HTMLParser
+        from urllib.parse import urlsplit, parse_qs
+        class Links(HTMLParser):
+            def __init__(self): super().__init__(); self.links=[]
+            def handle_starttag(self, tag, attrs):
+                attrs=dict(attrs)
+                if tag=='a' and attrs.get('class')=='media-title-link': self.links.append(attrs)
+        stages={name:[] for name in ('Waiting','Holding','Removal','Keep')}
+        stages['Waiting']=[{'title':'A & B (2024)','library':'Movies','since':None},
+                           {'title':'Show (2023)','library':'TV','since':None}]
+        with patch.object(web,'current_user',return_value={'name':'Viewer','admin':False}), \
+             patch.object(web,'load_actions',return_value=[]), patch.object(web,'load_state',return_value={}), \
+             patch.object(web,'load_config',return_value={'ENABLE_MOVIES':'true','ENABLE_TV':'true'}), \
+             patch.object(web,'filesystem_stages',return_value=(stages,[])), \
+             patch.object(web,'_dashboard_signals',return_value=None):
+            response=web.app.test_client().get('/')
+        self.assertEqual(response.status_code,200)
+        links=Links(); links.feed(response.get_data(as_text=True))
+        self.assertEqual(len(links.links),4)
+        for item in links.links:
+            self.assertEqual(urlsplit(item['href']).path,'/api/jellyfin-link')
+            self.assertIn(parse_qs(urlsplit(item['href']).query)['library'][0],('Movies','TV'))
+            self.assertEqual(item['target'],'_blank')
+            self.assertIn('noopener',item['rel'])
+
+    def test_jellyfin_link_falls_back_to_name_without_folder_year(self):
+        with patch.object(web,'load_config',return_value={'JELLYFIN_HOST_URL':'http://jellyfin:8096','JELLYFIN_API_TOKEN':'private'}), \
+             patch.object(web,'_poster_index',return_value={'name:example':'item-id'}):
+            self.assertEqual(web._jellyfin_item_id('Example (2024)','Movies'),('http://jellyfin:8096','item-id'))
+
+
+class ManualPreviewDashboardTests(unittest.TestCase):
+    def test_preview_button_is_enabled_without_changing_sealed_daily_only_control(self):
+        from html.parser import HTMLParser
+        class Button(HTMLParser):
+            def handle_starttag(self,tag,attrs):
+                values=dict(attrs)
+                if tag=='button' and values.get('id')=='run-now': self.values=values
+        for mode,enabled in (('scheduled_preview',True),(None,False)):
+            run={'storage_authority':'sqlite','execution_mode':mode,'running':False,'queued':False}
+            stages={name:[] for name in ('Waiting','Holding','Removal','Keep')}
+            with patch.object(web,'current_user',return_value={'name':'Admin','admin':True}), \
+                 patch.object(web,'load_actions',return_value=[]), patch.object(web,'load_state',return_value={}), \
+                 patch.object(web,'load_config',return_value={}), patch.object(web,'filesystem_stages',return_value=(stages,[])), \
+                 patch.object(web,'_dashboard_signals',return_value=None), \
+                 patch.object(web,'selected_run_snapshot',return_value=run), \
+                 patch.object(web,'selected_run_history',return_value=[]):
+                response=web.app.test_client().get('/')
+            self.assertEqual(response.status_code,200)
+            parser=Button(); parser.feed(response.get_data(as_text=True))
+            self.assertEqual('disabled' not in parser.values,enabled)
+            self.assertEqual(parser.values['data-preview'],'true' if enabled else 'false')

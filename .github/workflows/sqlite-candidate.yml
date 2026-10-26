@@ -1,0 +1,192 @@
+name: SQLite candidate image acceptance
+
+on:
+  push:
+    branches: [feature/sqlite, feature/unraid, feature/interface-api]
+    paths:
+      - '.github/workflows/sqlite-candidate.yml'
+      - '.github/workflows/docker.yml'
+      - '.github/workflows/python-safety.yml'
+      - 'docker/sqlite-candidate*'
+      - 'docker/sqlite-preview*'
+      - 'app/**'
+      - 'scripts/sqlite_candidate_*'
+      - 'scripts/sqlite_restore*'
+      - 'scripts/sqlite_release_preflight.py'
+      - 'scripts/sqlite_release_preparation*'
+      - 'scripts/sqlite_release_recovery*'
+      - 'scripts/sqlite_preview_release*'
+      - 'scripts/sqlite_preview_cutover*'
+      - 'scripts/sqlite_preview_capture.py'
+      - 'scripts/sqlite_preview_rollback_probe.py'
+      - 'scripts/sqlite_preview_packet_render.sh'
+      - 'scripts/sqlite_preview_install*'
+      - 'scripts/sqlite_preview_template*'
+      - 'scripts/sqlite_preview_service*'
+      - 'scripts/sqlite_preview_fresh*'
+      - 'scripts/sqlite_manual_preview*'
+      - 'scripts/sqlite_preview_release_request*'
+      - 'tests/test_sqlite_preview_cutover.py'
+      - 'tests/test_sqlite_preview_install.py'
+      - 'tests/test_sqlite_preview_template.py'
+      - 'tests/test_sqlite_preview_service.py'
+      - 'tests/test_sqlite_preview_release_request.py'
+      - 'tests/test_sqlite_preview_host_launcher.py'
+      - 'tests/test_sqlite_preview_fresh.py'
+      - 'requirements.txt'
+  pull_request:
+    branches: [feature/unraid, feature/interface-api]
+  workflow_call:
+    inputs:
+      publish_preview:
+        type: boolean
+        default: false
+  workflow_dispatch:
+    inputs:
+      publish_preview:
+        description: 'Publish the accepted preview image to a versioned GHCR tag'
+        type: boolean
+        default: false
+
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    if: >-
+      contains(fromJSON('["feature/sqlite","feature/unraid","feature/interface-api"]'), github.head_ref || github.ref_name)
+      && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    permissions:
+      contents: read
+      packages: write
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      ACCEPTANCE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+      BASE_IMAGE: python@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704
+      WEB_SESSION_SECRET: ci-only-candidate-test-secret
+      PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+      - name: Verify exact acceptance revision
+        run: test "$(git rev-parse HEAD)" = "$ACCEPTANCE_REVISION"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test dependencies
+        run: python -m pip install -r requirements.txt -c docker/sqlite-candidate-constraints.txt pytest
+      - name: Run complete disposable regression suite
+        run: python -B scripts/run_sqlite_integration_checks.py --full-suite --basetemp "$RUNNER_TEMP/sqlite-release-fixtures"
+      - name: Build sealed candidate without publishing
+        run: python -B scripts/sqlite_candidate_build.py --base-image "$BASE_IMAGE" > "$RUNNER_TEMP/candidate-build.json"
+      - name: Exercise actual candidate entrypoint and packaged worker
+        run: |
+          image=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate-build.json")
+          python -B scripts/sqlite_candidate_image_lab.py --image "$image" --source-revision "$ACCEPTANCE_REVISION" | tee "$RUNNER_TEMP/candidate-acceptance.log"
+      - name: Verify Tower Bash wrapper against the same image
+        run: |
+          image=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate-build.json")
+          bash scripts/sqlite_candidate_image_lab.sh "$image" | tee "$RUNNER_TEMP/candidate-tower-wrapper.log"
+      - name: Exercise restore on a new host-backed disposable directory
+        run: |
+          image=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate-build.json")
+          restore_parent=$(mktemp -d "$RUNNER_TEMP/restore-parent.XXXXXX")
+          bash scripts/sqlite_restore_lab.sh "$image" "$restore_parent" | tee "$RUNNER_TEMP/candidate-restore.log"
+      - name: Exercise preview on a new host-backed disposable directory
+        run: |
+          image=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate-build.json")
+          preview_parent=$(mktemp -d "$RUNNER_TEMP/preview-parent.XXXXXX")
+          SQLITE_LAB_IMAGE="$image" bash scripts/sqlite_scheduled_preview_lab.sh "$preview_parent" | tee "$RUNNER_TEMP/candidate-preview.log"
+      - name: Exercise backup-first release preparation on a new host directory
+        run: |
+          image=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate-build.json")
+          preparation_parent=$(mktemp -d "$RUNNER_TEMP/preparation-parent.XXXXXX")
+          bash scripts/sqlite_release_preparation_lab.sh "$image" "$preparation_parent" | tee "$RUNNER_TEMP/candidate-preparation.log"
+      - name: Exercise latest-state release recovery on a new host directory
+        run: |
+          image=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate-build.json")
+          recovery_parent=$(mktemp -d "$RUNNER_TEMP/recovery-parent.XXXXXX")
+          bash scripts/sqlite_release_recovery_lab.sh "$image" "$recovery_parent" | tee "$RUNNER_TEMP/candidate-recovery.log"
+      - name: Build separate preview-only release without publishing
+        run: bash scripts/sqlite_preview_release_build.sh > "$RUNNER_TEMP/preview-release-image.txt"
+      - name: Exercise actual preview release process and public worker
+        run: |
+          image=$(cat "$RUNNER_TEMP/preview-release-image.txt")
+          preview_release_parent=$(mktemp -d "$RUNNER_TEMP/preview-release-parent.XXXXXX")
+          bash scripts/sqlite_preview_release_lab.sh "$image" "$preview_release_parent" | tee "$RUNNER_TEMP/preview-release-acceptance.log"
+      - name: Exercise actual private packet bind and renderer
+        run: |
+          image=$(cat "$RUNNER_TEMP/preview-release-image.txt")
+          packet=$(mktemp -d "$RUNNER_TEMP/private-packet.XXXXXX")
+          python -B -c 'import sys; from scripts.sqlite_preview_template_fixture import prepare_private_packet; prepare_private_packet(sys.argv[1])' "$packet"
+          identity=$(stat -Lc '%d:%i' "$packet")
+          rollback=sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+          bash scripts/sqlite_preview_packet_render.sh "$image" "$packet" "$identity" "$rollback" /mnt/user/appdata/media_collection_auditor_sqlite_control > "$RUNNER_TEMP/private-packet-acceptance.log"
+          python -B -c 'import json,sys; from pathlib import Path; from scripts.sqlite_preview_cutover_fixture import SECRET; p=Path(sys.argv[1]); r=json.loads((p/"review.json").read_bytes()); assert r["status"]=="cutover_review_prepared" and not r["deployment_authorized"]; assert SECRET not in (p/"review.json").read_text(); assert SECRET in (p/"preview.env").read_text(); assert all((p/n).stat().st_mode & 0o777 == 0o600 for n in ("review.json","preview.env","proposed-config.json","container-plan.json")); print("status=actual_private_packet_bind_verified")' "$packet" | tee -a "$RUNNER_TEMP/private-packet-acceptance.log"
+          python -B -c 'import sys; from scripts.sqlite_preview_template_fixture import verify_private_packet; verify_private_packet(sys.argv[1])' "$packet" | tee -a "$RUNNER_TEMP/private-packet-acceptance.log"
+      - name: Exercise offline install and settings recovery on private fixture binds
+        run: |
+          image=$(cat "$RUNNER_TEMP/preview-release-image.txt")
+          install_parent=$(mktemp -d "$RUNNER_TEMP/install-parent.XXXXXX")
+          bash scripts/sqlite_preview_install_lab.sh "$image" "$install_parent" | tee "$RUNNER_TEMP/preview-install-acceptance.log"
+      - name: Exercise scoped actual Docker handoff and explicit recovery
+        run: |
+          image=$(cat "$RUNNER_TEMP/preview-release-image.txt")
+          sudo bash scripts/sqlite_preview_service_lab.sh "$image" | tee "$RUNNER_TEMP/preview-service-acceptance.log"
+      - name: Exercise fresh SQLite preparation and actual web/API startup
+        run: |
+          image=$(cat "$RUNNER_TEMP/preview-release-image.txt")
+          sudo bash scripts/sqlite_preview_service_lab.sh "$image" fresh | tee "$RUNNER_TEMP/preview-fresh-acceptance.log"
+      - name: Verify real host launcher in read-only selection mode
+        run: |
+          image=$(cat "$RUNNER_TEMP/preview-release-image.txt")
+          packet=$(sudo mktemp -d "$RUNNER_TEMP/host-selection.XXXXXX")
+          python_bin=$(command -v python)
+          selection=$(sudo --preserve-env=PYTHONPATH "$python_bin" -B -m scripts.sqlite_preview_release_request_fixture --packet-directory "$packet" --image-id "$image" --worker-revision "$ACCEPTANCE_REVISION")
+          sudo bash scripts/sqlite_preview_service_host.sh review "$image" "$packet" "$selection" "$ACCEPTANCE_REVISION" | tee "$RUNNER_TEMP/preview-host-selection.log"
+          python -B -c 'import json,sys; r=json.load(open(sys.argv[1])); assert r["status"]=="production_release_selection_verified_not_executed"; assert r["service_actions_performed"] is False and r["registry_publication_performed"] is False; print("status=actual_readonly_host_launcher_verified")' "$RUNNER_TEMP/preview-host-selection.log"
+      - name: Authenticate preview publication
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_preview
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish the accepted preview image without rebuilding
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_preview
+        run: |
+          image=$(cat "$RUNNER_TEMP/preview-release-image.txt")
+          [[ "$image" =~ ^sha256:[0-9a-f]{64}$ ]]
+          tag="ghcr.io/nvmagma/media_collection_auditor:sqlite-preview-${ACCEPTANCE_REVISION:0:12}-${image#sha256:}"
+          docker tag "$image" "$tag"
+          docker push "$tag"
+          reference=$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$image" | awk '/^ghcr\.io\/nvmagma\/media_collection_auditor@sha256:[0-9a-f]+$/ {print; exit}')
+          [[ "$reference" =~ ^ghcr\.io/nvmagma/media_collection_auditor@sha256:[0-9a-f]{64}$ ]]
+          [ "$(docker image inspect --format '{{.Id}}' "$reference")" = "$image" ]
+          python -B -c 'import json,sys; print(json.dumps(dict(status="accepted_preview_published", image_id=sys.argv[1], reference=sys.argv[2], source_revision=sys.argv[3], media_actions_authorized=False)))' "$image" "$reference" "$ACCEPTANCE_REVISION" | tee "$RUNNER_TEMP/preview-publication.json"
+          cat "$RUNNER_TEMP/preview-publication.json" >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain build and acceptance evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: sqlite-candidate-evidence-${{ env.ACCEPTANCE_REVISION }}
+          path: |
+            ${{ runner.temp }}/candidate-build.json
+            ${{ runner.temp }}/candidate-acceptance.log
+            ${{ runner.temp }}/candidate-tower-wrapper.log
+            ${{ runner.temp }}/candidate-restore.log
+            ${{ runner.temp }}/candidate-preview.log
+            ${{ runner.temp }}/candidate-preparation.log
+            ${{ runner.temp }}/candidate-recovery.log
+            ${{ runner.temp }}/preview-release-image.txt
+            ${{ runner.temp }}/preview-release-acceptance.log
+            ${{ runner.temp }}/private-packet-acceptance.log
+            ${{ runner.temp }}/preview-install-acceptance.log
+            ${{ runner.temp }}/preview-service-acceptance.log
+            ${{ runner.temp }}/preview-fresh-acceptance.log
+            ${{ runner.temp }}/preview-host-selection.log
+            ${{ runner.temp }}/preview-publication.json

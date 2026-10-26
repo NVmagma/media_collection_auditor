@@ -22,15 +22,25 @@ from manual_rescue import rescue_title
 from auth import session_key, jellyfin_login, current_user, store_token, discard_token, verify_user
 from run_control import snapshot, request_run
 from config_store import FIELDS, KEYS, SECRETS, BOOLS, DEFAULTS, FIELD_HELP, load_config, save_config, validate, redacted_config
+from integration_api import authorize_summary, read_only_service_enabled
+from integration_status import (selected_run_snapshot, selected_run_history, selected_audit_status_report, audit_status_report, collect_widget_media_index, widget_media_urls, widget_media_base,
+    read_selected_tracking_status as read_tracking_status,
+    read_selected_tracking_titles as read_tracking_titles,
+    read_selected_dashboard_state as read_dashboard_state)
 
 app = Flask(__name__)
-app.secret_key = session_key()
+app.secret_key = os.urandom(32).hex() if read_only_service_enabled() else session_key()
 app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
                   SESSION_COOKIE_SECURE=os.environ.get("WEB_SECURE_COOKIE", "false").lower() == "true",
                   PERMANENT_SESSION_LIFETIME=timedelta(hours=12))
 
 @app.before_request
 def require_login():
+    if read_only_service_enabled() and request.endpoint not in (
+            "integration_summary", "integration_audit_status", "integration_titles", "health"):
+        return {"status": "read_only_service"}, 404
+    if request.endpoint in ("integration_summary", "integration_audit_status", "integration_titles"):
+        return authorize_summary(request.headers.get("Authorization"))
     if request.endpoint in ("login", "login_background", "health", "static"):
         return None
     g.user = current_user()
@@ -45,7 +55,11 @@ def require_login():
 
 @app.context_processor
 def user_context():
-    return {"viewer": getattr(g, "user", None)}
+    return {"viewer": getattr(g, "user", None),
+            "experimental_sqlite_recovery_enabled": (
+                os.environ.get("EXPERIMENTAL_SQLITE_RECOVERY_VIEW", "").lower() == "true"
+                and "experimental_sqlite_recovery_view" in app.blueprints
+            )}
 
 @app.get("/login-background")
 def login_background():
@@ -98,6 +112,117 @@ ACTION_LOG_FILE = os.environ.get("ACTION_LOG_FILE", "/app/logs/auditor_actions.j
 STATE_FILE = os.environ.get("STATE_FILE", "/app/logs/auditor_state.json")
 
 
+@app.after_request
+def integration_response_headers(response):
+    if request.path in ("/api/v1/summary", "/api/v1/audit-status",
+                         "/api/v1/titles/oldest-waiting", "/api/v1/titles/leaving-soon"):
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Vary"] = "Authorization"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+@app.get("/api/v1/summary")
+def integration_summary():
+    report = read_tracking_status(STATE_FILE)
+    return report, 503 if report["status"] == "unavailable" else 200
+
+
+_WIDGET_MEDIA_CACHE = {}
+_WIDGET_MEDIA_LOCK = threading.Lock()
+
+
+def _widget_media_index(base, token, media_type):
+    """Five-minute presentation cache; never used for lifecycle decisions."""
+    if not widget_media_base(base) or not token:
+        raise ValueError("Invalid media transport")
+    key = (base, token, media_type)
+    with _WIDGET_MEDIA_LOCK:
+        cached = _WIDGET_MEDIA_CACHE.get(key)
+        if cached and time.monotonic() - cached[0] < 300:
+            return cached[1], "cached"
+    deadline = time.monotonic() + 8
+
+    def fetch(path, params):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise ValueError("Media lookup deadline exceeded")
+        response = requests.get(base + path, params=params, headers=_poster_headers(token),
+                                timeout=(min(2, remaining), min(4, remaining)), allow_redirects=False)
+        if response.status_code != 200:
+            raise ValueError("Media lookup unavailable")
+        data = response.json()
+        if time.monotonic() > deadline:
+            raise ValueError("Media lookup deadline exceeded")
+        return data
+
+    index = collect_widget_media_index(fetch, media_type)
+    with _WIDGET_MEDIA_LOCK:
+        if len(_WIDGET_MEDIA_CACHE) >= 4:
+            _WIDGET_MEDIA_CACHE.clear()
+        _WIDGET_MEDIA_CACHE[key] = (time.monotonic(), index)
+    return index, "collected"
+
+
+def _integration_title_media(report):
+    if not isinstance(report.get("items"), list):
+        return report
+    enabled = os.environ.get("INTEGRATION_API_MEDIA", "false").lower() == "true"
+    report["media_lookup_status"] = "disabled" if not enabled else "available"
+    config = load_config() if enabled else {}
+    base = config.get("JELLYFIN_HOST_URL", os.environ.get("JELLYFIN_HOST_URL", "")).rstrip("/")
+    # Saved Settings wins for both transport and browser navigation by default.
+    # An explicit override supports internal-only Docker names/reverse proxies.
+    public = widget_media_base(os.environ.get("JELLYFIN_PUBLIC_URL", base))
+    if enabled and not public:
+        report["media_lookup_status"] = "unavailable"
+    report["media_cache_max_age_seconds"] = 300 if enabled else None
+    token = config.get("JELLYFIN_API_TOKEN", os.environ.get("JELLYFIN_API_TOKEN", ""))
+    indexes = {}
+    for item in report["items"]:
+        library = item["library"]
+        if enabled and public and library not in indexes:
+            try:
+                indexes[library], _ = _widget_media_index(base, token, "Movie" if library == "Movies" else "Series")
+            except (requests.RequestException, ValueError, TypeError, KeyError, AttributeError):
+                indexes[library] = None
+                report["media_lookup_status"] = "unavailable"
+        item.update(widget_media_urls(item, indexes.get(library), public))
+        if not enabled:
+            item["match_status"] = "disabled"
+    return report
+
+
+@app.get("/api/v1/titles/oldest-waiting", defaults={"view": "oldest-waiting"})
+@app.get("/api/v1/titles/leaving-soon", defaults={"view": "leaving-soon"})
+def integration_titles(view):
+    if os.environ.get("INTEGRATION_API_TITLE_DETAILS", "false").lower() != "true":
+        return {"status": "disabled"}, 404
+    library = request.args.get('library')
+    if library not in (None, 'Movies', 'TV') or len(request.args.getlist('library')) > 1:
+        return {'status': 'invalid_library'}, 400
+    options = {} if library is None else {'library': library}
+    days = 7
+    if view == "leaving-soon":
+        config = load_config()
+        try:
+            days = max(1, int(config.get("HOLDING_DAYS", os.environ.get("HOLDING_DAYS", "7"))))
+        except (ValueError, TypeError):
+            days = 0
+    report = _integration_title_media(read_tracking_titles(STATE_FILE, view, holding_days=days, **options))
+    return report, 503 if report["status"] == "unavailable" else 200
+
+
+@app.get("/api/v1/audit-status")
+def integration_audit_status():
+    if read_only_service_enabled():
+        report = audit_status_report(None)
+        report["source"] = "coordinator_unavailable_in_read_only_service"
+        return report, 503
+    report = selected_audit_status_report(snapshot)
+    return report, 503 if report["status"] == "unavailable" else 200
+
+
 def load_actions(limit=250):
     path = Path(ACTION_LOG_FILE)
     if not path.exists():
@@ -116,14 +241,7 @@ def load_actions(limit=250):
 
 
 def load_state():
-    path = Path(STATE_FILE)
-    if not path.exists():
-        return {}
-    try:
-        with path.open() as handle:
-            return json.load(handle)
-    except (OSError, json.JSONDecodeError, UnicodeError) as exc:
-        raise RuntimeError("Dashboard tracking state is unreadable; displayed lifecycle dates may be incomplete") from exc
+    return read_dashboard_state(STATE_FILE)
 
 
 
@@ -381,7 +499,7 @@ def dashboard():
                     preview.append({"title": item["title"], "library": item["library"],
                                     "stage": stage, "action": action})
     preview.sort(key=lambda item: (item["library"], item["stage"], item["title"].casefold()))
-    return render_template("dashboard.html", actions=actions, state=state, state_error=state_error, stages=stages, inventory_warnings=inventory_warnings, health_issues=health_issues, run=snapshot(), history=read_history(100),
+    return render_template("dashboard.html", actions=actions, state=state, state_error=state_error, stages=stages, inventory_warnings=inventory_warnings, health_issues=health_issues, run=selected_run_snapshot(snapshot), history=selected_run_history(read_history, 100),
                            preview=preview, dry_run=load_config().get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "true")
 
 
@@ -468,7 +586,7 @@ def _jellyfin_item_id(title, library):
     media_type = "Movie" if library == "Movies" else "Series"
     index = _poster_index(base, token, media_type)
     normalized = title.casefold()
-    display_name = re.sub(r"\\s*\\(\\d{4}\\)\\s*$", "", title).strip().casefold()
+    display_name = re.sub(r"\s*\(\d{4}\)\s*$", "", title).strip().casefold()
     item_id = (index.get(normalized) or index.get("name:" + normalized)
                or index.get("name:" + display_name))
     return base, item_id
@@ -608,6 +726,24 @@ def admin_authorized():
     return bool(getattr(g, "user", None) and g.user["admin"])
 
 
+# Experimental SQLite recovery views are opt-in and never select SQLite as
+# the production tracking backend. Only the literal value "true" enables them.
+if (not read_only_service_enabled()
+        and os.environ.get("EXPERIMENTAL_SQLITE_RECOVERY_VIEW", "").lower() == "true"):
+    from app.sqlite_recovery_api import create_recovery_status_blueprint
+    from app.sqlite_recovery_view import create_recovery_view_blueprint
+
+    _experimental_database = os.environ.get("EXPERIMENTAL_SQLITE_RECOVERY_DB", "")
+    if not _experimental_database:
+        raise RuntimeError("Experimental SQLite recovery database path required")
+    app.register_blueprint(create_recovery_status_blueprint(
+        _experimental_database, is_admin=admin_authorized,
+    ))
+    app.register_blueprint(create_recovery_view_blueprint(
+        _experimental_database, is_admin=admin_authorized,
+    ))
+
+
 @app.route("/settings", methods=["GET", "POST"])
 def settings():
     if not admin_authorized():
@@ -672,6 +808,23 @@ def run_now():
     origin = request.headers.get("Origin") or request.headers.get("Referer")
     if not origin or urlsplit(origin).netloc != request.host:
         return {"ok": False, "message": "Invalid request origin."}, 403
+    backend = os.environ.get('AUDITOR_STATE_BACKEND', 'json')
+    if backend == 'sqlite':
+        from app.sqlite_backend_gate import preview_release_enabled, require_sqlite_production_activation
+        if not preview_release_enabled():
+            return {'ok': False, 'message': 'This backend runs only at its configured daily time.'}, 409
+        try:
+            require_sqlite_production_activation()
+        except RuntimeError:
+            return {'ok': False, 'message': 'Preview configuration unavailable; scan was not queued.'}, 409
+        from app.sqlite_scheduled_observations import COORDINATOR
+        if COORDINATOR.request_manual_preview():
+            from run_control import wake_worker
+            wake_worker()
+            return {'ok': True, 'message': 'Read-only preview queued. Daily schedule unchanged.'}, 202
+        return {'ok': False, 'message': 'A scan is already running or queued.'}, 409
+    if backend != 'json':
+        return {'ok': False, 'message': 'Unsupported run backend.'}, 409
     if request_run():
         return {"ok": True, "message": "Audit queued. Refresh the dashboard for results."}, 202
     return {"ok": False, "message": "An audit is already running or queued."}, 409

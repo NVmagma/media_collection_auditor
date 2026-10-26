@@ -262,6 +262,17 @@ def load_state() -> Dict[str, Dict[str, str]]:
 
 
 def save_state(state: Dict[str, Dict[str, str]]):
+    """Save JSON state only while holding the shared migration lock."""
+    from sqlite_lock import state_writer_lock
+
+    # Fresh installations may not have a state directory yet. Create it
+    # before opening the adjacent lock file, without touching existing state.
+    os.makedirs(os.path.dirname(os.path.abspath(STATE_FILE)), exist_ok=True)
+    with state_writer_lock(STATE_FILE):
+        _save_state_unlocked(state)
+
+
+def _save_state_unlocked(state: Dict[str, Dict[str, str]]):
     # Saved even in dry run: it only holds our own bookkeeping, never touches your media.
     tmp_path = None
     try:
@@ -1336,6 +1347,19 @@ def refresh_jellyfin_after_audit():
 
 
 def run_once():
+    """Run one audit under the same lock used by offline migration."""
+    from sqlite_lock import audit_run_lock
+    from sqlite_backend_gate import require_json_backend
+
+    # Fail before creating directories, acquiring locks, or dispatching actions.
+    require_json_backend(os.environ.get("AUDITOR_STATE_BACKEND", "json"))
+
+    os.makedirs(os.path.dirname(os.path.abspath(STATE_FILE)), exist_ok=True)
+    with audit_run_lock(STATE_FILE):
+        return _run_once_locked()
+
+
+def _run_once_locked():
     global _successful_media_moves
     _successful_media_moves = 0
     global _actions_taken

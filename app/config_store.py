@@ -7,7 +7,7 @@ CONFIG_FILE = Path(os.environ.get("WEB_CONFIG_FILE", "/app/logs/auditor_config.j
 FIELDS = {
     "Connections": ["JELLYFIN_HOST_URL", "JELLYFIN_API_TOKEN", "RADARR_URL", "RADARR_API_KEY", "SONARR_URL", "SONARR_API_KEY"],
     "Libraries": ["ENABLE_MOVIES", "ENABLE_TV", "MEDIA_PATH", "DISLIKE_TAG", "PROTECT_TAG", "KEEP_TAG", "FAVORITES_TRIGGER_KEEP", "JELLYFIN_REFRESH_AFTER_AUDIT", "TV_NEW_EPISODES_RESET_CLOCK", "ENABLE_SEASON_PRUNING", "KEEP_ALL_SEASONS_TAG", "SEASON_PRUNE_GRACE_DAYS", "SEASON_PRUNE_AFTER_NEW_SEASON_DAYS"],
-    "Lifecycle": ["MOVIE_WAIT_DAYS", "TV_WAIT_DAYS", "HOLDING_DAYS", "REMOVAL_DAYS", "RUN_INTERVAL_HOURS"],
+    "Lifecycle": ["MOVIE_WAIT_DAYS", "TV_WAIT_DAYS", "HOLDING_DAYS", "REMOVAL_DAYS", "RUN_INTERVAL_HOURS", "SQLITE_DAILY_RUN_TIME", "SQLITE_DAILY_RUN_TIMEZONE"],
     "Safety": ["ALLOW_PERMANENT_DELETE", "DRY_RUN", "MAX_ACTIONS_PER_RUN", "ALLOW_FILESYSTEM_DELETE", "ALLOW_CROSS_FILESYSTEM_MOVES"],
     "Notifications": ["NOTIFY_DISCORD_WEBHOOK_URL", "NOTIFY_NTFY_URL", "NOTIFY_NTFY_TOKEN", "NOTIFY_WEBHOOK_URL", "NOTIFY_ON_DRY_RUN", "NOTIFY_LEAVING_SOON_DIGEST"],
 }
@@ -28,6 +28,16 @@ def load_config():
 
 def validate(key, value):
     value = value.strip()
+    if key == "SQLITE_DAILY_RUN_TIME" and value:
+        import re
+        if not re.fullmatch(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]", value):
+            raise ValueError("SQLITE_DAILY_RUN_TIME: enter HH:MM in 24-hour format")
+    if key == "SQLITE_DAILY_RUN_TIMEZONE" and value:
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise ValueError("SQLITE_DAILY_RUN_TIMEZONE: enter an available IANA time zone") from None
     if key in BOOLS and value.lower() not in ("true", "false"):
         raise ValueError(f"{key}: select true or false")
     if key in INTS or key in FLOATS:
@@ -57,6 +67,8 @@ def save_config(values):
     os.replace(temp, CONFIG_FILE)
 
 FIELD_HELP = {
+  "SQLITE_DAILY_RUN_TIME": ["SQLite Daily Scan Time (Preparatory)", "24-hour HH:MM. Used by the scheduled SQLite workflow after activation approval. Saving this does not enable SQLite or change current JSON interval/manual runs."],
+  "SQLITE_DAILY_RUN_TIMEZONE": ["SQLite Daily Scan Time Zone (Preparatory)", "Explicit IANA time zone, such as America/Los_Angeles. Both daily schedule fields are required for SQLite preparation; leave blank while using JSON."],
   "JELLYFIN_REFRESH_AFTER_AUDIT": ["Refresh Jellyfin After Audit", "Request a Jellyfin library scan once after an audit that successfully moved media. Disabled for dry runs and audits with no moves."],
   "JELLYFIN_HOST_URL": [
     "Jellyfin Server URL",

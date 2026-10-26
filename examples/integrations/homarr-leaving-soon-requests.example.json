@@ -1,0 +1,12 @@
+{
+  "titles": {
+    "source": "default",
+    "method": "GET",
+    "path": "/api/v1/titles/leaving-soon",
+    "kind": "query",
+    "trigger": "load",
+    "auth": "inherit",
+    "permission": "view",
+    "cacheSeconds": 0
+  }
+}

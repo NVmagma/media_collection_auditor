@@ -1,0 +1,1 @@
+from scripts.sqlite_scheduled_configured_slot_fixture import ConfiguredSlotFixtureTests
