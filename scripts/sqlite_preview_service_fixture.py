@@ -236,18 +236,27 @@ class PreviewServiceFixtureTests(unittest.TestCase):
 
     def test_exhausted_directory_cursor_never_hides_journal_or_moves_callers_cursor(self):
         self.apply()
+        # The original handle predates the writes. Tower can retain a stale
+        # stream on that handle; the production reader must still see all events.
+        self.assertEqual(read_service_history(self.parent)[1][-1]['phase'], 'cutover_complete')
         # Keep the iterator open: fetching its first entry fills its buffer and
         # moves the shared kernel directory cursor beyond those buffered names.
         # Closing/exhausting scandir may rewind it, hiding the original defect.
-        with os.scandir(self.parent) as active:
-            first = next(active).name
-            position = os.lseek(self.parent, 0, os.SEEK_CUR)
-            request, events, new_id = read_service_history(self.parent)
-            self.assertEqual(events[-1]['phase'], 'cutover_complete')
-            self.assertEqual(new_id, NEW_ID)
-            self.assertEqual(os.lseek(self.parent, 0, os.SEEK_CUR), position)
-            self.assertEqual({first} | {entry.name for entry in active},
-                {'service-request.json'} | {f'service-{i:04d}.json' for i in range(1, 15)})
+        # Create the active iterator from a fresh open description, rather than
+        # assuming the pre-write handle's own cached stream contains entries.
+        reader = os.open('.', os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=self.parent)
+        try:
+            with os.scandir(reader) as active:
+                first = next(active).name
+                position = os.lseek(reader, 0, os.SEEK_CUR)
+                request, events, new_id = read_service_history(reader)
+                self.assertEqual(events[-1]['phase'], 'cutover_complete')
+                self.assertEqual(new_id, NEW_ID)
+                self.assertEqual(os.lseek(reader, 0, os.SEEK_CUR), position)
+                self.assertEqual({first} | {entry.name for entry in active},
+                    {'service-request.json'} | {f'service-{i:04d}.json' for i in range(1, 15)})
+        finally:
+            os.close(reader)
         self.assertEqual(read_service_history(self.parent)[1], events)
 
     def test_truncated_listing_is_blocked_by_direct_next_record_lookup(self):

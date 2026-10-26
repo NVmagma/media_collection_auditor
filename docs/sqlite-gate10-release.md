@@ -873,3 +873,13 @@ inferring an empty history. Service preflight emptiness checks also use a fresh
 scan. Regressions keep an active cursor open, verify all records and cursor
 preservation, and inject a truncated listing to verify refusal. Worker app code
 and the already accepted image remain unchanged. Tower reacceptance is pending.
+
+The next Tower run (`auditor-service-fixture-c002633800d426f7`, controller
+`55881894a35119cfe033cfc0a2c899a02c7279ba`) passed all existing journal/recovery
+cases. Only the added active-cursor regression failed in its own setup: it tried
+to obtain an entry from the pre-write handle's stale stream. That regression now
+first verifies the production reader can read through the old handle, then opens
+an independent handle relative to it for the active-iterator/cursor assertion.
+All record-count, ID, hash-chain, cursor-preservation and truncated-list refusal
+assertions remain; no service implementation or worker image change is needed.
+The actual handoff fixture remains unrun on Tower until the contract suite passes.
