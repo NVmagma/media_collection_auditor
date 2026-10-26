@@ -10,6 +10,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Thread
 from time import monotonic, sleep
@@ -162,6 +163,25 @@ class FreshPreviewTests(unittest.TestCase):
                 self.assertTrue(icon.startswith(b'\x89PNG\r\n\x1a\n'))
                 self.assertEqual(hashlib.sha256(icon).digest(),
                     hashlib.sha256(Path('/app/app/static/auditor-icon.png').read_bytes()).digest())
+            from scripts.unraid_update_backup import capture_current
+            from xml.etree import ElementTree as ET
+            backup_current = json.loads(json.dumps(observed))
+            backup_current['Name'] = '/media_collection_auditor'
+            # The fixture deliberately uses an unpublished local image and no
+            # published host port. Adapt only those synthetic review metadata.
+            backup_current['Config']['Image'] = REFERENCE
+            backup_xml = ET.fromstring(xml)
+            for item in list(backup_xml.findall("Config[@Type='Port']")):
+                backup_xml.remove(item)
+            with tempfile.TemporaryDirectory(prefix='update-backup.', dir='/lab') as folder:
+                receipt = capture_current(directory=folder, expected_identity=identity(folder),
+                    container=backup_current, templates=[('fixture.xml', ET.tostring(backup_xml))])
+                self.assertEqual(receipt['status'], 'preview_update_backup_captured')
+                self.assertFalse(receipt['update_authorized'])
+                self.assertEqual(json.loads(Path(folder,'tracking-snapshot.json').read_bytes()),
+                    GuardedSQLiteStateStore('/sqlite-control/release/state.db').load_with_revision()[0])
+                self.assertEqual(Path(folder,'saved-config.json').read_bytes(), Path('/app/logs/auditor_config.json').read_bytes())
+                self.assertEqual(Path(folder,'retained-source.json').read_bytes(), Path('/app/logs/auditor_state.json').read_bytes())
             self.assertEqual(observed['Config']['Labels']['net.unraid.docker.webui'],'http://[IP]:[PORT:8080]/')
             with closing(http.client.HTTPConnection(address,8080,timeout=5)) as connection:
                 connection.request('GET','/')

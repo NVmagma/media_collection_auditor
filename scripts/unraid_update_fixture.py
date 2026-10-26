@@ -126,6 +126,46 @@ class UnraidUpdateFixtureTests(unittest.TestCase):
         self.assertNotIn('fixture-secret-never-print', result.stdout + result.stderr)
         self.assertEqual(list(self.root.iterdir()), before)
 
+    def test_backup_retains_clocks_settings_and_unknown_fields(self):
+        import hashlib
+        from scripts.unraid_update_backup import SECTIONS, capture_backup, inspect_backup
+        folder = self.root / 'backup'; folder.mkdir(mode=0o700)
+        state = {key: {} for key in SECTIONS}
+        state['first_seen'] = {'Movies/Fixture': '2020-01-02T03:04:05', 'TV/Fixture': '2021-02-03T04:05:06'}
+        state['unknown-extension'] = {'value': 'fixture-secret-never-print'}
+        source = {name: (b'{"private":"fixture-secret-never-print"}', (1, index)) for index, name in enumerate(
+            ('saved-config.json', 'retained-source.json', 'current-binding.json'))}
+        identity = folder.stat().st_dev, folder.stat().st_ino
+        report = capture_backup(directory=folder, expected_identity=identity,
+            container={**self.container, 'Id': 'a'*64, 'Image': 'sha256:'+'b'*64}, template=ET.tostring(self.xml),
+            source_revision='c'*40, validate_current=lambda: None,
+            read_snapshot=lambda: (deepcopy(state), 0), read_inputs=lambda: deepcopy(source))
+        self.assertFalse(report['update_authorized'])
+        self.assertEqual(json.loads((folder/'tracking-snapshot.json').read_bytes()), state)
+        self.assertNotIn('fixture-secret-never-print', json.dumps(report))
+        fingerprint = hashlib.sha256((folder/'backup-complete.json').read_bytes()).hexdigest()
+        self.assertEqual(inspect_backup(directory=folder, expected_identity=identity,
+            expected_fingerprint=fingerprint)['status'], 'preview_update_backup_verified')
+        (folder/'saved-config.json').write_bytes(b'changed')
+        with self.assertRaises(RuntimeError):
+            inspect_backup(directory=folder, expected_identity=identity, expected_fingerprint=fingerprint)
+
+    def test_interrupted_backup_stays_partial_and_cannot_replay(self):
+        from unittest.mock import patch
+        from scripts import unraid_update_backup as backup
+        folder = self.root / 'partial'; folder.mkdir(mode=0o700)
+        state = {key: {} for key in backup.SECTIONS}
+        options = dict(directory=folder, expected_identity=(folder.stat().st_dev, folder.stat().st_ino),
+            container={**self.container, 'Id': 'a'*64, 'Image': 'sha256:'+'b'*64}, template=ET.tostring(self.xml),
+            source_revision='c'*40, validate_current=lambda: None, read_snapshot=lambda: (state, 0),
+            read_inputs=lambda: {name: (b'{}', (1,index)) for index,name in enumerate(
+                ('saved-config.json', 'retained-source.json', 'current-binding.json'))})
+        with patch.object(backup, '_boundary', side_effect=RuntimeError('fixture interruption')):
+            with self.assertRaises(RuntimeError): backup.capture_backup(**options)
+        self.assertTrue((folder/'backup-request.json').exists())
+        self.assertFalse((folder/'backup-complete.json').exists())
+        with self.assertRaises(RuntimeError): backup.capture_backup(**options)
+
     def test_real_http_icon_has_no_login_or_token_requirement(self):
         # Static route only: no scheduler, worker, database or external service.
         import app.web as web
@@ -163,7 +203,7 @@ def main():
         return 1
     print(json.dumps({'status': 'unraid_update_fixture_verified', 'tests': result.testsRun,
         'fixture_only': True, 'production_authorized': False, 'production_activation': 'disabled',
-        'service_changes_performed': False, 'acceptance_scope': 'template_proposed_image_diagnostics_and_icon_http'}))
+        'service_changes_performed': False, 'acceptance_scope': 'template_image_backup_diagnostics_and_icon_http'}))
     return 0
 
 

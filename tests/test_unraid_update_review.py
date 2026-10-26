@@ -140,3 +140,12 @@ def test_external_doctype_classification_never_returns_identifier_or_private_nam
         assert (diagnostic['doctype_root_kind'], diagnostic['doctype_form']) == expected
         assert result['status'] == 'review_required' and result['update_authorized'] is False
         assert 'private' not in json.dumps(result) and 'secret' not in json.dumps(result)
+
+
+def test_slave_propagation_is_preserved_and_unexpected_changes_block():
+    root, container = fixture()
+    root.find("Config[@Target='/media']").set('Mode', 'ro,slave')
+    container['Mounts'][0]['Propagation'] = 'rslave'
+    assert not review(root, container)['blockers']
+    container['Mounts'][0]['Propagation'] = 'rprivate'
+    assert 'mount_binding_mismatch' in review(root, container)['blockers']

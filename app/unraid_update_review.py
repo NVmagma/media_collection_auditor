@@ -144,12 +144,16 @@ def review_update(*, templates, container):
             if len(live_mounts) != len(mounts) or set(paths) != set(live_mounts):
                 blockers.append('mount_inventory_mismatch')
             for target, (origin, mode) in paths.items():
+                parts = mode.split(',')
+                if parts not in (['ro'], ['rw'], ['ro', 'slave'], ['rw', 'slave']):
+                    blockers.append('mount_binding_mismatch')
                 observed = live_mounts.get(target, {})
                 if (observed.get('Type') != 'bind' or observed.get('Source') != origin
-                        or observed.get('RW') is not (mode.split(',')[0] == 'rw')):
+                        or observed.get('RW') is not (parts[0] == 'rw')
+                        or observed.get('Propagation', 'rprivate') != ('rslave' if 'slave' in parts else 'rprivate')):
                     blockers.append('mount_binding_mismatch')
-            if (paths.get('/media', ('', ''))[1] != 'ro'
-                    or any(paths.get(target, ('', ''))[1] != 'rw' for target in ('/sqlite-control', '/app/logs'))):
+            if (paths.get('/media', ('', ''))[1].split(',')[0] != 'ro'
+                    or any(paths.get(target, ('', ''))[1].split(',')[0] != 'rw' for target in ('/sqlite-control', '/app/logs'))):
                 blockers.append('preview_mount_layout_missing')
             stage = 'container_ports'
             ports = {key[1] + '/' + mode: [{'HostIp': '', 'HostPort': value}]
