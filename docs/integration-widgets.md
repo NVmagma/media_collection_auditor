@@ -250,3 +250,15 @@ An explicitly reviewed initialization/import is needed to populate tracking.
 The operator chose to restore the retained prior tracking records and dates,
 including any TV records, into a new private preview root. This preserves old
 clocks; it is not a new-clock scan or automatic adoption of live folder changes.
+
+
+### Homarr query configuration
+
+In Homarr custom requests, put `/api/v1/titles/leaving-soon` in `path` and
+`{"library":"TV"}` in the separate `query` object. Do not paste the full API URL
+with `?library=TV` into Homarr's Path field. The matching Homarr revision
+`9a38404f738f1e50e382095716cc08f3b3751182` exposes `request.query` through its
+Query/body/behavior editor. The earlier TV example put the query in the path;
+this was corrected after the deployed route worked but Homarr returned the
+dashboard-style sign-in response. API URLs used directly by HTTP clients still
+correctly use `?library=TV`; only the Homarr manifest representation differs.

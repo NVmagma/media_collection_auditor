@@ -2,11 +2,14 @@
   "titles": {
     "source": "default",
     "method": "GET",
-    "path": "/api/v1/titles/leaving-soon?library=TV",
+    "path": "/api/v1/titles/leaving-soon",
     "kind": "query",
     "trigger": "load",
     "auth": "inherit",
     "permission": "view",
-    "cacheSeconds": 0
+    "cacheSeconds": 0,
+    "query": {
+      "library": "TV"
+    }
   }
 }

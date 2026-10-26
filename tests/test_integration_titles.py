@@ -167,3 +167,15 @@ def test_authenticated_library_filter_route(api,monkeypatch,query):
 def test_invalid_library_filter_is_refused(api,monkeypatch,query):
     client,_=api; monkeypatch.setenv('INTEGRATION_API_TITLE_DETAILS','true')
     assert client.get('/api/v1/titles/leaving-soon?'+query,headers=AUTH).status_code==400
+
+
+
+def test_homarr_tv_examples_keep_query_parameters_separate_from_path():
+    from pathlib import Path
+    base=Path(__file__).resolve().parents[1]/'examples'/'integrations'
+    for name in ('homarr-tv-leaving-soon-requests.example.json','homarr-tv-leaving-soon-widget.example.json'):
+        data=json.loads((base/name).read_text())
+        request=data.get('requests',data)['titles']
+        assert request['path']=='/api/v1/titles/leaving-soon'
+        assert request['query']=={'library':'TV'}
+        assert request['auth']=='inherit'
