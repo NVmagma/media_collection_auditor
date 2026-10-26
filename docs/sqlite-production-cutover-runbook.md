@@ -484,3 +484,32 @@ missing timestamps, enable TV moves, or write media. The redacted result include
 counts split by library to establish whether prior TV holding records exist.
 The corrected image and restored preview need fresh startup verification and
 matching template installation before reporting this follow-up complete.
+
+
+### Restored-records UI/TV release installed (2026-10-26)
+
+[Actions run 40314107390](https://github.com/NVmagma/media_collection_auditor/actions/runs/40314107390)
+accepted `b846e88af752dcfb9cb42c52acef0c85df2574fe` with 3,342 tests, 82 subtests
+and 9 fresh/restored startup cases, then published:
+`ghcr.io/nvmagma/media_collection_auditor@sha256:b602ae33bcf83b231b4e697254ce28e5fb8b4dec0e6442f00c66f8cf10f6e64c`.
+Image ID: `sha256:fea2f73da21afde0cb463eb1208464744417b5d0a7d5fdd5970ec7a0dd675722`.
+
+The operator prepared `/mnt/user/appdata/media_collection_auditor_fresh.nFGzhm`
+using `restore-previous`, preserving all retained clocks. Counts: Movies waiting
+454, Holding 4, Keep 13; TV waiting 68, Holding 0; Removal and Arr pending 0.
+The current primary was retained before the replacement; the operator confirmed
+the new immutable reference running, then confirmed the TV widget worked after
+Homarr query parameters moved from its Path into `query: {"library":"TV"}`.
+The widget correctly showed no TV Holding records. The request examples were
+corrected at `87e9e11`; 28 title/example tests passed locally, and this correction
+requires no image change. Tracking Holding entries, rather than tags alone, drive
+leaving-soon lists; the preview still does not execute lifecycle moves.
+
+The operator subsequently reported `status=restored_unraid_template_installed`.
+The command checked the digest-bound template, fresh nFGzhm logs/control mounts,
+read-only media, WebUI label and all environment entries against the running
+container, retained the prior template, then replaced the managed template
+without restart. Old data and retained containers remain preserved. Close stale
+Unraid edit tabs before using the updated template. Actual subsequent DockerMan
+recreation and browser click-through results have not been independently reported;
+they are not implied by the successful API/widget and template checks.
