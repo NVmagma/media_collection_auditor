@@ -11,7 +11,7 @@ case "$(git branch --show-current)" in
   feature/sqlite|feature/unraid|feature/interface-api) ;;
   *) echo 'Build requires an official or approved development branch.' >&2; exit 2;;
 esac
-git diff --quiet HEAD -- app scripts docker requirements.txt unraid/assets/Media_Collection_Auditor_Badge.png || {
+git diff --quiet HEAD -- app scripts docker requirements.txt unraid/assets || {
   echo 'Committed candidate build/runtime inputs required.' >&2; exit 2;
 }
 revision=$(git rev-parse --verify HEAD)

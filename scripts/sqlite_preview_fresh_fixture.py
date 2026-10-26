@@ -134,6 +134,15 @@ class FreshPreviewTests(unittest.TestCase):
                 response = connection.getresponse()
                 self.assertEqual(response.status,200)
                 self.assertIn(b'<html',response.read().lower())
+            # Static branding must work without a login or bearer token.
+            with closing(http.client.HTTPConnection(address,8080,timeout=5)) as connection:
+                connection.request('GET','/static/auditor-icon.png')
+                response = connection.getresponse(); icon = response.read()
+                self.assertEqual(response.status,200)
+                self.assertEqual(response.getheader('Content-Type'),'image/png')
+                self.assertTrue(icon.startswith(b'\x89PNG\r\n\x1a\n'))
+                self.assertEqual(hashlib.sha256(icon).digest(),
+                    hashlib.sha256(Path('/app/app/static/auditor-icon.png').read_bytes()).digest())
             self.assertEqual(observed['Config']['Labels']['net.unraid.docker.webui'],'http://[IP]:[PORT:8080]/')
             with closing(http.client.HTTPConnection(address,8080,timeout=5)) as connection:
                 connection.request('GET','/')
