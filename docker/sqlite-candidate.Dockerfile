@@ -9,6 +9,7 @@ COPY docker/sqlite-candidate-constraints.txt /app/candidate-constraints.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt -c /app/candidate-constraints.txt
 COPY app/ /app/app/
 COPY unraid/assets/Media_Collection_Auditor_Badge.png /app/app/static/auditor-badge.png
+COPY unraid/assets/media-collection-auditor-icon.png /app/app/static/auditor-icon.png
 RUN WEB_SESSION_SECRET=build-only-candidate-import-check python -c "import app.main, app.sqlite_scheduled_service, app.sqlite_scheduled_production, app.sqlite_tracking_view, app.sqlite_scheduled_observations; from app.sqlite_release_profile import PROFILE; assert PROFILE == 'sealed'; from app.sqlite_backend_gate import require_sqlite_production_activation; from unittest import TestCase; TestCase().assertRaises(RuntimeError, require_sqlite_production_activation)"
 ARG SOURCE_REVISION
 LABEL org.opencontainers.image.revision="${SOURCE_REVISION}" \

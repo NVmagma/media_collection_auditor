@@ -132,3 +132,11 @@ See [SQLite recovery acceptance review](sqlite-recovery-acceptance-review.md)\nf
 Complete safe SQLite recovery verification, then controlled lifecycle integration,
 migration/rollback rehearsals, and Unraid validation. JSON remains authoritative
 until the production switch is separately approved.
+
+## Interface/API branch progress
+
+- First update-reliability increment: read-only saved-template/container comparison,
+  including duplicate internal names and lost control mounts. This is a diagnostic,
+  not a completed safe updater or binding migration. See [usage](unraid-update-review.md).
+- Square transparent app icon prepared; future explicit images serve it without
+  credentials. Existing private GitHub asset URLs cannot serve as anonymous icons.
