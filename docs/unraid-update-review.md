@@ -54,3 +54,24 @@ For an icon that remains available while the auditor is stopped, serve this PNG
 from another existing static web service and use that URL in both places. Keep
 the URL free of credentials. Saving template metadata and recreating a container
 are distinct operations; use the reviewed update procedure for recreation.
+
+## Disposable Tower acceptance
+
+The fixture builds a local preview image from committed bytes, then runs six
+standard-library tests in a new container and a newly marked lab directory.
+It needs no host Python, registry push, GitHub Actions minutes, Docker socket
+mount, production paths or published ports. Static icon delivery is exercised
+through the real Flask route over private loopback HTTP; no scheduler is started.
+
+```bash
+bash scripts/unraid_update_lab.sh /mnt/user/sql_test
+```
+
+Use an existing disposable parent. All fixture artifacts and build diagnostics
+are retained in the new `unraid-update.*` directory. Only the newly created
+container is removed at exit. A successful run ends with
+`status=unraid_update_lab_complete`. This does not validate a production update,
+SQLite rebinding, or DockerMan recreation. GitHub CI remains a separate check.
+
+Local Docker acceptance passed six tests on 2026-10-26. GitHub Actions could not
+start because of its account billing/spending restriction; no CI pass is claimed.
