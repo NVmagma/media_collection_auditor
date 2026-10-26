@@ -113,7 +113,7 @@ class UnraidUpdateFixtureTests(unittest.TestCase):
                 self.assertEqual(response.status, 200)
                 self.assertEqual(response.getheader('Content-Type'), 'image/png')
                 self.assertTrue(raw.startswith(b'\x89PNG\r\n\x1a\n'))
-                expected = Path('unraid/assets/media-collection-auditor-icon.png').read_bytes()
+                expected = (Path(__file__).resolve().parents[1] / 'unraid/assets/media-collection-auditor-icon.png').read_bytes()
                 self.assertEqual(hashlib.sha256(raw).digest(), hashlib.sha256(expected).digest())
         finally:
             server.shutdown(); server.server_close(); worker.join(timeout=5)

@@ -30,7 +30,7 @@ volumes=$(docker image inspect --format '{{json .Config.Volumes}}' "$image")
 container=$(docker create --pull=never --network none --read-only --user 0:0 \
   --cap-drop ALL --security-opt no-new-privileges --pids-limit 64 --memory 256m \
   --tmpfs /tmp:rw,noexec,nosuid,nodev,size=32m \
-  --mount "type=bind,src=$lab,dst=/lab" --workdir /lab/source \
+  --mount "type=bind,src=$lab,dst=/lab" --workdir /app \
   --env PYTHONPATH=/app:/app/app:/lab/source --env PYTHONDONTWRITEBYTECODE=1 \
   --env WEB_SESSION_SECRET=disposable-fixture-session-secret \
   --env "UNRAID_FIXTURE_NONCE=$revision" --env "EXPECTED_REVISION=$revision" \
