@@ -2,9 +2,11 @@ name: SQLite candidate image acceptance
 
 on:
   push:
-    branches: [feature/sqlite]
+    branches: [feature/sqlite, feature/unraid, feature/interface-api]
     paths:
       - '.github/workflows/sqlite-candidate.yml'
+      - '.github/workflows/docker.yml'
+      - '.github/workflows/python-safety.yml'
       - 'docker/sqlite-candidate*'
       - 'docker/sqlite-preview*'
       - 'app/**'
@@ -32,6 +34,13 @@ on:
       - 'tests/test_sqlite_preview_host_launcher.py'
       - 'tests/test_sqlite_preview_fresh.py'
       - 'requirements.txt'
+  pull_request:
+    branches: [feature/unraid, feature/interface-api]
+  workflow_call:
+    inputs:
+      publish_preview:
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       publish_preview:
@@ -45,7 +54,9 @@ permissions:
 
 jobs:
   candidate:
-    if: github.ref == 'refs/heads/feature/sqlite'
+    if: >-
+      contains(fromJSON('["feature/sqlite","feature/unraid","feature/interface-api"]'), github.head_ref || github.ref_name)
+      && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     permissions:
       contents: read
       packages: write
@@ -54,11 +65,16 @@ jobs:
       run:
         shell: bash
     env:
+      ACCEPTANCE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
       BASE_IMAGE: python@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704
       WEB_SESSION_SECRET: ci-only-candidate-test-secret
       PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/app
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+      - name: Verify exact acceptance revision
+        run: test "$(git rev-parse HEAD)" = "$ACCEPTANCE_REVISION"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -71,7 +87,7 @@ jobs:
       - name: Exercise actual candidate entrypoint and packaged worker
         run: |
           image=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate-build.json")
-          python -B scripts/sqlite_candidate_image_lab.py --image "$image" --source-revision "$GITHUB_SHA" | tee "$RUNNER_TEMP/candidate-acceptance.log"
+          python -B scripts/sqlite_candidate_image_lab.py --image "$image" --source-revision "$ACCEPTANCE_REVISION" | tee "$RUNNER_TEMP/candidate-acceptance.log"
       - name: Verify Tower Bash wrapper against the same image
         run: |
           image=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate-build.json")
@@ -131,8 +147,8 @@ jobs:
           image=$(cat "$RUNNER_TEMP/preview-release-image.txt")
           packet=$(sudo mktemp -d "$RUNNER_TEMP/host-selection.XXXXXX")
           python_bin=$(command -v python)
-          selection=$(sudo --preserve-env=PYTHONPATH "$python_bin" -B -m scripts.sqlite_preview_release_request_fixture --packet-directory "$packet" --image-id "$image" --worker-revision "$GITHUB_SHA")
-          sudo bash scripts/sqlite_preview_service_host.sh review "$image" "$packet" "$selection" "$GITHUB_SHA" | tee "$RUNNER_TEMP/preview-host-selection.log"
+          selection=$(sudo --preserve-env=PYTHONPATH "$python_bin" -B -m scripts.sqlite_preview_release_request_fixture --packet-directory "$packet" --image-id "$image" --worker-revision "$ACCEPTANCE_REVISION")
+          sudo bash scripts/sqlite_preview_service_host.sh review "$image" "$packet" "$selection" "$ACCEPTANCE_REVISION" | tee "$RUNNER_TEMP/preview-host-selection.log"
           python -B -c 'import json,sys; r=json.load(open(sys.argv[1])); assert r["status"]=="production_release_selection_verified_not_executed"; assert r["service_actions_performed"] is False and r["registry_publication_performed"] is False; print("status=actual_readonly_host_launcher_verified")' "$RUNNER_TEMP/preview-host-selection.log"
       - name: Authenticate preview publication
         if: github.event_name == 'workflow_dispatch' && inputs.publish_preview
@@ -146,18 +162,18 @@ jobs:
         run: |
           image=$(cat "$RUNNER_TEMP/preview-release-image.txt")
           [[ "$image" =~ ^sha256:[0-9a-f]{64}$ ]]
-          tag="ghcr.io/nvmagma/media_collection_auditor:sqlite-preview-${GITHUB_SHA:0:12}-${image#sha256:}"
+          tag="ghcr.io/nvmagma/media_collection_auditor:sqlite-preview-${ACCEPTANCE_REVISION:0:12}-${image#sha256:}"
           docker tag "$image" "$tag"
           docker push "$tag"
           reference=$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$image" | awk '/^ghcr\.io\/nvmagma\/media_collection_auditor@sha256:[0-9a-f]+$/ {print; exit}')
           [[ "$reference" =~ ^ghcr\.io/nvmagma/media_collection_auditor@sha256:[0-9a-f]{64}$ ]]
           [ "$(docker image inspect --format '{{.Id}}' "$reference")" = "$image" ]
-          python -B -c 'import json,sys; print(json.dumps(dict(status="accepted_preview_published", image_id=sys.argv[1], reference=sys.argv[2], source_revision=sys.argv[3], media_actions_authorized=False)))' "$image" "$reference" "$GITHUB_SHA" | tee "$RUNNER_TEMP/preview-publication.json"
+          python -B -c 'import json,sys; print(json.dumps(dict(status="accepted_preview_published", image_id=sys.argv[1], reference=sys.argv[2], source_revision=sys.argv[3], media_actions_authorized=False)))' "$image" "$reference" "$ACCEPTANCE_REVISION" | tee "$RUNNER_TEMP/preview-publication.json"
           cat "$RUNNER_TEMP/preview-publication.json" >> "$GITHUB_STEP_SUMMARY"
       - name: Retain build and acceptance evidence
         uses: actions/upload-artifact@v4
         with:
-          name: sqlite-candidate-evidence-${{ github.sha }}
+          name: sqlite-candidate-evidence-${{ env.ACCEPTANCE_REVISION }}
           path: |
             ${{ runner.temp }}/candidate-build.json
             ${{ runner.temp }}/candidate-acceptance.log

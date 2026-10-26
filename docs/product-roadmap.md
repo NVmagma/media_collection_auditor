@@ -1,5 +1,16 @@
 # Product roadmap
 
+## Current baseline and next branch
+
+The SQLite scheduled-preview integration is complete. `feature/unraid` is the
+official/default branch; follow-up development uses `feature/interface-api`.
+See the [current feature priorities](feature-roadmap.md) and
+[release workflow](branch-workflow.md). Existing read-only summary/status/title
+APIs, movie/TV Homarr views, clickable Jellyfin posters/titles and manual previews
+are delivered; remaining work includes visual polish, readiness/provenance,
+filters and deploy/update usability. Older sections below preserve requested
+design directions and may describe now-delivered work as planned.
+
 ## Public-release storage portability
 
 User requirement: users' filesystem choices must not be dictated by this one
@@ -23,8 +34,8 @@ capabilities and retain explicit blocked outcomes when safety cannot be proven.
 - Preserve pending state and explain missing capabilities. No filesystem label,
   successful copy, or configuration flag alone authorizes deletion or recovery.
 
-No production mount change is approved or required by the current native lab
-results. Gates 6–10 remain open while portable execution and integration proceed.
+No production mount change is approved or required. All preview-scope gates are
+closed; portable execution is separate from that completed scheduled-preview scope.
 
 ## Integration API for Homarr, Homepage and other clients
 

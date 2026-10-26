@@ -28,7 +28,10 @@ packet_identity=$(stat -Lc '%d:%i' -- "$anchor")
 checkout=$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 cd -- "$checkout"
 git_cmd=(git -c "safe.directory=$checkout")
-[ "$("${git_cmd[@]}" branch --show-current)" = feature/sqlite ] || exit 2
+case "$("${git_cmd[@]}" branch --show-current)" in
+  feature/sqlite|feature/unraid|feature/interface-api) ;;
+  *) exit 2;;
+esac
 [ "$("${git_cmd[@]}" rev-parse --verify HEAD)" = "$controller_revision" ] || exit 2
 "${git_cmd[@]}" diff --quiet HEAD -- app scripts || { echo 'Committed controller/runtime files required.' >&2; exit 2; }
 "${git_cmd[@]}" cat-file -e "$controller_revision:scripts/sqlite_preview_release_request.py"

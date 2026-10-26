@@ -7,7 +7,10 @@ base=${1:-python@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19
 [[ "$base" =~ ^python@sha256:[0-9a-f]{64}$ ]] || { echo 'Pinned official Python digest required.' >&2; exit 2; }
 checkout=$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 cd -- "$checkout"
-[ "$(git branch --show-current)" = feature/sqlite ] || { echo 'Build requires feature/sqlite.' >&2; exit 2; }
+case "$(git branch --show-current)" in
+  feature/sqlite|feature/unraid|feature/interface-api) ;;
+  *) echo 'Build requires an official or approved development branch.' >&2; exit 2;;
+esac
 git diff --quiet HEAD -- app scripts docker requirements.txt unraid/assets/Media_Collection_Auditor_Badge.png || {
   echo 'Committed candidate build/runtime inputs required.' >&2; exit 2;
 }

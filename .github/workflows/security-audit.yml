@@ -2,13 +2,13 @@ name: Security audit (advisory)
 
 on:
   push:
-    branches: [feature/sqlite]
+    branches: [feature/sqlite, feature/unraid, feature/interface-api]
     paths:
       - requirements.txt
       - Dockerfile
       - .github/workflows/security-audit.yml
   pull_request:
-    branches: [feature/sqlite]
+    branches: [feature/sqlite, feature/unraid, feature/interface-api]
   schedule:
     - cron: '17 10 * * 1'
   workflow_dispatch:
@@ -36,7 +36,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build image locally (never publish)
-        run: docker build --pull --tag media-collection-auditor:security-check .
+        run: >-
+          docker build --pull --file docker/sqlite-preview-release.Dockerfile
+          --build-arg SOURCE_REVISION="$GITHUB_SHA"
+          --tag media-collection-auditor:security-check .
       # Scan an exported image without mounting the Docker socket into
       # the scanner. A finding still fails the job; no bypass or suppression.
       - name: Export local image for offline inspection

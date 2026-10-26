@@ -15,8 +15,8 @@ def build(*, checkout, base_image):
     def git(*args):
         return subprocess.run(['git', *args], cwd=checkout, capture_output=True,
                               check=True, timeout=30).stdout
-    if git('branch', '--show-current').decode().strip() != 'feature/sqlite':
-        raise RuntimeError('Build requires feature/sqlite')
+    if git('branch', '--show-current').decode().strip() not in ('feature/sqlite', 'feature/unraid', 'feature/interface-api'):
+        raise RuntimeError('Build requires an official or approved development branch')
     revision = git('rev-parse', '--verify', 'HEAD').decode().strip()
     if not re.fullmatch(r'[0-9a-f]{40}', revision):
         raise RuntimeError('Exact source revision required')

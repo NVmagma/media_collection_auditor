@@ -17,7 +17,10 @@ done
 checkout=$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 cd -- "$checkout"
 git_cmd=(git -c "safe.directory=$checkout")
-[ "$("${git_cmd[@]}" branch --show-current)" = feature/sqlite ] || exit 2
+case "$("${git_cmd[@]}" branch --show-current)" in
+  feature/sqlite|feature/unraid|feature/interface-api) ;;
+  *) exit 2;;
+esac
 revision=$("${git_cmd[@]}" rev-parse HEAD)
 "${git_cmd[@]}" diff --quiet HEAD -- app scripts || exit 2
 if [ -n "${DOCKER_CONTEXT:-}" ]; then

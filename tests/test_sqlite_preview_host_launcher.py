@@ -25,7 +25,7 @@ elif tool=='id': print('0')
 elif tool=='stat': print('0:700' if '%u:%a' in args else '1:2')
 elif tool=='git':
     if args[:1]==['-c']: args=args[2:]
-    if args[:2]==['branch','--show-current']: print('feature/sqlite')
+    if args[:2]==['branch','--show-current']: print(os.environ.get('BUILD_BRANCH','feature/sqlite'))
     elif args[:2]==['rev-parse','--verify']: print('a'*40)
     elif args[:1]==['archive']: sys.stdout.buffer.write(b'trusted-fixture-archive')
     elif args[:1]==['diff'] and scenario=='dirty': raise SystemExit(1)
@@ -177,4 +177,13 @@ def test_published_deployment_requires_same_repository_immutable_digest(host,ref
     root,run=host
     result,calls=run('deploy-published',reference=reference)
     assert result.returncode!=0 and calls==[]
+    assert not (root/'control').exists()
+
+
+@pytest.mark.parametrize('branch',['feature/unraid','feature/interface-api'])
+def test_official_and_next_development_branch_can_verify_without_publication(host,branch):
+    root,run=host
+    result,calls=run(BUILD_BRANCH=branch)
+    assert result.returncode==0,result.stderr
+    assert not any(args[0] in ('tag','push','pull','create','start') for args in calls)
     assert not (root/'control').exists()

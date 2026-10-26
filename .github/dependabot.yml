@@ -5,7 +5,7 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    target-branch: "feature/sqlite"
+    target-branch: "feature/unraid"
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -14,7 +14,7 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    target-branch: "feature/sqlite"
+    target-branch: "feature/unraid"
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -23,7 +23,7 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    target-branch: "feature/sqlite"
+    target-branch: "feature/unraid"
     open-pull-requests-limit: 5
     labels:
       - "dependencies"

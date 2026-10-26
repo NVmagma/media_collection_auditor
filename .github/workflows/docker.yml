@@ -1,149 +1,23 @@
 name: Docker Image
 
+# The official branch shares the fully tested preview release pipeline. No
+# floating tag is published by a merge, and Tower is never deployed by Actions.
 on:
-  push:
-    branches:
-      - feature/unraid
   workflow_dispatch:
+    inputs:
+      publish_preview:
+        description: 'Publish a versioned preview image after complete acceptance'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
   packages: write
 
 jobs:
-  test:
-    name: Run tests
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.12"]
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          pip install pytest
-
-      # These checks must pass in THIS job: build-and-push depends on it.
-      # Keep other branches' existing publishing behavior unchanged.
-      - name: Compile Python source and tests
-        if: github.ref == 'refs/heads/feature/unraid' || github.ref == 'refs/heads/feature/sqlite'
-        run: python -m compileall -q app tests
-
-      - name: Run web and rescue safety tests
-        if: github.ref == 'refs/heads/feature/unraid'
-        env:
-          WEB_SESSION_SECRET: ci-only-session-secret
-          PYTHONPATH: ${{ github.workspace }}/app
-        run: python -m unittest discover -s tests -p 'test_*.py' -v
-
-      - name: Run SQLite regression tests
-        if: github.ref == 'refs/heads/feature/sqlite'
-        env:
-          PYTHONPATH: ${{ github.workspace }}
-        run: python -B scripts/run_sqlite_integration_checks.py --full-suite --basetemp "$RUNNER_TEMP/sqlite-candidate-fixtures"
-
-      - name: Run tests
-        env:
-          PYTHONPATH: ${{ github.workspace }}/app
-        run: pytest -c /dev/null test-suite-and-ci/tests -v
-
-  build-and-push:
-    name: Build and publish image
-    needs: test
-    runs-on: ubuntu-latest
-    env:
-      API_CANDIDATE_IMAGE: ghcr.io/nvmagma/media_collection_auditor:api-candidate-${{ github.sha }}
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract Docker metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/nvmagma/media_collection_auditor
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
-            type=sha
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build API candidate locally
-        if: github.ref == 'refs/heads/feature/sqlite'
-        run: >-
-          docker buildx build --load --platform linux/amd64 --pull --file Dockerfile
-          --label org.opencontainers.image.revision="$GITHUB_SHA"
-          --tag "$API_CANDIDATE_IMAGE" .
-
-      - name: Scan API candidate before publication
-        if: github.ref == 'refs/heads/feature/sqlite'
-        run: |
-          docker save "$API_CANDIDATE_IMAGE" -o "$RUNNER_TEMP/api-candidate.tar"
-          docker run --rm \
-            -v "$RUNNER_TEMP:/scan:ro" \
-            aquasec/trivy:latest image \
-            --input /scan/api-candidate.tar \
-            --format table --vuln-type os,library \
-            --severity CRITICAL,HIGH --ignore-unfixed --exit-code 1
-
-      - name: Smoke actual candidate runtime with synthetic state
-        if: github.ref == 'refs/heads/feature/sqlite'
-        run: |
-          docker run --rm --network none --read-only --cap-drop ALL \
-            --security-opt no-new-privileges:true \
-            --tmpfs /tmp:rw,nosuid,nodev,size=64m \
-            --mount "type=bind,source=$GITHUB_WORKSPACE/scripts/integration_api_smoke.py,target=/fixture/smoke.py,readonly" \
-            --entrypoint python "$API_CANDIDATE_IMAGE" -B /fixture/smoke.py
-
-      - name: Smoke actual candidate in read-only service mode
-        if: github.ref == 'refs/heads/feature/sqlite'
-        run: |
-          docker run --rm --network none --read-only --cap-drop ALL \
-            --security-opt no-new-privileges:true \
-            --tmpfs /tmp:rw,nosuid,nodev,size=64m \
-            --mount "type=bind,source=$GITHUB_WORKSPACE/scripts/integration_api_smoke.py,target=/fixture/smoke.py,readonly" \
-            --entrypoint python "$API_CANDIDATE_IMAGE" -B /fixture/smoke.py --read-only-service
-
-      - name: Publish only the commit-specific API candidate tag
-        if: github.ref == 'refs/heads/feature/sqlite'
-        run: |
-          docker push "$API_CANDIDATE_IMAGE"
-          docker image inspect "$API_CANDIDATE_IMAGE" --format '{{index .RepoDigests 0}}' > "$RUNNER_TEMP/api-candidate-reference.txt"
-
-      - name: Record candidate digest reference
-        if: github.ref == 'refs/heads/feature/sqlite'
-        uses: actions/upload-artifact@v4
-        with:
-          name: api-candidate-reference
-          path: ${{ runner.temp }}/api-candidate-reference.txt
-
-      - name: Build and push
-        if: github.ref != 'refs/heads/feature/sqlite'
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+  validated-preview:
+    if: github.ref == 'refs/heads/feature/unraid'
+    uses: ./.github/workflows/sqlite-candidate.yml
+    with:
+      publish_preview: ${{ inputs.publish_preview }}
+    secrets: inherit

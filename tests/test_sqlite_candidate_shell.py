@@ -56,9 +56,11 @@ esac
     return env, log
 
 
+@pytest.mark.parametrize('branch', ['feature/sqlite','feature/unraid','feature/interface-api'])
 @pytest.mark.parametrize('kind', ['candidate', 'preview_release'])
-def test_host_python_free_build_never_tags_or_publishes(tmp_path, kind):
+def test_host_python_free_build_never_tags_or_publishes(tmp_path, kind, branch):
     env, log = fixture(tmp_path)
+    env["BUILD_BRANCH"] = branch
     result = subprocess.run(['bash', str(ROOT / f'scripts/sqlite_{kind}_build.sh')], env=env,
                             capture_output=True, text=True, timeout=15)
     assert result.returncode == 0, result.stderr

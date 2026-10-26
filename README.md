@@ -1,5 +1,21 @@
 # Media Collection Auditor
 
+## Current official release
+
+`feature/unraid` is the official/default branch. The completed SQLite work is
+integrated as a **scheduled-preview release**: SQLite tracking, authenticated
+web/Homarr APIs, Jellyfin poster links, daily scheduling and administrator-only
+Run Preview Now. Media remains read-only; moves and deletion are not enabled.
+The deployed immutable image and its matching binding remain unchanged by Git
+merges. See the [branch/release workflow](docs/branch-workflow.md) and
+[accepted deployment record](docs/sqlite-production-cutover-runbook.md).
+
+New interface, API, widget and deployment-usability work uses
+`feature/interface-api`. Earlier generic JSON/live-mode instructions below are
+legacy context, not instructions to activate media operations in this preview.
+Use the current release record for installation or updates.
+
+
 Safely manage a Jellyfin movie and TV collection through Waiting, Holding, Keep, and Removal stages, with an authenticated Unraid dashboard and Radarr/Sonarr synchronization.
 
 New titles enter **Waiting**. Jellyfin tags and optionally favorites can move titles to **Keep** or request early **Holding**. Expired Holding titles may move to **Removal**, but deletion requires separate safety checks. **Permanent deletion remains disabled for this release.** [Radarr](https://radarr.video) and [Sonarr](https://sonarr.tv) are kept in sync the whole way, so nothing gets re-downloaded.

@@ -17,11 +17,12 @@ def test_only_pinned_official_base_can_reach_docker(base, monkeypatch):
     run.assert_not_called()
 
 
-def test_build_uses_committed_archive_without_publishing_or_changing_tags(tmp_path, monkeypatch):
+@pytest.mark.parametrize('branch', ['feature/sqlite','feature/unraid','feature/interface-api'])
+def test_build_uses_committed_archive_without_publishing_or_changing_tags(tmp_path, monkeypatch, branch):
     calls = []
     def run(args, **kwargs):
         calls.append((args, kwargs))
-        if args[:3] == ['git', 'branch', '--show-current']: return SimpleNamespace(stdout=b'feature/sqlite\n')
+        if args[:3] == ['git', 'branch', '--show-current']: return SimpleNamespace(stdout=(branch+'\n').encode())
         if args[:3] == ['git', 'rev-parse', '--verify']: return SimpleNamespace(stdout=REVISION.encode())
         if args[:2] == ['git', 'diff']: return SimpleNamespace(stdout=b'')
         if args[:2] == ['git', 'archive']: return SimpleNamespace(stdout=b'exact-committed-archive')
