@@ -1,9 +1,13 @@
 # Scheduled SQLite preview production cutover — approval package
 
-**Status: user approved the preview deployment; GitHub Actions publication path in preparation.**
-Gate 10 remains open until the approved cutover and live verification complete.
+**Status: approved scheduled-preview deployment completed and live-verified; Gate 10 closed for this scope.**
+The final accepted image, packet, controller and live evidence are recorded in
+[Gate 10 final acceptance](sqlite-gate10-release.md#final-publication-tower-cutover-and-live-verification).
+The earlier image/packet selection below is historical; use final acceptance
+identities for recovery. Do not rerun deployment against the occupied control root.
 The sealed candidate remains sealed. A separately accepted immutable worker image
-supports scheduled preview only. No production service, setting or media has been changed. Tower registry pushes
+supports scheduled preview only. Production auditor settings/template and tracking authority changed in the approved
+cutover. Media remains unchanged and read-only. Earlier Tower registry pushes
 were denied before any service changes. Historical sections below record earlier steps;
 the exact initial release selection and launcher procedure follow here.
 

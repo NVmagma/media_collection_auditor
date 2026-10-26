@@ -1,9 +1,44 @@
 # Gate 10 — release and rollback acceptance
 
-Gates 1–9 are closed for the approved scheduled-run model. Gate 10 is open.
-Production remains the existing JSON worker/image. Permanent deletion, season
-pruning, cross-filesystem moves and SQLite activation remain disabled. This
-record does not authorize a production update or cutover.
+**Gate 10 closed for the approved scheduled-preview rollout.** The operator
+approved deployment and supplied successful cutover plus live verification.
+Production tracking authority is now SQLite, with read-only media and no media
+operations authorized. Live lifecycle moves, permanent deletion, season pruning
+and cross-filesystem moves remain disabled. Historical entries below describe
+the preceding work and do not supersede this final status.
+
+## Final publication, Tower cutover and live verification
+
+- Implementation/controller: `69df31c279e90fd7ddd1ef8fd5a1988824d41477`.
+- [Actions acceptance/publication run 40264573031](https://github.com/NVmagma/media_collection_auditor/actions/runs/40264573031):
+  3,328 tests and 82 subtests passed, including actual image/API handoff/recovery
+  and the read-only host launcher. Actions published the same tested image without
+  rebuilding; Tower pushes had failed before any service changes.
+- Published immutable reference:
+  `ghcr.io/nvmagma/media_collection_auditor@sha256:e374f43aac09cb1bea81de5615868638198e14516b63524a96681bd81fd47f0f`.
+- Image ID: `sha256:762610642e2f47b38e3d06a01b2ad92b36f4c4fdaa0281e3cad98105ad071603`.
+- Fresh private packet: `/mnt/user/sql_test/cutover-review.74EGuZ`;
+  selection `affb2c04a8a14e85df26dfa8b0150fdf12caf0e08148b89ab954b85a0df6bf4e`.
+- Operator ran `deploy-published`; reported `preview_service_cutover_complete`
+  and `explicit_service_transaction_finished`, with no automatic restoration.
+- Running preview: `ca0810358bf9c8cd147920d33f7ef4f82fc6147b664355c0ebbce19af314a495`.
+  `/media` is read-only; `/sqlite-control` and `/app/logs` are writable.
+- Original `media_collection_auditor_rollback_b637b8526244` is stopped and retained
+  at its original registry digest `4575aa35c0998aec937f1145b19c685af50d83fb00829f99be0a1a2017997db4`.
+  Its writable media mount is inactive while that container remains stopped.
+- Both authenticated live summary/audit-status APIs returned HTTP 200,
+  `storage_authority=sqlite`, `production_activation=preview_only`,
+  `execution_mode=scheduled_preview`, `read_only=true`,
+  `production_authorized=false`, `media_actions_authorized=false`.
+- Preserved counts: waiting 522, holding 4, keep 13, removal 0, Arr pending 0.
+- Idle coordinator: running=false, queued=false; next run
+  `2026-10-26T09:00:00+00:00`, October 26 at 02:00 America/Los_Angeles.
+  This verifies schedule registration, not completion of that future scan.
+
+Explicit recovery continues to use the retained packet/journal and current-state
+checks. Do not start the stopped original alongside the preview or discard the
+retained recovery artifacts. Enabling actual media actions requires a separately
+reviewed rollout; this closure is for the deployed scheduled-preview scope.
 
 ## Fixed exit requirements
 

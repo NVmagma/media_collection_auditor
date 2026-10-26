@@ -23,7 +23,7 @@ Tower acceptance on 2026-10-24 under this scheduled-run scope.
 | 7. Atomic lifecycle reconciliation | Bound applied revision/snapshot; source/destination clocks, exact intent clearance and optional Arr queue share one CAS commit; real SQL/process-failure tests prove old-or-new outcomes | Complete for the scheduled model: exact-implementation CI for 7d6823c and native Tower acceptance passed (19 atomic reconciliation, 27 move regression and 11 HTTP transport tests). See scheduled Gate 7 acceptance; production activation remains disabled |
 | 8. Production lifecycle integration | Real Waiting/Holding/Keep/Removal moves use guarded ordering; existing JSON path unaffected until cutover | Complete for the scheduled model: configured multi-library clocks, fresh Jellyfin reads, routed moves, daily claims, separate control/database/media layout and candidate worker/service integration passed exact-implementation CI and native Tower acceptance. Final runtime acceptance at cad51d8 passed 8 runtime and 11 HTTP tests. Production activation remains sealed; see the worker integration record |
 | 9. External integrations | Arr uncertain outcomes, Jellyfin protection, dashboard authoritative reads, TV-season behavior | Complete for the scheduled model: tracking authority accepted on native/shfs; configured Arr queue, one-shot delivery, known-outcome completion and worker integration accepted; whole-show TV compatibility accepted with pruning disabled; process-scoped coordinator/history authority accepted at 31184de (10 coordinator and 11 HTTP cases). Exact implementation 33cd61f passed CI 40151389894. See the Gate 9 integration record; production activation remains sealed |
-| 10. Deployment and rollback | Disposable Unraid end-to-end tests, full CI, Docker build, backup/rollback, explicit activation approval | In progress: candidate-only pinned runtime and Python-free Tower build/test wrappers implemented. Exact-source CI 40152538090 passed 3,141 tests and 49 subtests, linux/amd64 build and image/entrypoint checks; local linux/arm64 packaging also passed. Tower candidate packaging accepted at 9b8dfbf. Disposable advanced-state restore implemented with pending/stale/crash refusal and retained evidence. After the first Tower shfs run exposed an open-unlink staging lifetime issue, the strict-link-preserving repair passed exact-source CI 40154500531 (3,161 tests and 53 subtests) plus candidate image and host-backed restore acceptance. Tower native/shfs advanced restore accepted at 44c1c84 (17 cases each, retained evidence). Current production binding observations, activation-capable release implementation/review and explicit activation approval remain open; see the Gate 10 release record |
+| 10. Deployment and rollback | Disposable Unraid end-to-end tests, full CI, Docker build, backup/rollback, explicit activation approval | Complete for the approved scheduled-preview rollout: Actions 40264573031 passed 3,328 tests and 82 subtests and published the tested image. Operator-approved Tower cutover and live API/mount/schedule/count verification passed. SQLite is authoritative; media is read-only, media actions disabled, original container stopped and retained. See the Gate 10 release record |
 
 ## Current scheduled Gate 6 exit checklist
 
@@ -33,7 +33,7 @@ operator's native Tower result received on 2026-10-24. The final status was
 `scheduled_gate6_acceptance_complete`; all 27 filesystem/integration tests and
 11 HTTP transport tests passed. Gate 6 is closed under the approved scheduled
 model. Historical host-wide controller/boot requirements below do not reopen it.
-Gates 7–9 are also closed; Gate 10 deployment and rollback is next. Production behavior and activation remain unchanged.
+Gates 7–10 are also closed for the scheduled-preview rollout. SQLite now supplies tracking; live media operations remain disabled.
 
 ## Current scheduled Gate 7 exit checklist
 
@@ -54,7 +54,7 @@ CI for implementation `e5b0cde` and native Tower runtime acceptance from source
 `scheduled_runtime_acceptance_complete`. Prior clock, configured HTTP, routed
 move and separated-layout boundaries are also accepted. Gate 8 is closed under
 the scheduled model. The original JSON path remains unchanged; SQLite production
-selection stays sealed. Gate 9 is now also closed; Gate 10 and explicit activation approval remain open.
+selection was sealed at this acceptance boundary. Gates 9–10 later closed; the deployed release is scheduled preview only.
 
 ## Current Gate 9 exit checklist
 
@@ -69,38 +69,27 @@ scheduled model. Coordinator history is explicitly current-process only; it is
 not durable history or live-inventory verification. Season pruning, permanent
 deletion and production SQLite activation remain disabled.
 
-Gate 10 remains responsible for release packaging/image verification, operational
-migration/backup/rollback acceptance and explicit production activation approval.
+Gate 10 subsequently completed release packaging, operational migration/recovery
+acceptance, explicit preview approval and verified Tower cutover.
 
-## Current Gate 10 work
+## Current Gate 10 exit checklist
 
-The [release and rollback record](sqlite-gate10-release.md) tracks candidate image
-packaging and the remaining operational restore/cutover/approval requirements.
-The candidate workflow never publishes or deploys an image.
-
-Tower's read-only production packet now records the current rollback image,
-Movies-only roots, persisted JSON/appdata mappings and approved initial dry-run
-schedule (`02:00 America/Los_Angeles`). The candidate has a genuine scheduled
-preview path with advisory discovery and no media/Arr/clock writes; actual Tower
-preview acceptance passed on both filesystems at `5599aad`. Backup-first release
-preparation and its offline CLI now pass full CI and strict host-backed acceptance
-at `2181422` (3,203 tests, 56 subtests). Tower preparation acceptance passed on both filesystems at `ce41fc7`. Latest-state
-recovery export/inspection is implemented and passed exact-source CI at `bf7e604`
-(3,224 tests, 56 subtests), including actual host-backed checks. Tower recovery
-acceptance passed on both filesystems at `01bba11`. A separate bound preview-only
-release now passes CI `0121ce7` (3,246 tests, 61 subtests), including actual-process
-startup/API/shutdown. Tower preview-image acceptance and the final concrete
-cutover/rollback packet remain open before explicit deployment approval.
+The [release and rollback record](sqlite-gate10-release.md) contains the final
+immutable image, approved selection, CI publication and operator-supplied live
+verification. Actions run `40264573031` passed 3,328 tests and 82 subtests, then
+published the tested image. Tower's `deploy-published` transaction completed;
+summary and audit-status returned HTTP 200 from SQLite preview authority, with
+expected tracking counts and next run `2026-10-26T09:00:00+00:00` (02:00 Pacific).
+Media is mounted read-only; the original container is stopped and retained.
 
 ## Current decision
 
-Nine of ten *gates* have been met, but these gates do not represent equal
-amounts of work. Do not publish an overall percent complete without a
-documented weighting and stable denominator. Earlier 90% and 65–70% estimates
-used different scopes and should not be compared or treated as reliable.
-
-Production authority remains JSON. SQLite production activation and permanent
-filesystem deletion remain disabled.
+All ten gates are closed for the approved scheduled-preview rollout. This is
+not live media-move activation: the running profile reports
+`media_actions_authorized=false` and `production_authorized=false`. Production
+tracking authority is SQLite. The next scheduled scan has not yet been observed
+completing. Media moves/deletion require a separately reviewed release; keep the
+retained original and recovery artifacts until that review.
 
 ## Historical host closure package — superseded as the initial rollout target
 
