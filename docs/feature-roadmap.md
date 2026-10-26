@@ -145,3 +145,8 @@ until the production switch is separately approved.
   existing binding; a changed source revision requires fresh preparation. Local
   eight-case lab and nine-case fresh-instance acceptance passed. Backup-first
   update planning and production recreation remain outstanding.
+
+- Backup-first update capture/inspection implemented for disposable acceptance:
+  full logical tracking/settings snapshots, private files, durable incomplete
+  markers, exact-content verification and no automatic replay. Replacement
+  binding preparation and the container swap/recovery are not yet implemented.

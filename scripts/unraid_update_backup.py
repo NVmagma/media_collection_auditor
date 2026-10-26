@@ -37,7 +37,7 @@ def capture_backup(*, directory, expected_identity, container, template, source_
     validate_current()
     state, revision = read_snapshot()
     validate_snapshot(state)
-    if revision != 0 or INTENTS_KEY in state:
+    if type(revision) is not int or revision != 0 or INTENTS_KEY in state:
         raise RuntimeError('Frozen preview without pending operation required')
     before = read_inputs()
     if set(before) != {'saved-config.json', 'retained-source.json', 'current-binding.json'}:
@@ -134,8 +134,8 @@ def inspect_backup(*, directory, expected_identity, expected_fingerprint):
         if hashlib.sha256(raw).hexdigest() != expected_fingerprint:
             raise RuntimeError('Selected backup receipt changed')
         receipt = parse_unique_json(raw)
-        if (receipt.get('schema_version') != 1 or receipt.get('status') != 'preview_update_backup_captured'
-                or receipt.get('snapshot_revision') != 0 or receipt.get('update_authorized') is not False
+        if (type(receipt.get('schema_version')) is not int or receipt.get('schema_version') != 1 or receipt.get('status') != 'preview_update_backup_captured'
+                or type(receipt.get('snapshot_revision')) is not int or receipt.get('snapshot_revision') != 0 or receipt.get('update_authorized') is not False
                 or receipt.get('backup_kind') != 'logical_tracking_and_settings'
                 or set(receipt.get('sha256', {})) != set(FILES)):
             raise RuntimeError('Complete known backup receipt required')

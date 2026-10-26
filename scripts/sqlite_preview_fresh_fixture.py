@@ -171,8 +171,21 @@ class FreshPreviewTests(unittest.TestCase):
             # published host port. Adapt only those synthetic review metadata.
             backup_current['Config']['Image'] = REFERENCE
             backup_xml = ET.fromstring(xml)
+            observed_mounts = {item['Destination']: item for item in observed['Mounts']}
+            for item in backup_xml.findall("Config[@Type='Path']"):
+                mount = observed_mounts[item.get('Target')]
+                item.text = mount['Source']
+                # Docker's private-volume fixture uses slave propagation,
+                # including the new control bind. Model its actual metadata.
+                self.assertIn(mount.get('Propagation'), ('rslave', 'rprivate'))
+                item.set('Mode', ('rw' if mount['RW'] else 'ro') +
+                    (',slave' if mount['Propagation'] == 'rslave' else ''))
             for item in list(backup_xml.findall("Config[@Type='Port']")):
                 backup_xml.remove(item)
+            import runpy
+            review_code = runpy.run_path(str(Path(__file__).resolve().parents[1] / 'app/unraid_update_review.py'))
+            checked = review_code['review_update'](templates=[('fixture.xml', ET.tostring(backup_xml))], container=backup_current)
+            self.assertEqual(checked['blockers'], [], checked)
             with tempfile.TemporaryDirectory(prefix='update-backup.', dir='/lab') as folder:
                 receipt = capture_current(directory=folder, expected_identity=identity(folder),
                     container=backup_current, templates=[('fixture.xml', ET.tostring(backup_xml))])
