@@ -153,3 +153,44 @@ fixture's settings or state. `update_authorized=false` and
 reviewed replacement template/image references, service swap and recovery still
 need their separate transaction and rehearsal. No production preparation command
 is provided by this increment.
+
+## Fixture container swap and explicit recovery
+
+The transaction in `scripts/unraid_update_transaction.py` is explicitly
+fixture-only: production service names are refused and no production launcher
+exists. Scoped Docker acceptance admits only recorded new fixture IDs, labels,
+images and mounts under its newly created private volume. No host ports are
+published. The helper uses the Docker socket to control these fixtures; it is not
+a sandbox against arbitrary code with Docker privileges.
+
+The rehearsal stops and retains the original, starts the prepared replacement,
+checks authenticated HTTP readiness, then updates a private fixture template.
+Recovery is explicit: verify both tracking snapshots/configuration, stop/retain
+the replacement, restore the private template and original name, restart the
+original and verify HTTP readiness. Neither container is removed by the model.
+The fixture harness cleans up only its recorded disposable containers afterward.
+
+Every effect follows a durable intent. Fault tests cover lost stop/create
+acknowledgements, failed health, diverged data, corrupted history and replay.
+Uncertain creation requires an explicitly reviewed exact replacement ID; no name
+search can authorize adoption. A separate real subprocess is killed with SIGKILL
+after the durable old-stopped record. Its parent verifies the worker stays
+stopped before explicitly requesting and verifying recovery.
+
+Run the updated no-socket fault lab as before. To exercise actual fixture workers
+and controller death, build the committed preview image and use the existing
+scoped fresh-image fixture on Tower:
+
+```bash
+image=$(bash scripts/sqlite_preview_release_build.sh)
+bash scripts/sqlite_preview_service_lab.sh "$image" fresh
+```
+
+This creates a new Docker-managed fixture volume and randomly named containers;
+it does not inherit production mounts or touch Unraid templates. Both workers
+use the same accepted fixture image; this is a service/recovery rehearsal, not a
+cross-version compatibility or registry-publication claim. Different source
+revision binding preparation is covered by the separate preparation tests.
+Freshness at production cutover, reviewed registry references, managed-template
+replacement, backup capture and production transaction orchestration still need
+an explicit production implementation and review.

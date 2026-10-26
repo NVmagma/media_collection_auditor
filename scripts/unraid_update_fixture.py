@@ -199,14 +199,16 @@ def main():
     if SOURCE_REVISION != os.environ.get('EXPECTED_REVISION'):
         raise RuntimeError('Matching committed preview image required')
     from scripts.unraid_update_prepare_fixture import ReplacementPrepareTests
+    from scripts.unraid_update_transaction_fixture import UpdateTransactionTests
     suite = unittest.TestSuite([unittest.defaultTestLoader.loadTestsFromTestCase(UnraidUpdateFixtureTests),
-                                unittest.defaultTestLoader.loadTestsFromTestCase(ReplacementPrepareTests)])
+                                unittest.defaultTestLoader.loadTestsFromTestCase(ReplacementPrepareTests),
+                                unittest.defaultTestLoader.loadTestsFromTestCase(UpdateTransactionTests)])
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     if not result.wasSuccessful():
         return 1
     print(json.dumps({'status': 'unraid_update_fixture_verified', 'tests': result.testsRun,
         'fixture_only': True, 'production_authorized': False, 'production_activation': 'disabled',
-        'service_changes_performed': False, 'acceptance_scope': 'template_image_backup_and_replacement_preparation'}))
+        'service_changes_performed': False, 'acceptance_scope': 'backup_preparation_and_fixture_swap_faults'}))
     return 0
 
 

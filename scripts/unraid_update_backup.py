@@ -89,7 +89,9 @@ def capture_current(*, directory, expected_identity, container, templates):
     from app.sqlite_preview_activation import _revision, validate_preview_activation
     from app.state_store import GuardedSQLiteStateStore
     # The checker is pure source code, loaded without shadowing packaged app/profile.
-    review_code = runpy.run_path(str(Path(__file__).resolve().parents[1] / 'app/unraid_update_review.py'))
+    review_path = Path(__file__).resolve().parents[1] / 'app/unraid_update_review.py'
+    if not review_path.is_file(): review_path = Path('/app/app/unraid_update_review.py')
+    review_code = runpy.run_path(str(review_path))
     review = review_code['review_update'](templates=templates, container=container)
     if review['blockers']:
         raise RuntimeError('Matching current template review required')

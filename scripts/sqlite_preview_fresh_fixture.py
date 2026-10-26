@@ -183,7 +183,9 @@ class FreshPreviewTests(unittest.TestCase):
             for item in list(backup_xml.findall("Config[@Type='Port']")):
                 backup_xml.remove(item)
             import runpy
-            review_code = runpy.run_path(str(Path(__file__).resolve().parents[1] / 'app/unraid_update_review.py'))
+            review_path = Path(__file__).resolve().parents[1] / 'app/unraid_update_review.py'
+            if not review_path.is_file(): review_path = Path('/app/app/unraid_update_review.py')
+            review_code = runpy.run_path(str(review_path))
             checked = review_code['review_update'](templates=[('fixture.xml', ET.tostring(backup_xml))], container=backup_current)
             self.assertEqual(checked['blockers'], [], checked)
             with tempfile.TemporaryDirectory(prefix='update-backup.', dir='/lab') as folder:
@@ -211,6 +213,14 @@ class FreshPreviewTests(unittest.TestCase):
                     new_env = dict(line.split('=',1) for line in (new_logs/'runtime.env').read_text().splitlines())
                     validate_preview_activation(settings=new_env)
                     self.assertEqual(json.loads((new_logs/'auditor_config.json').read_bytes()), json.loads(original_config))
+                    from scripts.unraid_update_docker_fixture import run_rehearsal
+                    transaction = run_rehearsal(raw=raw, captured=raw.inspect(container), image=image,
+                        old_env=env, new_env=new_env, destination=Path(destination))
+                    self.assertEqual(transaction['status'], 'actual_fixture_swap_recovery_and_controller_death_verified')
+                    self.assertFalse(transaction['automatic_restoration'])
+                    print(json.dumps(transaction, sort_keys=True))
+                    address = raw.inspect(container)['NetworkSettings']['Networks']['bridge']['IPAddress']
+
                 validate_preview_activation(settings=env)
                 self.assertEqual(GuardedSQLiteStateStore('/sqlite-control/release/state.db').load_with_revision(), original_state)
                 self.assertEqual(Path('/app/logs/auditor_config.json').read_bytes(), original_config)

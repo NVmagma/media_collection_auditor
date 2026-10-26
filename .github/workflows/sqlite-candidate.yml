@@ -16,6 +16,7 @@ on:
       - 'tests/test_unraid_update_plan.py'
       - 'tests/test_unraid_update_backup.py'
       - 'tests/test_unraid_update_prepare.py'
+      - 'tests/test_unraid_update_transaction.py'
       - 'tests/test_unraid_proposed_update_launcher.py'
       - 'tests/test_unraid_update_review.py'
       - 'scripts/sqlite_candidate_*'
