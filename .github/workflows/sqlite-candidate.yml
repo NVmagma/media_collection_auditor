@@ -21,10 +21,13 @@ on:
       - 'scripts/sqlite_preview_install*'
       - 'scripts/sqlite_preview_template*'
       - 'scripts/sqlite_preview_service*'
+      - 'scripts/sqlite_preview_release_request*'
       - 'tests/test_sqlite_preview_cutover.py'
       - 'tests/test_sqlite_preview_install.py'
       - 'tests/test_sqlite_preview_template.py'
       - 'tests/test_sqlite_preview_service.py'
+      - 'tests/test_sqlite_preview_release_request.py'
+      - 'tests/test_sqlite_preview_host_launcher.py'
       - 'requirements.txt'
   workflow_dispatch:
 
@@ -107,6 +110,14 @@ jobs:
         run: |
           image=$(cat "$RUNNER_TEMP/preview-release-image.txt")
           sudo bash scripts/sqlite_preview_service_lab.sh "$image" | tee "$RUNNER_TEMP/preview-service-acceptance.log"
+      - name: Verify real host launcher in read-only selection mode
+        run: |
+          image=$(cat "$RUNNER_TEMP/preview-release-image.txt")
+          packet=$(sudo mktemp -d "$RUNNER_TEMP/host-selection.XXXXXX")
+          python_bin=$(command -v python)
+          selection=$(sudo --preserve-env=PYTHONPATH "$python_bin" -B -m scripts.sqlite_preview_release_request_fixture --packet-directory "$packet" --image-id "$image" --worker-revision "$GITHUB_SHA")
+          sudo bash scripts/sqlite_preview_service_host.sh review "$image" "$packet" "$selection" "$GITHUB_SHA" | tee "$RUNNER_TEMP/preview-host-selection.log"
+          python -B -c 'import json,sys; r=json.load(open(sys.argv[1])); assert r["status"]=="production_release_selection_verified_not_executed"; assert r["service_actions_performed"] is False and r["registry_publication_performed"] is False; print("status=actual_readonly_host_launcher_verified")' "$RUNNER_TEMP/preview-host-selection.log"
       - name: Retain build and acceptance evidence
         uses: actions/upload-artifact@v4
         with:
@@ -124,3 +135,4 @@ jobs:
             ${{ runner.temp }}/private-packet-acceptance.log
             ${{ runner.temp }}/preview-install-acceptance.log
             ${{ runner.temp }}/preview-service-acceptance.log
+            ${{ runner.temp }}/preview-host-selection.log

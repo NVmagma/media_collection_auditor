@@ -1,10 +1,117 @@
-# Scheduled SQLite production cutover — review draft
+# Scheduled SQLite preview production cutover — approval package
 
-**Status: not authorized and not executable as a live cutover.** Gate 10 remains
-open. The current candidate image intentionally refuses SQLite activation. No
-container, share, service, source state, setting or production tag has changed.
+**Status: executable launcher prepared; production execution is not authorized.**
+Gate 10 remains open until the approved cutover and live verification complete.
+The sealed candidate remains sealed. A separately accepted immutable worker image
+supports scheduled preview only. No production service, setting, media or registry
+tag has been changed by this work. Historical sections below record earlier steps;
+the exact initial release selection and launcher procedure follow here.
 
-## Accepted and outstanding evidence
+## Exact initial preview selection
+
+- Private packet: `/mnt/user/sql_test/cutover-review.sSK5fF`.
+- Worker: `sha256:83933b4aa1819ec156f8432f6ac64c234a21a32123de8655c893dd797c8c2db8`;
+  app revision `54372f8b476b8affcb7b51e705bfc5cdbcb39381`.
+- Selection fingerprint:
+  `63613834a4f2e1506fea627be836599dd3cde75182bf8d79a4d0416bd1c438d4`.
+- Original container: `b637b8526244f54852a9a7f22279311e4aa8d7d5a982d701d82234e36d6cca88`.
+  Its immutable image/configuration are pinned through the private packet.
+- Movies only, 02:00 America/Los_Angeles, dry-run preview, cap 10; media/root
+  filesystem read-only. No moves, deletion, pruning, Arr delivery or lifecycle
+  clock advancement is possible in this worker profile. Tracking/coordinator
+  observations remain advisory. Port 8089 and all 53 application environment
+  entries are preserved. Saved settings are frozen until reviewed rebinding.
+- New root-owned 0700 control directory:
+  `/mnt/user/appdata/media_collection_auditor_sqlite_control`.
+  Existing appdata ownership/permissions remain unchanged.
+
+The fingerprint pins all six captured private input hashes, original/preview IDs,
+worker revision, proposed XML hash, repository and schedule/port/library/control
+selection. The request verifier also reconstructs private outputs and effective
+policy. A fingerprint is a selection check, not consent to execute a deployment.
+
+## Host launcher procedure
+
+`scripts/sqlite_preview_service_host.sh` takes an explicit mode, exact worker ID,
+private packet, fingerprint and tested controller commit. The working checkout
+must be `feature/sqlite` at that commit with committed runtime/controller inputs;
+its app tree must match the accepted worker's app tree. Use the full controller
+commit from the passing acceptance workflow and final approved command, not a
+moving branch name. No worker rebuild is needed for script-only integration.
+
+`review` only verifies the private selection through a new network-isolated
+read-only helper. It does not publish, create the control directory, mount a
+Docker socket, access the real template directory or control production services.
+
+After explicit human approval, `deploy` performs this fixed sequence:
+
+1. Verify private inputs and the exact fingerprint. Refuse remote Docker
+   contexts, a changed worker/app tree or any occupied control destination.
+2. Tag and push only the accepted local image to
+   `ghcr.io/nvmagma/media_collection_auditor:sqlite-preview-54372f8b476b-83933b4aa1819ec156f8432f6ac64c234a21a32123de8655c893dd797c8c2db8`.
+   It does not move `latest`, `feature-sqlite` or another existing release tag.
+   Missing registry write credentials fail here before service changes.
+3. Resolve an immutable digest under the same repository and require that local
+   inspection of that digest returns the exact accepted image ID. The service
+   client repeats image/revision/digest verification before its first stop.
+4. Exclusively create the new private control root and start the reviewed
+   transient controller. It validates current original container/config/mount
+   identity and current settings/template bytes before service handoff.
+5. Stop only the auditor; back up fresh stopped-writer JSON and byte-exact saved
+   settings; prepare parity-verified revision-zero SQL; stage settings and bind
+   the frozen preview. JSON tracking is never overwritten with an old snapshot.
+6. Rename/retain the original, create/start the preview, require authenticated
+   preview APIs and unauthenticated 401 responses, then atomically replace only
+   its captured managed Unraid template with the verified digest-bound proposal.
+   Each external intent is durably journaled first. No automatic retry or rollback.
+
+The controller binds its own private packet/control root, existing auditor logs,
+read-only media, Docker socket and the Unraid template directory. Code reads/writes
+only `my-media_collection_auditor.xml` there. DAC_OVERRIDE lets its root process
+stage settings under the existing 99:100-owned logs directory without chmod/chown
+of that directory. CHOWN is not granted to the production controller. Docker
+socket access is a control capability; the code enforces exact selected IDs and
+never stops the daemon, NFS, SMB, mover, other containers or web management.
+
+The original container is retained as
+`media_collection_auditor_rollback_b637b8526244`, stopped with its original
+restart=no configuration. Do not manually reconfigure/start either auditor or
+Apply its Unraid template during the transaction. The approved maintenance
+protocol trusts host administrators to follow this rule.
+
+## Explicit recovery
+
+Use `rollback` with the same worker ID, packet and selection fingerprint and a
+tested controller revision. It reads the retained immutable reference; it never
+tags or publishes. The controller stops the recorded preview, verifies current
+revision-zero SQL parity with retained JSON and absence of pending operations,
+restores exact saved settings/template bytes, archives/retains the stopped
+preview, then restores the original name and starts the original container.
+No container, image or SQL evidence is removed. A lost create acknowledgement
+requires an explicitly reviewed full preview ID as a sixth launcher argument;
+the controller never adopts an arbitrary container by name.
+
+On any failure retain the packet/control artifacts and terminal status. There is
+no automatic restoration. Changed settings/template, a corrupt/incomplete journal,
+advanced/mutated SQL or changed source identity blocks replay/recovery for review.
+Advanced state requires the existing current-state export/inspection procedure;
+never restart JSON from an older tracking backup. After successful deployment,
+verify live summary/audit-status API results and the expected next daily slot
+before closing Gate 10. API `production_activation=preview_only` is expected;
+`production_authorized=false` means media operations remain unauthorized.
+
+## Acceptance of this package
+
+Tower passed the 23 service contract cases and actual scoped Docker/API handoff/
+recovery at controller `e3207f94d7ee360bce6fab16b6200872bae9695d` using the exact
+accepted worker above. Its disposable original was an idle stand-in; real old
+image JSON compatibility was separately verified earlier. The host launcher's
+publication/failure order is covered by command-shim tests with no Docker socket
+or real `/mnt` writes; CI also exercises the actual `review` launcher against a
+new synthetic packet. Registry publication and production deploy/rollback remain
+unexecuted until the explicit final approval.
+
+## Historical development evidence (superseded by the approval package above)
 
 - Scheduled lifecycle/Arr/protection/tracking authority and whole-show TV scope:
   Gates 1–9 accepted. Pruning, permanent deletion and cross-filesystem moves stay

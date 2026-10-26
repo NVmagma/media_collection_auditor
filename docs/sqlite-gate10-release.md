@@ -883,3 +883,25 @@ an independent handle relative to it for the active-iterator/cursor assertion.
 All record-count, ID, hash-chain, cursor-preservation and truncated-list refusal
 assertions remain; no service implementation or worker image change is needed.
 The actual handoff fixture remains unrun on Tower until the contract suite passes.
+
+### Tower service handoff/recovery accepted
+
+Tower completed all 23 contract cases and
+`actual_scoped_service_handoff_recovery_verified` /
+`scoped_preview_service_acceptance_complete` at controller
+`e3207f94d7ee360bce6fab16b6200872bae9695d` using accepted worker
+`sha256:83933b4aa1819ec156f8432f6ac64c234a21a32123de8655c893dd797c8c2db8`.
+Fixture volume `auditor-service-fixture-788e8a3440385605` was new and the fixture
+cleaned up its own resources on success. Original JSON stayed unchanged, the
+private template was restored, the new worker's authenticated API was real, and
+no production container, template, host port or registry publication was changed.
+
+The final host launcher and fingerprint verifier are now implemented. See the
+[approval package](sqlite-production-cutover-runbook.md) for the exact accepted
+worker/packet, 02:00 America/Los_Angeles Movies-only preview, publication target,
+verified digest requirement, retained-original handoff and explicit recovery.
+Host command-shim tests cover read-only review, helper failure propagation,
+publication failure, digest mismatch, occupied control roots, remote contexts,
+correct runtime binds, retained failed attempts and publication-free rollback.
+The package is awaiting complete CI acceptance and explicit human authorization;
+no production execution is implied by these tests or the packet fingerprint.
