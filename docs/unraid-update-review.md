@@ -57,7 +57,7 @@ are distinct operations; use the reviewed update procedure for recreation.
 
 ## Disposable Tower acceptance
 
-The fixture builds a local preview image from committed bytes, then runs six
+The fixture builds a local preview image from committed bytes, then runs eight
 standard-library tests in a new container and a newly marked lab directory.
 It needs no host Python, registry push, GitHub Actions minutes, Docker socket
 mount, production paths or published ports. Static icon delivery is exercised
@@ -73,7 +73,7 @@ container is removed at exit. A successful run ends with
 `status=unraid_update_lab_complete`. This does not validate a production update,
 SQLite rebinding, or DockerMan recreation. GitHub CI remains a separate check.
 
-Local Docker acceptance passed six tests on 2026-10-26. GitHub Actions could not
+Local Docker acceptance passed eight tests on 2026-10-26; the real fresh-preview suite also passed nine tests with binding-review checks. GitHub Actions could not
 start because of its account billing/spending restriction; no CI pass is claimed.
 
 ## Proposed cached-image binding review

@@ -140,3 +140,8 @@ until the production switch is separately approved.
   not a completed safe updater or binding migration. See [usage](unraid-update-review.md).
 - Square transparent app icon prepared; future explicit images serve it without
   credentials. Existing private GitHub asset URLs cannot serve as anonymous icons.
+
+- Proposed cached-image review now checks the packaged preview contract and full
+  existing binding; a changed source revision requires fresh preparation. Local
+  eight-case lab and nine-case fresh-instance acceptance passed. Backup-first
+  update planning and production recreation remain outstanding.

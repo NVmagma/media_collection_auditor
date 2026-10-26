@@ -8,10 +8,12 @@ image=$1
 volumes=$(docker image inspect --format '{{json .Config.Volumes}}' "$image")
 [ "$volumes" = null ] || [ "$volumes" = '{}' ] || { echo 'Image-declared volumes refused.' >&2; exit 2; }
 checkout=$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
-# Fixed internal helper target must not shadow an existing container mount.
-if docker inspect --format '{{range .Mounts}}{{println .Destination}}{{end}}' media_collection_auditor | grep -qx /review-source; then
-  echo 'Reserved review helper target already mounted.' >&2; exit 2
-fi
+# Inherit only the known directory layout; never inherit an unexpected socket
+# or unrelated mount, even when Docker marks that bind read-only.
+mounts=$(docker inspect --format '{{range .Mounts}}{{printf "%s %s\n" .Type .Destination}}{{end}}' media_collection_auditor | sort)
+[ "$mounts" = $'bind /app/logs\nbind /media\nbind /sqlite-control' ] || {
+  echo 'Exactly the reviewed three bind mounts are required.' >&2; exit 2;
+}
 {
   printf '{"containers":'
   docker inspect media_collection_auditor
