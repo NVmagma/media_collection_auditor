@@ -99,6 +99,33 @@ class UnraidUpdateFixtureTests(unittest.TestCase):
         self.assertEqual(report['inventory_errors'], {'xml_parse_failed': 1})
         self.assertEqual(report['matching_template_count'], 1)
 
+    def test_proposed_revision_change_never_reuses_binding(self):
+        from scripts.unraid_update_plan import proposed_update
+        container = {**self.container, 'Image': 'sha256:' + 'a' * 64}
+        image = {'Id': 'sha256:' + 'b' * 64, 'Config': {'Entrypoint': ['python', '-m', 'app.main'],
+            'Cmd': None, 'StopSignal': 'SIGINT', 'Volumes': None, 'Labels': {
+                'org.opencontainers.image.revision': 'c' * 40,
+                'io.media-collection-auditor.sqlite-activation': 'preview-only'}}}
+        result = proposed_update(container=container, image=image, packaged_profile='scheduled-preview-v1',
+            packaged_revision='c' * 40, binding_revision='d' * 40, binding_validation='invalid')
+        self.assertTrue(result['requires_fresh_preparation'])
+        self.assertIn('candidate_source_requires_new_binding', result['blockers'])
+        self.assertFalse(result['candidate_binding_verified'])
+        self.assertFalse(result['update_authorized'])
+
+    def test_actual_candidate_helper_refuses_missing_binding_without_writes(self):
+        before = list(self.root.iterdir())
+        result = subprocess.run([sys.executable, '-B', '-m', 'scripts.unraid_proposed_update_review'],
+            input=json.dumps({'containers': [self.container], 'images': [{'Id': 'sha256:' + 'b' * 64}]}),
+            text=True, capture_output=True, timeout=15)
+        self.assertEqual(result.returncode, 2)
+        report = json.loads(result.stdout)
+        self.assertFalse(report['candidate_binding_verified'])
+        self.assertFalse(report['update_authorized'])
+        self.assertIn('candidate_binding_inputs_unavailable', report['blockers'])
+        self.assertNotIn('fixture-secret-never-print', result.stdout + result.stderr)
+        self.assertEqual(list(self.root.iterdir()), before)
+
     def test_real_http_icon_has_no_login_or_token_requirement(self):
         # Static route only: no scheduler, worker, database or external service.
         import app.web as web

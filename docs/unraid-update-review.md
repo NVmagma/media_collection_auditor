@@ -75,3 +75,28 @@ SQLite rebinding, or DockerMan recreation. GitHub CI remains a separate check.
 
 Local Docker acceptance passed six tests on 2026-10-26. GitHub Actions could not
 start because of its account billing/spending restriction; no CI pass is claimed.
+
+## Proposed cached-image binding review
+
+```bash
+bash scripts/unraid_proposed_update_review.sh sha256:FULL_CACHED_IMAGE_ID
+```
+
+This separately requested read-only diagnostic runs a **new helper container**
+from an explicitly selected cached image. Current auditor volumes are inherited
+read-only, network is disabled, and no Docker socket is mounted. The candidate's
+packaged activation validator receives the current private environment through
+stdin; template values, credentials and binding contents are not printed.
+No image is pulled, no production process is executed or stopped, and no binding
+is created or edited. Do not use an untrusted image with private mounts.
+
+A changed application source revision requires fresh reviewed preparation;
+changing only the Repository field cannot reuse the old release binding.
+Even when revisions match, the complete packaged validator must pass. Changes to
+entrypoint, command, stop signal, declared volumes or preview profile are refused.
+A successful diagnostic still says `update_authorized=false`: registry approval,
+backup-first planning, template review and recreation rehearsal are separate.
+The observation does not protect against concurrent administrator changes.
+
+The disposable lab now includes proposed-update refusal cases. Actual matching
+binding validation is also exercised in the fresh preview container fixture.

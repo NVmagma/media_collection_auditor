@@ -8,6 +8,8 @@ from pathlib import Path
 import re
 import shutil
 import socket
+import subprocess
+import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Thread
 from time import monotonic, sleep
@@ -129,6 +131,23 @@ class FreshPreviewTests(unittest.TestCase):
             verify_http_health(engine=raw,identity=container,env=env)
             observed = raw.inspect(container)
             address = observed['NetworkSettings']['Networks']['bridge']['IPAddress']
+            # Proposed update review uses this image's packaged binding validator.
+            reviewed = subprocess.run([sys.executable, '-B', '-m', 'scripts.unraid_proposed_update_review'],
+                input=json.dumps({'containers': [{**observed, 'Name': '/media_collection_auditor'}],
+                                  'images': [image]}), text=True, capture_output=True, timeout=15)
+            self.assertEqual(reviewed.returncode, 0, reviewed.stdout)
+            review_report = json.loads(reviewed.stdout)
+            self.assertTrue(review_report['candidate_binding_verified'])
+            self.assertFalse(review_report['update_authorized'])
+            wrong_image = json.loads(json.dumps(image))
+            wrong_image['Config']['Labels']['org.opencontainers.image.revision'] = 'f' * 40
+            refused = subprocess.run([sys.executable, '-B', '-m', 'scripts.unraid_proposed_update_review'],
+                input=json.dumps({'containers': [{**observed, 'Name': '/media_collection_auditor'}],
+                                  'images': [wrong_image]}), text=True, capture_output=True, timeout=15)
+            self.assertEqual(refused.returncode, 2)
+            self.assertIn('candidate_preview_profile_unverified', json.loads(refused.stdout)['blockers'])
+            self.assertNotIn(SECRET, reviewed.stdout + refused.stdout)
+
             with closing(http.client.HTTPConnection(address,8080,timeout=5)) as connection:
                 connection.request('GET','/login')
                 response = connection.getresponse()
