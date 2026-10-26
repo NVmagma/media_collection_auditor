@@ -1,5 +1,5 @@
 # Use a slim base image to keep the container small and efficient
-FROM python:3.10-slim
+FROM python:3.12-slim
 
 # Install necessary system packages if needed (e.g., build dependencies)
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential
