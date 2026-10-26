@@ -7,6 +7,48 @@ operations authorized. Live lifecycle moves, permanent deletion, season pruning
 and cross-filesystem moves remain disabled. Historical entries below describe
 the preceding work and do not supersede this final status.
 
+## SQLite preview integration closed — 2026-10-26
+
+The operator confirmed the manual preview control worked, dashboard titles opened
+the correct Jellyfin items, and posters displayed after switching Media display
+to Posters. Homarr's TV-only widget was verified; zero TV Holding records is the
+expected result, not an authentication/transport failure. The operator then
+reported `status=final_sqlite_preview_template_saved`, completing persistence of
+the currently running release's template without restart.
+
+Current accepted application/controller revision:
+`e537ba575294044ce56e4806191d1ba3e3909388`.
+[Actions acceptance/publication 40324296730](https://github.com/NVmagma/media_collection_auditor/actions/runs/40324296730)
+passed 3,361 tests and 82 subtests, plus actual container/admin-request/service-wake
+checks. Current image:
+`ghcr.io/nvmagma/media_collection_auditor@sha256:b0d33893b8e6e989eb8ee619662e19a5a33053a7105d0e359b8dd36b9a9ccf27`.
+Its image ID is `sha256:cdefcbe020241dd524986385d1f5527c01c6ddf00165c7535185b26731ce8b8f`.
+Current private root: `/mnt/user/appdata/media_collection_auditor_fresh.7hxHwC`,
+with `logs` and `control` children. Preparation restored the retained snapshot:
+522 first-seen records (454 Movies, 68 TV), 4 Movie Holding, 13 Movie Keep,
+0 Removal and 0 Arr pending, preserving their prior dates and extensions.
+
+The saved managed template is `my-media_collection_auditor.xml`. DockerMan's
+reviewed `getUserTemplate` selects the first matching internal `<Name>` across
+saved XML files, not necessarily the same-named filename. Tower's observed
+`my-media_archiver.xml` duplicated the internal name and caused Update to restore
+the older image/mounts. The operator moved it outside templates-user to the nFGzhm
+logs as `obsolete-my-media_archiver.xml`, retained the failed container, and
+restored the working service with HTTP 200. The correct XML remained and has now
+been replaced by the 7hxHwC release template, with a backup of its predecessor.
+No later DockerMan recreation is claimed tested; never reintroduce a duplicate
+internal name or substitute latest for the bound immutable release.
+
+Closure is for the scheduled SQLite **preview** integration. SQLite supplies
+tracking; media is read-only; lifecycle moves, Arr delivery, permanent deletion,
+season pruning and cross-filesystem moves remain disabled in the deployed profile.
+Daily schedule remains 02:00 America/Los_Angeles. Run Preview Now is an explicit
+admin-only read-only scan, does not checkpoint clocks or consume the daily claim,
+and has process-local history. A completed live scheduled scan has not separately
+been reported. Keep old data, private packets, templates and stopped rollback
+containers. Live media-action activation, any state-changing production rollout,
+and branch merge remain separate work requiring review/authorization.
+
 ## Final publication, Tower cutover and live verification
 
 - Implementation/controller: `69df31c279e90fd7ddd1ef8fd5a1988824d41477`.

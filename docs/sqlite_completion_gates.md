@@ -4,6 +4,13 @@ This is the fixed-scope checklist for `feature/sqlite`. Do not equate a
 percentage of tests passing with readiness to run SQLite in production.
 A gate is complete only when its acceptance criteria are verified.
 
+**SQLite preview integration closed, 2026-10-26.** The operator accepted manual
+preview scans, Jellyfin links/posters, Homarr TV filtering, retained tracking and
+the current persisted Unraid template. Final release e537ba5 passed Actions
+40324296730 (3,361 tests, 82 subtests and actual manual-request container checks).
+See the [final closure record](sqlite-gate10-release.md#sqlite-preview-integration-closed--2026-10-26).
+This does not enable production media moves/deletion or authorize a branch merge.
+
 **Current scope, approved 2026-10-24:** adopt the
 [scheduled-run contract](sqlite-scheduled-run-contract.md). Gate 6 now targets a
 complete scan before moves, fresh per-move checks, capability-verified same-filesystem
