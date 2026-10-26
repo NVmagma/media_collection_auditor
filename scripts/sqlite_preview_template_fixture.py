@@ -63,6 +63,8 @@ class PreviewTemplateFixtureTests(unittest.TestCase):
         configs = {(item.get('Type'), item.get('Target')): item for item in root.findall('Config')}
         self.assertEqual(root.findtext('Repository'), REFERENCE)
         self.assertEqual(root.findtext('Network'), 'bridge')
+        self.assertEqual(root.findtext('WebUI'), 'http://[IP]:[PORT:8080]/')
+        self.assertEqual(configs['Label', 'net.unraid.docker.webui'].text, root.findtext('WebUI'))
         self.assertEqual(root.findtext('Privileged'), 'false')
         self.assertEqual(root.findtext('Overview'), 'Keep this description')
         self.assertEqual(configs['Path', '/media'].get('Mode'), 'ro')

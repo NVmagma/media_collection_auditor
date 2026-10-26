@@ -163,7 +163,8 @@ def preview_payload(*, captured, image, env, control_host, reference, request_id
         Env=[key + '=' + value for key, value in sorted(runtime_env.items())])
     labels = {key: value for key, value in config.get('Labels', {}).items()
               if not key.startswith(('org.opencontainers.image.', 'io.media-collection-auditor.'))}
-    config['Labels'] = {**image['Config'].get('Labels', {}), **labels, LABEL: request_id}
+    config['Labels'] = {**image['Config'].get('Labels', {}), **labels, LABEL: request_id,
+        'net.unraid.docker.webui': 'http://[IP]:[PORT:' + env.get('WEB_PORT', '8080') + ']/'}
     host.update(Binds=None, ReadonlyRootfs=True, AutoRemove=False,
         RestartPolicy={'Name': 'no', 'MaximumRetryCount': 0}, NetworkMode='bridge',
         Tmpfs={'/tmp': 'rw,noexec,nosuid,nodev,size=64m,mode=1777'})

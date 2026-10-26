@@ -98,3 +98,11 @@ def test_invalid_database_never_falls_back_to_json(tmp_path, kind):
 def test_invalid_hold_policy_rejects_whole_capture(database):
     with pytest.raises(RuntimeError, match='unavailable'):
         capture_candidate_tracking_view(database, holding_days=0)
+
+
+def test_sqlite_tv_filter_preserves_global_summary_and_shared_revision(database):
+    view=capture_candidate_tracking_view(database,library='TV')
+    assert view['summary']['tracking_counts']['waiting']==2
+    assert [item['title'] for item in view['oldest_waiting']['items']]==['B']
+    assert view['leaving_soon']['items']==[]
+    assert view['oldest_waiting']['state_revision']==view['summary']['state_revision']

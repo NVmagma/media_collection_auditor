@@ -64,6 +64,8 @@ class FreshPreviewTests(unittest.TestCase):
         # private volume root; this is fixture layout, not a Tower change.
         for mount in self.case.old[0]['Mounts']: mount['Propagation']='rslave'
         self.case.old[0]['HostConfig']['PortBindings'] = {'8080/tcp':[{'HostIp':'','HostPort':'8089'}]}
+        self.case.state['queued']['TV/Fixture Holding'] = '2024-03-01T00:00:00'
+        self.case.old[0]['Config']['Env'] += ['INTEGRATION_API_TITLE_DETAILS=true','INTEGRATION_API_MEDIA=false']
         self.case.inputs()
         (self.case.root/'original-template.xml').write_text('<Container><Name>media_collection_auditor</Name></Container>')
         self.report = self.case.write()
@@ -82,6 +84,9 @@ class FreshPreviewTests(unittest.TestCase):
         self.assertFalse(result['old_tracking_imported']); self.unchanged()
         state,revision = GuardedSQLiteStateStore('/sqlite-control/release/state.db').load_with_revision()
         self.assertEqual(revision,0); self.assertTrue(all(not value for value in state.values()))
+        self.verify_running_preview()
+
+    def verify_running_preview(self, expected_tv=0):
         env = dict(line.split('=',1) for line in Path('/app/logs/runtime.env').read_text().splitlines())
         self.assertEqual(env['INTEGRATION_API_TOKEN'],SECRET)
         validate_preview_activation(settings=env)
@@ -107,11 +112,38 @@ class FreshPreviewTests(unittest.TestCase):
                 response = connection.getresponse()
                 self.assertEqual(response.status,200)
                 self.assertIn(b'<html',response.read().lower())
+            self.assertEqual(observed['Config']['Labels']['net.unraid.docker.webui'],'http://[IP]:[PORT:8080]/')
+            with closing(http.client.HTTPConnection(address,8080,timeout=5)) as connection:
+                connection.request('GET','/')
+                response=connection.getresponse()
+                self.assertEqual(response.status,302)
+                self.assertEqual(response.getheader('Location'),'/login')
+                response.read()
+            with closing(http.client.HTTPConnection(address,8080,timeout=5)) as connection:
+                connection.request('GET','/api/v1/titles/leaving-soon?library=TV',
+                    headers={'Authorization':'Bearer '+env['INTEGRATION_API_TOKEN']})
+                response=connection.getresponse(); report=json.loads(response.read())
+                self.assertEqual(response.status,200)
+                self.assertEqual(report['library_filter'],'TV')
+                self.assertEqual(report['total_records'],expected_tv)
+                self.assertTrue(all(item['library']=='TV' for item in report['items']))
+                if expected_tv: self.assertEqual(report['items'][0]['since'],'2024-03-01T00:00:00')
             self.assertFalse(next(m['RW'] for m in observed['Mounts'] if m['Destination']=='/media'))
             self.assertTrue(observed['HostConfig']['ReadonlyRootfs'])
             self.unchanged()
         finally:
             raw.request('DELETE','/containers/'+container+'?force=1&v=0',statuses=(204,))
+
+    def test_restore_previous_snapshot_keeps_all_clocks_extensions_and_tv_records(self):
+        state=json.loads(self.before['source-observed.json'])
+        result=fresh.prepare(**self.kwargs,tracking_mode='restore-previous')
+        self.assertTrue(result['old_tracking_imported'])
+        actual,revision=GuardedSQLiteStateStore('/sqlite-control/release/state.db').load_with_revision()
+        self.assertEqual(actual,state); self.assertEqual(revision,0)
+        self.assertEqual(actual['keep_seen']['TV/Fixture Show'],'2024-02-01T00:00:00')
+        self.assertEqual(actual['unknown'],state['unknown'])
+        self.unchanged()
+        self.verify_running_preview(expected_tv=1)
 
     def test_occupied_logs_never_overwritten(self):
         Path('/app/logs/retained').write_bytes(b'keep')

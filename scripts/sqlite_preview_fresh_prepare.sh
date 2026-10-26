@@ -2,10 +2,12 @@
 # Prepare new files only. No production container, template or old data changes.
 set -euo pipefail
 umask 077
-[ "$(uname -s)" = Linux ] && [ "$(id -u)" = 0 ] && [ "$#" = 4 ] || {
-  echo 'Usage (Tower root): bash SCRIPT PUBLISHED_DIGEST PRIOR_PACKET PRIOR_FINGERPRINT EXISTING_APPDATA_PARENT' >&2; exit 2;
+[ "$(uname -s)" = Linux ] && [ "$(id -u)" = 0 ] && { [ "$#" = 4 ] || [ "$#" = 5 ]; } || {
+  echo 'Usage (Tower root): bash SCRIPT PUBLISHED_DIGEST PRIOR_PACKET PRIOR_FINGERPRINT EXISTING_APPDATA_PARENT [empty|restore-previous]' >&2; exit 2;
 }
 reference=$1 packet=$2 fingerprint=$3 base=$4
+tracking_mode=${5:-empty}
+[[ "$tracking_mode" = empty || "$tracking_mode" = restore-previous ]] || exit 2
 [[ "$reference" =~ ^ghcr\.io/nvmagma/media_collection_auditor@sha256:[0-9a-f]{64}$ && "$fingerprint" =~ ^[0-9a-f]{64}$ ]] || exit 2
 for directory in "$packet" "$base"; do
   [[ "$directory" = /* && ! "$directory" =~ [[:cntrl:],] && -d "$directory" && ! -L "$directory" ]] || exit 2
@@ -47,7 +49,8 @@ control_identity=$(stat -Lc '%d:%i' "$root/control")
     'import io,sys,tarfile,subprocess; tarfile.open(fileobj=io.BytesIO(sys.stdin.buffer.read()),mode="r:").extractall("/tools",filter="data"); subprocess.run([sys.executable,"-B","-m","scripts.sqlite_preview_fresh",*sys.argv[1:]],check=True)' \
     --packet /packet --packet-identity "$packet_identity" --fingerprint "$fingerprint" \
     --logs-identity "$logs_identity" --control-identity "$control_identity" \
-    --host-logs "$root/logs" --host-control "$root/control" --image-id "$image" --reference "$reference"
+    --host-logs "$root/logs" --host-control "$root/control" --image-id "$image" --reference "$reference" \
+    --tracking-mode "$tracking_mode"
 [ ! -L "$packet" ] && [ "$(stat -Lc '%d:%i' "$packet")" = "$packet_identity" ] || exit 1
 printf '%s\n' 'status=fresh_sqlite_files_ready_not_started' 'existing_services_changed=false' \
   'Old appdata, SQLite state, rollback containers and Unraid templates were not changed.' \

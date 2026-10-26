@@ -71,12 +71,12 @@ def audit_status_report(current):
     return report
 
 
-def read_tracking_titles(path, view, *, holding_days=7):
+def read_tracking_titles(path, view, *, holding_days=7, library=None):
     return _project_tracking_titles(lambda: read_json_dashboard_snapshot(path, require_existing=True),
-                                    view, holding_days=holding_days)
+                                    view, holding_days=holding_days, library_filter=library)
 
 
-def _project_tracking_titles(capture, view, *, holding_days=7):
+def _project_tracking_titles(capture, view, *, holding_days=7, library_filter=None):
     """Bounded opt-in title projection from one JSON read, without collection.
 
     Legacy timestamps are local wall time without an offset. Preserve that
@@ -90,6 +90,9 @@ def _project_tracking_titles(capture, view, *, holding_days=7):
               "total_records": None, "truncated": None}
     if view not in ("oldest-waiting", "leaving-soon"):
         raise ValueError("Unknown title view")
+    if library_filter not in (None, 'Movies', 'TV'):
+        raise ValueError('Unknown library filter')
+    if library_filter is not None: report['library_filter'] = library_filter
     try:
         if type(holding_days) is not int or not 1 <= holding_days <= 36500:
             return report
@@ -102,6 +105,8 @@ def _project_tracking_titles(capture, view, *, holding_days=7):
                     key in state.get(other, {}) for other in ("queued", "keep_seen", "in_removal")):
                 continue
             library = "TV" if key.startswith("TV/") else "Movies"
+            if library_filter is not None and library != library_filter:
+                continue
             title = key[3:] if library == "TV" else key
             # State extensions or malformed keys must never leak raw paths.
             if (not title or len(title) > 250 or title in (".", "..")
@@ -264,24 +269,25 @@ def _preview_metadata():
     return {}
 
 
-def _selected_report(path, view, holding_days):
+def _selected_report(path, view, holding_days, library=None):
+    options = {} if library is None else {"library": library}
     backend = os.environ.get('AUDITOR_STATE_BACKEND', 'json')
     if backend == 'json':
-        return read_tracking_status(path) if view == 'summary' else read_tracking_titles(path, view, holding_days=holding_days)
+        return read_tracking_status(path) if view == 'summary' else read_tracking_titles(path, view, holding_days=holding_days, **options)
     try:
         if backend != 'sqlite':
             raise RuntimeError('Unsupported backend')
         _require_sqlite_authority()
         from app.sqlite_tracking_view import capture_candidate_tracking_view
         report = capture_candidate_tracking_view(os.environ.get('SQLITE_STATE_FILE',
-            '/app/logs/sqlite_worker/state.db'), holding_days=holding_days)[
+            '/app/logs/sqlite_worker/state.db'), holding_days=holding_days, **options)[
                 {'summary': 'summary', 'oldest-waiting': 'oldest_waiting', 'leaving-soon': 'leaving_soon'}[view]]
         if _preview_metadata():
             _require_sqlite_authority()  # Do not project an intervening unbound snapshot.
         return {**report, 'storage_authority': 'sqlite', **_preview_metadata()}
     except RuntimeError:
         report = (_project_tracking_status(_unavailable) if view == 'summary' else
-                  _project_tracking_titles(_unavailable, view, holding_days=holding_days))
+                  _project_tracking_titles(_unavailable, view, holding_days=holding_days, library_filter=library))
         return {**report, 'storage_authority': 'sqlite' if backend == 'sqlite' else 'unavailable',
                 'state_revision': None}
 
@@ -290,10 +296,10 @@ def read_selected_tracking_status(path):
     return _selected_report(path, 'summary', 7)
 
 
-def read_selected_tracking_titles(path, view, *, holding_days=7):
+def read_selected_tracking_titles(path, view, *, holding_days=7, library=None):
     if view not in ('oldest-waiting', 'leaving-soon'):
         raise ValueError('Unknown title view')
-    return _selected_report(path, view, holding_days)
+    return _selected_report(path, view, holding_days, library)
 
 
 def read_selected_dashboard_state(path):

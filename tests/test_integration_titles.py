@@ -138,3 +138,32 @@ def test_unapproved_sqlite_titles_never_fall_back_to_json(api, monkeypatch, view
     assert response.json['items'] is None
     assert 'private-title' not in response.text
     assert path.read_bytes() == original
+
+
+def test_library_filter_applies_before_ten_record_limit(tmp_path):
+    path=tmp_path/'state.json'
+    state={'queued':{**{f'Movie {n:02}':'2024-01-01' for n in range(20)},
+                     'TV/Series A':'2024-02-01'}}
+    path.write_text(json.dumps(state)); before=path.read_bytes()
+    result=read_tracking_titles(path,'leaving-soon',library='TV')
+    assert result['library_filter']=='TV' and result['total_records']==1
+    assert result['truncated'] is False and result['items'][0]['title']=='Series A'
+    assert result['items'][0]['transition_authorized'] is False
+    assert path.read_bytes()==before
+
+
+@pytest.mark.parametrize('query',['library=TV','library=Movies'])
+def test_authenticated_library_filter_route(api,monkeypatch,query):
+    client,path=api
+    monkeypatch.setenv('INTEGRATION_API_TITLE_DETAILS','true')
+    path.write_text(json.dumps({'queued':{'Movie':'2024-01-01','TV/Series':'2024-01-02'}}))
+    response=client.get('/api/v1/titles/leaving-soon?'+query,headers=AUTH)
+    assert response.status_code==200
+    assert response.json['total_records']==1
+    assert response.json['items'][0]['library']==query.split('=')[1]
+
+
+@pytest.mark.parametrize('query',['library=invalid','library=','library=TV&library=Movies'])
+def test_invalid_library_filter_is_refused(api,monkeypatch,query):
+    client,_=api; monkeypatch.setenv('INTEGRATION_API_TITLE_DETAILS','true')
+    assert client.get('/api/v1/titles/leaving-soon?'+query,headers=AUTH).status_code==400

@@ -59,13 +59,13 @@ def capture_candidate_dashboard_state(database):
     return state
 
 
-def capture_candidate_tracking_view(database, *, holding_days=7):
+def capture_candidate_tracking_view(database, *, holding_days=7, library=None):
     """All fixed-schema API projections share one exact database revision."""
     with _candidate_capture(database) as snapshot:
         reports = {
             'summary': _project_tracking_status(lambda: snapshot),
-            'oldest_waiting': _project_tracking_titles(lambda: snapshot, 'oldest-waiting', holding_days=holding_days),
-            'leaving_soon': _project_tracking_titles(lambda: snapshot, 'leaving-soon', holding_days=holding_days),
+            'oldest_waiting': _project_tracking_titles(lambda: snapshot, 'oldest-waiting', holding_days=holding_days, library_filter=library),
+            'leaving_soon': _project_tracking_titles(lambda: snapshot, 'leaving-soon', holding_days=holding_days, library_filter=library),
         }
         if any(report['status'] == 'unavailable' for report in reports.values()):
             raise RuntimeError('Tracking projection unavailable')

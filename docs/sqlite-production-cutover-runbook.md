@@ -462,3 +462,25 @@ recreation has not been tested on Tower; template persistence alone is not that
 acceptance claim. Existing saved configuration
 and policy are frozen by the preview binding. The original service journal belongs
 to the first deployment and is not a recovery journal for this fresh instance.
+
+
+### Dashboard shortcuts, title links and retained tracking restoration
+
+The running fresh container lacked the `net.unraid.docker.webui` Docker label;
+a persisted XML WebUI field alone does not add it to an existing container.
+The preview recipe and service payload now supply the root WebUI label, and the
+rendered Unraid template includes the matching label for later recreations.
+The root route already redirects anonymous visitors to `/login`; actual-image
+acceptance now verifies that redirect. Dashboard table/poster titles link through
+the authenticated Jellyfin route; its display-title/year fallback regex is fixed.
+
+After observing empty Homarr lists, the operator explicitly chose to restore
+previous tracking records and clocks. `sqlite_preview_fresh_prepare.sh` accepts
+an optional fifth argument `restore-previous`. It validates the prior private
+packet and the retained source digest, imports that entire snapshot (including
+extensions and TV-prefixed records) into NEW private files, and uses the existing
+parity/binding preparation. It does not overwrite either old deployment, invent
+missing timestamps, enable TV moves, or write media. The redacted result includes
+counts split by library to establish whether prior TV holding records exist.
+The corrected image and restored preview need fresh startup verification and
+matching template installation before reporting this follow-up complete.

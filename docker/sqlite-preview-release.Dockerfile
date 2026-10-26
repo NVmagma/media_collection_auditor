@@ -14,7 +14,8 @@ RUN python -c 'import os,re; from pathlib import Path; revision=os.environ["SOUR
 RUN WEB_SESSION_SECRET=build-only-candidate-import-check python -c "import app.main, app.sqlite_scheduled_service, app.sqlite_scheduled_production, app.sqlite_tracking_view, app.sqlite_scheduled_observations; from app.sqlite_release_profile import PROFILE; assert PROFILE == 'scheduled-preview-v1'; from app.sqlite_backend_gate import require_sqlite_production_activation; from unittest import TestCase; TestCase().assertRaises(RuntimeError, require_sqlite_production_activation)"
 LABEL org.opencontainers.image.revision="${SOURCE_REVISION}" \
       org.opencontainers.image.title="Media Collection Auditor SQLite scheduled preview" \
-      io.media-collection-auditor.sqlite-activation="preview-only"
+      io.media-collection-auditor.sqlite-activation="preview-only" \
+      net.unraid.docker.webui="http://[IP]:[PORT:8080]/"
 STOPSIGNAL SIGINT
 EXPOSE 8080
 ENTRYPOINT ["python", "-m", "app.main"]

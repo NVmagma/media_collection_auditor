@@ -81,7 +81,9 @@ def render_preview_template(*, original, env, plan, review):
     field('Registry', 'https://ghcr.io/')
     field('Network', 'bridge' if review['network_mode'] == 'default' else review['network_mode'])
     field('Privileged', 'false'); field('PostArgs', ''); field('CPUset', ''); field('Memory', ''); field('MyIP', '')
-    field('WebUI', 'http://[IP]:[PORT:' + env.get('WEB_PORT', '8080') + ']/')
+    webui = 'http://[IP]:[PORT:' + env.get('WEB_PORT', '8080') + ']/'
+    field('WebUI', webui)
+    webui_label_seen = False
     args = plan.get('create_argv_template')
     if not isinstance(args, list) or args[0] != 'create' or args[-1] != review['preview_image_id']:
         raise TemplateReviewBlocked('reviewed_create_arguments_required')
@@ -106,6 +108,9 @@ def render_preview_template(*, original, env, plan, review):
         elif arg.startswith('--label='):
             key, separator, value = arg[len('--label='):].partition('=')
             if not separator: raise TemplateReviewBlocked('invalid_template_label')
+            if key == 'net.unraid.docker.webui':
+                value = webui
+                webui_label_seen = True
             config('Label', key, value)
         else:
             if not arg.startswith(('--pull=', '--user=', '--restart=', '--read-only', '--tmpfs=',
@@ -117,6 +122,8 @@ def render_preview_template(*, original, env, plan, review):
             extra.append(arg)
     if destinations != {'/media', '/app/logs', '/sqlite-control'}:
         raise TemplateReviewBlocked('complete_template_bind_layout_required')
+    if not webui_label_seen:
+        config('Label', 'net.unraid.docker.webui', webui)
     ports = set()
     for item in review['published_ports']:
         if item['host_ip'] not in ('', '0.0.0.0'):

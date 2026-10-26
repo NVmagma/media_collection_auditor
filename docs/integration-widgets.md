@@ -225,3 +225,28 @@ characters; it performs no timezone conversion, date parsing or browser-local
 reinterpretation. Seconds/fractions are hidden, and absent timestamps display
 “Unknown”. Both full import definitions contain the same JSX as the separate
 editor fragments. Updating a widget template requires no container update.
+
+
+## Separate TV leaving-soon widget
+
+The combined leaving-soon endpoint includes both Movies and TV tracking records.
+Use `/api/v1/titles/leaving-soon?library=TV` for a separate TV list, or
+`?library=Movies` for a movie-only list. Filtering occurs before the ten-record
+limit, so movie entries cannot hide the first TV item. Invalid or repeated library
+filters return HTTP 400. Authentication and title-detail opt-in still apply.
+
+TV examples are `examples/integrations/homarr-tv-leaving-soon-requests.example.json`,
+`homarr-tv-leaving-soon-template.example.jsx`, and
+`homarr-tv-leaving-soon-widget.example.json`. Use the same Auditor base URL and
+private integration token as the existing widgets. The TV template requires
+`library_filter=TV`, preserves clickable posters, and shows advisory Holding to
+Removal dates. It does not enable TV lifecycle operations or season pruning.
+No TV holding records means no tracked TV items for this view; the widget does
+not fabricate missing dates or infer tracking merely from folders.
+
+A newly initialized empty SQLite preview has no title records even when the
+folder-based dashboard shows media. Preview scans do not persist discovery clocks.
+An explicitly reviewed initialization/import is needed to populate tracking.
+The operator chose to restore the retained prior tracking records and dates,
+including any TV records, into a new private preview root. This preserves old
+clocks; it is not a new-clock scan or automatic adoption of live folder changes.

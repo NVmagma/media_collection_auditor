@@ -198,6 +198,10 @@ def _integration_title_media(report):
 def integration_titles(view):
     if os.environ.get("INTEGRATION_API_TITLE_DETAILS", "false").lower() != "true":
         return {"status": "disabled"}, 404
+    library = request.args.get('library')
+    if library not in (None, 'Movies', 'TV') or len(request.args.getlist('library')) > 1:
+        return {'status': 'invalid_library'}, 400
+    options = {} if library is None else {'library': library}
     days = 7
     if view == "leaving-soon":
         config = load_config()
@@ -205,7 +209,7 @@ def integration_titles(view):
             days = max(1, int(config.get("HOLDING_DAYS", os.environ.get("HOLDING_DAYS", "7"))))
         except (ValueError, TypeError):
             days = 0
-    report = _integration_title_media(read_tracking_titles(STATE_FILE, view, holding_days=days))
+    report = _integration_title_media(read_tracking_titles(STATE_FILE, view, holding_days=days, **options))
     return report, 503 if report["status"] == "unavailable" else 200
 
 
@@ -582,7 +586,7 @@ def _jellyfin_item_id(title, library):
     media_type = "Movie" if library == "Movies" else "Series"
     index = _poster_index(base, token, media_type)
     normalized = title.casefold()
-    display_name = re.sub(r"\\s*\\(\\d{4}\\)\\s*$", "", title).strip().casefold()
+    display_name = re.sub(r"\s*\(\d{4}\)\s*$", "", title).strip().casefold()
     item_id = (index.get(normalized) or index.get("name:" + normalized)
                or index.get("name:" + display_name))
     return base, item_id
