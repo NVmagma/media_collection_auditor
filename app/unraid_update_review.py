@@ -15,6 +15,29 @@ class InventoryFormatError(ValueError):
     """Only fixed diagnostic codes, never private XML/parser exception text."""
 
 
+def declaration_diagnostics(raw):
+    """Classify only; never return declaration names, URLs or XML contents.
+
+    These hints cannot make a refused document eligible for parsing.
+    """
+    if not isinstance(raw, bytes):
+        return {'input_kind': 'unsupported'}
+    match = re.search(br'<!DOCTYPE\s+([A-Za-z_][A-Za-z0-9_.:-]*)\s*', raw, re.I)
+    result = {'size_limit_exceeded': len(raw) > LIMIT,
+              'entity_present': b'<!ENTITY' in raw.upper()}
+    if match:
+        root = match.group(1).lower()
+        result['doctype_root_kind'] = root.decode('ascii') if root in (b'html', b'container', b'containers') else 'other'
+        tail = raw[match.end():].lstrip()
+        result['doctype_form'] = ('system' if re.match(br'SYSTEM\b', tail, re.I) else
+                                  'public' if re.match(br'PUBLIC\b', tail, re.I) else
+                                  'internal_subset' if tail.startswith(b'[') else
+                                  'simple' if tail.startswith(b'>') else 'unrecognized')
+    else:
+        result['doctype_root_kind'] = 'unrecognized' if b'<!DOCTYPE' in raw.upper() else 'absent'
+    return result
+
+
 def parse_template(raw):
     if (not isinstance(raw, bytes) or len(raw) > LIMIT
             or b'<!DOCTYPE' in raw.upper() or b'<!ENTITY' in raw.upper()):
@@ -46,13 +69,15 @@ def review_update(*, templates, container):
               'binding_verified': False, 'status': 'review_required'}
     stage = 'template_inventory'
     try:
-        matches, errors = [], {}
+        matches, errors, declarations = [], {}, []
         for _, raw in templates:
             try:
                 root = parse_template(raw)
             except InventoryFormatError as error:
                 code = str(error)  # This class is constructed only with fixed codes above.
                 errors[code] = errors.get(code, 0) + 1
+                if code == 'xml_size_or_declaration_unsupported':
+                    declarations.append(declaration_diagnostics(raw))
                 continue
             if root.findtext('Name') == NAME:
                 matches.append(root)
@@ -60,6 +85,8 @@ def review_update(*, templates, container):
         report['matching_template_count'] = len(matches)
         if errors:
             report['inventory_errors'] = errors
+            if declarations:
+                report['declaration_diagnostics'] = declarations
             report['diagnostic_stage'] = stage
             report['blockers'] = ['inventory_unreadable_or_unsupported']
             report['warnings'] = []

@@ -126,3 +126,17 @@ def test_runtime_failure_identifies_stage_without_private_exception_message():
     result = review(root, container)
     assert result['diagnostic_stage'] == 'template_extra_arguments'
     assert SECRET not in json.dumps(result)
+
+
+def test_external_doctype_classification_never_returns_identifier_or_private_name():
+    root, container = fixture()
+    for declaration, expected in (
+        (b'<!DOCTYPE html PUBLIC "private-identifier" "https://private.invalid/secret">', ('html', 'public')),
+        (b'<!DOCTYPE Container SYSTEM "file:///private/secret">', ('container', 'system')),
+        (b'<!DOCTYPE private-secret [ ]>', ('other', 'internal_subset')),
+    ):
+        result = review(root, container, [('untrusted.xml', declaration + b'<Container><Name>other</Name></Container>')])
+        diagnostic = result['declaration_diagnostics'][0]
+        assert (diagnostic['doctype_root_kind'], diagnostic['doctype_form']) == expected
+        assert result['status'] == 'review_required' and result['update_authorized'] is False
+        assert 'private' not in json.dumps(result) and 'secret' not in json.dumps(result)
