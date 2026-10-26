@@ -3,10 +3,12 @@
 # its recorded IDs/new lab mounts; no production service name is used by Docker.
 set -euo pipefail
 umask 077
-[ "$(uname -s)" = Linux ] && [ "$(id -u)" = 0 ] && [ "$#" = 1 ] || {
-  echo 'Run on the Linux Docker host as root: bash SCRIPT ACCEPTED_PREVIEW_IMAGE_ID' >&2; exit 2;
+[ "$(uname -s)" = Linux ] && [ "$(id -u)" = 0 ] && { [ "$#" = 1 ] || [ "$#" = 2 ]; } || {
+  echo 'Run on the Linux Docker host as root: bash SCRIPT ACCEPTED_PREVIEW_IMAGE_ID [service|fresh]' >&2; exit 2;
 }
 image=$1
+fixture_mode=${2:-service}
+[[ "$fixture_mode" = service || "$fixture_mode" = fresh ]] || exit 2
 [[ "$image" =~ ^sha256:[0-9a-f]{64}$ ]] || exit 2
 checkout=$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 cd -- "$checkout"
@@ -59,10 +61,10 @@ container=$(docker create --pull=never --network bridge --read-only --user 0:0 -
   --mount "type=volume,src=$volume,dst=/lab" --mount "type=bind,src=$lab/packet,dst=/packet" \
   --mount "type=bind,src=$lab/logs,dst=/app/logs" --mount "type=bind,src=$lab/control,dst=/sqlite-control" \
   --mount "type=bind,src=$lab/media,dst=/media,readonly" --mount "type=bind,src=$lab/templates,dst=/unraid-templates" \
-  --env TMPDIR=/lab --env "EXPECTED_RELEASE_REVISION=$revision" --env "EXPECTED_CONTROLLER_REVISION=$controller_revision" \
+  --env "FIXTURE_MODE=$fixture_mode" --env TMPDIR=/lab --env "EXPECTED_RELEASE_REVISION=$revision" --env "EXPECTED_CONTROLLER_REVISION=$controller_revision" \
   --env "EXPECTED_PREVIEW_IMAGE=$image" --env "EXPECTED_DAEMON_ID=$daemon" --env "HOST_FIXTURE_ROOT=$lab" \
   --env PYTHONPATH=/tools:/app:/app/app --interactive --workdir /tools --entrypoint python "$image" -B -c \
-  'import io,os,sys,tarfile,subprocess,tempfile; assert os.stat("/lab").st_uid==0 and tempfile.gettempdir()=="/lab"; tarfile.open(fileobj=io.BytesIO(sys.stdin.buffer.read()),mode="r:").extractall("/tools",filter="data"); subprocess.run([sys.executable,"-B","-m","scripts.sqlite_preview_service_fixture"],check=True,timeout=60); subprocess.run([sys.executable,"-B","-m","scripts.sqlite_preview_service_docker_fixture"],check=True,timeout=180)')
+  'import io,os,sys,tarfile,subprocess,tempfile; assert os.stat("/lab").st_uid==0 and tempfile.gettempdir()=="/lab"; tarfile.open(fileobj=io.BytesIO(sys.stdin.buffer.read()),mode="r:").extractall("/tools",filter="data"); modules=("scripts.sqlite_preview_fresh_fixture",) if os.environ["FIXTURE_MODE"]=="fresh" else ("scripts.sqlite_preview_service_fixture","scripts.sqlite_preview_service_docker_fixture"); [subprocess.run([sys.executable,"-B","-m",module],check=True,timeout=180) for module in modules]')
 [[ "$container" =~ ^[0-9a-f]{64}$ ]] || exit 2
 cleanup() { [ -z "$container" ] || docker rm --force "$container" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
@@ -72,6 +74,7 @@ cleanup
 container=''
 [ "$(docker volume inspect --format '{{index .Labels "io.media-collection-auditor.service-fixture"}}' "$volume")" = "$nonce" ] || exit 1
 docker volume rm "$volume" >/dev/null
+printf 'fixture_mode=%s\n' "$fixture_mode"
 printf '%s\n' 'status=scoped_preview_service_acceptance_complete' 'fixture_only=true' \
   'production_authorized=false' 'registry_publication_performed=false' 'host_ports_published=false' \
   'Only new fixture containers/files were used; existing auditor and Unraid templates unchanged.'

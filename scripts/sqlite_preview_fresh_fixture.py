@@ -1,0 +1,133 @@
+"""Fresh preview acceptance on explicitly marked disposable Docker volume binds."""
+from contextlib import closing
+import hashlib
+import http.client
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import unittest
+from unittest.mock import patch
+
+from app.sqlite_preview_activation import validate_preview_activation
+from app.state_store import GuardedSQLiteStateStore
+from scripts import sqlite_preview_fresh as fresh
+from scripts.sqlite_preview_cutover_fixture import PreviewCutoverFixtureTests, SECRET
+from scripts.sqlite_preview_release_request import fingerprint
+from scripts.sqlite_preview_service import Docker, preview_payload, verify_http_health
+
+REFERENCE = 'ghcr.io/nvmagma/media_collection_auditor@sha256:'+'9'*64
+
+
+def identity(path):
+    info = Path(path).stat(); return info.st_dev, info.st_ino
+
+
+def assert_fixture():
+    root = os.environ.get('HOST_FIXTURE_ROOT','')
+    if not re.fullmatch('/var/lib/docker/volumes/auditor-service-fixture-[0-9a-f]{16}/_data',root):
+        raise RuntimeError('Explicit new local fixture volume required')
+    for name,path in (('packet','/packet'),('logs','/app/logs'),('control','/sqlite-control')):
+        if identity('/lab/'+name) != identity(path): raise RuntimeError('Disposable bind identity mismatch')
+
+
+class FreshPreviewTests(unittest.TestCase):
+    def setUp(self):
+        assert_fixture()
+        for directory in ('/packet','/app/logs','/sqlite-control'):
+            for item in Path(directory).iterdir():
+                if item.is_dir() and not item.is_symlink(): shutil.rmtree(item)
+                else: item.unlink()
+        self.case = PreviewCutoverFixtureTests(); self.case.setUp(); self.addCleanup(self.case.doCleanups)
+        self.case.root = Path('/packet')
+        self.case.old[0]['HostConfig']['PortBindings'] = {'8080/tcp':[{'HostIp':'','HostPort':'8089'}]}
+        self.case.inputs()
+        (self.case.root/'original-template.xml').write_text('<Container><Name>media_collection_auditor</Name></Container>')
+        self.report = self.case.write()
+        self.before = {p.name:p.read_bytes() for p in self.case.root.iterdir()}
+        self.kwargs = dict(packet=self.case.root,packet_identity=identity(self.case.root),
+            expected_fingerprint=fingerprint(self.report), logs=Path('/app/logs'), logs_identity=identity('/app/logs'),
+            control=Path('/sqlite-control'),control_identity=identity('/sqlite-control'),
+            host_logs=os.environ['HOST_FIXTURE_ROOT']+'/logs',host_control=os.environ['HOST_FIXTURE_ROOT']+'/control',
+            image_id=os.environ['EXPECTED_PREVIEW_IMAGE'],reference=REFERENCE)
+
+    def unchanged(self):
+        self.assertEqual({p.name:p.read_bytes() for p in self.case.root.iterdir()},self.before)
+
+    def test_fresh_sqlite_actual_frontend_and_authenticated_api(self):
+        result = fresh.prepare(**self.kwargs)
+        self.assertFalse(result['old_tracking_imported']); self.unchanged()
+        state,revision = GuardedSQLiteStateStore('/sqlite-control/release/state.db').load_with_revision()
+        self.assertEqual(revision,0); self.assertTrue(all(not value for value in state.values()))
+        env = dict(line.split('=',1) for line in Path('/app/logs/runtime.env').read_text().splitlines())
+        self.assertEqual(env['INTEGRATION_API_TOKEN'],SECRET)
+        validate_preview_activation(settings=env)
+        xml = Path('/app/logs/fresh-template.xml').read_text()
+        self.assertIn('/sqlite-control',xml); self.assertIn('Mode="ro"',xml)
+        raw = Docker(endpoint='/docker-engine.sock',expected_daemon=os.environ['EXPECTED_DAEMON_ID'])
+        original = self.case.old[0]
+        for mount in original['Mounts']:
+            mount['Source'] = os.environ['HOST_FIXTURE_ROOT']+('/media' if mount['Destination']=='/media' else '/logs')
+        original['HostConfig']['PortBindings'] = {}
+        image = raw.image(self.kwargs['image_id'])
+        payload = preview_payload(captured=original,image=image,env=env,
+            control_host=self.kwargs['host_control'],reference=self.kwargs['image_id'],request_id='8'*64)
+        name = 'auditor-fresh-fixture-'+os.urandom(8).hex()
+        container = raw.create(name,payload)
+        try:
+            raw.start(container)
+            verify_http_health(engine=raw,identity=container,env=env)
+            observed = raw.inspect(container)
+            address = observed['NetworkSettings']['Networks']['bridge']['IPAddress']
+            with closing(http.client.HTTPConnection(address,8080,timeout=5)) as connection:
+                connection.request('GET','/login')
+                response = connection.getresponse()
+                self.assertEqual(response.status,200)
+                self.assertIn(b'<html',response.read().lower())
+            self.assertFalse(next(m['RW'] for m in observed['Mounts'] if m['Destination']=='/media'))
+            self.assertTrue(observed['HostConfig']['ReadonlyRootfs'])
+            self.unchanged()
+        finally:
+            raw.request('DELETE','/containers/'+container+'?force=1&v=0',statuses=(204,))
+
+    def test_occupied_logs_never_overwritten(self):
+        Path('/app/logs/retained').write_bytes(b'keep')
+        with self.assertRaises(RuntimeError): fresh.prepare(**self.kwargs)
+        self.assertEqual(Path('/app/logs/retained').read_bytes(),b'keep')
+        self.assertEqual(list(Path('/sqlite-control').iterdir()),[]); self.unchanged()
+
+    def test_occupied_control_never_overwritten(self):
+        Path('/sqlite-control/retained').write_bytes(b'keep')
+        with self.assertRaises(RuntimeError): fresh.prepare(**self.kwargs)
+        self.assertEqual(Path('/sqlite-control/retained').read_bytes(),b'keep')
+        self.assertEqual(list(Path('/app/logs').iterdir()),[]); self.unchanged()
+
+    def test_wrong_settings_selection_never_writes(self):
+        with self.assertRaises(RuntimeError): fresh.prepare(**{**self.kwargs,'expected_fingerprint':'0'*64})
+        self.assertEqual(list(Path('/app/logs').iterdir()),[]); self.unchanged()
+
+    def test_changed_private_input_never_writes(self):
+        Path('/packet/original-config.json').write_text('{}')
+        with self.assertRaises(RuntimeError): fresh.prepare(**self.kwargs)
+        self.assertEqual(list(Path('/app/logs').iterdir()),[])
+
+    def test_changed_generated_environment_never_writes(self):
+        with Path('/packet/preview.env').open('ab') as file: file.write(b'DRY_RUN=false\n')
+        with self.assertRaises(RuntimeError): fresh.prepare(**self.kwargs)
+        self.assertEqual(list(Path('/app/logs').iterdir()),[])
+
+    def test_partial_preparation_is_retained_and_not_replayed(self):
+        with patch.object(fresh,'stage_preview',side_effect=RuntimeError('fixture interruption')):
+            with self.assertRaises(RuntimeError): fresh.prepare(**self.kwargs)
+        before = {p.name:p.read_bytes() for p in Path('/app/logs').iterdir()}
+        with self.assertRaises(RuntimeError): fresh.prepare(**self.kwargs)
+        self.assertEqual({p.name:p.read_bytes() for p in Path('/app/logs').iterdir()},before); self.unchanged()
+
+    def test_unapproved_repository_never_writes(self):
+        with self.assertRaises(RuntimeError): fresh.prepare(**{**self.kwargs,'reference':'elsewhere.invalid:latest'})
+        self.assertEqual(list(Path('/app/logs').iterdir()),[]); self.unchanged()
+
+
+if __name__ == '__main__':
+    unittest.main(verbosity=2)

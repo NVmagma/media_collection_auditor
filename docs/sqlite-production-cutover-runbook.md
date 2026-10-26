@@ -380,3 +380,48 @@ control directory or stopping services. It does not tag, push or pull. The origi
 cutover/recovery transaction is unchanged. Updating the image field alone is not
 the first SQLite migration procedure. Prior production approval persists for this
 same Movies-only, read-only 02:00 Pacific preview scope.
+
+
+## Post-cutover recreation incident and clean reinstall
+
+The operator removed the pinned image digest and later restored it through Unraid.
+The recreated container then lacked `/sqlite-control`, had writable `/media`, and
+had lost the read-only root setting. Preview correctly refused startup. After
+manual mount/environment repair, the read-only diagnostic failed opening the
+saved config in `_effective` before SQLite validation. Current mounts and config
+path have not yet been verified, so missing/changed SQLite data is not established.
+The prior live verification is historical; current frontend/API availability is
+not confirmed. Rebuilding an image does not repair missing binds or saved files.
+
+The operator requested all commits pushed and a fresh Actions-built runtime for a
+clean reinstall, explicitly selecting a fresh SQLite preview rather than a JSON
+baseline. Preserve old appdata, SQL control files, private review packets and the
+stopped original rollback container. Use separate new appdata/control directories
+for the clean preview, with explicit initialization and binding before startup;
+publishing an image alone does not create that binding. The installer must not
+reuse the original cutover transaction against the changed container identity.
+
+Carry forward the reviewed Movies-only 02:00 America/Los_Angeles preview settings,
+read-only media, port 8089 and disabled media operations. New tracking starts
+empty by operator request; the old tracking is retained separately. A fresh
+preview scan reports advisory observations and does not authorize media moves.
+Fresh preparation, actual startup validation and the exact published image are
+required before recommending the replacement container.
+
+
+Fresh preparation uses `scripts/sqlite_preview_fresh_prepare.sh` with the published
+preview digest, prior packet and fingerprint, and existing appdata parent. It
+creates a randomly named NEW root with separate private logs/control children,
+checks the prior packet inputs and reconstructed settings, writes an empty JSON
+seed only in the new logs, and uses the existing offline parity/binding procedure
+to produce a revision-zero SQL preview. It preserves connection/integration
+credentials privately in `runtime.env` and generates a digest-bound
+`fresh-template.xml`. Neither file should be pasted into diagnostics.
+
+The helper has no Docker socket and no external network; old packet and media
+are read-only. It does not alter the old appdata, control state, template or any
+service. Occupied/partial outputs are retained and refused, never overwritten.
+The workflow exercises eight fresh-fixture cases, including actual preview web
+login page and authenticated/unauthenticated API readiness, before publication.
+Starting the new container and installing its template use only this new root;
+those operator actions follow successful preparation and review of redacted output.

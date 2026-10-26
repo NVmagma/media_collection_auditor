@@ -21,6 +21,7 @@ on:
       - 'scripts/sqlite_preview_install*'
       - 'scripts/sqlite_preview_template*'
       - 'scripts/sqlite_preview_service*'
+      - 'scripts/sqlite_preview_fresh*'
       - 'scripts/sqlite_preview_release_request*'
       - 'tests/test_sqlite_preview_cutover.py'
       - 'tests/test_sqlite_preview_install.py'
@@ -28,6 +29,7 @@ on:
       - 'tests/test_sqlite_preview_service.py'
       - 'tests/test_sqlite_preview_release_request.py'
       - 'tests/test_sqlite_preview_host_launcher.py'
+      - 'tests/test_sqlite_preview_fresh.py'
       - 'requirements.txt'
   workflow_dispatch:
     inputs:
@@ -119,6 +121,10 @@ jobs:
         run: |
           image=$(cat "$RUNNER_TEMP/preview-release-image.txt")
           sudo bash scripts/sqlite_preview_service_lab.sh "$image" | tee "$RUNNER_TEMP/preview-service-acceptance.log"
+      - name: Exercise fresh SQLite preparation and actual web/API startup
+        run: |
+          image=$(cat "$RUNNER_TEMP/preview-release-image.txt")
+          sudo bash scripts/sqlite_preview_service_lab.sh "$image" fresh | tee "$RUNNER_TEMP/preview-fresh-acceptance.log"
       - name: Verify real host launcher in read-only selection mode
         run: |
           image=$(cat "$RUNNER_TEMP/preview-release-image.txt")
@@ -164,5 +170,6 @@ jobs:
             ${{ runner.temp }}/private-packet-acceptance.log
             ${{ runner.temp }}/preview-install-acceptance.log
             ${{ runner.temp }}/preview-service-acceptance.log
+            ${{ runner.temp }}/preview-fresh-acceptance.log
             ${{ runner.temp }}/preview-host-selection.log
             ${{ runner.temp }}/preview-publication.json
