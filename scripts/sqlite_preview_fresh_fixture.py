@@ -7,6 +7,10 @@ import os
 from pathlib import Path
 import re
 import shutil
+import socket
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from threading import Thread
+from time import monotonic, sleep
 import unittest
 from unittest.mock import patch
 
@@ -21,6 +25,15 @@ from app.sqlite_release_recovery import _encode
 from app.sqlite_json import parse_unique_json
 
 REFERENCE = 'ghcr.io/nvmagma/media_collection_auditor@sha256:'+'9'*64
+
+
+class FixtureJellyfin(BaseHTTPRequestHandler):
+    def log_message(self, *args): pass
+    def do_GET(self):
+        payload=json.dumps([{'Id':'fixture-user'}] if self.path=='/Users'
+            else {'TotalRecordCount':0,'Items':[]}).encode()
+        self.send_response(200); self.send_header('Content-Type','application/json')
+        self.send_header('Content-Length',str(len(payload))); self.end_headers(); self.wfile.write(payload)
 
 
 class FixtureDocker(Docker):
@@ -64,8 +77,17 @@ class FreshPreviewTests(unittest.TestCase):
         # private volume root; this is fixture layout, not a Tower change.
         for mount in self.case.old[0]['Mounts']: mount['Propagation']='rslave'
         self.case.old[0]['HostConfig']['PortBindings'] = {'8080/tcp':[{'HostIp':'','HostPort':'8089'}]}
+        # Actual dashboard/manual scans may collect signals: direct them only to
+        # this private fixture server, never an external Jellyfin or DNS origin.
+        server=ThreadingHTTPServer(('0.0.0.0',0),FixtureJellyfin)
+        worker=Thread(target=lambda:server.serve_forever(poll_interval=.01),daemon=True); worker.start()
+        self.addCleanup(lambda:(server.shutdown(),server.server_close(),worker.join(timeout=2)))
+        address=socket.gethostbyname(socket.gethostname())
+        self.case.old[0]['Config']['Env']=[item for item in self.case.old[0]['Config']['Env']
+            if not item.startswith('JELLYFIN_HOST_URL=')]
+        self.case.old[0]['Config']['Env'].append('JELLYFIN_HOST_URL=http://'+address+':'+str(server.server_port))
         self.case.state['queued']['TV/Fixture Holding'] = '2024-03-01T00:00:00'
-        self.case.old[0]['Config']['Env'] += ['INTEGRATION_API_TITLE_DETAILS=true','INTEGRATION_API_MEDIA=false']
+        self.case.old[0]['Config']['Env'] += ['INTEGRATION_API_TITLE_DETAILS=true','INTEGRATION_API_MEDIA=false', 'WEB_SESSION_SECRET=synthetic-manual-preview-session-key']
         self.case.inputs()
         (self.case.root/'original-template.xml').write_text('<Container><Name>media_collection_auditor</Name></Container>')
         self.report = self.case.write()
@@ -128,6 +150,39 @@ class FreshPreviewTests(unittest.TestCase):
                 self.assertEqual(report['total_records'],expected_tv)
                 self.assertTrue(all(item['library']=='TV' for item in report['items']))
                 if expected_tv: self.assertEqual(report['items'][0]['since'],'2024-03-01T00:00:00')
+            # The real dashboard session, POST route and service wake must compose.
+            # This key/cookie belongs only to this newly created fixture instance.
+            from flask import Flask
+            from flask.sessions import SecureCookieSessionInterface
+            client_app=Flask('manual-preview-fixture'); client_app.secret_key=env['WEB_SESSION_SECRET']
+            cookie=SecureCookieSessionInterface().get_signing_serializer(client_app).dumps({'provider':'local'})
+            snapshot_before=GuardedSQLiteStateStore('/sqlite-control/release/state.db').load_with_revision()
+            json_before=Path('/app/logs/auditor_state.json').read_bytes()
+            with closing(http.client.HTTPConnection(address,8080,timeout=5)) as connection:
+                connection.request('GET','/',headers={'Cookie':'session='+cookie})
+                response=connection.getresponse(); page=response.read()
+                self.assertEqual(response.status,200)
+                self.assertIn(b'Run Preview Now',page)
+            with closing(http.client.HTTPConnection(address,8080,timeout=5)) as connection:
+                connection.request('POST','/api/run-now',headers={'Cookie':'session='+cookie,
+                    'Origin':'http://'+address+':8080'})
+                response=connection.getresponse(); response.read()
+                self.assertEqual(response.status,202)
+            deadline=monotonic()+15
+            while monotonic()<deadline:
+                with closing(http.client.HTTPConnection(address,8080,timeout=5)) as connection:
+                    connection.request('GET','/api/v1/audit-status',
+                        headers={'Authorization':'Bearer '+env['INTEGRATION_API_TOKEN']})
+                    response=connection.getresponse(); audit=json.loads(response.read())
+                if audit.get('last_trigger')=='manual' and audit.get('last_result') is not None: break
+                sleep(.1)
+            self.assertEqual(audit.get('last_trigger'),'manual')
+            self.assertEqual(audit.get('last_result'),'completed')
+            self.assertTrue(audit.get('dry_run')); self.assertEqual(audit.get('moves_completed'),0)
+            self.assertFalse(audit.get('media_actions_authorized'))
+            self.assertEqual(GuardedSQLiteStateStore('/sqlite-control/release/state.db').load_with_revision(),snapshot_before)
+            self.assertEqual(Path('/app/logs/auditor_state.json').read_bytes(),json_before)
+            self.assertFalse(Path('/sqlite-control/release/.sqlite_scheduled_slots').exists())
             self.assertFalse(next(m['RW'] for m in observed['Mounts'] if m['Destination']=='/media'))
             self.assertTrue(observed['HostConfig']['ReadonlyRootfs'])
             self.unchanged()

@@ -3,7 +3,7 @@
 No automatic database initialization/migration, deletion or service controls.
 Marked labs test the same locked run body independently of production selection.
 """
-from contextlib import ExitStack, contextmanager
+from contextlib import ExitStack, contextmanager, nullcontext
 from datetime import datetime
 import os
 from pathlib import Path
@@ -67,10 +67,33 @@ def _configured_cycle_step(*, cycle, settings, now, clock, observer=None):
     return result
 
 
-def _run_bound_production_slot(*, settings, scheduled_at, now, clock, timer=monotonic):
+def run_requested_preview(*, settings, now, observer, clock=datetime.now):
+    """Consume one explicit preview request; never claim/advance a daily slot."""
+    from app.sqlite_scheduled_observations import ScheduledRunObservations
+    if not isinstance(observer, ScheduledRunObservations): raise ValueError('Bound process observer required')
+    if not isinstance(now, datetime) or now.tzinfo is None: raise ValueError('Aware manual time required')
+    if not observer.claim_manual_preview(): return None
+    try:
+        def execute():
+            from app.sqlite_backend_gate import preview_release_enabled
+            if not preview_release_enabled(): raise RuntimeError('Manual scans require the preview release')
+            values = require_sqlite_production_activation(settings=settings)
+            if values.get('DRY_RUN', '').strip().lower() != 'true':
+                raise RuntimeError('Manual scans require read-only preview')
+            result = _run_bound_production_slot(settings=values, scheduled_at=now, now=now,
+                clock=clock, manual_preview=True)
+            require_sqlite_production_activation(settings=values)
+            return result
+        return observer.run_attempt(scheduled_at=now, execute=execute, dry_run=True, trigger='manual')
+    finally:
+        observer.release_manual_preview()
+
+
+def _run_bound_production_slot(*, settings, scheduled_at, now, clock, timer=monotonic, manual_preview=False):
     """Private candidate implementation; the public entry above remains sealed."""
     config, scan, protect = _configured_run_inputs(settings=settings, clock=clock, allow_dry_run=True)
     dry_run = settings.get('DRY_RUN', 'true').strip().lower() == 'true'
+    if manual_preview and not dry_run: raise RuntimeError('Manual media actions are not authorized')
     resolve_arr = None if dry_run else configured_arr_queue_resolver(settings=settings, config=config)
     source = Path(_canonical(settings.get('STATE_FILE', '/app/logs/auditor_state.json')))
     database = Path(_canonical(settings.get('SQLITE_STATE_FILE', '/app/logs/sqlite_worker/state.db')))
@@ -87,8 +110,10 @@ def _run_bound_production_slot(*, settings, scheduled_at, now, clock, timer=mono
         with _hold_control_database(control, database) as verify_control:
             def verify_binding():
                 verify_json(); verify_control()
-            with _claim_scheduled_slot_locked(root=control, schedule=config.schedule,
-                    scheduled_at=scheduled_at, now=now, verify_binding=verify_binding) as verify_claim:
+            claim = (nullcontext(verify_binding) if manual_preview else
+                _claim_scheduled_slot_locked(root=control, schedule=config.schedule,
+                    scheduled_at=scheduled_at, now=now, verify_binding=verify_binding))
+            with claim as verify_claim:
                 if dry_run:
                     from app.sqlite_scheduled_preview import prepare_scheduled_preview
                     return prepare_scheduled_preview(database=database, config=config,

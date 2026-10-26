@@ -808,8 +808,23 @@ def run_now():
     origin = request.headers.get("Origin") or request.headers.get("Referer")
     if not origin or urlsplit(origin).netloc != request.host:
         return {"ok": False, "message": "Invalid request origin."}, 403
-    if os.environ.get('AUDITOR_STATE_BACKEND', 'json') != 'json':
-        return {'ok': False, 'message': 'This backend runs only at its configured daily time.'}, 409
+    backend = os.environ.get('AUDITOR_STATE_BACKEND', 'json')
+    if backend == 'sqlite':
+        from app.sqlite_backend_gate import preview_release_enabled, require_sqlite_production_activation
+        if not preview_release_enabled():
+            return {'ok': False, 'message': 'This backend runs only at its configured daily time.'}, 409
+        try:
+            require_sqlite_production_activation()
+        except RuntimeError:
+            return {'ok': False, 'message': 'Preview configuration unavailable; scan was not queued.'}, 409
+        from app.sqlite_scheduled_observations import COORDINATOR
+        if COORDINATOR.request_manual_preview():
+            from run_control import wake_worker
+            wake_worker()
+            return {'ok': True, 'message': 'Read-only preview queued. Daily schedule unchanged.'}, 202
+        return {'ok': False, 'message': 'A scan is already running or queued.'}, 409
+    if backend != 'json':
+        return {'ok': False, 'message': 'Unsupported run backend.'}, 409
     if request_run():
         return {"ok": True, "message": "Audit queued. Refresh the dashboard for results."}, 202
     return {"ok": False, "message": "An audit is already running or queued."}, 409

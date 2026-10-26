@@ -51,6 +51,10 @@ def finish_run(result, movies, tv, interval):
                        movies_processed=movies, tv_processed=tv,
                        next_run=(now + timedelta(hours=interval)).isoformat() if interval > 0 else None)
 
+def wake_worker():
+    """Wake the worker without creating a legacy JSON audit request."""
+    _wake.set()
+
 def wait_for_run(timeout):
     triggered = _wake.wait(timeout)
     _wake.clear()

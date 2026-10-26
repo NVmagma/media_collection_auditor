@@ -19,7 +19,7 @@
     <section class="hero">
       <div><span class="status-dot"></span> {% if run.get("storage_authority") == "sqlite" %}Daily scheduler observations{% else %}Auditor is running{% endif %}</div>
       <strong>{% if run.get('production_activation') == 'preview_only' %}SQLite scheduled preview · media changes disabled{% elif run.get('storage_authority') == 'sqlite' %}Scheduled backend · activation {{ run.get('production_activation', 'unavailable') }}{% else %}Current configuration: {{ 'Dry Run (preview only)' if dry_run else 'LIVE MODE — changes to media are enabled' }}{% endif %}</strong>
-      {% if viewer.admin %}<div class="run-controls"><button id="run-now" type="button" {% if run.get("storage_authority") == "sqlite" %}disabled{% endif %}>{% if run.get("storage_authority") == "sqlite" %}Daily schedule only{% else %}Run Now{% endif %}</button><span id="run-result" role="status" aria-live="polite">{% if run.get("storage_authority") == "sqlite" %}Runs start only at the configured daily time.{% else %}Administrator access required.{% endif %}</span></div>{% endif %}
+      {% if viewer.admin %}{% set manual_preview = run.get("execution_mode") == "scheduled_preview" %}<div class="run-controls"><button id="run-now" type="button" data-preview="{{ 'true' if manual_preview else 'false' }}" {% if (run.get("storage_authority") == "sqlite" and not manual_preview) or run.get("running") or run.get("queued") %}disabled{% endif %}>{% if manual_preview %}Run Preview Now{% elif run.get("storage_authority") == "sqlite" %}Daily schedule only{% else %}Run Now{% endif %}</button><span id="run-result" role="status" aria-live="polite">{% if manual_preview %}Read-only scan; daily schedule unchanged.{% elif run.get("storage_authority") == "sqlite" %}Runs start only at the configured daily time.{% else %}Administrator access required.{% endif %}</span></div>{% endif %}
     </section>
     <section class="cards run-cards">
       <article><span>Audit status</span><strong>{{ 'Unavailable' if run.get('storage_authority') == 'sqlite' and run.get('status') == 'unavailable' else 'Blocked' if run.get('storage_authority') == 'sqlite' and run.get('scheduler_state') == 'blocked' else 'Running' if run.running else 'Queued' if run.queued else run.last_result|capitalize if run.last_result else 'Waiting' }}</strong></article>
@@ -214,7 +214,7 @@ document.querySelectorAll('.rescue-choice').forEach(choice => choice.addEventLis
 }));
 const button = document.getElementById('run-now');
 button?.addEventListener('click', async () => {
-  if (!confirm('Start an audit using your saved configuration? In Live Mode this may move or delete media.')) return;
+  if (button.dataset.preview !== 'true' && !confirm('Start an audit using your saved configuration? In Live Mode this may move or delete media.')) return;
   button.disabled = true;
   const output = document.getElementById('run-result');
   output.textContent = 'Requesting audit…';

@@ -255,3 +255,13 @@ this closes Gate 6 for the scheduled model. Historical intermediate progress
 statements above do not override this closure. Gate 7 remains a separate
 reconciliation milestone. JSON remains authoritative; no production behavior,
 backend selection, image deployment or deletion setting changed with closure.
+
+
+## Manual read-only preview exception
+
+An explicit administrator-requested preview scan may collect outside the daily
+slot in the separately bound scheduled-preview release. This is not a manual
+media-action permit. It shares the regular cooperating run locks, cannot move
+media, deliver Arr updates or checkpoint lifecycle clocks, and does not consume
+or bypass the durable daily claim. Live action scheduling and at-most-once daily
+attempt requirements above remain unchanged. The UI calls this Run Preview Now.

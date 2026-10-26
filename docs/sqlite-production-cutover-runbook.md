@@ -513,3 +513,29 @@ without restart. Old data and retained containers remain preserved. Close stale
 Unraid edit tabs before using the updated template. Actual subsequent DockerMan
 recreation and browser click-through results have not been independently reported;
 they are not implied by the successful API/widget and template checks.
+
+
+### Explicit manual preview scans
+
+The operator requested a way to force a scan for testing without waiting for the
+daily slot. The preview dashboard now exposes **Run Preview Now** to signed-in
+administrators. Same-origin POST `/api/run-now` validates the current immutable
+preview binding before queuing one process-local read-only request. Integration
+bearer tokens and non-admin sessions cannot use this action. Duplicate pending,
+claimed or running requests are rejected. Requests are not persisted across restart.
+
+The same worker consumes the request, holding the shared source/control locks
+through configured collection, and reports a `manual` dry-run History row. It
+uses the existing preview path only: no media moves, Arr writes, clock checkpoint,
+deletion or state migration. A manual preview does not create or remove the daily
+claim, change the next daily slot, or permit a catch-up/retry of a failed scheduled
+media action. The regular scheduled worker remains daily-only. Binding changes,
+pending/changed state, unavailable protection or held locks fail the manual scan;
+errors remain redacted. A failed request is not automatically retried. Explicit
+new read-only requests are allowed after failure once the problem is resolved.
+
+The manual preview does not populate missing tracking records: discovery changes
+and move proposals remain advisory. A new application image still requires a
+matching preview binding; do not change only the image field or edit binding files.
+Stage and validate the replacement against the same retained tracking before
+switching the container, preserving the working instance and templates.

@@ -22,6 +22,7 @@ on:
       - 'scripts/sqlite_preview_template*'
       - 'scripts/sqlite_preview_service*'
       - 'scripts/sqlite_preview_fresh*'
+      - 'scripts/sqlite_manual_preview*'
       - 'scripts/sqlite_preview_release_request*'
       - 'tests/test_sqlite_preview_cutover.py'
       - 'tests/test_sqlite_preview_install.py'

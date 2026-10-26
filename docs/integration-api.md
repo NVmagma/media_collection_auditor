@@ -260,3 +260,13 @@ shape. Jellyfin handles its own viewer login and permissions. The optional
 presentation collector is separate from the existing dashboard poster index and
 all lifecycle/protection collectors. No media move, deletion, state write, SQLite
 activation, refresh POST or Jellyfin settings change is performed.
+
+
+### Manual preview observations
+
+In the bound SQLite scheduled-preview release, signed-in dashboard administrators
+can queue a read-only scan from Run Preview Now. The integration bearer token
+cannot call this action. Audit status reports `queued` while waiting, `running`
+during collection and `last_trigger=manual` when it is the latest attempt. History
+remains current-process only. These observations do not grant media actions,
+claim inventory freshness, checkpoint tracking, or change the daily schedule.

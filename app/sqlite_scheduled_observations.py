@@ -15,6 +15,8 @@ class ScheduledRunObservations:
         self._lock = Lock()
         self._observed = False
         self._running = False
+        self._manual_pending = False
+        self._manual_claimed = False
         self._next_run = None
         self._scheduler_state = 'unobserved'
         self._history = []
@@ -42,12 +44,38 @@ class ScheduledRunObservations:
             self._next_run = None
             self._scheduler_state = 'blocked'
 
-    def run_attempt(self, *, scheduled_at, execute, dry_run=False):
+    def request_manual_preview(self):
+        with self._lock:
+            if self._running or self._manual_pending or self._manual_claimed:
+                return False
+            self._manual_pending = True
+            self._observed = True
+            return True
+
+    def claim_manual_preview(self):
+        with self._lock:
+            if not self._manual_pending or self._running or self._manual_claimed:
+                return False
+            self._manual_pending = False
+            self._manual_claimed = True
+            return True
+
+    def cancel_pending_preview(self):
+        with self._lock:
+            self._manual_pending = False
+
+    def release_manual_preview(self):
+        with self._lock:
+            self._manual_claimed = False
+
+    def run_attempt(self, *, scheduled_at, execute, dry_run=False, trigger='scheduled'):
         if type(dry_run) is not bool:
             raise ValueError('Explicit dry-run observation required')
         if not callable(execute) or not isinstance(scheduled_at, datetime) or scheduled_at.tzinfo is None:
             raise ValueError('Bound scheduled attempt required')
-        record = {'id': uuid4().hex, 'trigger': 'scheduled', 'dry_run': dry_run,
+        if trigger not in ('scheduled', 'manual') or (trigger == 'manual' and not dry_run):
+            raise ValueError('Manual observations require read-only preview')
+        record = {'id': uuid4().hex, 'trigger': trigger, 'dry_run': dry_run,
             'scheduled_at': scheduled_at.astimezone(timezone.utc).isoformat(),
             'started_at': self._now(), 'finished_at': None, 'result': None,
             'movies_processed': None, 'tv_processed': None,
@@ -56,8 +84,11 @@ class ScheduledRunObservations:
             'result_basis': 'worker_return', 'freshness_verified': False,
             'history_scope': 'current_process'}
         with self._lock:
-            if self._running:
+            if self._running or (self._manual_claimed and trigger != 'manual'):
                 raise RuntimeError('Scheduled observation already active')
+            if trigger == 'manual' and not self._manual_claimed:
+                raise RuntimeError('Explicit manual request required')
+            self._manual_claimed = False
             self._observed = True; self._running = True; self._active = record
         result = None
         try:
@@ -113,10 +144,11 @@ class ScheduledRunObservations:
                 'read_only': True, 'production_activation': 'disabled', 'production_authorized': False,
                 'freshness_verified': False, 'history_scope': 'current_process', 'history_persistent': False,
                 'running': self._running if self._observed else None,
-                'queued': False if self._observed else None, 'rescuing': False if self._observed else None,
+                'queued': (self._manual_pending or self._manual_claimed) if self._observed else None, 'rescuing': False if self._observed else None,
                 'scheduler_state': self._scheduler_state, 'next_run': self._next_run,
                 'last_started': latest.get('started_at'), 'last_finished': None if self._running else latest.get('finished_at'),
-                'last_result': None if self._running else latest.get('result'), 'result_basis': latest.get('result_basis'),
+                'last_result': None if self._running else latest.get('result'), 'last_trigger': latest.get('trigger'),
+                'result_basis': latest.get('result_basis'),
                 'state_revision': latest.get('state_revision'), 'moves_completed': latest.get('moves_completed'),
                 'dry_run': latest.get('dry_run'), 'moves_proposed': latest.get('moves_proposed'),
                 'discovery_changes': latest.get('discovery_changes')}
