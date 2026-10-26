@@ -452,7 +452,13 @@ browser/frontend observation is implied by this API result.
 The old data was not imported or removed. The command retained any existing
 stopped failed primary under `media_collection_auditor_before_fresh_<id-prefix>`.
 Do not start that retained container or the original rollback concurrently.
-Installation of the matching generated Unraid template remains pending operator
-confirmation; avoid Edit/Apply until it is persisted. Existing saved configuration
+The operator subsequently reported `status=fresh_unraid_template_installed`.
+The installation command validated the pinned digest, read-only media, fresh logs/
+control paths, read-only root parameter and all template environment entries
+against the running container before retaining the previous template and
+replacing `my-media_collection_auditor.xml`. No restart occurred. Close stale
+Unraid edit tabs before opening the persisted template. A subsequent DockerMan
+recreation has not been tested on Tower; template persistence alone is not that
+acceptance claim. Existing saved configuration
 and policy are frozen by the preview binding. The original service journal belongs
 to the first deployment and is not a recovery journal for this fresh instance.
