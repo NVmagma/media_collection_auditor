@@ -13,11 +13,30 @@ from unittest.mock import patch
 from app.sqlite_preview_activation import validate_preview_activation
 from app.state_store import GuardedSQLiteStateStore
 from scripts import sqlite_preview_fresh as fresh
-from scripts.sqlite_preview_cutover_fixture import PreviewCutoverFixtureTests, SECRET
+from scripts import sqlite_preview_cutover_fixture as packet_fixture
+from scripts.sqlite_preview_cutover_fixture import SECRET
 from scripts.sqlite_preview_release_request import fingerprint
-from scripts.sqlite_preview_service import Docker, preview_payload, verify_http_health
+from scripts.sqlite_preview_service import Docker, UnixConnection, preview_payload, verify_http_health
+from app.sqlite_release_recovery import _encode
+from app.sqlite_json import parse_unique_json
 
 REFERENCE = 'ghcr.io/nvmagma/media_collection_auditor@sha256:'+'9'*64
+
+
+class FixtureDocker(Docker):
+    def request(self, method, route, payload=None, statuses=(200,)):
+        if method != 'POST' or not route.startswith('/containers/create?'):
+            return super().request(method,route,payload,statuses)
+        # Synthetic fixture only: surface the one-shot create rejection without
+        # retrying or logging private production payloads in the service client.
+        self.check()
+        with closing(UnixConnection(self.endpoint)) as connection:
+            connection.request(method,self.prefix+route,body=_encode(payload),headers={'Content-Type':'application/json'})
+            response=connection.getresponse(); raw=response.read(65537)
+            self.check()
+            if response.status not in statuses or len(raw)>65536:
+                raise RuntimeError('Fixture create rejected: '+str(response.status)+' '+raw[:1000].decode(errors='replace'))
+            return parse_unique_json(raw)
 
 
 def identity(path):
@@ -39,8 +58,11 @@ class FreshPreviewTests(unittest.TestCase):
             for item in Path(directory).iterdir():
                 if item.is_dir() and not item.is_symlink(): shutil.rmtree(item)
                 else: item.unlink()
-        self.case = PreviewCutoverFixtureTests(); self.case.setUp(); self.addCleanup(self.case.doCleanups)
+        self.case = packet_fixture.PreviewCutoverFixtureTests(); self.case.setUp(); self.addCleanup(self.case.doCleanups)
         self.case.root = Path('/packet')
+        # Docker requires slave/shared propagation for binds under its own
+        # private volume root; this is fixture layout, not a Tower change.
+        for mount in self.case.old[0]['Mounts']: mount['Propagation']='rslave'
         self.case.old[0]['HostConfig']['PortBindings'] = {'8080/tcp':[{'HostIp':'','HostPort':'8089'}]}
         self.case.inputs()
         (self.case.root/'original-template.xml').write_text('<Container><Name>media_collection_auditor</Name></Container>')
@@ -64,8 +86,8 @@ class FreshPreviewTests(unittest.TestCase):
         self.assertEqual(env['INTEGRATION_API_TOKEN'],SECRET)
         validate_preview_activation(settings=env)
         xml = Path('/app/logs/fresh-template.xml').read_text()
-        self.assertIn('/sqlite-control',xml); self.assertIn('Mode="ro"',xml)
-        raw = Docker(endpoint='/docker-engine.sock',expected_daemon=os.environ['EXPECTED_DAEMON_ID'])
+        self.assertIn('/sqlite-control',xml); self.assertIn('Mode="ro,slave"',xml)
+        raw = FixtureDocker(endpoint='/docker-engine.sock',expected_daemon=os.environ['EXPECTED_DAEMON_ID'])
         original = self.case.old[0]
         for mount in original['Mounts']:
             mount['Source'] = os.environ['HOST_FIXTURE_ROOT']+('/media' if mount['Destination']=='/media' else '/logs')
