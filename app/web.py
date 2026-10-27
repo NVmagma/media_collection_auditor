@@ -34,10 +34,21 @@ app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
                   SESSION_COOKIE_SECURE=os.environ.get("WEB_SECURE_COOKIE", "false").lower() == "true",
                   PERMANENT_SESSION_LIFETIME=timedelta(hours=12))
 
+def _preview_backend_gate():
+    # Legacy JSON images copy modules flat; preview images include the app package.
+    try:
+        from app import sqlite_backend_gate
+    except ModuleNotFoundError as error:
+        if error.name != 'app':
+            raise
+        import sqlite_backend_gate
+    return sqlite_backend_gate
+
+
 @app.before_request
 def require_login():
-    from app.sqlite_backend_gate import preview_release_enabled, require_sqlite_production_activation
-    preview = preview_release_enabled()
+    gate = _preview_backend_gate()
+    preview = gate.preview_release_enabled()
     if read_only_service_enabled() and not preview and request.endpoint not in (
             "integration_summary", "integration_audit_status", "integration_titles", "health"):
         return {"status": "read_only_service"}, 404
@@ -45,7 +56,7 @@ def require_login():
         failure = authorize_summary(request.headers.get("Authorization"))
         if failure is not None: return failure
         if preview:
-            try: require_sqlite_production_activation()
+            try: gate.require_sqlite_production_activation()
             except RuntimeError:
                 return {"status":"preview_paused", "read_only":True, "media_actions_authorized":False,
                         "message":"Preview scans are paused; settings or tracking need review."}, 503
@@ -58,7 +69,7 @@ def require_login():
             return {"ok": False, "message": "Please sign in."}, 401
         return redirect(url_for("login"))
     if preview and request.endpoint not in ('settings','logout','run_now'):
-        try: require_sqlite_production_activation()
+        try: gate.require_sqlite_production_activation()
         except RuntimeError:
             if request.path.startswith('/api/'):
                 return {'status':'preview_paused','media_actions_authorized':False}, 503
@@ -764,8 +775,7 @@ def settings():
     if not admin_authorized():
         return Response("Settings require WEB_ADMIN_PASSWORD (and HTTP Basic authentication).",
                         401, {"WWW-Authenticate": 'Basic realm="Auditor settings"'})
-    from app.sqlite_backend_gate import preview_release_enabled
-    preview_mode = preview_release_enabled()
+    preview_mode = _preview_backend_gate().preview_release_enabled()
     saved = load_config()
     pending_settings = {'status':'none','changed_keys':[]}
     if preview_mode:
@@ -839,12 +849,12 @@ def run_now():
     if not origin or urlsplit(origin).netloc != request.host:
         return {"ok": False, "message": "Invalid request origin."}, 403
     backend = os.environ.get('AUDITOR_STATE_BACKEND', 'json')
-    from app.sqlite_backend_gate import preview_release_enabled, require_sqlite_production_activation
-    if preview_release_enabled() or backend == 'sqlite':
-        if not preview_release_enabled():
+    gate = _preview_backend_gate()
+    if gate.preview_release_enabled() or backend == 'sqlite':
+        if not gate.preview_release_enabled():
             return {'ok': False, 'message': 'This backend runs only at its configured daily time.'}, 409
         try:
-            require_sqlite_production_activation()
+            gate.require_sqlite_production_activation()
         except RuntimeError:
             return {'ok': False, 'message': 'Preview configuration unavailable; scan was not queued.'}, 409
         from app.sqlite_scheduled_observations import COORDINATOR
