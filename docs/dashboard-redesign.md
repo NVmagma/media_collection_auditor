@@ -131,3 +131,32 @@ reconcile an intent or authorize any media operation.
 The disposable preview includes synthetic completed previews, a recorded live
 outcome and failed/uncertain outcomes to exercise the labels and filters. These
 are illustrative records; no actual scan or media operation took place.
+
+## Settings status and local drafts
+
+The Settings page separates active field values, the saved request and explicit
+application/recovery into three status cards. Only allowlisted field names are
+shown for requested changes; pending values and credentials are not projected.
+The editor begins with the existing values. Local changes receive an unsaved
+indicator; edits and indicator text are not autosaved or put in browser storage.
+Applying still uses the saved request and its existing digest, never local draft
+values. The existing backend origin, administrator, binding, locking, request
+validation and restore checks are unchanged.
+
+Recovery retains the disabled editor and explicit Restore form outside it.
+Stale/review/resubmit states offer no Apply button. Connection tests keep using
+the active server endpoint; typed draft values are not sent by those tests.
+The legacy non-preview save flow remains supported.
+
+The synthetic Tower server offers `/settings` and
+`/settings?scenario=recovery` (also `stale`, `clean`, `review`, `resubmit`). These
+are generated demonstration states, not the host's actual settings. All POST
+submissions are refused by that fixture server. Use placeholder edits only;
+actual apply/restore behavior is covered separately by disposable backend tests.
+
+Settings verification: 117 focused Linux tests and 8 subtests passed, including
+application/recovery/security and Docker runtime checks. Real Chromium checks
+cover local draft counts, credential masking, all six status states, category
+switching and 1440/900/390/320px widths. A private HTTP fixture check verified the
+page and script while refusing application. Existing Dashboard browser checks
+still pass. User visual acceptance is pending; no production service changed.

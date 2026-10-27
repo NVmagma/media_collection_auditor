@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Settings · Media Collection Auditor</title><link rel="stylesheet" href="/static/style.css"></head>
-<body class="app-shell">
+<body class="app-shell settings-app">
 <aside class="sidebar">
 <a class="sidebar-brand" href="/"><img class="brand-icon" src="/static/auditor-badge.png" alt=""><span>Media<br>Auditor</span></a>
 <nav class="side-nav" aria-label="Main navigation"><a href="/">▦ <span>Dashboard</span></a><a href="/logs">☷ <span>Activity Logs</span></a><a class="active" href="/settings">⚙ <span>Settings</span></a></nav>
@@ -10,20 +10,31 @@
 <div class="app-content">
 <header class="settings-header"><div><h1>Settings</h1><p>Manage your auditor without editing Docker environment variables.</p></div><span class="header-note">{{ 'Apply requests after review' if preview_mode else 'Changes apply next audit' }}</span></header>
 <main class="settings-main">
-<nav class="settings-tabs" aria-label="Settings categories">
-{% for group in groups %}<button type="button" class="tab-button{% if loop.first %} selected{% endif %}" data-tab="{{ group }}" aria-selected="{{ 'true' if loop.first else 'false' }}">{{ group }}</button>{% endfor %}
-</nav>
-{% if preview_mode %}<div class="alert" role="status">{% if settings_application.status == 'recovery_required' %}An application was interrupted. Scans are paused; restore the previous settings before editing again.{% else %}Preview mode: this form requests settings changes. Your active settings stay in place until the request is validated and applied.{% endif %}</div>{% endif %}
-{% if requested %}<div class="alert" role="status">Requested settings saved. Active settings have not changed.</div>{% endif %}
-{% if pending_settings.status == 'requested' %}
-<div class="alert" role="status"><strong>Settings request pending</strong>
-{% if settings_application.status != 'recovery_required' %}<p>Active settings are shown below and continue to control scans. Use Apply Requested Settings to validate and apply the saved request.</p>{% endif %}
-{% if pending_settings.changed_keys %}<p>Requested changes: {% for key in pending_settings.changed_keys %}{{ help_text[key][0] }}{{ ', ' if not loop.last else '.' }}{% endfor %}</p>{% endif %}</div>
-{% elif pending_settings.status == 'stale' %}
-<div class="alert error" role="status">The saved request was made against an older configuration. It has not been applied. Review the active settings before submitting a new request.</div>
-{% elif pending_settings.status == 'review_required' %}
-<div class="alert error" role="status">The saved settings request needs review. Active settings have not been changed by this request.</div>
+{% if preview_mode %}
+<section class="settings-status-grid" aria-label="Configuration status">
+  <article class="settings-status-card"><span class="settings-step">1 · ACTIVE CONFIGURATION</span><h2>{{ 'Recovery required' if settings_application.status == 'recovery_required' else 'Active values loaded' }}</h2>
+    {% if settings_application.status == 'recovery_required' %}<p>An application was interrupted. Scans are paused; restore the previous settings before editing again.</p>
+    {% else %}<p>The form starts from active settings. Editing it or saving a request does not apply changes.</p><p class="muted">Connection tests use active settings, not your unsaved edits or pending request.</p>{% endif %}
+  </article>
+  <article class="settings-status-card"><span class="settings-step">2 · SAVED REQUEST</span>
+    {% if pending_settings.status == 'requested' %}<h2>Settings request pending</h2><p>Active settings have not changed merely because a request was saved.</p>
+    {% if pending_settings.changed_keys %}<details class="pending-field-names"><summary>Requested field names ({{ pending_settings.changed_keys|length }})</summary><ul>{% for key in pending_settings.changed_keys if key in help_text %}<li>{{ help_text[key][0] }}</li>{% endfor %}</ul></details>{% endif %}
+    {% elif pending_settings.status == 'stale' %}<h2>Out-of-date request</h2><p>The saved request was made against an older configuration. It has not been applied. Review the active settings before submitting a new request.</p>
+    {% elif pending_settings.status == 'none' %}<h2>No pending changes</h2><p>Save Requested Changes stores a separate request for review. It does not queue a scan.</p>
+    {% else %}<h2>Request needs review</h2><p>The saved settings request needs review. Active settings have not been changed by this request.</p>{% endif %}
+  </article>
+  <article class="settings-status-card {% if settings_application.status == 'recovery_required' %}settings-recovery-card{% endif %}"><span class="settings-step">3 · APPLY / RECOVER</span>
+    {% if settings_application.status == 'ready' %}<h2>Ready for application</h2>
+    <form method="post" action="/settings/apply"><p>Apply the saved request to this read-only preview. The active configuration and its binding are validated together; tracking is preserved.</p><p class="muted">Only the saved request is applied; unsaved field edits are not included.</p><input type="hidden" name="request_sha256" value="{{ settings_application.request_sha256 }}"><button class="save-button" type="submit">Apply Requested Settings</button></form>
+    {% elif settings_application.status == 'recovery_required' %}<h2>Restore before editing</h2>
+    <form method="post" action="/settings/restore"><p>A settings application was interrupted. Scans are paused. Restore the previous settings to recover; tracking is preserved.</p><input type="hidden" name="request_sha256" value="{{ settings_application.request_sha256 }}"><button class="save-button" type="submit">Restore Previous Settings</button></form>
+    {% elif settings_application.status == 'resubmit_required' %}<h2>New request needed</h2><p>This request has a retained application attempt. Review your selections and save a new request before applying again.</p>
+    {% elif settings_application.status == 'none' %}<h2>No application pending</h2><p>Save a request first. Media actions remain disabled in this preview.</p>
+    {% else %}<h2>Application needs review</h2><p>Application is unavailable. Review the request status before proceeding.</p>{% endif %}
+  </article>
+</section>
 {% endif %}
+{% if requested %}<div class="alert" role="status">Requested settings saved. Active settings have not changed.</div>{% endif %}
 {% if unchanged %}<div class="alert" role="status">No active settings changes were requested.</div>{% endif %}
 {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
 {% if success and not preview_mode %}<div class="alert" role="status">Settings saved. Changes will apply at the next audit run.</div>{% endif %}
@@ -31,20 +42,11 @@
 {% if settings_restored %}<div class="alert" role="status">Previous settings restored. Tracking and lifecycle clocks were preserved.</div>{% endif %}
 {% if settings_apply_busy %}<div class="alert" role="status">A scan or settings operation is active. The request is retained; try again when it finishes.</div>{% endif %}
 {% if settings_apply_error %}<div class="alert error" role="alert">The settings operation did not complete. Review the status below before trying again. Tracking was not reset.</div>{% endif %}
-{% if settings_application.status == 'ready' %}
-<form method="post" action="/settings/apply" class="alert">
-<p>Apply the saved request to this read-only preview. The active configuration and its binding are validated together; tracking is preserved.</p>
-<input type="hidden" name="request_sha256" value="{{ settings_application.request_sha256 }}">
-<button class="save-button" type="submit">Apply Requested Settings</button></form>
-{% elif settings_application.status == 'recovery_required' %}
-<form method="post" action="/settings/restore" class="alert error">
-<p>A settings application was interrupted. Scans are paused. Restore the previous settings to recover; tracking is preserved.</p>
-<input type="hidden" name="request_sha256" value="{{ settings_application.request_sha256 }}">
-<button class="save-button" type="submit">Restore Previous Settings</button></form>
-{% elif settings_application.status == 'resubmit_required' %}
-<div class="alert" role="status">This request has a retained application attempt. Review your selections and save a new request before applying again.</div>
-{% endif %}
-<form method="post" action="/settings" id="settings-form">
+<div class="settings-editor-note"><p>{% if settings_application.status == 'recovery_required' %}Editing is paused. Restore previous settings before making another request.{% elif preview_mode %}Fields start from active values. Make edits, save a request, then apply it after review.{% else %}Fields show the current configuration. Changes apply after saving.{% endif %}</p><span id="settings-draft-status" role="status" aria-live="polite">No unsaved field edits</span></div>
+<nav class="settings-tabs" aria-label="Settings categories">
+{% for group in groups %}<button type="button" class="tab-button{% if loop.first %} selected{% endif %}" data-tab="{{ group }}" aria-pressed="{{ 'true' if loop.first else 'false' }}">{{ group }}</button>{% endfor %}
+</nav>
+<form method="post" action="/settings" id="settings-form" data-preview="{{ 'true' if preview_mode else 'false' }}">
 <fieldset style="border:0;padding:0;margin:0;min-width:0" {% if settings_application.status == 'recovery_required' %}disabled{% endif %}>
 {% for group, keys in groups.items() %}
 <section class="settings-section{% if not loop.first %} hidden-section{% endif %}" data-panel="{{ group }}">
@@ -76,36 +78,4 @@
 <input id="safety_confirmation" name="safety_confirmation" autocomplete="off" placeholder="Type I UNDERSTAND"></div>
 <button class="save-button" type="submit">{{ 'Save Requested Changes' if preview_mode else 'Save Changes' }}</button></div>
 </fieldset></form></main></div>
-<script>
-const tabs = document.querySelectorAll('[data-tab]');
-const panels = document.querySelectorAll('[data-panel]');
-function showTab(name) {
-  tabs.forEach(tab => { const active = tab.dataset.tab === name; tab.classList.toggle('selected', active); tab.setAttribute('aria-selected', String(active)); });
-  panels.forEach(panel => panel.classList.toggle('hidden-section', panel.dataset.panel !== name));
-}
-tabs.forEach(tab => tab.addEventListener('click', () => showTab(tab.dataset.tab)));
-document.querySelectorAll('[data-test-service]').forEach(button => {
-  button.addEventListener('click', async () => {
-    const service = button.dataset.testService;
-    const result = document.querySelector('[data-test-result="' + service + '"]');
-    button.disabled = true;
-    result.textContent = 'Testing…';
-    result.className = 'test-result';
-    try {
-      const response = await fetch('/api/test-connection/' + service, {
-        method: 'POST',
-        headers: {'Accept': 'application/json'},
-        credentials: 'same-origin'
-      });
-      const data = await response.json();
-      result.textContent = data.message || 'Unable to complete test.';
-      result.classList.add(data.ok ? 'test-success' : 'test-failure');
-    } catch (error) {
-      result.textContent = 'Request failed. Please try again.';
-      result.classList.add('test-failure');
-    } finally {
-      button.disabled = false;
-    }
-  });
-});
-</script></body></html>
+<script src="{{ url_for('static', filename='settings.js') }}" defer></script></body></html>

@@ -1,6 +1,11 @@
 {
   "name": "auditor-dashboard-browser-tests",
   "private": true,
-  "devDependencies": {"playwright": "1.62.1"},
-  "scripts": {"test": "node ../../scripts/test_dashboard_workspace.cjs"}
+  "devDependencies": {
+    "playwright": "1.62.1"
+  },
+  "scripts": {
+    "test": "node ../../scripts/test_dashboard_workspace.cjs",
+    "test:settings": "node ../../scripts/test_settings_workspace.cjs"
+  }
 }

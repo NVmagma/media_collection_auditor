@@ -17,7 +17,7 @@ image=$(docker inspect --format '{{.Image}}' media_collection_auditor)
 docker image inspect "$image" >/dev/null
 lab=$(mktemp -d "$base/dashboard-workspace.XXXXXX")
 mkdir "$lab/source"
-git archive "$revision" app tests/dashboard_workspace_case.py scripts/dashboard_workspace_server.py unraid/assets |
+git archive "$revision" app tests/dashboard_workspace_case.py tests/settings_workspace_case.py scripts/dashboard_workspace_server.py unraid/assets |
   tar -xf - -C "$lab/source"
 container=$(docker create --pull=never --network bridge --read-only --user "$(id -u):$(id -g)" \
   --cap-drop ALL --security-opt no-new-privileges --pids-limit 64 --memory 256m \

@@ -239,3 +239,26 @@
 .dashboard-app .history-controls>div{display:flex;gap:8px}
 @media(max-width:700px){.dashboard-app .history-entry-time{flex-basis:100%;margin-left:0}.dashboard-app .history-entry .scan-metrics>div{flex-basis:calc(50% - 12px);flex-wrap:wrap}}
 .dashboard-app.viewing-history .dashboard-status{display:none}
+
+/* Settings lifecycle: displayed values, private request metadata, explicit application. */
+.settings-app .settings-status-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:24px;margin-bottom:20px}
+.settings-app .settings-status-card{padding:16px;background:#131f30;border:1px solid #30435a;border-radius:10px;min-width:0;overflow-wrap:anywhere}
+.settings-app .settings-step{color:#a6b5c9;font-size:11px;letter-spacing:.08em}
+.settings-app .settings-status-card h2{font-size:17px;margin:10px 0}
+.settings-app .settings-status-card p{font-size:13px;line-height:1.6;margin:10px 0}
+.settings-app .settings-status-card .save-button{padding:9px 12px;font-size:13px;white-space:normal;max-width:100%}
+.settings-app .settings-recovery-card{border-color:#b58550;background:#2b251f}
+.settings-app .pending-field-names{font-size:13px;color:#bbd8f5;line-height:1.6}
+.settings-app .pending-field-names summary{cursor:pointer}
+.settings-app .pending-field-names ul{padding-left:18px}
+.settings-app .settings-editor-note{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:18px 0 0;font-size:13px;color:#a6b5c9}
+.settings-app .settings-editor-note p{margin:0}
+.settings-app #settings-draft-status{color:#c3dcfa}
+.settings-app .setting-row{border-bottom:1px solid #213249;padding-left:10px;border-left:3px solid transparent}
+.settings-app .setting-row.draft-changed{border-left-color:#a9cfff;background:#15263a}
+.settings-app .setting-row.draft-changed .source-indicator::after{content:' · Unsaved edit';color:#c6dfff}
+.settings-app .settings-main{overflow-wrap:anywhere}
+.settings-app button:focus-visible,.settings-app summary:focus-visible{outline:2px solid #97c4ff;outline-offset:3px}
+@media(max-width:1050px){.settings-app .settings-status-grid{grid-template-columns:1fr}.settings-app .settings-editor-note{align-items:flex-start;flex-direction:column}}
+.settings-app fieldset:disabled .save-button{opacity:.5;cursor:not-allowed}
+.settings-app fieldset:disabled input,.settings-app fieldset:disabled select{opacity:.65;cursor:not-allowed}

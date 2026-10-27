@@ -5,6 +5,7 @@ import threading
 from flask import Flask, Response, request, send_file
 from werkzeug.serving import make_server
 from dashboard_workspace_case import render_workspace
+from settings_workspace_case import render_settings_workspace
 
 
 def create_preview_app():
@@ -16,6 +17,16 @@ def create_preview_app():
     def dashboard():
         page = render_workspace(workspace='Review' if request.path == '/review' else 'Overview').get_data(as_text=True)
         page = page.replace('<main>', '<main><p class="notice" role="status">Disposable design preview · synthetic titles only · no production services connected.</p>', 1)
+        return Response(page, mimetype='text/html')
+
+    @app.get('/settings')
+    def settings():
+        scenario = request.args.get('scenario', 'ready')
+        try:
+            page = render_settings_workspace(scenario)
+        except ValueError:
+            return {'status':'unknown_fixture_scenario'}, 400
+        page = page.replace('<main class="settings-main">', '<main class="settings-main"><p role="status">Synthetic Settings demo. Form submissions are blocked; no production configuration is connected.</p>', 1)
         return Response(page, mimetype='text/html')
 
     @app.get('/static/auditor-badge.png')

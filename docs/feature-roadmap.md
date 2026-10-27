@@ -208,3 +208,10 @@ until the production switch is separately approved.
   separate Review/compact Overview increment. New Scans/History passed 191 Linux
   checks (including both runtime layouts) and real Chromium interaction checks;
   disposable Tower visual review is pending.
+
+- Settings presentation increment: three-stage active/request/application status,
+  local-only unsaved field indicators, private requested field-name summaries,
+  and clearer interrupted/recovery presentation. Apply/restore/backend safeguards
+  are unchanged. Positive user feedback recorded for Scans/History. Settings
+  passed 117 Linux tests and 8 subtests plus real browser/private HTTP checks;
+  the synthetic Tower Settings preview is ready for visual review.
