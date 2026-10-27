@@ -8,7 +8,7 @@
 <div class="sidebar-footer"><span class="viewer-indicator" title="Signed in as {{ viewer.name }}">{{ viewer.name }} <span class="viewer-role">{{ "Administrator" if viewer.admin else "Read only" }}</span></span> <form method="post" action="/logout" style="display:inline"><button type="submit">Sign out</button></form></div>
 </aside>
 <div class="app-content">
-<header class="settings-header"><div><h1>Settings</h1><p>Manage your auditor without editing Docker environment variables.</p></div><span class="header-note">{{ 'Requests require validation before applying' if preview_mode else 'Changes apply next audit' }}</span></header>
+<header class="settings-header"><div><h1>Settings</h1><p>Manage your auditor without editing Docker environment variables.</p></div><span class="header-note">{{ 'Apply requests after review' if preview_mode else 'Changes apply next audit' }}</span></header>
 <main class="settings-main">
 <nav class="settings-tabs" aria-label="Settings categories">
 {% for group in groups %}<button type="button" class="tab-button{% if loop.first %} selected{% endif %}" data-tab="{{ group }}" aria-selected="{{ 'true' if loop.first else 'false' }}">{{ group }}</button>{% endfor %}
@@ -17,7 +17,7 @@
 {% if requested %}<div class="alert" role="status">Requested settings saved. Active settings have not changed.</div>{% endif %}
 {% if pending_settings.status == 'requested' %}
 <div class="alert" role="status"><strong>Settings request pending</strong>
-<p>Active settings are shown below and continue to control scans. The request needs validation before it can be applied.</p>
+<p>Active settings are shown below and continue to control scans. Use Apply Requested Settings to validate and apply the saved request.</p>
 {% if pending_settings.changed_keys %}<p>Requested changes: {% for key in pending_settings.changed_keys %}{{ help_text[key][0] }}{{ ', ' if not loop.last else '.' }}{% endfor %}</p>{% endif %}</div>
 {% elif pending_settings.status == 'stale' %}
 <div class="alert error" role="status">The saved request was made against an older configuration. It has not been applied. Review the active settings before submitting a new request.</div>
@@ -27,6 +27,23 @@
 {% if unchanged %}<div class="alert" role="status">No active settings changes were requested.</div>{% endif %}
 {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
 {% if success and not preview_mode %}<div class="alert" role="status">Settings saved. Changes will apply at the next audit run.</div>{% endif %}
+{% if settings_applied %}<div class="alert" role="status">Requested settings applied. Tracking and lifecycle clocks were preserved. No scan was queued.</div>{% endif %}
+{% if settings_restored %}<div class="alert" role="status">Previous settings restored. Tracking and lifecycle clocks were preserved.</div>{% endif %}
+{% if settings_apply_busy %}<div class="alert" role="status">A scan or settings operation is active. The request is retained; try again when it finishes.</div>{% endif %}
+{% if settings_apply_error %}<div class="alert error" role="alert">The settings operation did not complete. Review the status below before trying again. Tracking was not reset.</div>{% endif %}
+{% if settings_application.status == 'ready' %}
+<form method="post" action="/settings/apply" class="alert">
+<p>Apply the saved request to this read-only preview. The active configuration and its binding are validated together; tracking is preserved.</p>
+<input type="hidden" name="request_sha256" value="{{ settings_application.request_sha256 }}">
+<button class="save-button" type="submit">Apply Requested Settings</button></form>
+{% elif settings_application.status == 'recovery_required' %}
+<form method="post" action="/settings/restore" class="alert error">
+<p>A settings application was interrupted. Scans are paused. Restore the previous settings to recover; tracking is preserved.</p>
+<input type="hidden" name="request_sha256" value="{{ settings_application.request_sha256 }}">
+<button class="save-button" type="submit">Restore Previous Settings</button></form>
+{% elif settings_application.status == 'resubmit_required' %}
+<div class="alert" role="status">This request has a retained application attempt. Review your selections and save a new request before applying again.</div>
+{% endif %}
 <form method="post" action="/settings" id="settings-form">
 {% for group, keys in groups.items() %}
 <section class="settings-section{% if not loop.first %} hidden-section{% endif %}" data-panel="{{ group }}">

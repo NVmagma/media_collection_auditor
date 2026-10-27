@@ -32,7 +32,7 @@ jobs:
         env:
           WEB_SESSION_SECRET: ci-only-session-secret
           PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/app:${{ github.workspace }}/tests
-        run: python -B -m pytest -q tests/test_sqlite_preview_settings.py tests/test_sqlite_manual_preview_web.py tests/test_unraid_preview_recovery_start.py tests/test_unraid_update_production_prepare.py
+        run: python -B -m pytest -q tests/test_sqlite_preview_settings.py tests/test_sqlite_preview_settings_apply.py tests/test_sqlite_preview_settings_apply_web.py tests/test_sqlite_manual_preview_web.py tests/test_unraid_preview_recovery_start.py tests/test_unraid_update_production_prepare.py
       - name: Run scheduled SQLite acceptance
         if: contains(fromJSON('["feature/sqlite","feature/unraid","feature/interface-api"]'), github.head_ref || github.ref_name)
         env:

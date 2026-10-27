@@ -68,13 +68,13 @@ def require_login():
         if request.path.startswith("/api/"):
             return {"ok": False, "message": "Please sign in."}, 401
         return redirect(url_for("login"))
-    if preview and request.endpoint not in ('settings','logout','run_now'):
+    if preview and request.endpoint not in ('settings','logout','run_now','apply_preview_settings','restore_preview_settings'):
         try: gate.require_sqlite_production_activation()
         except RuntimeError:
             if request.path.startswith('/api/'):
                 return {'status':'preview_paused','media_actions_authorized':False}, 503
             return render_template('preview-paused.html'), 503
-    if request.endpoint in ("settings", "test_connection", "run_now", "rescue") and not g.user["admin"]:
+    if request.endpoint in ("settings", "test_connection", "run_now", "rescue", "apply_preview_settings", "restore_preview_settings") and not g.user["admin"]:
         if request.path.startswith("/api/"):
             return {"ok": False, "message": "Administrator access required."}, 403
         return Response("Administrator access required.", 403)
@@ -778,10 +778,14 @@ def settings():
     preview_mode = _preview_backend_gate().preview_release_enabled()
     saved = load_config()
     pending_settings = {'status':'none','changed_keys':[]}
+    settings_application = {'status':'none'}
     if preview_mode:
         from app.sqlite_preview_settings import pending_request_summary
-        from config_store import CONFIG_FILE
-        pending_settings = pending_request_summary(config_path=CONFIG_FILE)
+        from config_store import CONFIG_FILE, initial_environment
+        from app.sqlite_preview_settings_apply import application_status
+        baseline = initial_environment()
+        pending_settings = pending_request_summary(config_path=CONFIG_FILE,environment=baseline)
+        settings_application = application_status(settings=baseline)
     error = None
     success = request.args.get("saved") == "1"
     requested = request.args.get("requested") == "1"
@@ -811,7 +815,7 @@ def settings():
             if preview_mode:
                 from app.sqlite_preview_settings import request_settings
                 from config_store import CONFIG_FILE
-                result = request_settings(config_path=CONFIG_FILE, updated=updated)
+                result = request_settings(config_path=CONFIG_FILE, updated=updated, environment=baseline)
                 return redirect(url_for('settings', **{result['status']: '1'}))
             save_config(updated)
             return redirect(url_for("settings", saved=1))
@@ -826,7 +830,11 @@ def settings():
     return render_template("settings.html", groups=FIELDS, values=values,
                            secrets=SECRETS, bools=BOOLS, sources=sources, help_text=FIELD_HELP, error=error,
                            success=success, preview_mode=preview_mode, requested=requested, unchanged=unchanged,
-                           pending_settings=pending_settings)
+                           pending_settings=pending_settings, settings_application=settings_application,
+                           settings_applied=request.args.get('applied')=='1',
+                           settings_restored=request.args.get('restored')=='1',
+                           settings_apply_error=request.args.get('apply_error')=='1',
+                           settings_apply_busy=request.args.get('apply_busy')=='1')
 
 
 @app.post("/api/test-connection/<service>")
@@ -839,6 +847,41 @@ def test_connection(service):
     if service not in SERVICES:
         return {"ok": False, "message": "Unknown service."}, 404
     return check_connection(service)
+
+
+def _change_preview_settings(*, restore):
+    if not admin_authorized():
+        return Response('Administrator access required.',403)
+    origin = request.headers.get('Origin') or request.headers.get('Referer')
+    if not origin or urlsplit(origin).netloc != request.host:
+        return Response('Invalid request origin.',403)
+    if not _preview_backend_gate().preview_release_enabled():
+        return Response('Preview settings application unavailable.',409)
+    from config_store import initial_environment
+    from app.sqlite_lock import StateLockBusy
+    from app.sqlite_preview_settings_apply import apply_requested_settings, restore_previous_settings
+    try:
+        action = restore_previous_settings if restore else apply_requested_settings
+        action(settings=initial_environment(),request_sha256=request.form.get('request_sha256',''))
+    except StateLockBusy:
+        return redirect(url_for('settings',apply_busy='1'))
+    except Exception:
+        # Pending files and journals retain details privately; no raw errors or
+        # connection credentials are returned through the settings page.
+        return redirect(url_for('settings',apply_error='1'))
+    from run_control import wake_worker
+    wake_worker()  # Reload effective settings; this does not queue a scan.
+    return redirect(url_for('settings',**{('restored' if restore else 'applied'):'1'}))
+
+
+@app.post('/settings/apply')
+def apply_preview_settings():
+    return _change_preview_settings(restore=False)
+
+
+@app.post('/settings/restore')
+def restore_preview_settings():
+    return _change_preview_settings(restore=True)
 
 
 @app.post("/api/run-now")

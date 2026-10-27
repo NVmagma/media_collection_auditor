@@ -19,6 +19,15 @@ FLOATS = {"RUN_INTERVAL_HOURS"}
 MINIMUM_ONE = {"HOLDING_DAYS", "REMOVAL_DAYS"}
 DEFAULTS = {"ALLOW_PERMANENT_DELETE":"false","DRY_RUN":"true","ENABLE_MOVIES":"true","ENABLE_TV":"false","MOVIE_WAIT_DAYS":"30","TV_WAIT_DAYS":"60","HOLDING_DAYS":"7","REMOVAL_DAYS":"7","RUN_INTERVAL_HOURS":"0","MAX_ACTIONS_PER_RUN":"10","DISLIKE_TAG":"not-at-all","PROTECT_TAG":"keep-forever","KEEP_TAG":"keep","FAVORITES_TRIGGER_KEEP":"true","JELLYFIN_REFRESH_AFTER_AUDIT":"false","TV_NEW_EPISODES_RESET_CLOCK":"true","ENABLE_SEASON_PRUNING":"false","KEEP_ALL_SEASONS_TAG":"keep-all-seasons","SEASON_PRUNE_GRACE_DAYS":"30","SEASON_PRUNE_AFTER_NEW_SEASON_DAYS":"7","NOTIFY_ON_DRY_RUN":"false","NOTIFY_LEAVING_SOON_DIGEST":"true","ALLOW_FILESYSTEM_DELETE":"false","ALLOW_CROSS_FILESYSTEM_MOVES":"false","MEDIA_PATH":"/media"}
 
+# Captured before the worker overlays saved settings onto os.environ. A settings
+# request that removes an override must fall back to Docker's original value.
+_INITIAL_ENVIRONMENT = dict(os.environ)
+
+
+def initial_environment():
+    return dict(_INITIAL_ENVIRONMENT)
+
+
 def load_config():
     try:
         data = json.loads(CONFIG_FILE.read_text())

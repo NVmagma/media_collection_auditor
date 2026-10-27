@@ -236,3 +236,49 @@ tracking. It also exercises the normal bound preview API and clean shutdown. No
 production mounts, service names, Docker socket or published ports are used by
 the test container. A local acceptance result does not imply a successful GitHub
 Actions build or published image.
+
+## Applying a saved settings request (development preview)
+
+The settings application workflow adds an explicit **Apply Requested Settings**
+button for authenticated administrators. Saving a request still leaves the active
+configuration untouched. Applying validates the exact displayed request digest,
+its base configuration, allowed preview policy and media roots, then coordinates
+with scans through the existing source and SQLite runner locks. An active scan
+leaves the request waiting for another explicit attempt; application does not
+queue a scan, clear daily claims or restart the container.
+
+Only the saved configuration and its preview binding are replaced. Their staged
+file identities and private before/after copies are retained in a settings
+transaction directory under the private control root. The SQLite database,
+retained JSON source, clocks, preparation receipts and media are unchanged. A
+pending transaction marker blocks preview scans and tracking API responses while
+login and administrator settings remain available. The running worker reloads
+settings after successful application.
+
+An interrupted application is never replayed or rolled back automatically. The
+settings page offers **Restore Previous Settings**, which checks the retained
+records, unchanged tracking and known file identities before restoring the old
+configuration and binding. An interrupted restoration can be explicitly resumed
+when its recorded file identities still match. Unknown replacements, corrupt
+records or changed tracking require review rather than adoption. A restored
+request must be reviewed and saved again before another application attempt.
+
+The baseline environment used when an override is removed is captured before
+saved settings are loaded, so removal returns to the original Docker value. The
+form cannot enable media actions, permanent deletion, cross-filesystem moves or
+season pruning. No environment switch opens the sealed build.
+
+Before deploying this development workflow, run its disposable host-backed lab:
+
+```bash
+settings_image=$(bash scripts/sqlite_preview_release_build.sh)
+bash scripts/sqlite_preview_settings_apply_lab.sh "$settings_image" /mnt/user/sql_test
+```
+
+The lab uses a new directory and container, private loopback HTTP, synthetic admin
+credentials, real SQLite state and an actual controller SIGKILL. It verifies
+settings application, interface availability after restart, explicit restoration,
+and unchanged tracking bytes. Production media, appdata, Unraid templates, Docker
+socket and published host ports are not mounted or changed. Only the fixture
+containers/processes are started or stopped. This does not deploy the workflow or
+claim a published image; GitHub acceptance/publication remain separate.
