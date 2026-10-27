@@ -10,7 +10,7 @@ on:
       - 'docker/sqlite-candidate*'
       - 'docker/sqlite-preview*'
       - 'app/**'
-      - 'scripts/dashboard_clock_coverage*'
+      - 'scripts/dashboard_clock_*'
       - 'tests/test_dashboard_clock*'
       - 'unraid/assets/**'
       - 'scripts/unraid_update*'
@@ -146,6 +146,11 @@ jobs:
           bash scripts/sqlite_preview_packet_render.sh "$image" "$packet" "$identity" "$rollback" /mnt/user/appdata/media_collection_auditor_sqlite_control > "$RUNNER_TEMP/private-packet-acceptance.log"
           python -B -c 'import json,sys; from pathlib import Path; from scripts.sqlite_preview_cutover_fixture import SECRET; p=Path(sys.argv[1]); r=json.loads((p/"review.json").read_bytes()); assert r["status"]=="cutover_review_prepared" and not r["deployment_authorized"]; assert SECRET not in (p/"review.json").read_text(); assert SECRET in (p/"preview.env").read_text(); assert all((p/n).stat().st_mode & 0o777 == 0o600 for n in ("review.json","preview.env","proposed-config.json","container-plan.json")); print("status=actual_private_packet_bind_verified")' "$packet" | tee -a "$RUNNER_TEMP/private-packet-acceptance.log"
           python -B -c 'import sys; from scripts.sqlite_preview_template_fixture import verify_private_packet; verify_private_packet(sys.argv[1])' "$packet" | tee -a "$RUNNER_TEMP/private-packet-acceptance.log"
+      - name: Exercise dashboard clock coverage through authenticated HTTP
+        run: |
+          image=$(cat "$RUNNER_TEMP/preview-release-image.txt")
+          dashboard_parent=$(mktemp -d "$RUNNER_TEMP/dashboard-parent.XXXXXX")
+          bash scripts/dashboard_clock_lab.sh "$image" "$dashboard_parent" | tee "$RUNNER_TEMP/dashboard-clock-acceptance.log"
       - name: Exercise preview settings application and explicit recovery
         run: |
           image=$(cat "$RUNNER_TEMP/preview-release-image.txt")
@@ -207,6 +212,7 @@ jobs:
             ${{ runner.temp }}/preview-release-image.txt
             ${{ runner.temp }}/preview-release-acceptance.log
             ${{ runner.temp }}/settings-apply-acceptance.log
+            ${{ runner.temp }}/dashboard-clock-acceptance.log
             ${{ runner.temp }}/private-packet-acceptance.log
             ${{ runner.temp }}/preview-install-acceptance.log
             ${{ runner.temp }}/preview-service-acceptance.log

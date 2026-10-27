@@ -37,7 +37,7 @@ jobs:
         env:
           WEB_SESSION_SECRET: ci-only-session-secret
           PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/app:${{ github.workspace }}/tests
-        run: python -B -m pytest -q tests/test_dashboard_clocks.py tests/test_dashboard_clock_coverage.py tests/test_dashboard_inventory.py tests/test_dashboard_lifecycle_visibility.py tests/test_docker_runtime_context.py
+        run: python -B -m pytest -q tests/test_dashboard_clocks.py tests/test_dashboard_clock_coverage.py tests/test_dashboard_clock_summary.py tests/test_dashboard_clock_fixture.py tests/test_dashboard_inventory.py tests/test_dashboard_lifecycle_visibility.py tests/test_docker_runtime_context.py
       - name: Run scheduled SQLite acceptance
         if: contains(fromJSON('["feature/sqlite","feature/unraid","feature/interface-api"]'), github.head_ref || github.ref_name)
         env:

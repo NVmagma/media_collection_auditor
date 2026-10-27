@@ -43,3 +43,28 @@ Zero-day Waiting policies remain zero-day estimates rather than being silently
 rounded to one day. Invalid duration settings leave estimates unavailable and do
 not create dashboard move candidates. These display calculations never change
 stored clocks or the worker's safety policy.
+
+## Saved date coverage in the dashboard
+
+The Overview page summarizes the same directory capture used for lifecycle rows.
+It shows missing, invalid and future clocks, plus tracking records without matching
+folders in the named stage. The latter is not evidence that media was deleted or
+permission to remove tracking. Per-library/stage counts remain separate, and an
+unavailable directory or tracking source is shown as unknown coverage rather than
+an empty success. No case folding, folder timestamps or dates from another stage
+are used to fill missing dates.
+
+The disposable HTTP acceptance fixture creates 513 movie Waiting folders with
+454 clocks, 69 TV Waiting folders with 66 clocks, two unmatched TV clocks, four
+Holding folders and thirteen Keep folders. It verifies the rendered counts, date
+format and missing-date labels while comparing source, SQLite and configuration
+bytes before and after. Only newly created fixture data is used:
+
+```bash
+clock_test_image=$(bash scripts/sqlite_preview_release_build.sh)
+bash scripts/dashboard_clock_lab.sh "$clock_test_image" /mnt/user/sql_test
+```
+
+This is a test of a locally built preview, not a production deployment. It uses
+private loopback HTTP, no published host ports or Docker socket in the fixture,
+and no production media, logs or control mounts.
