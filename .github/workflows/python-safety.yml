@@ -29,12 +29,24 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-          cache-dependency-path: tests/homarr-render/package-lock.json
+          cache-dependency-path: |
+            tests/homarr-render/package-lock.json
+            tests/dashboard-browser/package-lock.json
       - name: Verify compact Homarr examples
         run: |
           python -B scripts/build_homarr_compact_examples.py --check
           npm ci --prefix tests/homarr-render --ignore-scripts --no-audit --no-fund
           npm test --prefix tests/homarr-render
+      - name: Verify dashboard workspace in Chromium
+        env:
+          WEB_SESSION_SECRET: ci-only-session-secret
+          PYTHONPATH: ${{ github.workspace }}/app:${{ github.workspace }}/tests
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/dashboard-browsers
+        run: |
+          npm ci --prefix tests/dashboard-browser --ignore-scripts --no-audit --no-fund
+          tests/dashboard-browser/node_modules/.bin/playwright install --with-deps chromium --only-shell
+          python -B tests/dashboard_workspace_case.py "$RUNNER_TEMP/dashboard-workspace.html"
+          npm test --prefix tests/dashboard-browser -- "$RUNNER_TEMP/dashboard-workspace.html"
       - name: Compile all Python files
         run: python -m compileall -q app tests
       - name: Install pytest
@@ -48,7 +60,7 @@ jobs:
         env:
           WEB_SESSION_SECRET: ci-only-session-secret
           PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/app:${{ github.workspace }}/tests
-        run: python -B -m pytest -q tests/test_dashboard_clocks.py tests/test_dashboard_clock_coverage.py tests/test_dashboard_clock_summary.py tests/test_dashboard_clock_fixture.py tests/test_dashboard_inventory.py tests/test_dashboard_lifecycle_visibility.py tests/test_docker_runtime_context.py
+        run: python -B -m pytest -q tests/test_dashboard_clocks.py tests/test_dashboard_clock_coverage.py tests/test_dashboard_clock_summary.py tests/test_dashboard_clock_fixture.py tests/test_dashboard_inventory.py tests/test_dashboard_lifecycle_visibility.py tests/test_dashboard_workspace.py tests/test_docker_runtime_context.py
       - name: Run synthetic widget fixture and filter checks
         env:
           WEB_SESSION_SECRET: ci-only-session-secret

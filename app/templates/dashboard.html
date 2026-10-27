@@ -6,22 +6,30 @@
   <title>Media Collection Auditor</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
-<body>
+<body class="dashboard-app">
   <header class="topbar">
     <div>
       <h1><img class="brand-icon" src="/static/auditor-badge.png" alt="Auditor logo"> Media Collection Auditor</h1>
-      <p>Keep your library clean, organized &amp; complete.</p>
+      <p>Library tracking &amp; lifecycle review</p>
     </div>
     <nav><a href="/">Dashboard</a><a href="/logs">Logs</a>{% if viewer.admin %}<a href="/settings">Settings</a>{% if experimental_sqlite_recovery_enabled %}<a href="/experimental/sqlite/recovery">SQLite recovery (experimental)</a>{% endif %}{% endif %} <span class="viewer-indicator" title="Signed in as {{ viewer.name }}">{{ viewer.name }} <span class="viewer-role">{{ "Administrator" if viewer.admin else "Read only" }}</span></span> <form method="post" action="/logout" style="display:inline"><button type="submit">Sign out</button></form></nav>
   </header>
+  <nav class="workspace-nav" aria-label="Dashboard workspace">
+    <button type="button" data-workspace="Overview" aria-pressed="true">Overview</button>
+    <button type="button" data-workspace="Library" aria-pressed="false">Library</button>
+    <button type="button" data-workspace="Audit Preview" aria-pressed="false">Scans</button>
+    <button type="button" data-workspace="Activity" aria-pressed="false">Activity</button>
+    <button type="button" data-workspace="History" aria-pressed="false">History</button>
+  </nav>
   <main>
+    <div class="workspace-heading"><div><p class="workspace-eyebrow">COLLECTION WORKSPACE</p><h2 id="workspace-title">Overview</h2><p id="workspace-description" class="muted">Review library coverage, tracking gaps and scheduler observations.</p></div></div>
     {% if state_error %}<section role="alert" class="notice warning"><strong>Tracking state unavailable:</strong> {{ state_error }}. Dashboard lifecycle ages and predictions may be inaccurate. Do not rely on this display for media removal decisions.</section>{% endif %}
     <section class="hero">
-      <div><span class="status-dot"></span> {% if run.get("storage_authority") == "sqlite" %}Daily scheduler observations{% else %}Auditor is running{% endif %}</div>
+      <div class="scheduler-label">{% if run.get("storage_authority") == "sqlite" %}Daily scheduler observations{% else %}Auditor configuration{% endif %}</div>
       <strong>{% if run.get('production_activation') == 'preview_only' %}SQLite scheduled preview · media changes disabled{% elif run.get('storage_authority') == 'sqlite' %}Scheduled backend · activation {{ run.get('production_activation', 'unavailable') }}{% else %}Current configuration: {{ 'Dry Run (preview only)' if dry_run else 'LIVE MODE — changes to media are enabled' }}{% endif %}</strong>
       {% if viewer.admin %}{% set manual_preview = run.get("execution_mode") == "scheduled_preview" %}<div class="run-controls"><button id="run-now" type="button" data-preview="{{ 'true' if manual_preview else 'false' }}" {% if (run.get("storage_authority") == "sqlite" and not manual_preview) or run.get("running") or run.get("queued") %}disabled{% endif %}>{% if manual_preview %}Run Preview Now{% elif run.get("storage_authority") == "sqlite" %}Daily schedule only{% else %}Run Now{% endif %}</button><span id="run-result" role="status" aria-live="polite">{% if manual_preview %}Read-only scan; daily schedule unchanged.{% elif run.get("storage_authority") == "sqlite" %}Runs start only at the configured daily time.{% else %}Administrator access required.{% endif %}</span></div>{% endif %}
     </section>
-    <section class="cards run-cards">
+    <section class="cards run-cards" data-workspace-context="Overview History">
       <article><span>Audit status</span><strong>{{ 'Unavailable' if run.get('storage_authority') == 'sqlite' and run.get('status') == 'unavailable' else 'Blocked' if run.get('storage_authority') == 'sqlite' and run.get('scheduler_state') == 'blocked' else 'Running' if run.running else 'Queued' if run.queued else run.last_result|capitalize if run.last_result else 'Waiting' }}</strong></article>
       <article><span>Last finished attempt</span><strong class="small-metric">{{ run.last_finished|observation_datetime(dashboard_timezone) }}</strong></article>
       <article><span>Next scheduled audit</span><strong class="small-metric">{{ run.next_run|observation_datetime(dashboard_timezone) if run.next_run else ('Unavailable' if run.get('storage_authority') == 'sqlite' else 'Manual only / pending') }}</strong></article>
@@ -29,24 +37,25 @@
       <article><span>Movies processed (last run)</span><strong>{{ run.movies_processed if run.movies_processed is not none else '—' }}</strong></article>
       <article><span>TV folders processed (last run)</span><strong>{{ run.tv_processed if run.tv_processed is not none else '—' }}</strong></article>
     </section>
-    <section class="cards">
-      <article><span>Recent actions</span><strong>{{ actions|length }}</strong></article>
-      <article><span>Transient records</span><strong>{{ state.get('first_seen', {})|length }}</strong></article>
-      <article><span>Holding records</span><strong>{{ state.get('queued', {})|length }}</strong></article>
-      <article><span>Removal records</span><strong>{{ state.get('in_removal', {})|length }}</strong></article>
+    <section class="library-toolbar hidden-section" id="library-toolbar" aria-label="Library controls">
+      <div class="library-picker" role="group" aria-label="Media library">
+        <button type="button" data-tab="Movies" aria-pressed="true">Movies</button>
+        <button type="button" data-tab="TV Shows" aria-pressed="false">TV Shows</button>
+      </div>
+      <div class="dashboard-view-switch" role="group" aria-label="Media display style">
+        <span class="muted">Display</span>
+        <button type="button" class="view-switch-button selected" data-view="table" aria-pressed="true">Table</button>
+        <button type="button" class="view-switch-button" data-view="posters" aria-pressed="false">Posters</button>
+      </div>
     </section>
-    <div class="dashboard-view-switch" role="group" aria-label="Media display style">
-      <span class="muted">Media display</span>
-      <button type="button" class="view-switch-button selected" data-view="table" aria-pressed="true">Table</button>
-      <button type="button" class="view-switch-button" data-view="posters" aria-pressed="false">Posters</button>
-    </div>
-    <nav class="settings-tabs" aria-label="Dashboard sections">
-      {% for tab in ['Overview','Movies','TV Shows','Audit Preview','Activity','History'] %}
-      <button type="button" class="tab-button{% if loop.first %} selected{% endif %}" data-tab="{{ tab }}" aria-selected="{{ 'true' if loop.first else 'false' }}">{{ tab }}</button>
-      {% endfor %}
-    </nav>
     <section class="panel dashboard-section" data-panel="Overview">
       <h2>Library overview</h2>
+      <p class="muted">Saved tracking records · these totals can differ from the folders currently present.</p>
+      <div class="cards tracking-cards">
+        {% for section, label in [('first_seen','Waiting'),('queued','Holding'),('keep_seen','Keep'),('in_removal','Removal')] %}
+        <article><span>{{ label }}</span><strong>{{ state.get(section, {})|length if not state_error else '—' }}</strong><small>{{ 'Tracking unavailable' if state_error else 'Tracking records' }}</small></article>
+        {% endfor %}
+      </div>
       {% if inventory_warnings %}
       <p role="alert"><strong>Filesystem inventory incomplete:</strong> counts for unavailable directories are not reliable.</p>
       {% for warning in inventory_warnings %}<p class="muted">{{ warning }}</p>{% endfor %}
@@ -167,77 +176,5 @@
       {% else %}<p class="empty">No recorded audits yet. New runs will appear here after completion.</p>{% endif %}
     </section>
   </main>
-<script>
-const mediaViewButtons = document.querySelectorAll('[data-view]');
-function setMediaView(view) {
-  const selectedView = view === 'posters' ? 'posters' : 'table';
-  document.querySelectorAll('.lifecycle-panel .table-wrap').forEach(table =>
-    table.classList.toggle('hidden-section', selectedView !== 'table'));
-  document.querySelectorAll('.media-poster-list').forEach(list =>
-    list.classList.toggle('hidden-section', selectedView !== 'posters'));
-  mediaViewButtons.forEach(button => {
-    const selected = button.dataset.view === selectedView;
-    button.classList.toggle('selected', selected);
-    button.setAttribute('aria-pressed', String(selected));
-  });
-  try { localStorage.setItem('auditor-media-view', selectedView); } catch (_) {}
-}
-mediaViewButtons.forEach(button => button.addEventListener('click', () => setMediaView(button.dataset.view)));
-try { setMediaView(localStorage.getItem('auditor-media-view') || 'table'); }
-catch (_) { setMediaView('table'); }
-const tabs = document.querySelectorAll('[data-tab]');
-const panels = document.querySelectorAll('[data-panel]');
-function openSection(name) {
-  tabs.forEach(tab => {
-    const selected = tab.dataset.tab === name;
-    tab.classList.toggle('selected', selected);
-    tab.setAttribute('aria-selected', String(selected));
-  });
-  panels.forEach(panel => panel.classList.toggle('hidden-section', panel.dataset.panel !== name));
-}
-tabs.forEach(tab => tab.addEventListener('click', () => openSection(tab.dataset.tab)));
-document.querySelectorAll('[data-open-library]').forEach(button =>
-  button.addEventListener('click', () => openSection(button.dataset.openLibrary)));
-document.querySelectorAll('[data-stage-tab]').forEach(tab => tab.addEventListener('click', () => {
-  const section = tab.closest('[data-panel]');
-  section.querySelectorAll('[data-stage-tab]').forEach(item => {
-    const selected = item === tab;
-    item.classList.toggle('selected', selected);
-    item.setAttribute('aria-selected', String(selected));
-  });
-  section.querySelectorAll('[data-stage-panel]').forEach(panel =>
-    panel.classList.toggle('hidden-section', panel.dataset.stagePanel !== tab.dataset.stageTab));
-}));
-document.querySelectorAll('.rescue-choice').forEach(choice => choice.addEventListener('change', async () => {
-  const destination = choice.value;
-  if (!destination) return;
-  const title = choice.dataset.title;
-  const library = choice.dataset.library;
-  if (!confirm('Rescue ' + title + ' (' + library + ') to ' + destination + '? Live mode moves media.')) { choice.value = ''; return; }
-  choice.disabled = true;
-  try {
-    const response = await fetch('/api/rescue', {method:'POST', credentials:'same-origin',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({title, library, destination})});
-    const data = await response.json();
-    alert(data.message || 'Request failed.');
-    if (data.ok) location.reload();
-  } catch (error) { alert('Unable to request rescue.'); }
-  finally { choice.disabled = false; choice.value = ''; }
-}));
-const button = document.getElementById('run-now');
-button?.addEventListener('click', async () => {
-  if (button.dataset.preview !== 'true' && !confirm('Start an audit using your saved configuration? In Live Mode this may move or delete media.')) return;
-  button.disabled = true;
-  const output = document.getElementById('run-result');
-  output.textContent = 'Requesting audit…';
-  try {
-    const response = await fetch('/api/run-now', {method:'POST', credentials:'same-origin'});
-    const data = await response.json();
-    output.textContent = data.message || 'Request failed.';
-    if (response.status === 401) output.textContent = 'Please open Settings to sign in, then try again.';
-  } catch (error) { output.textContent = 'Unable to request an audit.'; }
-  finally { button.disabled = false; }
-});
-</script></body>
+<script src="{{ url_for('static', filename='dashboard.js') }}" defer></script></body>
 </html>

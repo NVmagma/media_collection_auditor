@@ -166,3 +166,11 @@ until the production switch is separately approved.
 - Dashboard navigation polish: consistent visited/unvisited Jellyfin title
   colors, visible keyboard focus, and narrow-screen wrapping prepared. Browser
   acceptance and deployment remain pending; no lifecycle or tracking changes.
+
+- Hybrid dashboard foundation: Overview/Library/Scans/Activity/History workspace
+  navigation, contextual movie/TV and table/poster controls, scoped dashboard
+  spacing and clearer tracking-versus-folder totals. Existing action handlers and
+  administrator restrictions are retained. Sixty focused Python checks passed
+  on Linux; Chromium exercised page/library/stage/view switching and storage
+  preference behavior at 1280/736/390/320px with synthetic intercepted responses.
+  Production remains unchanged; candidate image and Tower acceptance pending.

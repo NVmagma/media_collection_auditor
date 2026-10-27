@@ -71,3 +71,36 @@
 .media-title-link:hover{color:#d0e5ff;text-decoration:underline}
 .media-title-link:focus-visible{outline:2px solid #70acff;outline-offset:4px;border-radius:2px;text-decoration:underline}
 @media(max-width:600px){.lifecycle-panel .table-wrap td:first-child{white-space:normal;min-width:180px}.topbar nav{flex-wrap:wrap}.dashboard-view-switch{flex-wrap:wrap}}
+
+/* Dashboard workspace: local navigation, with library-only presentation controls. */
+.dashboard-app{background:#0c1420}
+.dashboard-app .topbar{background:#101a28;padding:18px max(5%,calc((100% - 1400px)/2));gap:20px}
+.dashboard-app .topbar h1{font-size:22px}
+.dashboard-app .topbar p{font-size:13px}
+.dashboard-app main{margin-top:24px}
+.dashboard-app .workspace-nav{display:flex;gap:6px;flex-wrap:wrap;padding:10px 5%;border-bottom:1px solid #29384c;background:#101a28}
+.dashboard-app .workspace-nav button{background:transparent;color:#a6b5c9;padding:10px 16px;border:1px solid transparent}
+.dashboard-app .workspace-nav button[aria-pressed=true]{color:#dceaff;background:#233751;border-color:#3c5676}
+.dashboard-app .workspace-nav button:hover{background:#1a2a40;color:#e7edf7}
+.dashboard-app button:focus-visible{outline:2px solid #97c4ff;outline-offset:3px}
+.dashboard-app .workspace-heading{margin-bottom:20px}
+.dashboard-app .workspace-heading h2{font-size:26px;margin:6px 0}
+.dashboard-app .workspace-heading p{margin:0}
+.dashboard-app .workspace-eyebrow{font-size:11px;letter-spacing:.12em;color:#a6b5c9}
+.dashboard-app .hero{padding:16px 20px;box-shadow:none;border-color:#29384c}
+.dashboard-app .hero .scheduler-label{font-size:13px;color:#bacce1}
+.dashboard-app .hero .run-controls{margin-top:12px}
+.dashboard-app .run-cards article{padding:15px;box-shadow:none}
+.dashboard-app .run-cards strong{font-size:21px}
+.dashboard-app .run-cards strong.small-metric{font-size:14px}
+.dashboard-app .panel{border-color:#29384c;box-shadow:none}
+.dashboard-app .tracking-cards{margin-top:18px}
+.dashboard-app .tracking-cards article{background:#162437;box-shadow:none}
+.dashboard-app .tracking-cards small{color:#a6b5c9}
+.dashboard-app .library-toolbar{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+.dashboard-app .library-picker{display:flex;gap:6px}
+.dashboard-app .library-picker button{background:#162538;color:#b5c9dc;border:1px solid #2b415a;padding:9px 16px}
+.dashboard-app .library-picker button.selected{background:#214568;color:#fff;border-color:#70acff}
+.dashboard-app .dashboard-view-switch{margin:0}
+.dashboard-app .hidden-section{display:none}
+@media(max-width:600px){.dashboard-app .topbar h1{font-size:19px}.dashboard-app .workspace-nav{gap:4px}.dashboard-app .workspace-nav button{padding:10px 12px}.dashboard-app .panel{padding:16px}.dashboard-app .library-toolbar{align-items:flex-start;flex-direction:column}.dashboard-app .library-overview-card{padding:18px;min-height:130px}.dashboard-app .topbar nav{gap:12px}}
