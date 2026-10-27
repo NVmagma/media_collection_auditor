@@ -10,6 +10,8 @@ on:
       - 'docker/sqlite-candidate*'
       - 'docker/sqlite-preview*'
       - 'app/**'
+      - 'scripts/dashboard_clock_coverage*'
+      - 'tests/test_dashboard_clock*'
       - 'unraid/assets/**'
       - 'scripts/unraid_update*'
       - 'scripts/unraid_preview_recovery*'
