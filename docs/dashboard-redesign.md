@@ -20,8 +20,19 @@ Development branch: `feature/interface-api`. Production is unchanged.
   Keyboard users can close with Escape or Close and return to the triggering
   button. The inspector stacks above the list on smaller screens.
 
-The full operations Overview, compact media-row display, additional filters,
-scan-history redesign and active/pending Settings redesign remain upcoming.
+The first shell/Library preview received positive user feedback. Overview now
+adds read-only attention items, a compact scheduler summary, a latest-attempt
+proposal summary and two five-title lists combining enabled movie/TV libraries.
+Selecting a list title opens its matching Library stage and Details panel. Poster
+requests use the existing authenticated image route, with an inert fallback.
+The new lists use the already enriched inventory; they do not rescan directories
+or request protection data. Waiting sorts by recorded elapsed days (then title);
+Holding sorts by the existing estimated calendar date. Unknown dates sort last,
+unavailable tracking suppresses the lists, and partial directory coverage stays
+explicit. Stage dates and tracking records are never initialized by this view.
+
+Compact Library media rows, additional filters, scan-history redesign and
+active/pending Settings redesign remain upcoming.
 The Scans workspace currently contains the existing saved-date deadline estimate,
 not a reconstructed live scan or a promise of future media actions.
 
@@ -71,3 +82,9 @@ will not stop an existing service to claim the port.
 The server exits after fifteen minutes. Its stopped container and lab files are
 retained. Use the exact returned container ID to remove only that fixture when
 finished; no automatic production restoration or changes occur.
+
+Overview follow-up verification: 148 focused Linux checks passed. Chromium checks
+include coverage expansion, movie/TV title-to-inspector navigation and mobile
+overflow, alongside the existing search/sort/focus checks. The synthetic server
+also served the Overview over private HTTP while rejecting action requests.
+The Tower visual review for this Overview increment is pending.

@@ -186,3 +186,56 @@ def summarize_dashboard_clocks(state, stages, warnings, *, libraries, tracking_a
             else:complete=False
             rows.append(row)
     return {'rows':rows,'complete':complete,'freshness_verified':False,**totals}
+
+
+def dashboard_overview(stages, coverage, *, libraries, tracking_available=True, limit=5):
+    """Project bounded overview lists from the already enriched folder snapshot.
+
+    Waiting uses recorded elapsed days, with title/library ties. Holding uses the
+    existing estimated calendar date. Unknown clocks sort last and never acquire
+    an inferred date. This function performs no collection or state writes.
+    """
+    if type(limit) is not int or not 1 <= limit <= 10:
+        raise ValueError('Overview limit must be between one and ten')
+    enabled = set(libraries)
+    result = {'freshness_verified': False, 'count_basis': 'observed_folders', 'lists': {}, 'attention': []}
+    for stage, name in (('Holding', 'leaving_soon'), ('Waiting', 'oldest_waiting')):
+        source = [item for item in stages.get(stage, []) if item['library'] in enabled]
+        incomplete = any(row['stage'] == stage and row['library'] in enabled
+                         and row['status'] != 'observed' for row in coverage['rows'])
+        if not tracking_available:
+            result['lists'][name] = {'status': 'unavailable', 'items': None,
+                'observed_folders': len(source), 'more': 0, 'unusable_dates': None}
+            continue
+        def sort_key(item):
+            if stage == 'Holding':
+                known = item.get('clock_status') == 'recorded' and bool(item.get('next_review_date'))
+                date = item['next_review_date'] if known else ''
+            else:
+                elapsed = item.get('elapsed_days')
+                known = item.get('clock_status') == 'recorded' and type(elapsed) is int and elapsed >= 0
+                date = -elapsed if known else 0
+            return (not known, date, item['title'].casefold(), item['library'])
+        ordered = sorted(source, key=sort_key)
+        rows = [{key: item.get(key) for key in ('title', 'library', 'clock_status', 'since_display',
+                    'since_basis', 'next_review_display')} | {'stage': stage} for item in ordered[:limit]]
+        result['lists'][name] = {'status': 'partial' if incomplete else 'observed', 'items': rows,
+            'observed_folders': len(source), 'more': max(0, len(source) - limit),
+            'unusable_dates': sum(sort_key(item)[0] for item in source)}
+    attention = result['attention']
+    if not tracking_available:
+        attention.append({'title': 'Tracking unavailable',
+            'detail': 'Saved dates and tracking totals cannot be verified. Review the tracking error before relying on this display.',
+            'target': 'clock-coverage'})
+    if not coverage['complete']:
+        attention.append({'title': 'Coverage is incomplete',
+            'detail': 'Some tracking or directory observations are unavailable. Counts below cover only readable inputs.',
+            'target': 'clock-coverage'})
+    prefix = 'At least ' if not coverage['complete'] else ''
+    for count, singular, plural, detail in (
+        (coverage['missing_dates'], 'folder has no saved stage date', 'folders have no saved stage date', 'Existing dates are preserved. No folder date is substituted.'),
+        (coverage['invalid_dates'] + coverage['future_dates'], 'saved date needs review', 'saved dates need review', 'Invalid or future dates are not used as reliable lifecycle ages.'),
+        (coverage['records_without_stage_folder'], 'record has no matching stage folder', 'records have no matching stage folder', 'Review renamed or absent folders; this does not prove media was deleted.')):
+        if count:
+            attention.append({'title': prefix + str(count) + ' ' + (singular if count == 1 else plural), 'detail': detail, 'target': 'clock-coverage'})
+    return result

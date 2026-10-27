@@ -7,7 +7,7 @@ os.environ.setdefault('WEB_SESSION_SECRET', 'fixture-dashboard-secret')
 import web
 
 
-def render_workspace(*, admin=False, tracking_available=True):
+def render_workspace(*, admin=False, tracking_available=True, run_updates=None):
     state = {'first_seen': {'The Quiet Orbit (2026)': '2026-10-01T11:30:00',
                             'TV/Lantern House (2026)': '2026-10-02T11:30:00',
                             'A & B <Moon> (2026)': '2026-10-03T11:30:00'},
@@ -18,12 +18,17 @@ def render_workspace(*, admin=False, tracking_available=True):
                          {'library': 'TV', 'title': 'Lantern House (2026)', 'since': state['first_seen']['TV/Lantern House (2026)']}]
     stages['Waiting'].append({'library': 'Movies', 'title': 'A & B <Moon> (2026)', 'since': state['first_seen']['A & B <Moon> (2026)']})
     stages['Holding'] = [{'library': 'Movies', 'title': 'Summer Frontier (2026)', 'since': state['queued']['Summer Frontier (2026)']}]
+    stages['Waiting'].append({'library': 'TV', 'title': 'Untracked Series (2026)', 'since': None})
+    state['first_seen']['TV/Retained unmatched (2026)'] = '2026-10-01T11:30:00'
     config = {'ENABLE_MOVIES': 'true', 'ENABLE_TV': 'true', 'DRY_RUN': 'true',
               'ALLOW_PERMANENT_DELETE': 'false'}
     run = {'storage_authority': 'sqlite', 'execution_mode': 'scheduled_preview',
            'production_activation': 'preview_only', 'running': False, 'queued': False,
            'status': 'advisory_only', 'last_result': 'completed',
-           'movies_processed': None, 'tv_processed': None}
+           'movies_processed': None, 'tv_processed': None,
+           'last_finished': '2026-10-27T09:04:00+00:00', 'next_run': '2026-10-28T09:00:00+00:00',
+           'moves_proposed': 2, 'discovery_changes': 1}
+    run.update(run_updates or {})
     with ExitStack() as stack:
         for name, value in {'current_user': {'name': 'Fixture reviewer', 'admin': admin},
                             'load_actions': [], 'load_config': config,

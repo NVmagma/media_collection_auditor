@@ -181,3 +181,11 @@ until the production switch is separately approved.
   Linux dashboard/API regression checks and Chromium interaction checks passed;
   a synthetic expiring Tower visual preview is ready. See
   [redesign scope and preview](dashboard-redesign.md). No production update yet.
+
+- Operations Overview increment: explicit coverage/scheduler attention findings,
+  compact scheduler and proposal observations, and bounded Leaving soon/Oldest
+  waiting lists from the same enriched folder snapshot. Title selection opens
+  the correct Library stage/inspector. Missing clocks, partial directories and
+  unavailable tracking remain distinct. Positive user feedback recorded for the
+  preceding shell/Library preview. Overview passed 148 focused Linux checks plus
+  real Chromium/private HTTP checks; Tower visual acceptance remains pending.

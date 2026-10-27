@@ -30,6 +30,25 @@ if (!file) throw Error('Pass the synthetic page rendered by tests/dashboard_work
     }
     await section('Overview');
     assert.equal(await page.locator('#library-toolbar').isVisible(), false);
+    await page.locator('[data-open-details="clock-coverage"]').first().click();
+    assert.equal(await page.locator('#clock-coverage').getAttribute('open'), '');
+    assert.equal(await page.evaluate(() => document.activeElement.parentElement.id), 'clock-coverage');
+    await page.locator('[data-open-title="Summer Frontier (2026)"]').click();
+    await section('Movies');
+    assert.equal(await page.locator('[data-stage-panel="Movies:Holding"]').isVisible(), true);
+    assert.equal(await page.locator('#inspector-title').textContent(), 'Summer Frontier (2026)');
+    await page.locator('[data-workspace="Overview"]').click();
+    await page.locator('[data-open-title="Lantern House (2026)"]').click();
+    await section('TV Shows');
+    assert.equal(await page.locator('#inspector-title').textContent(), 'Lantern House (2026)');
+    await page.locator('[data-workspace="Overview"]').click();
+    await page.locator('[data-open-workspace="History"]').first().click();
+    await section('History');
+    await page.locator('[data-workspace="Overview"]').click();
+    await page.locator('[data-open-library="Movies"]').click();
+    await page.locator('[data-stage-tab="Movies:Waiting"]').click();
+    await page.locator('[data-workspace="Overview"]').click();
+
     await page.locator('[data-workspace="Library"]').click();
     await section('Movies');
     assert.equal(await page.locator('#library-toolbar').isVisible(), true);

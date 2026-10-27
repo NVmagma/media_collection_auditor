@@ -46,3 +46,23 @@ def test_disposable_server_has_synthetic_banner_and_refuses_actions():
     for endpoint in ('/api/run-now', '/api/rescue', '/settings'):
         assert client.post(endpoint, json={}).status_code == 405
     assert client.get('/api/v1/summary').status_code == 404
+
+
+def test_overview_findings_estimates_and_unavailable_lists_are_explicit():
+    page = render_workspace(run_updates={'last_result': 'failed', 'scheduler_state': 'blocked'}).get_data(as_text=True)
+    assert '1 folder has no saved stage date' in page
+    assert '1 record has no matching stage folder' in page
+    assert 'Latest scheduler observation needs review' in page
+    assert 'estimated calendar dates, not deletion dates' in page
+    assert 'Proposals are not completed media actions' in page
+    unavailable = render_workspace(tracking_available=False).get_data(as_text=True)
+    assert unavailable.count('Tracking unavailable; this list cannot be verified.') == 2
+    assert 'No Holding folders observed' not in unavailable
+
+
+def test_latest_attempt_does_not_replace_unreported_counts_with_zero():
+    page = render_workspace(run_updates={'moves_proposed': None, 'discovery_changes': None,
+                                        'last_result': None, 'status': 'unavailable'}).get_data(as_text=True)
+    assert 'No result recorded' in page
+    assert page.count('<dd>—</dd>') == 2
+    assert 'Scheduler observations are unavailable in this process' in page

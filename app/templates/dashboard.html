@@ -33,9 +33,6 @@
       <article><span>Audit status</span><strong>{{ 'Unavailable' if run.get('storage_authority') == 'sqlite' and run.get('status') == 'unavailable' else 'Blocked' if run.get('storage_authority') == 'sqlite' and run.get('scheduler_state') == 'blocked' else 'Running' if run.running else 'Queued' if run.queued else run.last_result|capitalize if run.last_result else 'Waiting' }}</strong></article>
       <article><span>Last finished attempt</span><strong class="small-metric">{{ run.last_finished|observation_datetime(dashboard_timezone) }}</strong></article>
       <article><span>Next scheduled audit</span><strong class="small-metric">{{ run.next_run|observation_datetime(dashboard_timezone) if run.next_run else ('Unavailable' if run.get('storage_authority') == 'sqlite' else 'Manual only / pending') }}</strong></article>
-      <article><span>Mode</span><strong>{{ 'Dry Run' if dry_run else 'Live' }}</strong></article>
-      <article><span>Movies processed (last run)</span><strong>{{ run.movies_processed if run.movies_processed is not none else '—' }}</strong></article>
-      <article><span>TV folders processed (last run)</span><strong>{{ run.tv_processed if run.tv_processed is not none else '—' }}</strong></article>
     </section>
     <section class="library-toolbar hidden-section" id="library-toolbar" aria-label="Library controls">
       <div class="library-picker" role="group" aria-label="Media library">
@@ -48,7 +45,8 @@
         <button type="button" class="view-switch-button" data-view="posters" aria-pressed="false">Posters</button>
       </div>
     </section>
-    <section class="panel dashboard-section" data-panel="Overview">
+    <section class="dashboard-section overview-workspace" data-panel="Overview">
+    <div class="panel overview-totals">
       <h2>Library overview</h2>
       <p class="muted">Saved tracking records · these totals can differ from the folders currently present.</p>
       <div class="cards tracking-cards">
@@ -56,12 +54,56 @@
         <article><span>{{ label }}</span><strong>{{ state.get(section, {})|length if not state_error else '—' }}</strong><small>{{ 'Tracking unavailable' if state_error else 'Tracking records' }}</small></article>
         {% endfor %}
       </div>
+    </div>
+    <div class="overview-grid">
+    <section class="panel overview-attention" aria-labelledby="attention-title">
+      <div class="panel-heading"><h2 id="attention-title">Needs attention</h2><span class="muted">Read-only findings</span></div>
+      {% if overview.attention %}
+      {% for finding in overview.attention %}<article class="attention-finding"><strong>{{ finding.title }}</strong><p class="muted">{{ finding.detail }}</p><button type="button" data-open-details="{{ finding.target }}">Review coverage</button></article>{% endfor %}
+      {% elif not health_issues %}<p class="muted">No known tracking discrepancies in the readable inputs. Live inventory freshness remains unverified.</p>{% endif %}
+      {% if health_issues %}<p><button type="button" class="overview-review-findings" data-open-details="health-findings">Review all {{ health_issues|length }} collection findings</button></p><p class="muted">Includes stage mismatches and pending Arr updates; some findings overlap coverage items above.</p>{% endif %}
+      {% if run.get('scheduler_state') == 'blocked' or run.get('last_result') == 'failed' %}<article class="attention-finding"><strong>Latest scheduler observation needs review</strong><p class="muted">The schedule is blocked or the last attempt failed. Review History and logs before assuming a scan completed.</p><button type="button" data-open-workspace="History">Review History</button></article>{% endif %}
+      {% if run.get('status') == 'unavailable' %}<p class="muted">Scheduler observations are unavailable in this process.</p>{% endif %}
+    </section>
+    <section class="panel overview-context" aria-labelledby="overview-context-title">
+      <div class="panel-heading"><h2 id="overview-context-title">Latest attempt</h2><span class="muted">{% if run.running %}In progress{% elif run.last_result %}{{ run.last_result|capitalize }}{% else %}No result recorded{% endif %}</span></div>
+      <dl class="overview-attempt-metrics"><div><dt>Proposed moves</dt><dd>{{ run.get('moves_proposed') if run.get('moves_proposed') is not none else '—' }}</dd></div><div><dt>Discovery changes</dt><dd>{{ run.get('discovery_changes') if run.get('discovery_changes') is not none else '—' }}</dd></div></dl>
+      <p class="muted">— means not reported. Proposals are not completed media actions.</p>
+      <p class="muted">{% if run.get('storage_authority') == 'sqlite' %}Observations cover this scheduler process only; live inventory freshness is unverified.{% else %}Recorded audit results do not verify live inventory freshness.{% endif %}</p>
+      <button type="button" data-open-workspace="History">Review History</button>
+    </section>
+    </div>
+    <div class="overview-grid overview-title-lists">
+      {% for name, heading in [('leaving_soon','Leaving soon'),('oldest_waiting','Oldest waiting')] %}
+      {% set listing = overview.lists[name] %}
+      <section class="panel overview-title-list" aria-label="{{ heading }}">
+        <div class="panel-heading"><h2>{{ heading }}</h2><span class="muted">Movies + TV</span></div>
+        <p class="overview-list-basis muted">{% if name == 'leaving_soon' %}Holding folders · estimated calendar dates, not deletion dates. Protection checks can prevent moves.{% else %}Waiting folders · ordered by recorded days in stage, then title.{% endif %}</p>
+        {% if listing.status == 'unavailable' %}<p class="empty">Tracking unavailable; this list cannot be verified.</p>
+        {% else %}
+        {% if listing.status == 'partial' %}<p role="status" class="overview-partial">Directory coverage is incomplete; this list may omit titles.</p>{% endif %}
+        {% for item in listing['items'] %}
+        <article class="overview-media-row">
+          <a class="overview-poster" href="{{ url_for('jellyfin_link', library=item.library, title=item.title) }}" target="_blank" rel="noopener noreferrer" aria-label="Open {{ item.title }} in Jellyfin"><span>{{ 'TV' if item.library == 'TV' else 'FILM' }}</span><img loading="lazy" src="{{ url_for('poster', library=item.library, title=item.title) }}" alt="" onerror="this.remove()"></a>
+          <div class="overview-media-copy"><button type="button" class="overview-title-button" data-open-title="{{ item.title }}" data-library="{{ item.library }}" data-stage="{{ item.stage }}">{{ item.title }}</button><p><span class="overview-stage stage-{{ item.stage|lower }}">{{ item.stage }}</span> <span class="muted">{{ 'TV show' if item.library == 'TV' else 'Movie' }}</span></p>
+            <p class="muted">{% if name == 'leaving_soon' %}Est. removal stage: {{ item.next_review_display or 'Unknown' }}{% else %}Tracked since: <span title="{{ item.since_basis }}">{{ item.since_display }}</span>{% endif %}</p>
+          </div>
+        </article>
+        {% else %}<p class="empty">{% if listing.status == 'partial' %}No folders observed in the readable directories.{% else %}No {{ 'Holding' if name == 'leaving_soon' else 'Waiting' }} folders observed in enabled libraries.{% endif %}</p>{% endfor %}
+        {% if listing.more %}<p class="muted">{{ listing.more }} more observed folders · open Library to browse.</p>{% endif %}
+        {% if listing.unusable_dates %}<p class="muted">{{ listing.unusable_dates }} folders have no usable {{ 'transition estimate' if name == 'leaving_soon' else 'recorded age' }}; unknown dates sort last.</p>{% endif %}
+        {% endif %}
+      </section>
+      {% endfor %}
+    </div>
+    <section class="panel overview-diagnostics" aria-label="Collection diagnostics">
+      <h2>Coverage &amp; collection review</h2>
       {% if inventory_warnings %}
       <p role="alert"><strong>Filesystem inventory incomplete:</strong> counts for unavailable directories are not reliable.</p>
       {% for warning in inventory_warnings %}<p class="muted">{{ warning }}</p>{% endfor %}
       {% endif %}
       <p class="muted">Choose Movies or TV Shows to see their individual lifecycle stages. Activity and History cover both libraries.</p>
-      <details>
+      <details id="health-findings">
         <summary>Collection health · {{ health_issues|length }} item(s) needing review</summary>
         <p class="muted">Read-only comparison of media folders, tracking timestamps, and pending Arr updates. A newly moved title may appear here until the next audit.</p>
         {% if health_issues %}
@@ -70,7 +112,7 @@
         {% endfor %}</ul>
         {% else %}<p class="muted">No discrepancies found in readable directories.</p>{% endif %}
       </details>
-      <details class="clock-coverage">
+      <details class="clock-coverage" id="clock-coverage">
         <summary>Saved date coverage · {{ clock_coverage.missing_dates }} folders without a stage date · {{ clock_coverage.records_without_stage_folder }} records without a matching stage folder{% if not clock_coverage.complete %} · incomplete{% endif %}</summary>
         <p class="muted">These are observed tracking gaps. Missing dates remain untracked; folder dates and dates from other stages are not substituted. Records without a matching stage folder need review, not automatic removal.</p>
         {% if not clock_coverage.complete %}<p role="status">Coverage is incomplete. Unavailable counts are shown as —.</p>{% endif %}
@@ -92,6 +134,7 @@
         </button>
         {% endfor %}
       </div>
+    </section>
     </section>
     <div class="library-layout hidden-section" id="library-layout">
     <div class="library-browser">
@@ -176,6 +219,7 @@
       {% else %}<p class="empty">No action log entries yet.</p>{% endif %}
     </section>
     <section class="panel dashboard-section hidden-section" data-panel="History">
+      <p class="muted">Last reported folder counts: Movies {{ run.movies_processed if run.movies_processed is not none else '—' }} · TV {{ run.tv_processed if run.tv_processed is not none else '—' }}. Mode: {{ 'Dry Run' if dry_run else 'Live' }}.</p>
       <div class="panel-heading"><h2>Audit history</h2><span class="muted">{% if run.get("storage_authority") == "sqlite" %}Current scheduler process only · live inventory freshness unverified{% else %}Last {{ history|length }} runs · stored in appdata{% endif %}</span></div>
       <p class="muted">{% if run.get("storage_authority") == "sqlite" %}Scheduled results report completed moves, not a verified live inventory. Times are UTC.{% else %}Movie and TV counts reflect titles appearing in action logs, not every title scanned. Times are UTC.{% endif %}</p>
       {% if history %}

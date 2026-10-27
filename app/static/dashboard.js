@@ -153,3 +153,24 @@ button?.addEventListener('click', async () => {
   } catch (error) { output.textContent = 'Unable to request an audit.'; }
   finally { button.disabled = false; }
 });
+
+// Overview navigation reuses the Library's existing stage and Details controls.
+document.querySelectorAll('[data-open-workspace]').forEach(button =>
+  button.addEventListener('click', () => openSection(button.dataset.openWorkspace)));
+document.querySelectorAll('[data-open-details]').forEach(button => button.addEventListener('click', () => {
+  const target = document.getElementById(button.dataset.openDetails);
+  target.open = true;
+  target.querySelector('summary').focus();
+  target.scrollIntoView({block: 'nearest', behavior: 'auto'});
+}));
+document.querySelectorAll('[data-open-title]').forEach(button => button.addEventListener('click', () => {
+  document.getElementById('library-search').value = '';
+  openSection(button.dataset.library === 'TV' ? 'TV Shows' : 'Movies');
+  const section = activeLibrary();
+  const stageButton = Array.from(section.querySelectorAll('[data-stage-tab]')).find(tab =>
+    tab.dataset.stageTab === button.dataset.library + ':' + button.dataset.stage);
+  stageButton.click();
+  const row = Array.from(section.querySelectorAll('[data-media-title]')).find(item =>
+    item.dataset.mediaTitle === button.dataset.openTitle && item.getClientRects().length);
+  row?.querySelector('.inspect-title').click();
+}));
