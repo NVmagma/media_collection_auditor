@@ -9,12 +9,14 @@ import web
 
 def render_workspace(*, admin=False, tracking_available=True):
     state = {'first_seen': {'The Quiet Orbit (2026)': '2026-10-01T11:30:00',
-                            'TV/Lantern House (2026)': '2026-10-02T11:30:00'},
+                            'TV/Lantern House (2026)': '2026-10-02T11:30:00',
+                            'A & B <Moon> (2026)': '2026-10-03T11:30:00'},
              'queued': {'Summer Frontier (2026)': '2026-10-20T11:30:00'},
              'keep_seen': {}, 'in_removal': {}}
     stages = {name: [] for name in ('Waiting', 'Holding', 'Keep', 'Removal')}
     stages['Waiting'] = [{'library': 'Movies', 'title': 'The Quiet Orbit (2026)', 'since': state['first_seen']['The Quiet Orbit (2026)']},
                          {'library': 'TV', 'title': 'Lantern House (2026)', 'since': state['first_seen']['TV/Lantern House (2026)']}]
+    stages['Waiting'].append({'library': 'Movies', 'title': 'A & B <Moon> (2026)', 'since': state['first_seen']['A & B <Moon> (2026)']})
     stages['Holding'] = [{'library': 'Movies', 'title': 'Summer Frontier (2026)', 'since': state['queued']['Summer Frontier (2026)']}]
     config = {'ENABLE_MOVIES': 'true', 'ENABLE_TV': 'true', 'DRY_RUN': 'true',
               'ALLOW_PERMANENT_DELETE': 'false'}

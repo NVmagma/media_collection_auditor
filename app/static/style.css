@@ -104,3 +104,23 @@
 .dashboard-app .dashboard-view-switch{margin:0}
 .dashboard-app .hidden-section{display:none}
 @media(max-width:600px){.dashboard-app .topbar h1{font-size:19px}.dashboard-app .workspace-nav{gap:4px}.dashboard-app .workspace-nav button{padding:10px 12px}.dashboard-app .panel{padding:16px}.dashboard-app .library-toolbar{align-items:flex-start;flex-direction:column}.dashboard-app .library-overview-card{padding:18px;min-height:130px}.dashboard-app .topbar nav{gap:12px}}
+
+/* Library exploration is local to the rendered inventory and never mutates tracking. */
+.dashboard-app .library-layout{display:block}
+.dashboard-app .library-layout.has-selection{display:grid;grid-template-columns:minmax(0,1fr) minmax(250px,310px);align-items:start;gap:18px}
+.dashboard-app .library-browser{min-width:0}
+.dashboard-app .library-search-tools{display:flex;gap:12px;align-items:end;margin-bottom:10px;flex-wrap:wrap}
+.dashboard-app .library-search-tools label{display:flex;flex-direction:column;gap:6px;color:#bacce1;font-size:13px}
+.dashboard-app .library-search-tools label:first-child{flex:1;min-width:160px}
+.dashboard-app .library-search-tools input,.dashboard-app .library-search-tools select{background:#162538;color:#e9eef7;border:1px solid #405875;border-radius:8px;padding:11px 12px;font:inherit;font-size:16px;max-width:100%;width:100%}
+.dashboard-app #library-results{font-size:13px;margin:12px 0}
+.dashboard-app .inspect-title{display:none}
+.dashboard-app.dashboard-ready .inspect-title{display:inline-block;background:transparent;color:#9bc8ff;border:1px solid #3c5676;padding:5px 9px;font-size:12px;margin-left:10px}
+.dashboard-app.dashboard-ready .media-detail-source{display:none}
+.dashboard-app .title-inspector{min-width:0;overflow-wrap:anywhere;border-color:#44617f}
+.dashboard-app .title-inspector h3{margin:8px 0;font-size:20px}
+.dashboard-app .title-inspector p{font-size:13px;line-height:1.6}
+.dashboard-app #close-inspector{background:#203450;color:#c7ddf7;padding:7px 10px;font-size:12px}
+.dashboard-app .library-filtered-out{display:none}
+.dashboard-app .hidden-section{display:none}
+@media(max-width:850px){.dashboard-app .library-layout.has-selection{grid-template-columns:1fr}.dashboard-app .title-inspector{grid-row:1}.dashboard-app .library-search-tools{align-items:stretch}}

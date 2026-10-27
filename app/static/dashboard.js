@@ -34,6 +34,8 @@ function openSection(name) {
   const isLibrary = libraryNames.includes(name);
   if (isLibrary) lastLibrary = name;
   const workspace = isLibrary ? 'Library' : name;
+  closeInspector(false);
+  document.getElementById('library-layout').classList.toggle('hidden-section', !isLibrary);
   tabs.forEach(tab => {
     const selected = tab.dataset.tab === name;
     tab.classList.toggle('selected', selected);
@@ -46,14 +48,71 @@ function openSection(name) {
     element.classList.toggle('hidden-section', !element.dataset.workspaceContext.split(' ').includes(workspace)));
   document.getElementById('workspace-title').textContent = workspace === 'Audit Preview' ? 'Scans' : workspace;
   document.getElementById('workspace-description').textContent = descriptions[workspace];
+  if (isLibrary) filterLibrary();
 }
 workspaces.forEach(button => button.addEventListener('click', () => openSection(button.dataset.workspace)));
 tabs.forEach(tab => tab.addEventListener('click', () => openSection(tab.dataset.tab)));
 document.querySelectorAll('[data-open-library]').forEach(button =>
   button.addEventListener('click', () => openSection(button.dataset.openLibrary)));
+let inspectorTrigger = null;
+function closeInspector(returnFocus) {
+  document.getElementById('title-inspector').classList.add('hidden-section');
+  document.getElementById('library-layout').classList.remove('has-selection');
+  if (inspectorTrigger) {
+    inspectorTrigger.setAttribute('aria-expanded', 'false');
+    if (returnFocus && inspectorTrigger.getClientRects().length) inspectorTrigger.focus();
+  }
+  inspectorTrigger = null;
+}
+function activeLibrary() {
+  return Array.from(panels).find(panel => libraryNames.includes(panel.dataset.panel) && !panel.classList.contains('hidden-section'));
+}
+function filterLibrary() {
+  const section = activeLibrary();
+  if (!section) return;
+  const query = document.getElementById('library-search').value.trim().toLowerCase();
+  const direction = document.getElementById('library-sort').value === 'desc' ? -1 : 1;
+  section.querySelectorAll('tbody, .media-poster-list').forEach(container => {
+    Array.from(container.querySelectorAll('[data-media-title]')).sort((a, b) =>
+      direction * a.dataset.mediaTitle.localeCompare(b.dataset.mediaTitle, undefined, {numeric: true})).forEach(row => {
+        row.classList.toggle('library-filtered-out', !row.dataset.mediaTitle.toLowerCase().includes(query));
+        container.append(row);
+      });
+  });
+  const stage = section.querySelector('.lifecycle-panel:not(.hidden-section)');
+  const rows = stage ? Array.from(stage.querySelectorAll('tbody [data-media-title]')) : [];
+  const matched = rows.filter(row => !row.classList.contains('library-filtered-out')).length;
+  document.getElementById('library-results').textContent = 'Showing ' + matched + ' of ' + rows.length + ' folders in this stage · ' + section.dataset.panel;
+  document.getElementById('library-no-matches').classList.toggle('hidden-section', matched > 0 || !query || rows.length === 0);
+}
+document.getElementById('library-search').addEventListener('input', () => {closeInspector(false); filterLibrary();});
+document.getElementById('library-sort').addEventListener('change', filterLibrary);
+document.getElementById('close-inspector').addEventListener('click', () => closeInspector(true));
+document.getElementById('title-inspector').addEventListener('keydown', event => {
+  if (event.key === 'Escape') {event.preventDefault(); closeInspector(true);}
+});
+document.querySelectorAll('.inspect-title').forEach(button => button.addEventListener('click', () => {
+  closeInspector(false);
+  const row = button.closest('[data-media-title]');
+  const section = button.closest('[data-panel]');
+  const stage = button.closest('[data-stage-panel]').dataset.stagePanel.split(':')[1];
+  const source = row.querySelector('.media-detail-source');
+  document.getElementById('inspector-title').textContent = row.dataset.mediaTitle;
+  document.getElementById('inspector-library').textContent = section.dataset.panel + ' · ' + stage;
+  const clock = row.querySelector('span[title]');
+  document.getElementById('inspector-since').textContent = clock ? clock.textContent : 'Unknown';
+  document.getElementById('inspector-explanation').replaceChildren(...Array.from(source.querySelectorAll('p')).map(p => p.cloneNode(true)));
+  document.getElementById('title-inspector').classList.remove('hidden-section');
+  document.getElementById('library-layout').classList.add('has-selection');
+  button.setAttribute('aria-expanded', 'true');
+  inspectorTrigger = button;
+  document.getElementById('close-inspector').focus();
+}));
+document.body.classList.add('dashboard-ready');
 openSection('Overview');
 document.querySelectorAll('[data-stage-tab]').forEach(tab => tab.addEventListener('click', () => {
   const section = tab.closest('[data-panel]');
+  closeInspector(false);
   section.querySelectorAll('[data-stage-tab]').forEach(item => {
     const selected = item === tab;
     item.classList.toggle('selected', selected);
@@ -61,6 +120,7 @@ document.querySelectorAll('[data-stage-tab]').forEach(tab => tab.addEventListene
   });
   section.querySelectorAll('[data-stage-panel]').forEach(panel =>
     panel.classList.toggle('hidden-section', panel.dataset.stagePanel !== tab.dataset.stageTab));
+  filterLibrary();
 }));
 document.querySelectorAll('.rescue-choice').forEach(choice => choice.addEventListener('change', async () => {
   const destination = choice.value;

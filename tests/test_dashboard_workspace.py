@@ -35,3 +35,14 @@ def test_admin_keeps_manual_preview_and_tracking_errors_do_not_show_zero_totals(
     counters = page.split('<div class="cards tracking-cards">', 1)[1].split('</div>', 1)[0]
     assert counters.count('<small>Tracking unavailable</small>') == 4
     assert '<strong>—</strong>' in page
+
+
+def test_disposable_server_has_synthetic_banner_and_refuses_actions():
+    from scripts.dashboard_workspace_server import create_preview_app
+    client = create_preview_app().test_client()
+    assert 'Disposable design preview' in client.get('/').get_data(as_text=True)
+    assert client.get('/static/dashboard.js').status_code == 200
+    assert client.get('/static/auditor-badge.png').mimetype == 'image/png'
+    for endpoint in ('/api/run-now', '/api/rescue', '/settings'):
+        assert client.post(endpoint, json={}).status_code == 405
+    assert client.get('/api/v1/summary').status_code == 404

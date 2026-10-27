@@ -174,3 +174,10 @@ until the production switch is separately approved.
   on Linux; Chromium exercised page/library/stage/view switching and storage
   preference behavior at 1280/736/390/320px with synthetic intercepted responses.
   Production remains unchanged; candidate image and Tower acceptance pending.
+
+- Hybrid Library increment: local title search, alphabetical sorting and a
+  keyboard-accessible read-only details panel reuse the rendered inventory and
+  existing explanations. Filtered result counts stay separate from stage totals.
+  Linux dashboard/API regression checks and Chromium interaction checks passed;
+  a synthetic expiring Tower visual preview is ready. See
+  [redesign scope and preview](dashboard-redesign.md). No production update yet.
