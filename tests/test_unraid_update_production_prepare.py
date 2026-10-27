@@ -39,3 +39,13 @@ def test_unreviewed_recovery_refused(change):
     if change=='overlap': args['host_logs']='/private-fixture/media/subdir'
     if change=='writable': args['current']['Mounts'][0]['RW']=True
     with pytest.raises(ValueError): replacement_metadata(**args)
+
+
+def test_stored_payload_reconstruction_is_identical_with_image_runtime_defaults():
+    from app.sqlite_preview_template import RUNTIME_DEFAULTS
+    args=inputs();args['image']['Config']['Env']=['PATH=/usr/local/bin:/usr/bin','PYTHON_VERSION=3.12.15']
+    payload,xml=replacement_metadata(**args)
+    selected=dict(item.split('=',1) for item in payload['Env'])
+    args['environment']={key:value for key,value in selected.items() if key not in RUNTIME_DEFAULTS}
+    rebuilt,rendered=replacement_metadata(**args)
+    assert rebuilt==payload and rendered==xml
