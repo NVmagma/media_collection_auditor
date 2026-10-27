@@ -210,6 +210,17 @@ def actual_image_acceptance():
     before = GuardedSQLiteStateStore(control / 'state.db').load_with_revision()
     try:
         activation.create_preview_binding(settings=values)
+        # Exercise a real request on this host-backed fixture, retaining the
+        # active bytes and binding while the private pending file is created.
+        from app.sqlite_preview_settings import request_settings, pending_request_summary, PENDING
+        active_config = saved.read_bytes()
+        requested = json.loads(active_config)
+        requested['ENABLE_TV'] = 'false' if str(values.get('ENABLE_TV','false')).lower() == 'true' else 'true'
+        assert request_settings(config_path=saved, updated=requested, environment=values)['status'] == 'requested'
+        assert saved.read_bytes() == active_config
+        assert (saved.parent/PENDING).stat().st_mode & 0o777 == 0o600
+        assert 'ENABLE_TV' in pending_request_summary(config_path=saved,environment=values)['changed_keys']
+        activation.validate_preview_activation(settings=values)
         cycle = ScheduledWorkerCycle()
         slot = case.fixture.slot
         production_cycle_step(cycle=cycle, settings=values, now=slot - timedelta(hours=1), clock=lambda: configured_fixture.NOW)
@@ -285,6 +296,8 @@ def actual_image_acceptance():
             'source_revision': build.SOURCE_REVISION, 'startup_waits_for_future_slot': True,
             'unauthenticated_status': 401, 'authenticated_status': 200,
             'changed_policy_status': 503, 'clean_shutdown': True,
+            'settings_request_staged': True, 'active_settings_unchanged': True,
+            'pending_request_private': True,
             'fixture_only': True, 'media_actions_authorized': False}))
     finally:
         if process is not None and process.poll() is None:
