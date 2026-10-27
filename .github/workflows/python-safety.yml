@@ -24,6 +24,17 @@ jobs:
           cache: pip
       - name: Install runtime dependencies
         run: python -m pip install -r requirements.txt
+      - name: Set up JSX test compiler
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tests/homarr-render/package-lock.json
+      - name: Verify compact Homarr examples
+        run: |
+          python -B scripts/build_homarr_compact_examples.py --check
+          npm ci --prefix tests/homarr-render --ignore-scripts --no-audit --no-fund
+          npm test --prefix tests/homarr-render
       - name: Compile all Python files
         run: python -m compileall -q app tests
       - name: Install pytest
@@ -38,6 +49,11 @@ jobs:
           WEB_SESSION_SECRET: ci-only-session-secret
           PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/app:${{ github.workspace }}/tests
         run: python -B -m pytest -q tests/test_dashboard_clocks.py tests/test_dashboard_clock_coverage.py tests/test_dashboard_clock_summary.py tests/test_dashboard_clock_fixture.py tests/test_dashboard_inventory.py tests/test_dashboard_lifecycle_visibility.py tests/test_docker_runtime_context.py
+      - name: Run synthetic widget fixture and filter checks
+        env:
+          WEB_SESSION_SECRET: ci-only-session-secret
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/app:${{ github.workspace }}/tests
+        run: python -B -m pytest -q tests/test_homarr_compact_examples.py tests/test_integration_widget_fixture.py tests/test_integration_widget_lab.py tests/test_integration_titles.py
       - name: Run scheduled SQLite acceptance
         if: contains(fromJSON('["feature/sqlite","feature/unraid","feature/interface-api"]'), github.head_ref || github.ref_name)
         env:

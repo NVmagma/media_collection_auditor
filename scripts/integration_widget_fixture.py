@@ -34,7 +34,7 @@ def read_fixture_token(path):
 
 
 def create_fixture_app(directory, scenario):
-    if scenario not in ('sample', 'titles', 'artwork', 'empty', 'unavailable'):
+    if scenario not in ('sample', 'titles', 'artwork', 'compact', 'empty', 'unavailable'):
         raise ValueError('Unsupported fixture scenario')
     state = Path(directory) / 'state.json'
     if state.exists() or state.is_symlink():
@@ -44,20 +44,22 @@ def create_fixture_app(directory, scenario):
               'keep_seen': {'Fixture D': '2024-01-01'},
               'in_removal': {'Fixture E': '2024-01-01'},
               'arr_sync_pending': {'Fixture C': {'stage': 'holding', 'root': '/fixture/holding'}}}
-    if scenario in ('titles', 'artwork'):
+    if scenario in ('titles', 'artwork', 'compact'):
         sample = {
             'first_seen': {f'Fixture Movie {n:02}': f'2024-01-{n:02}' for n in range(1, 13)},
             'queued': {f'TV/Fixture Series {n:02}': f'2024-02-{n:02}' for n in range(1, 13)},
         }
+    if scenario == 'compact':
+        sample['queued'].update({f'Fixture Leaving Movie {n:02}':f'2024-03-{n:02}' for n in range(1,13)})
     if scenario != 'unavailable':
         with state.open('x') as handle:
-            json.dump(sample if scenario in ('sample', 'titles', 'artwork') else {}, handle)
+            json.dump(sample if scenario in ('sample', 'titles', 'artwork', 'compact') else {}, handle)
     app = Flask('auditor_widget_fixture')
     app.config.update(DEBUG=False, TESTING=False)
 
     @app.before_request
     def authorize():
-        if scenario == 'artwork' and request.path in ('/fixture/poster.png', '/fixture/jellyfin'):
+        if scenario in ('artwork','compact') and request.path in ('/fixture/poster.png', '/fixture/jellyfin'):
             if request.method not in ('GET', 'HEAD'):
                 return {'status': 'fixture_method_unavailable'}, 405
             return None
@@ -77,7 +79,7 @@ def create_fixture_app(directory, scenario):
         response.headers['X-Content-Type-Options'] = 'nosniff'
         return response
 
-    if scenario == 'artwork':
+    if scenario in ('artwork','compact'):
         @app.get('/fixture/poster.png')
         def fixture_poster():
             # Inert, generated raster placeholder: no external images or keys.
@@ -103,8 +105,11 @@ def create_fixture_app(directory, scenario):
     @app.get('/api/v1/titles/oldest-waiting', defaults={'view': 'oldest-waiting'})
     @app.get('/api/v1/titles/leaving-soon', defaults={'view': 'leaving-soon'})
     def titles(view):
-        report = read_tracking_titles(state, view)
-        if scenario == 'artwork' and isinstance(report['items'], list):
+        library=request.args.get('library')
+        if library not in (None,'Movies','TV') or len(request.args.getlist('library'))>1:
+            return {'status':'invalid_library','fixture_only':True},400
+        report = read_tracking_titles(state, view, **({} if library is None else {'library':library}))
+        if scenario in ('artwork','compact') and isinstance(report['items'], list):
             root = request.host_url.rstrip('/')
             report['media_lookup_status'] = 'fixture_only'
             for number, item in enumerate(report['items'], 1):
@@ -170,7 +175,7 @@ def serve_fixture(app, seconds):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--token-file', required=True)
-    parser.add_argument('--scenario', choices=('sample', 'titles', 'artwork', 'empty', 'unavailable'), default='sample')
+    parser.add_argument('--scenario', choices=('sample', 'titles', 'artwork', 'compact', 'empty', 'unavailable'), default='sample')
     parser.add_argument('--lifetime-seconds', type=int, default=900)
     args = parser.parse_args(argv)
     if not Path('/.dockerenv').is_file() or not 30 <= args.lifetime_seconds <= 3600:

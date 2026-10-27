@@ -1,0 +1,164 @@
+<Stack gap={6}>
+  <Text fw={700}>10 oldest waiting</Text>
+  {status.titles?.loading ? (
+    <Text size="sm" role="status">Refreshing titles...</Text>
+  ) : !status.titles?.ok || data.titles?.schema_version !== 1 || data.titles?.status !== "advisory_only" || data.titles?.view !== "oldest-waiting" || !data.titles?.items ? (
+    <Text size="sm" role="status">Title list unavailable</Text>
+  ) : data.titles.items.length === 0 ? (
+    <Text size="sm">No waiting tracking records</Text>
+  ) : (
+    <Stack gap={6}>
+      {data.titles.items[0] ? (
+        <Group wrap="nowrap" align="center" gap={8} style={{ border: "1px solid #334155", borderLeft: "3px solid #60a5fa", borderRadius: "10px", padding: "6px 8px", background: "linear-gradient(110deg, #182334, #111827)" }}>
+          {data.titles.items[0].poster_url ? (
+            data.titles.items[0].jellyfin_url ? <Anchor href={data.titles.items[0].jellyfin_url} target="_blank" aria-label={data.titles.items[0].title} style={{ flexShrink: 0 }}><Image src={data.titles.items[0].poster_url} alt={data.titles.items[0].title} w={36} h={54} fit="cover" radius="sm" /></Anchor> : <Image src={data.titles.items[0].poster_url} alt={data.titles.items[0].title} w={36} h={54} fit="cover" radius="sm" />
+          ) : <Text w={36} h={54} style={{ display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#253247", borderRadius: "4px", fontSize: "10px", flexShrink: 0 }}>{data.titles.items[0].library === "TV" ? "TV" : "FILM"}</Text>}
+          <Stack gap={2} style={{ minWidth: 0, flex: 1 }}>
+            <Text size="sm" fw={600} title={data.titles.items[0].title} style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "#f1f5f9" }}>1. {data.titles.items[0].title}</Text>
+            <Group wrap="nowrap" gap={6}>
+              <Text style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.06em", color: "#60a5fa", backgroundColor: "rgba(59,130,246,0.14)", padding: "1px 6px", borderRadius: "999px" }}>WAITING</Text>
+              <Text size="xs" style={{ color: "#94a3b8" }}>{data.titles.items[0].library === "TV" ? "TV show" : "Movie"}</Text>
+            </Group>
+            <Text size="xs" title="Saved date as recorded; no timezone conversion" style={{ color: "#cbd5e1" }}>Waiting since: {data.titles.items[0].since?.length >= 16 ? data.titles.items[0].since[5] + data.titles.items[0].since[6] + "/" + data.titles.items[0].since[8] + data.titles.items[0].since[9] + "/" + data.titles.items[0].since[0] + data.titles.items[0].since[1] + data.titles.items[0].since[2] + data.titles.items[0].since[3] + " " + data.titles.items[0].since[11] + data.titles.items[0].since[12] + ":" + data.titles.items[0].since[14] + data.titles.items[0].since[15] : "Date unavailable"}</Text>
+          </Stack>
+        </Group>
+      ) : null}
+      {data.titles.items[1] ? (
+        <Group wrap="nowrap" align="center" gap={8} style={{ border: "1px solid #334155", borderLeft: "3px solid #60a5fa", borderRadius: "10px", padding: "6px 8px", background: "linear-gradient(110deg, #182334, #111827)" }}>
+          {data.titles.items[1].poster_url ? (
+            data.titles.items[1].jellyfin_url ? <Anchor href={data.titles.items[1].jellyfin_url} target="_blank" aria-label={data.titles.items[1].title} style={{ flexShrink: 0 }}><Image src={data.titles.items[1].poster_url} alt={data.titles.items[1].title} w={36} h={54} fit="cover" radius="sm" /></Anchor> : <Image src={data.titles.items[1].poster_url} alt={data.titles.items[1].title} w={36} h={54} fit="cover" radius="sm" />
+          ) : <Text w={36} h={54} style={{ display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#253247", borderRadius: "4px", fontSize: "10px", flexShrink: 0 }}>{data.titles.items[1].library === "TV" ? "TV" : "FILM"}</Text>}
+          <Stack gap={2} style={{ minWidth: 0, flex: 1 }}>
+            <Text size="sm" fw={600} title={data.titles.items[1].title} style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "#f1f5f9" }}>2. {data.titles.items[1].title}</Text>
+            <Group wrap="nowrap" gap={6}>
+              <Text style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.06em", color: "#60a5fa", backgroundColor: "rgba(59,130,246,0.14)", padding: "1px 6px", borderRadius: "999px" }}>WAITING</Text>
+              <Text size="xs" style={{ color: "#94a3b8" }}>{data.titles.items[1].library === "TV" ? "TV show" : "Movie"}</Text>
+            </Group>
+            <Text size="xs" title="Saved date as recorded; no timezone conversion" style={{ color: "#cbd5e1" }}>Waiting since: {data.titles.items[1].since?.length >= 16 ? data.titles.items[1].since[5] + data.titles.items[1].since[6] + "/" + data.titles.items[1].since[8] + data.titles.items[1].since[9] + "/" + data.titles.items[1].since[0] + data.titles.items[1].since[1] + data.titles.items[1].since[2] + data.titles.items[1].since[3] + " " + data.titles.items[1].since[11] + data.titles.items[1].since[12] + ":" + data.titles.items[1].since[14] + data.titles.items[1].since[15] : "Date unavailable"}</Text>
+          </Stack>
+        </Group>
+      ) : null}
+      {data.titles.items[2] ? (
+        <Group wrap="nowrap" align="center" gap={8} style={{ border: "1px solid #334155", borderLeft: "3px solid #60a5fa", borderRadius: "10px", padding: "6px 8px", background: "linear-gradient(110deg, #182334, #111827)" }}>
+          {data.titles.items[2].poster_url ? (
+            data.titles.items[2].jellyfin_url ? <Anchor href={data.titles.items[2].jellyfin_url} target="_blank" aria-label={data.titles.items[2].title} style={{ flexShrink: 0 }}><Image src={data.titles.items[2].poster_url} alt={data.titles.items[2].title} w={36} h={54} fit="cover" radius="sm" /></Anchor> : <Image src={data.titles.items[2].poster_url} alt={data.titles.items[2].title} w={36} h={54} fit="cover" radius="sm" />
+          ) : <Text w={36} h={54} style={{ display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#253247", borderRadius: "4px", fontSize: "10px", flexShrink: 0 }}>{data.titles.items[2].library === "TV" ? "TV" : "FILM"}</Text>}
+          <Stack gap={2} style={{ minWidth: 0, flex: 1 }}>
+            <Text size="sm" fw={600} title={data.titles.items[2].title} style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "#f1f5f9" }}>3. {data.titles.items[2].title}</Text>
+            <Group wrap="nowrap" gap={6}>
+              <Text style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.06em", color: "#60a5fa", backgroundColor: "rgba(59,130,246,0.14)", padding: "1px 6px", borderRadius: "999px" }}>WAITING</Text>
+              <Text size="xs" style={{ color: "#94a3b8" }}>{data.titles.items[2].library === "TV" ? "TV show" : "Movie"}</Text>
+            </Group>
+            <Text size="xs" title="Saved date as recorded; no timezone conversion" style={{ color: "#cbd5e1" }}>Waiting since: {data.titles.items[2].since?.length >= 16 ? data.titles.items[2].since[5] + data.titles.items[2].since[6] + "/" + data.titles.items[2].since[8] + data.titles.items[2].since[9] + "/" + data.titles.items[2].since[0] + data.titles.items[2].since[1] + data.titles.items[2].since[2] + data.titles.items[2].since[3] + " " + data.titles.items[2].since[11] + data.titles.items[2].since[12] + ":" + data.titles.items[2].since[14] + data.titles.items[2].since[15] : "Date unavailable"}</Text>
+          </Stack>
+        </Group>
+      ) : null}
+      {data.titles.items[3] ? (
+        <Group wrap="nowrap" align="center" gap={8} style={{ border: "1px solid #334155", borderLeft: "3px solid #60a5fa", borderRadius: "10px", padding: "6px 8px", background: "linear-gradient(110deg, #182334, #111827)" }}>
+          {data.titles.items[3].poster_url ? (
+            data.titles.items[3].jellyfin_url ? <Anchor href={data.titles.items[3].jellyfin_url} target="_blank" aria-label={data.titles.items[3].title} style={{ flexShrink: 0 }}><Image src={data.titles.items[3].poster_url} alt={data.titles.items[3].title} w={36} h={54} fit="cover" radius="sm" /></Anchor> : <Image src={data.titles.items[3].poster_url} alt={data.titles.items[3].title} w={36} h={54} fit="cover" radius="sm" />
+          ) : <Text w={36} h={54} style={{ display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#253247", borderRadius: "4px", fontSize: "10px", flexShrink: 0 }}>{data.titles.items[3].library === "TV" ? "TV" : "FILM"}</Text>}
+          <Stack gap={2} style={{ minWidth: 0, flex: 1 }}>
+            <Text size="sm" fw={600} title={data.titles.items[3].title} style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "#f1f5f9" }}>4. {data.titles.items[3].title}</Text>
+            <Group wrap="nowrap" gap={6}>
+              <Text style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.06em", color: "#60a5fa", backgroundColor: "rgba(59,130,246,0.14)", padding: "1px 6px", borderRadius: "999px" }}>WAITING</Text>
+              <Text size="xs" style={{ color: "#94a3b8" }}>{data.titles.items[3].library === "TV" ? "TV show" : "Movie"}</Text>
+            </Group>
+            <Text size="xs" title="Saved date as recorded; no timezone conversion" style={{ color: "#cbd5e1" }}>Waiting since: {data.titles.items[3].since?.length >= 16 ? data.titles.items[3].since[5] + data.titles.items[3].since[6] + "/" + data.titles.items[3].since[8] + data.titles.items[3].since[9] + "/" + data.titles.items[3].since[0] + data.titles.items[3].since[1] + data.titles.items[3].since[2] + data.titles.items[3].since[3] + " " + data.titles.items[3].since[11] + data.titles.items[3].since[12] + ":" + data.titles.items[3].since[14] + data.titles.items[3].since[15] : "Date unavailable"}</Text>
+          </Stack>
+        </Group>
+      ) : null}
+      {data.titles.items[4] ? (
+        <Group wrap="nowrap" align="center" gap={8} style={{ border: "1px solid #334155", borderLeft: "3px solid #60a5fa", borderRadius: "10px", padding: "6px 8px", background: "linear-gradient(110deg, #182334, #111827)" }}>
+          {data.titles.items[4].poster_url ? (
+            data.titles.items[4].jellyfin_url ? <Anchor href={data.titles.items[4].jellyfin_url} target="_blank" aria-label={data.titles.items[4].title} style={{ flexShrink: 0 }}><Image src={data.titles.items[4].poster_url} alt={data.titles.items[4].title} w={36} h={54} fit="cover" radius="sm" /></Anchor> : <Image src={data.titles.items[4].poster_url} alt={data.titles.items[4].title} w={36} h={54} fit="cover" radius="sm" />
+          ) : <Text w={36} h={54} style={{ display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#253247", borderRadius: "4px", fontSize: "10px", flexShrink: 0 }}>{data.titles.items[4].library === "TV" ? "TV" : "FILM"}</Text>}
+          <Stack gap={2} style={{ minWidth: 0, flex: 1 }}>
+            <Text size="sm" fw={600} title={data.titles.items[4].title} style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "#f1f5f9" }}>5. {data.titles.items[4].title}</Text>
+            <Group wrap="nowrap" gap={6}>
+              <Text style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.06em", color: "#60a5fa", backgroundColor: "rgba(59,130,246,0.14)", padding: "1px 6px", borderRadius: "999px" }}>WAITING</Text>
+              <Text size="xs" style={{ color: "#94a3b8" }}>{data.titles.items[4].library === "TV" ? "TV show" : "Movie"}</Text>
+            </Group>
+            <Text size="xs" title="Saved date as recorded; no timezone conversion" style={{ color: "#cbd5e1" }}>Waiting since: {data.titles.items[4].since?.length >= 16 ? data.titles.items[4].since[5] + data.titles.items[4].since[6] + "/" + data.titles.items[4].since[8] + data.titles.items[4].since[9] + "/" + data.titles.items[4].since[0] + data.titles.items[4].since[1] + data.titles.items[4].since[2] + data.titles.items[4].since[3] + " " + data.titles.items[4].since[11] + data.titles.items[4].since[12] + ":" + data.titles.items[4].since[14] + data.titles.items[4].since[15] : "Date unavailable"}</Text>
+          </Stack>
+        </Group>
+      ) : null}
+      {data.titles.items[5] ? (
+        <Group wrap="nowrap" align="center" gap={8} style={{ border: "1px solid #334155", borderLeft: "3px solid #60a5fa", borderRadius: "10px", padding: "6px 8px", background: "linear-gradient(110deg, #182334, #111827)" }}>
+          {data.titles.items[5].poster_url ? (
+            data.titles.items[5].jellyfin_url ? <Anchor href={data.titles.items[5].jellyfin_url} target="_blank" aria-label={data.titles.items[5].title} style={{ flexShrink: 0 }}><Image src={data.titles.items[5].poster_url} alt={data.titles.items[5].title} w={36} h={54} fit="cover" radius="sm" /></Anchor> : <Image src={data.titles.items[5].poster_url} alt={data.titles.items[5].title} w={36} h={54} fit="cover" radius="sm" />
+          ) : <Text w={36} h={54} style={{ display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#253247", borderRadius: "4px", fontSize: "10px", flexShrink: 0 }}>{data.titles.items[5].library === "TV" ? "TV" : "FILM"}</Text>}
+          <Stack gap={2} style={{ minWidth: 0, flex: 1 }}>
+            <Text size="sm" fw={600} title={data.titles.items[5].title} style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "#f1f5f9" }}>6. {data.titles.items[5].title}</Text>
+            <Group wrap="nowrap" gap={6}>
+              <Text style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.06em", color: "#60a5fa", backgroundColor: "rgba(59,130,246,0.14)", padding: "1px 6px", borderRadius: "999px" }}>WAITING</Text>
+              <Text size="xs" style={{ color: "#94a3b8" }}>{data.titles.items[5].library === "TV" ? "TV show" : "Movie"}</Text>
+            </Group>
+            <Text size="xs" title="Saved date as recorded; no timezone conversion" style={{ color: "#cbd5e1" }}>Waiting since: {data.titles.items[5].since?.length >= 16 ? data.titles.items[5].since[5] + data.titles.items[5].since[6] + "/" + data.titles.items[5].since[8] + data.titles.items[5].since[9] + "/" + data.titles.items[5].since[0] + data.titles.items[5].since[1] + data.titles.items[5].since[2] + data.titles.items[5].since[3] + " " + data.titles.items[5].since[11] + data.titles.items[5].since[12] + ":" + data.titles.items[5].since[14] + data.titles.items[5].since[15] : "Date unavailable"}</Text>
+          </Stack>
+        </Group>
+      ) : null}
+      {data.titles.items[6] ? (
+        <Group wrap="nowrap" align="center" gap={8} style={{ border: "1px solid #334155", borderLeft: "3px solid #60a5fa", borderRadius: "10px", padding: "6px 8px", background: "linear-gradient(110deg, #182334, #111827)" }}>
+          {data.titles.items[6].poster_url ? (
+            data.titles.items[6].jellyfin_url ? <Anchor href={data.titles.items[6].jellyfin_url} target="_blank" aria-label={data.titles.items[6].title} style={{ flexShrink: 0 }}><Image src={data.titles.items[6].poster_url} alt={data.titles.items[6].title} w={36} h={54} fit="cover" radius="sm" /></Anchor> : <Image src={data.titles.items[6].poster_url} alt={data.titles.items[6].title} w={36} h={54} fit="cover" radius="sm" />
+          ) : <Text w={36} h={54} style={{ display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#253247", borderRadius: "4px", fontSize: "10px", flexShrink: 0 }}>{data.titles.items[6].library === "TV" ? "TV" : "FILM"}</Text>}
+          <Stack gap={2} style={{ minWidth: 0, flex: 1 }}>
+            <Text size="sm" fw={600} title={data.titles.items[6].title} style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "#f1f5f9" }}>7. {data.titles.items[6].title}</Text>
+            <Group wrap="nowrap" gap={6}>
+              <Text style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.06em", color: "#60a5fa", backgroundColor: "rgba(59,130,246,0.14)", padding: "1px 6px", borderRadius: "999px" }}>WAITING</Text>
+              <Text size="xs" style={{ color: "#94a3b8" }}>{data.titles.items[6].library === "TV" ? "TV show" : "Movie"}</Text>
+            </Group>
+            <Text size="xs" title="Saved date as recorded; no timezone conversion" style={{ color: "#cbd5e1" }}>Waiting since: {data.titles.items[6].since?.length >= 16 ? data.titles.items[6].since[5] + data.titles.items[6].since[6] + "/" + data.titles.items[6].since[8] + data.titles.items[6].since[9] + "/" + data.titles.items[6].since[0] + data.titles.items[6].since[1] + data.titles.items[6].since[2] + data.titles.items[6].since[3] + " " + data.titles.items[6].since[11] + data.titles.items[6].since[12] + ":" + data.titles.items[6].since[14] + data.titles.items[6].since[15] : "Date unavailable"}</Text>
+          </Stack>
+        </Group>
+      ) : null}
+      {data.titles.items[7] ? (
+        <Group wrap="nowrap" align="center" gap={8} style={{ border: "1px solid #334155", borderLeft: "3px solid #60a5fa", borderRadius: "10px", padding: "6px 8px", background: "linear-gradient(110deg, #182334, #111827)" }}>
+          {data.titles.items[7].poster_url ? (
+            data.titles.items[7].jellyfin_url ? <Anchor href={data.titles.items[7].jellyfin_url} target="_blank" aria-label={data.titles.items[7].title} style={{ flexShrink: 0 }}><Image src={data.titles.items[7].poster_url} alt={data.titles.items[7].title} w={36} h={54} fit="cover" radius="sm" /></Anchor> : <Image src={data.titles.items[7].poster_url} alt={data.titles.items[7].title} w={36} h={54} fit="cover" radius="sm" />
+          ) : <Text w={36} h={54} style={{ display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#253247", borderRadius: "4px", fontSize: "10px", flexShrink: 0 }}>{data.titles.items[7].library === "TV" ? "TV" : "FILM"}</Text>}
+          <Stack gap={2} style={{ minWidth: 0, flex: 1 }}>
+            <Text size="sm" fw={600} title={data.titles.items[7].title} style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "#f1f5f9" }}>8. {data.titles.items[7].title}</Text>
+            <Group wrap="nowrap" gap={6}>
+              <Text style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.06em", color: "#60a5fa", backgroundColor: "rgba(59,130,246,0.14)", padding: "1px 6px", borderRadius: "999px" }}>WAITING</Text>
+              <Text size="xs" style={{ color: "#94a3b8" }}>{data.titles.items[7].library === "TV" ? "TV show" : "Movie"}</Text>
+            </Group>
+            <Text size="xs" title="Saved date as recorded; no timezone conversion" style={{ color: "#cbd5e1" }}>Waiting since: {data.titles.items[7].since?.length >= 16 ? data.titles.items[7].since[5] + data.titles.items[7].since[6] + "/" + data.titles.items[7].since[8] + data.titles.items[7].since[9] + "/" + data.titles.items[7].since[0] + data.titles.items[7].since[1] + data.titles.items[7].since[2] + data.titles.items[7].since[3] + " " + data.titles.items[7].since[11] + data.titles.items[7].since[12] + ":" + data.titles.items[7].since[14] + data.titles.items[7].since[15] : "Date unavailable"}</Text>
+          </Stack>
+        </Group>
+      ) : null}
+      {data.titles.items[8] ? (
+        <Group wrap="nowrap" align="center" gap={8} style={{ border: "1px solid #334155", borderLeft: "3px solid #60a5fa", borderRadius: "10px", padding: "6px 8px", background: "linear-gradient(110deg, #182334, #111827)" }}>
+          {data.titles.items[8].poster_url ? (
+            data.titles.items[8].jellyfin_url ? <Anchor href={data.titles.items[8].jellyfin_url} target="_blank" aria-label={data.titles.items[8].title} style={{ flexShrink: 0 }}><Image src={data.titles.items[8].poster_url} alt={data.titles.items[8].title} w={36} h={54} fit="cover" radius="sm" /></Anchor> : <Image src={data.titles.items[8].poster_url} alt={data.titles.items[8].title} w={36} h={54} fit="cover" radius="sm" />
+          ) : <Text w={36} h={54} style={{ display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#253247", borderRadius: "4px", fontSize: "10px", flexShrink: 0 }}>{data.titles.items[8].library === "TV" ? "TV" : "FILM"}</Text>}
+          <Stack gap={2} style={{ minWidth: 0, flex: 1 }}>
+            <Text size="sm" fw={600} title={data.titles.items[8].title} style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "#f1f5f9" }}>9. {data.titles.items[8].title}</Text>
+            <Group wrap="nowrap" gap={6}>
+              <Text style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.06em", color: "#60a5fa", backgroundColor: "rgba(59,130,246,0.14)", padding: "1px 6px", borderRadius: "999px" }}>WAITING</Text>
+              <Text size="xs" style={{ color: "#94a3b8" }}>{data.titles.items[8].library === "TV" ? "TV show" : "Movie"}</Text>
+            </Group>
+            <Text size="xs" title="Saved date as recorded; no timezone conversion" style={{ color: "#cbd5e1" }}>Waiting since: {data.titles.items[8].since?.length >= 16 ? data.titles.items[8].since[5] + data.titles.items[8].since[6] + "/" + data.titles.items[8].since[8] + data.titles.items[8].since[9] + "/" + data.titles.items[8].since[0] + data.titles.items[8].since[1] + data.titles.items[8].since[2] + data.titles.items[8].since[3] + " " + data.titles.items[8].since[11] + data.titles.items[8].since[12] + ":" + data.titles.items[8].since[14] + data.titles.items[8].since[15] : "Date unavailable"}</Text>
+          </Stack>
+        </Group>
+      ) : null}
+      {data.titles.items[9] ? (
+        <Group wrap="nowrap" align="center" gap={8} style={{ border: "1px solid #334155", borderLeft: "3px solid #60a5fa", borderRadius: "10px", padding: "6px 8px", background: "linear-gradient(110deg, #182334, #111827)" }}>
+          {data.titles.items[9].poster_url ? (
+            data.titles.items[9].jellyfin_url ? <Anchor href={data.titles.items[9].jellyfin_url} target="_blank" aria-label={data.titles.items[9].title} style={{ flexShrink: 0 }}><Image src={data.titles.items[9].poster_url} alt={data.titles.items[9].title} w={36} h={54} fit="cover" radius="sm" /></Anchor> : <Image src={data.titles.items[9].poster_url} alt={data.titles.items[9].title} w={36} h={54} fit="cover" radius="sm" />
+          ) : <Text w={36} h={54} style={{ display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#253247", borderRadius: "4px", fontSize: "10px", flexShrink: 0 }}>{data.titles.items[9].library === "TV" ? "TV" : "FILM"}</Text>}
+          <Stack gap={2} style={{ minWidth: 0, flex: 1 }}>
+            <Text size="sm" fw={600} title={data.titles.items[9].title} style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "#f1f5f9" }}>10. {data.titles.items[9].title}</Text>
+            <Group wrap="nowrap" gap={6}>
+              <Text style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.06em", color: "#60a5fa", backgroundColor: "rgba(59,130,246,0.14)", padding: "1px 6px", borderRadius: "999px" }}>WAITING</Text>
+              <Text size="xs" style={{ color: "#94a3b8" }}>{data.titles.items[9].library === "TV" ? "TV show" : "Movie"}</Text>
+            </Group>
+            <Text size="xs" title="Saved date as recorded; no timezone conversion" style={{ color: "#cbd5e1" }}>Waiting since: {data.titles.items[9].since?.length >= 16 ? data.titles.items[9].since[5] + data.titles.items[9].since[6] + "/" + data.titles.items[9].since[8] + data.titles.items[9].since[9] + "/" + data.titles.items[9].since[0] + data.titles.items[9].since[1] + data.titles.items[9].since[2] + data.titles.items[9].since[3] + " " + data.titles.items[9].since[11] + data.titles.items[9].since[12] + ":" + data.titles.items[9].since[14] + data.titles.items[9].since[15] : "Date unavailable"}</Text>
+          </Stack>
+        </Group>
+      ) : null}
+      {data.titles.truncated ? <Text size="xs">Showing 10 of {data.titles.total_records} tracking records.</Text> : null}
+    </Stack>
+  )}
+</Stack>

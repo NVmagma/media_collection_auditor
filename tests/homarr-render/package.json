@@ -1,0 +1,6 @@
+{
+  "name": "auditor-homarr-template-tests",
+  "private": true,
+  "devDependencies": {"esbuild": "0.28.2"},
+  "scripts": {"test": "node ../../scripts/test_homarr_compact_render.cjs"}
+}

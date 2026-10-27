@@ -13,3 +13,6 @@ auditor_state.json
 __pycache__/
 *.pyc
 .venv/
+
+# Development-only JSX template compiler
+/tests/homarr-render/node_modules/

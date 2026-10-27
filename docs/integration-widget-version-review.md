@@ -75,3 +75,11 @@ accepts HTTP(S) image sources, rejects data URLs and strips event callbacks. The
 includes Image, Group and Anchor. This supports credential-free browser image
 URLs rather than embedding credentials or data URLs in templates. Actual image
 loading/click acceptance remains pending on the installed dashboard.
+
+Compact layout development: optional templates reuse the previously accepted
+Stack/Group/Text/Image/Anchor surface and explicit ten-row JSX expansion. The
+pinned runtime and property sanitizer were retrieved again for style/link review.
+Local compilation and synthetic render-tree checks pass; this is not a claim of
+Homarr rendering acceptance. The new `compact` fixture supports both filtered
+Holding lists without changing the existing artwork scenario. Actual card layout,
+image loading and saved-board behavior require a temporary Homarr preview.

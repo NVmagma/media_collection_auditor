@@ -262,3 +262,65 @@ Query/body/behavior editor. The earlier TV example put the query in the path;
 this was corrected after the deployed route worked but Homarr returned the
 dashboard-style sign-in response. API URLs used directly by HTTP clients still
 correctly use `?library=TV`; only the Homarr manifest representation differs.
+
+## Optional compact Homarr title rows
+
+The existing accepted templates are retained. Three optional layouts use smaller
+36×54 posters, one-line titles, a colored Waiting/Holding pill, library labels and
+minute-precision dates. Only a matched poster links to Jellyfin. Missing artwork
+shows a fixed-size FILM/TV fallback; it does not add a separate text link. No
+internal scroll area or fixed list height is imposed; size the Homarr widget to
+fit its ten rows. Long titles are truncated visually and retained in the title
+attribute and poster accessibility label.
+
+The new prefixes under `examples/integrations/` are:
+
+- `homarr-oldest-waiting-compact` — oldest Waiting tracking records, both libraries.
+- `homarr-movies-leaving-soon-compact` — Movies Holding records only.
+- `homarr-tv-leaving-soon-compact` — TV Holding records only.
+
+Each has `-template.example.jsx`, `-requests.example.json` and
+`-widget.example.json` files. Library filters stay in the request's `query`
+object, not the path. Loading or failed requests hide any cached title rows;
+empty responses remain distinct from unavailable data. Holding dates retain the
+**Est. removal stage** label and are not deletion promises. Dates preserve API
+wall-time characters without browser timezone conversion. These presentation
+changes do not alter the API, tracking, lifecycle policy or existing widgets.
+
+The layouts use the same Stack, Group, Text, Image and Anchor components as the
+accepted examples. The pill is styled Text, avoiding a new component dependency.
+The property handling was reviewed against Homarr revision
+`9a38404f738f1e50e382095716cc08f3b3751182`:
+[runtime components](https://github.com/homarr-labs/homarr/blob/9a38404f738f1e50e382095716cc08f3b3751182/packages/custom-widgets/src/jsx/runtime-components.tsx),
+[property sanitizer](https://github.com/homarr-labs/homarr/blob/9a38404f738f1e50e382095716cc08f3b3751182/packages/custom-widgets/src/jsx/safe-properties.ts).
+No callbacks, array iteration or data/image URLs are added to the JSX.
+
+Generate and check the synchronized examples with:
+
+```bash
+python -B scripts/build_homarr_compact_examples.py
+python -B scripts/build_homarr_compact_examples.py --check
+npm ci --prefix tests/homarr-render --ignore-scripts --no-audit --no-fund
+npm test --prefix tests/homarr-render
+```
+
+The pinned development-only esbuild compiler checks JSX syntax and synthetic
+render trees for all three templates: ten-row cap, poster-only links, missing
+artwork, dates, stale data on errors/loading, wrong schema/library filter and empty
+results. It does not prove Homarr component layout or actual browser image access.
+The compiler and Node are not part of the production image.
+
+For visual acceptance, start a separate expiring fixture on Tower:
+
+```bash
+bash scripts/integration_widget_lab.sh compact
+```
+
+This scenario adds synthetic movie and TV Holding records, twelve per library,
+plus twelve Waiting records. Filtering happens before the ten-row limit. It uses
+only inert fixture artwork and a synthetic navigation destination, with its own
+private token. Configure a temporary Homarr widget using the returned fixture
+URL and token; do not replace existing board widgets during the first preview.
+Check the layout, long titles, fallback rows, poster click and card height. The
+fixture expires after fifteen minutes, and production containers/configuration
+are not changed. A widget-template update itself requires no auditor image update.
