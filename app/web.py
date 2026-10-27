@@ -16,6 +16,7 @@ from pathlib import Path
 from flask import Flask, render_template, request, Response, redirect, url_for, session, g, send_file
 
 from lifecycle_decisions import decide
+from dashboard_tracking_snapshot import lifecycle_clock, observation_datetime
 from connection_tests import check_connection, SERVICES
 from audit_history import read_history
 from manual_rescue import rescue_title
@@ -459,19 +460,15 @@ def dashboard():
     config = load_config()
     stages, inventory_warnings = filesystem_stages(state, config)
     health_issues = collection_health(state, stages, inventory_warnings, config)
-    removal_days = int(config.get("REMOVAL_DAYS", os.environ.get("REMOVAL_DAYS", "7")))
-    for item in stages["Removal"]:
-        try:
-            age = (datetime.now() - datetime.fromisoformat(item["since"])).days
-            item["days_left"] = max(0, removal_days - age)
-        except (ValueError, TypeError):
-            item["days_left"] = None
     def setting_days(key, fallback):
         try:
-            return max(1, int(config.get(key, os.environ.get(key, str(fallback)))))
+            value=int(config.get(key, os.environ.get(key, str(fallback))))
+            minimum=1 if key in ('HOLDING_DAYS','REMOVAL_DAYS') else 0
+            return value if minimum <= value <= 100000 else None
         except (ValueError, TypeError):
-            return fallback
+            return None
 
+    removal_days=setting_days('REMOVAL_DAYS',7)
     deadlines = {"Waiting": {"Movies": setting_days("MOVIE_WAIT_DAYS", 30),
                               "TV": setting_days("TV_WAIT_DAYS", 60)},
                  "Holding": {"Movies": setting_days("HOLDING_DAYS", 7),
@@ -490,27 +487,15 @@ def dashboard():
     for stage, items in stages.items():
         for item in items:
             item["reason"] = stage_explanations[stage]
-            item["elapsed_days"] = None
-            item["deadline_days"] = None
-            item["due"] = False
-            item["next_review_date"] = None
-            try:
-                start = datetime.fromisoformat(str(item["since"]))
-                now = datetime.now(start.tzinfo) if start.tzinfo else datetime.now()
-                elapsed = max(0, (now - start).days)
-                item["elapsed_days"] = elapsed
-                if stage in deadlines:
-                    limit = deadlines[stage][item["library"]]
-                    item["deadline_days"] = max(0, limit - elapsed)
-                    item["due"] = elapsed >= limit
-                    item["next_review_date"] = (start + timedelta(days=limit)).date().isoformat()
-            except (ValueError, TypeError, OverflowError):
-                pass
+            item.update(lifecycle_clock(item['since'],limit=deadlines.get(stage,{}).get(item['library'])))
+            if stage=='Removal':item['days_left']=item['deadline_days']
             sig = live_signals.get(item["library"], {}).get(item["title"].casefold()) if live_signals is not None else None
             item["jellyfin_signals"] = sig
-            decision, explanation = decide(stage, item["elapsed_days"],
-                                           deadlines.get(stage, {}).get(item["library"], 0), sig,
-                                           favorites_trigger_keep)
+            limit=deadlines.get(stage,{}).get(item['library'])
+            if stage!='Keep' and limit is None:
+                decision,explanation='unknown','Lifecycle duration unavailable; review saved settings.'
+            else:
+                decision, explanation = decide(stage, item["elapsed_days"],limit or 0,sig,favorites_trigger_keep)
             if stage == "Removal" and (sig is None or sig.get("protected") or sig.get("keep") or (favorites_trigger_keep and sig.get("favorite"))):
                 decision, explanation = "blocked", "Deletion blocked: Jellyfin status unknown or title protected. Manual rescue may be needed."
             if stage == "Removal" and not deletion_enabled:
@@ -525,7 +510,8 @@ def dashboard():
                     preview.append({"title": item["title"], "library": item["library"],
                                     "stage": stage, "action": action})
     preview.sort(key=lambda item: (item["library"], item["stage"], item["title"].casefold()))
-    return render_template("dashboard.html", actions=actions, state=state, state_error=state_error, stages=stages, inventory_warnings=inventory_warnings, health_issues=health_issues, run=selected_run_snapshot(snapshot), history=selected_run_history(read_history, 100),
+    display_zone=config.get('SQLITE_DAILY_RUN_TIMEZONE') or os.environ.get('SQLITE_DAILY_RUN_TIMEZONE') or os.environ.get('TZ')
+    return render_template("dashboard.html", dashboard_timezone=display_zone, actions=actions, state=state, state_error=state_error, stages=stages, inventory_warnings=inventory_warnings, health_issues=health_issues, run=selected_run_snapshot(snapshot), history=selected_run_history(read_history, 100),
                            preview=preview, dry_run=load_config().get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "true")
 
 
@@ -588,6 +574,11 @@ def _poster_index(base, token, media_type):
     with _POSTER_LOCK:
         _POSTER_INDEX[key] = (time.monotonic(), index)
     return index
+
+
+@app.template_filter('observation_datetime')
+def format_observation_datetime(value,timezone_name=None):
+    return observation_datetime(value,timezone_name)
 
 
 @app.template_filter("friendly_date")

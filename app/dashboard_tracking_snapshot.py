@@ -99,3 +99,57 @@ def compare_dashboard_snapshots(*, json_path, database, build_inventory):
             "pending_operation_present": pending,
             "sqlite_revision": experimental.revision, "storage_authority": "json",
             "production_activation": "disabled", "authorization": "not_authorized", "read_only": True}
+
+
+def lifecycle_clock(value, *, limit=None, now=None):
+    """Display a saved clock without guessing from folder dates or other stages.
+
+    Naive timestamps retain their original wall-time meaning. Aware timestamps
+    keep their recorded offset, including when computing removal-stage ages.
+    """
+    from datetime import datetime, timedelta
+    result={'since_display':'Not yet tracked','since_basis':'No saved clock for this stage',
+            'clock_status':'missing','elapsed_days':None,'deadline_days':None,
+            'due':False,'next_review_date':None,'next_review_display':None}
+    if value is None:return result
+    try:
+        start=datetime.fromisoformat(value.replace('Z','+00:00'))
+    except (ValueError,TypeError,AttributeError,OverflowError):
+        return {**result,'since_display':'Invalid saved date','since_basis':'Saved clock needs review',
+                'clock_status':'invalid'}
+    result.update(since_display=start.strftime('%m/%d/%Y %H:%M'),clock_status='recorded',
+        since_basis='Local wall time as recorded' if start.tzinfo is None else 'Recorded offset '+start.strftime('%z'))
+    current=now if now is not None else datetime.now(start.tzinfo)
+    try:
+        if start>current:
+            return {**result,'clock_status':'future','since_basis':result['since_basis']+'; date is in the future'}
+        result['elapsed_days']=(current-start).days
+        if limit is not None:
+            if type(limit) is not int or limit<0:raise ValueError('Nonnegative stage duration required')
+            result.update(deadline_days=max(0,limit-result['elapsed_days']),due=result['elapsed_days']>=limit)
+            try:
+                review=(start+timedelta(days=limit)).date()
+                result.update(next_review_date=review.isoformat(),next_review_display=review.strftime('%m/%d/%Y'))
+            except OverflowError:pass
+    except (ValueError,TypeError,OverflowError):
+        result.update(clock_status='unavailable',elapsed_days=None,deadline_days=None,due=False)
+    return result
+
+
+def observation_datetime(value, timezone_name=None):
+    """Format process observations in a known zone; never reinterpret naive clocks."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    if not value:return 'Not recorded in this process'
+    try:parsed=datetime.fromisoformat(value.replace('Z','+00:00'))
+    except (ValueError,TypeError,AttributeError,OverflowError):return 'Invalid recorded time'
+    label=None
+    if parsed.tzinfo is not None and timezone_name:
+        try:
+            parsed=parsed.astimezone(ZoneInfo(timezone_name));label=timezone_name
+        except (ValueError,TypeError,KeyError):pass
+    text=parsed.strftime('%m/%d/%Y %H:%M')
+    if label:return text+' '+label
+    offset=parsed.strftime('%z')
+    if offset:text+=' UTC'+offset[:3]+':'+offset[3:]
+    return text
