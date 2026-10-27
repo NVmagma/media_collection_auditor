@@ -367,3 +367,41 @@ def selected_run_history(legacy_history, limit=100):
         return COORDINATOR.history(limit)
     except RuntimeError:
         return []
+
+
+def read_selected_coverage(path, build):
+    """Project bounded aggregate inventory while verifying the selected snapshot.
+
+    The callback receives detached tracking only. Never return its source payload.
+    SQLite keeps the existing identity/revision guard across local inventory.
+    """
+    backend = os.environ.get('AUDITOR_STATE_BACKEND', 'json')
+    if backend == 'sqlite':
+        _require_sqlite_authority()
+        from app.sqlite_tracking_view import _candidate_capture
+        with _candidate_capture(os.environ.get('SQLITE_STATE_FILE', '/app/logs/sqlite_worker/state.db')) as capture:
+            report = build(capture.state)
+            revision = capture.revision
+        _require_sqlite_authority()
+        return {**report, 'storage_authority':'sqlite', 'state_revision':revision}
+    if backend != 'json':
+        raise RuntimeError('Unsupported tracking backend')
+    if __package__:
+        from .dashboard_tracking_snapshot import read_json_dashboard_snapshot
+    else:
+        from dashboard_tracking_snapshot import read_json_dashboard_snapshot
+    from pathlib import Path
+    import stat
+    source = Path(path)
+    before = source.lstat()
+    if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1:
+        raise RuntimeError('Tracking source unavailable')
+    capture = read_json_dashboard_snapshot(source, require_existing=True)
+    state = capture.state
+    report = build(state)
+    after = source.lstat()
+    if ((before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns, before.st_ctime_ns)
+            != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns)
+            or read_json_dashboard_snapshot(source, require_existing=True).state != state):
+        raise RuntimeError('Tracking changed during observation')
+    return {**report, 'storage_authority':'json', 'state_revision':None}

@@ -28,8 +28,6 @@ The page neither displays nor changes secrets, settings, state or services.
 
 ## Additional useful APIs to consider
 
-- Collection coverage: folder/tracking mismatches and missing lifecycle dates,
-  using the same bounded projection as Review.
 - Scan observations: bounded process-local history and proposal counts, with
   unknown counts and restart scope explicit.
 - Backup status: last verified backup receipt and age without private paths or
@@ -44,3 +42,32 @@ These are future proposals, not new endpoints or authority to control media.
 The existing `scripts/dashboard_workspace_lab.sh` also serves `/integrations`
 with synthetic status, no actual tokens and all POSTs refused. Use the running
 fixture's URL plus `/integrations`. Production services are not connected.
+
+## Library coverage endpoint
+
+`GET /api/v1/coverage` requires the dedicated Bearer token and explicit
+`INTEGRATION_API_COVERAGE=true`. It uses the same inventory and clock summary as
+Review, with at most 10,000 directory entries per selected stage. Optional
+`library=Movies` or `library=TV` limits both the inventory reads and counts.
+Disabled libraries and duplicate/invalid library values return 400.
+
+The fixed response has at most eight aggregate rows, never title names, absolute
+paths, secrets or raw warning messages. Each row reports folder count, missing,
+invalid and future dates, and tracking records without a matching stage folder.
+The latter does not prove that a title was deleted. Unsupported/missing tracking
+never falls back to empty state or JSON when SQLite is selected.
+
+`complete=true` means all requested directories and tracking could be observed;
+it does not certify live freshness, atomic filesystem state or action permission.
+Unavailable directories return 503, retaining explicit unavailable rows with
+unknown counts. Incomplete aggregate totals are null. Snapshot, settings or
+source-identity changes invalidate the whole response. SQLite identity/revision
+checks span inventory collection. This is an observation only: it writes no dates,
+state, settings, media or service controls and makes no remote media requests.
+
+Run `bash scripts/integration_coverage_lab.sh EXISTING_LAB_PARENT` on Tower after
+updating the approved development checkout. It uses the cached auditor image only
+as a Python/Flask runtime, current committed source, and newly created fixture
+folders/state. Five actual loopback HTTP cases exercise auth/opt-in, filtering,
+missing directories/state and source changes. No production mounts, host ports,
+Docker socket, external connections or worker are used. Artifacts are retained.

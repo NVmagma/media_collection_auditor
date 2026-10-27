@@ -7,7 +7,7 @@
 <section class="settings-status-grid" aria-label="API status">
 <article class="settings-status-card"><h2>Credential</h2><p>{{ 'Configured' if token_ready else 'Missing or invalid' }}</p><p>The integration token grants read-only API access. Its value is never displayed here.</p></article>
 <article class="settings-status-card"><h2>Tracking</h2><p>{{ 'Available' if readiness.tracking_available else 'Needs review' }}</p><p>Authority: {{ readiness.storage_authority }} · Binding: {{ readiness.binding_status }}</p><p>Availability does not verify freshness or authorize media actions.</p></article>
-<article class="settings-status-card"><h2>Presentation</h2><p>Title details: {{ 'enabled' if readiness.title_details_enabled else 'disabled' }} · Posters: {{ 'enabled' if readiness.poster_lookup_enabled else 'disabled' }}</p><p>Coordinator observations: {{ readiness.coordinator_scope }}.</p></article>
+<article class="settings-status-card"><h2>Presentation</h2><p>Title details: {{ 'enabled' if readiness.title_details_enabled else 'disabled' }} · Posters: {{ 'enabled' if readiness.poster_lookup_enabled else 'disabled' }}</p><p>Coverage API: {{ 'enabled' if readiness.coverage_enabled else 'disabled' }}.</p><p>Coordinator observations: {{ readiness.coordinator_scope }}.</p></article>
 </section>
 <section class="panel"><h2>Homarr / Homepage connection</h2><p>Use HTTP API, private network access, and Bearer authentication. Paste only the token into the credential field; omit the word Bearer. Each widget needs its own query and matching template.</p>
 <label for="integration-base">Base URL</label><input id="integration-base" readonly><button type="button" data-copy="integration-base">Copy base URL</button>
@@ -18,6 +18,7 @@
 {% endfor %}{% endfor %}</tbody></table>
 <p>For Homarr, keep the path and query separate: expand “Query, body and behavior”, add key <code>library</code>, value source Literal, and value <code>Movies</code> or <code>TV</code>. Request ID: <code>titles</code>. Maximum: 10 records. An empty list means no matching tracking records.</p>
 <p id="integration-copy-status" role="status" aria-live="polite"></p></section>
+<section class="panel"><h2>Library coverage</h2><p><code>GET /api/v1/coverage</code> reports folder counts, missing/invalid/future dates and records without a matching stage folder. Optional query: <code>library=Movies</code> or <code>library=TV</code>. Enable explicitly with <code>INTEGRATION_API_COVERAGE=true</code> in the container template. It reads configured local folders only; no Jellyfin requests or media changes. Partial coverage returns 503 with unknown aggregate totals. A mismatch is a review finding, not proof that media was deleted.</p></section>
 <section class="panel"><h2>Diagnose a connection</h2><ul>
 <li><strong>401 Unauthorized:</strong> token missing or incorrect. A browser sign-in cannot replace Bearer authentication.</li>
 <li><strong>404:</strong> check the path; title routes also return 404 when title details are disabled. Missing or invalid server token configuration disables the API.</li>

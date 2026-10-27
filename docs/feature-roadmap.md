@@ -232,3 +232,12 @@ until the production switch is separately approved.
   Verified with 216 Linux integration/security/runtime checks, two additional
   fixture/token tests and Chromium copy/responsive checks; existing Dashboard and
   Settings browser checks also pass. Tower visual acceptance remains pending.
+
+- Coverage API: opt-in authenticated `/api/v1/coverage`, optional movie/TV filter,
+  aggregate-only Review parity, bounded local folder reads and explicit incomplete
+  totals. Selected SQLite identity/revision checks span inventory collection;
+  changed JSON/settings also invalidate the report. No clocks/state/media writes.
+  Verified with 239 Linux regression tests, five real loopback HTTP cases and
+  Chromium setup-page checks. Disposable Tower HTTP acceptance is next; production
+  remains unchanged and no image publication is claimed while CI billing is blocked.
+- User visual acceptance recorded for the API setup page on Tower port 18091.

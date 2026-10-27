@@ -24,7 +24,7 @@ from auth import session_key, jellyfin_login, current_user, store_token, discard
 from run_control import snapshot, request_run
 from config_store import FIELDS, KEYS, SECRETS, BOOLS, DEFAULTS, FIELD_HELP, load_config, save_config, validate, redacted_config
 from integration_api import authorize_summary, read_only_service_enabled
-from integration_status import (selected_run_snapshot, selected_run_history, selected_audit_status_report, audit_status_report, collect_widget_media_index, widget_media_urls, widget_media_base,
+from integration_status import (read_selected_coverage, selected_run_snapshot, selected_run_history, selected_audit_status_report, audit_status_report, collect_widget_media_index, widget_media_urls, widget_media_base,
     read_selected_tracking_status as read_tracking_status,
     read_selected_tracking_titles as read_tracking_titles,
     read_selected_dashboard_state as read_dashboard_state)
@@ -51,7 +51,7 @@ def require_login():
     gate = _preview_backend_gate()
     preview = gate.preview_release_enabled()
     if read_only_service_enabled() and not preview and request.endpoint not in (
-            "integration_summary", "integration_audit_status", "integration_titles", "integration_readiness", "health"):
+            "integration_summary", "integration_audit_status", "integration_titles", "integration_readiness", "integration_coverage", "health"):
         return {"status": "read_only_service"}, 404
     if request.path.startswith("/api/v1/"):
         failure = authorize_summary(request.headers.get("Authorization"))
@@ -61,7 +61,7 @@ def require_login():
                     "message": "Unknown integration route. See /api/v1/readiness for supported routes."}, 404
     if request.endpoint == "integration_readiness":
         return None
-    if request.endpoint in ("integration_summary", "integration_audit_status", "integration_titles"):
+    if request.endpoint in ("integration_summary", "integration_audit_status", "integration_titles", "integration_coverage"):
         if preview:
             try: gate.require_sqlite_production_activation()
             except RuntimeError:
@@ -179,8 +179,9 @@ def _integration_readiness():
         'poster_lookup_enabled': os.environ.get('INTEGRATION_API_MEDIA', 'false').lower() == 'true',
         'coordinator_scope': 'unavailable' if read_only_service_enabled() else 'current_process',
         'routes': ['/api/v1/readiness', '/api/v1/summary', '/api/v1/audit-status',
-                   '/api/v1/titles/oldest-waiting', '/api/v1/titles/leaving-soon'],
+                   '/api/v1/titles/oldest-waiting', '/api/v1/titles/leaving-soon', '/api/v1/coverage'],
         'libraries': ['Movies', 'TV'], 'title_limit': 10,
+        'coverage_enabled': os.environ.get('INTEGRATION_API_COVERAGE', 'false').lower() == 'true',
     }
 
 
@@ -196,6 +197,46 @@ def integration_setup():
     configured = authorize_summary(None)
     token_ready = configured is not None and configured[1] == 401
     return render_template('integrations.html', readiness=_integration_readiness(), token_ready=token_ready)
+
+
+@app.get('/api/v1/coverage')
+def integration_coverage():
+    if os.environ.get('INTEGRATION_API_COVERAGE', 'false').lower() != 'true':
+        return {'status':'disabled'}, 404
+    library = request.args.get('library')
+    if library not in (None, 'Movies', 'TV') or len(request.args.getlist('library')) > 1:
+        return {'status':'invalid_library'}, 400
+    base = {'schema_version':1, 'read_only':True, 'automatic_action':'none',
+            'freshness_verified':False, 'media_actions_authorized':False,
+            'observation_scope':'local_inventory_and_selected_tracking',
+            'filesystem_snapshot_atomic':False}
+    try:
+        config = load_config()
+        enabled = [name for name,key,fallback in (('Movies','ENABLE_MOVIES','true'),('TV','ENABLE_TV','false'))
+                   if str(config.get(key,os.environ.get(key,fallback))).lower() == 'true']
+        if library is not None and library not in enabled:
+            return {**base, 'status':'library_disabled'}, 400
+        if library is not None:
+            enabled = [library]
+        if not enabled:
+            return {**base, 'status':'no_enabled_libraries', 'rows':[], 'complete':False}, 503
+        inventory_config = {**config, 'ENABLE_MOVIES':str('Movies' in enabled).lower(),
+                            'ENABLE_TV':str('TV' in enabled).lower()}
+        def build(state):
+            stages, warnings = filesystem_stages(state, inventory_config, max_entries=10000)
+            result = summarize_dashboard_clocks(state, stages, warnings, libraries=enabled)
+            # Incomplete aggregates are unknown; do not present partial totals as full coverage.
+            if not result['complete']:
+                for key in ('missing_dates','invalid_dates','future_dates','records_without_stage_folder'):
+                    result[key] = None
+            return result
+        result = read_selected_coverage(STATE_FILE, build)
+        if load_config() != config:
+            raise RuntimeError('Settings changed during observation')
+        return {**base, **result, 'status':'advisory_only' if result['complete'] else 'unavailable'}, 200 if result['complete'] else 503
+    except (OSError, RuntimeError, ValueError, TypeError, KeyError, AttributeError):
+        return {**base, 'status':'unavailable', 'rows':None, 'complete':False,
+                'storage_authority':'unavailable', 'state_revision':None}, 503
 
 
 @app.get("/api/v1/summary")
@@ -391,7 +432,7 @@ def _dashboard_signals(config):
 _SIGNAL_LOCK = threading.Lock()
 _SIGNAL_CACHE = {}
 
-def filesystem_stages(state, config):
+def filesystem_stages(state, config, *, max_entries=None):
     """Read-only lifecycle inventory. Missing mounts are reported, not counted as empty."""
     stages = {label: [] for label in ("Waiting", "Holding", "Removal", "Keep")}
     warnings = []
@@ -414,8 +455,13 @@ def filesystem_stages(state, config):
             directory = os.environ.get(f"{prefix}_{kind}_PATH") or os.path.join(media_root, dirname)
             try:
                 with os.scandir(directory) as entries:
-                    names = sorted((entry.name for entry in entries
-                                    if entry.is_dir(follow_symlinks=False)), key=str.casefold)
+                    names = []
+                    for count, entry in enumerate(entries, 1):
+                        if max_entries is not None and count > max_entries:
+                            raise OSError('Inventory observation bound exceeded')
+                        if entry.is_dir(follow_symlinks=False):
+                            names.append(entry.name)
+                    names.sort(key=str.casefold)
             except OSError:
                 warnings.append(f"{library} {label}: directory unavailable ({directory})")
                 continue
