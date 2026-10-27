@@ -153,3 +153,36 @@ def observation_datetime(value, timezone_name=None):
     offset=parsed.strftime('%z')
     if offset:text+=' UTC'+offset[:3]+':'+offset[3:]
     return text
+
+
+def summarize_dashboard_clocks(state, stages, warnings, *, libraries, tracking_available=True):
+    """Summarize this inventory capture without rescanning or changing dates.
+
+    Unmatched counts refer to the named stage, not proof that media was deleted.
+    Unavailable tracking/directories are unknown coverage, never zero-date claims.
+    """
+    sections={'Waiting':'first_seen','Holding':'queued','Removal':'in_removal','Keep':'keep_seen'}
+    rows=[]
+    totals={key:0 for key in ('missing_dates','invalid_dates','future_dates','records_without_stage_folder')}
+    complete=tracking_available
+    for library in libraries:
+        for stage,section in sections.items():
+            items=[item for item in stages.get(stage,[]) if item['library']==library]
+            unavailable=any(message.startswith(library+' '+stage+':') for message in warnings)
+            status='directory_unavailable' if unavailable else 'observed' if tracking_available else 'tracking_unavailable'
+            row={'library':library,'stage':stage,'status':status,'folders':None if unavailable else len(items)}
+            for key in totals:row[key]=None
+            if status=='observed':
+                row.update(missing_dates=0,invalid_dates=0,future_dates=0,records_without_stage_folder=0)
+                present=set()
+                for item in items:
+                    present.add(('TV/' if library=='TV' else '')+item['title'])
+                    clock=lifecycle_clock(item.get('since'))
+                    key={'missing':'missing_dates','invalid':'invalid_dates','future':'future_dates'}.get(clock['clock_status'])
+                    if key:row[key]+=1
+                recorded={key for key in state.get(section,{}) if key.startswith('TV/')==(library=='TV')}
+                row['records_without_stage_folder']=len(recorded-present)
+                for key in totals:totals[key]+=row[key]
+            else:complete=False
+            rows.append(row)
+    return {'rows':rows,'complete':complete,'freshness_verified':False,**totals}

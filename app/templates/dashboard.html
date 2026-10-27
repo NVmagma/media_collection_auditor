@@ -61,6 +61,19 @@
         {% endfor %}</ul>
         {% else %}<p class="muted">No discrepancies found in readable directories.</p>{% endif %}
       </details>
+      <details class="clock-coverage">
+        <summary>Saved date coverage · {{ clock_coverage.missing_dates }} folders without a stage date · {{ clock_coverage.records_without_stage_folder }} records without a matching stage folder{% if not clock_coverage.complete %} · incomplete{% endif %}</summary>
+        <p class="muted">These are observed tracking gaps. Missing dates remain untracked; folder dates and dates from other stages are not substituted. Records without a matching stage folder need review, not automatic removal.</p>
+        {% if not clock_coverage.complete %}<p role="status">Coverage is incomplete. Unavailable counts are shown as —.</p>{% endif %}
+        <div class="table-wrap"><table><thead><tr><th>Library</th><th>Stage</th><th>Folders</th><th>Missing dates</th><th>Invalid / future dates</th><th>Records without stage folder</th></tr></thead><tbody>
+        {% for row in clock_coverage.rows %}<tr>
+          <td>{{ row.library }}</td><td>{{ row.stage }}{% if row.status != 'observed' %}<br><small>{{ 'Directory unavailable' if row.status == 'directory_unavailable' else 'Tracking unavailable' }}</small>{% endif %}</td>
+          <td>{{ row.folders if row.folders is not none else '—' }}</td>
+          <td>{{ row.missing_dates if row.missing_dates is not none else '—' }}</td>
+          <td>{% if row.invalid_dates is not none %}{{ row.invalid_dates }} / {{ row.future_dates }}{% else %}—{% endif %}</td>
+          <td>{{ row.records_without_stage_folder if row.records_without_stage_folder is not none else '—' }}</td>
+        </tr>{% endfor %}</tbody></table></div>
+      </details>
       <div class="library-overview">
         {% for library, label in [('Movies', 'Movies'), ('TV', 'TV Shows')] %}
         <button type="button" class="library-overview-card" data-open-library="{{ label }}">
