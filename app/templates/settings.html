@@ -15,6 +15,15 @@
 </nav>
 {% if preview_mode %}<div class="alert" role="status">Preview mode: this form requests settings changes. Your active settings stay in place until the request is validated and applied.</div>{% endif %}
 {% if requested %}<div class="alert" role="status">Requested settings saved. Active settings have not changed.</div>{% endif %}
+{% if pending_settings.status == 'requested' %}
+<div class="alert" role="status"><strong>Settings request pending</strong>
+<p>Active settings are shown below and continue to control scans. The request needs validation before it can be applied.</p>
+{% if pending_settings.changed_keys %}<p>Requested changes: {% for key in pending_settings.changed_keys %}{{ help_text[key][0] }}{{ ', ' if not loop.last else '.' }}{% endfor %}</p>{% endif %}</div>
+{% elif pending_settings.status == 'stale' %}
+<div class="alert error" role="status">The saved request was made against an older configuration. It has not been applied. Review the active settings before submitting a new request.</div>
+{% elif pending_settings.status == 'review_required' %}
+<div class="alert error" role="status">The saved settings request needs review. Active settings have not been changed by this request.</div>
+{% endif %}
 {% if unchanged %}<div class="alert" role="status">No active settings changes were requested.</div>{% endif %}
 {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
 {% if success and not preview_mode %}<div class="alert" role="status">Settings saved. Changes will apply at the next audit run.</div>{% endif %}

@@ -194,3 +194,45 @@ revision binding preparation is covered by the separate preparation tests.
 Freshness at production cutover, reviewed registry references, managed-template
 replacement, backup capture and production transaction orchestration still need
 an explicit production implementation and review.
+
+## Recovered TV preview and requested settings
+
+The same-image recovery controller (`unraid_preview_recovery_start_host.sh`) is a
+separate explicit transaction for an already stopped preview. It verifies the
+selected backup, prepared roots, original tracking/settings/binding and unique
+saved template before retaining the old container and starting the replacement.
+It saves the replacement template only after authenticated API readiness. It does
+not delete the old container, retry an uncertain effect or restore automatically.
+This is the narrow recovery used for the TV-enabled preview, rather than a general
+Unraid image-update implementation.
+
+The settings protection changes require a newly accepted preview image. They do
+not alter an older running image merely because source code was pushed. In that
+new image, Settings saves a private `auditor_config.pending.json` beside the
+active configuration. The active configuration and its state binding remain
+unchanged. A persistent page notice lists only known setting labels, never secret
+values, and identifies requests made against an older configuration. Inputs still
+show active settings. Submitting another request replaces the pending request;
+it does not apply or merge the previous request automatically.
+
+A request needs explicit validation and application in a prepared preview before
+it takes effect; this increment does not provide an automatic settings-application
+controller. Media actions and season pruning cannot be enabled through this form.
+If an administrator changes the bound configuration externally, preview scans
+pause while the login and authenticated settings page remain available. Invalid
+bindings return an authenticated API 503 rather than falling back to JSON state.
+The SQLite database and retained source are never reset to restore availability.
+
+Test the committed image on Tower using only a new disposable lab:
+
+```bash
+image=$(bash scripts/sqlite_preview_release_build.sh)
+bash scripts/sqlite_preview_release_lab.sh "$image" /mnt/user/sql_test
+```
+
+This runs real application startup with missing and changed bindings, confirms
+login remains available, checks authenticated API refusal, and verifies unchanged
+tracking. It also exercises the normal bound preview API and clean shutdown. No
+production mounts, service names, Docker socket or published ports are used by
+the test container. A local acceptance result does not imply a successful GitHub
+Actions build or published image.

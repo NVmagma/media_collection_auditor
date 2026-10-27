@@ -102,3 +102,37 @@ def test_settings_reload_failure_keeps_service_loop_alive(monkeypatch):
         service.run_daily_service(apply_settings=Mock(side_effect=ValueError('private-settings')))
     assert calls==[30]
     collect.assert_not_called()
+
+
+def test_pending_summary_survives_reload_without_returning_secrets(tmp_path):
+    from app.sqlite_preview_settings import pending_request_summary
+    active,values=configured(tmp_path)
+    request_settings(config_path=active,updated={**values,'ENABLE_TV':'true','JELLYFIN_API_TOKEN':'private-token'},environment={})
+    report=pending_request_summary(config_path=active,environment={})
+    assert report=={'status':'requested','changed_keys':['ENABLE_TV','JELLYFIN_API_TOKEN']}
+    assert 'private-token' not in json.dumps(report) and 'private_extension' not in json.dumps(report)
+    active.write_text(json.dumps({**values,'ENABLE_TV':'true'}))
+    assert pending_request_summary(config_path=active,environment={})=={'status':'stale','changed_keys':[]}
+
+
+def test_pending_summary_refuses_symlinks_without_following_target(tmp_path):
+    from app.sqlite_preview_settings import pending_request_summary
+    active,values=configured(tmp_path)
+    target=tmp_path/'unrelated';target.write_text('private-secret')
+    (tmp_path/PENDING).symlink_to(target)
+    assert pending_request_summary(config_path=active)['status']=='review_required'
+    assert target.read_text()=='private-secret'
+
+
+def test_settings_page_reports_pending_labels_but_never_pending_values(preview,monkeypatch,tmp_path):
+    import config_store,web
+    client,_,_,_=preview
+    active,values=configured(tmp_path)
+    request_settings(config_path=active,updated={**values,'ENABLE_TV':'true','JELLYFIN_API_TOKEN':'private-token'},environment={})
+    monkeypatch.setattr(config_store,'CONFIG_FILE',str(active))
+    monkeypatch.setattr(web,'load_config',lambda:dict(values))
+    response=client.get('/settings')
+    assert response.status_code==200
+    assert 'Settings request pending' in response.text
+    assert 'Manage TV Shows' in response.text
+    assert 'private-token' not in response.text

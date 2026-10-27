@@ -767,6 +767,11 @@ def settings():
     from app.sqlite_backend_gate import preview_release_enabled
     preview_mode = preview_release_enabled()
     saved = load_config()
+    pending_settings = {'status':'none','changed_keys':[]}
+    if preview_mode:
+        from app.sqlite_preview_settings import pending_request_summary
+        from config_store import CONFIG_FILE
+        pending_settings = pending_request_summary(config_path=CONFIG_FILE)
     error = None
     success = request.args.get("saved") == "1"
     requested = request.args.get("requested") == "1"
@@ -810,7 +815,8 @@ def settings():
         values[key] = ""  # Never send stored tokens to the browser.
     return render_template("settings.html", groups=FIELDS, values=values,
                            secrets=SECRETS, bools=BOOLS, sources=sources, help_text=FIELD_HELP, error=error,
-                           success=success, preview_mode=preview_mode, requested=requested, unchanged=unchanged)
+                           success=success, preview_mode=preview_mode, requested=requested, unchanged=unchanged,
+                           pending_settings=pending_settings)
 
 
 @app.post("/api/test-connection/<service>")
