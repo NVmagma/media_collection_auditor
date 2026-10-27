@@ -158,3 +158,50 @@
 .dashboard-app .overview-attempt-metrics dt{font-size:12px;color:#a6b5c9}
 .dashboard-app .overview-attempt-metrics dd{font-size:23px;font-weight:600;margin:5px 0}
 .dashboard-app .overview-review-findings{background:#203450;color:#b9d8ff;border:1px solid #3c5676;padding:7px 10px;font-size:12px}
+
+/* Keep Overview short; detailed evidence lives on its own /review page. */
+.dashboard-app .workspace-nav a{display:inline-block;text-decoration:none;color:#a6b5c9;padding:10px 16px;border:1px solid transparent;border-radius:8px}
+.dashboard-app .workspace-nav a[aria-current=page]{color:#dceaff;background:#233751;border-color:#3c5676}
+.dashboard-app .workspace-nav a:hover{background:#1a2a40;color:#e7edf7}
+.dashboard-app .workspace-nav a:focus-visible,.dashboard-app .overview-review-link:focus-visible{outline:2px solid #97c4ff;outline-offset:3px}
+.dashboard-app.viewing-review .dashboard-status{display:none}
+.dashboard-app .overview-review-link{display:inline-block;color:#b9d8ff;background:#203450;border:1px solid #3c5676;border-radius:6px;padding:6px 9px;font-size:12px;text-decoration:none;margin:2px 5px 0 0}
+.dashboard-app .overview-finding-summary{margin:6px 0 8px;padding-left:18px;font-size:13px;line-height:1.5}
+.dashboard-app .overview-browse-links{display:flex;gap:8px;justify-content:flex-end}
+.dashboard-app .overview-browse-links button{padding:6px 10px;background:transparent;color:#b9d8ff;font-size:12px}
+.dashboard-app.viewing-overview main{margin-top:14px;margin-bottom:14px}
+.dashboard-app.viewing-overview .workspace-heading{margin-bottom:12px}
+.dashboard-app.viewing-overview .workspace-heading h2{font-size:23px;margin:0 0 3px}
+.dashboard-app.viewing-overview .workspace-eyebrow{display:none}
+.dashboard-app.viewing-overview .workspace-heading p{font-size:13px}
+.dashboard-app.viewing-overview .dashboard-status{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.7fr);gap:12px;align-items:stretch;margin-bottom:12px}
+.dashboard-app.viewing-overview .hero{margin:0;padding:12px 14px}
+.dashboard-app.viewing-overview .hero .scheduler-label{margin-bottom:4px}
+.dashboard-app.viewing-overview .run-cards{margin:0;gap:8px}
+.dashboard-app.viewing-overview .run-cards article{padding:12px}
+.dashboard-app.viewing-overview .run-cards strong{font-size:18px}
+.dashboard-app.viewing-overview .run-cards strong.small-metric{font-size:12px}
+.dashboard-app.viewing-overview .overview-workspace{gap:12px}
+.dashboard-app.viewing-overview .overview-workspace .panel{padding:14px 16px}
+.dashboard-app .overview-count-heading{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.dashboard-app .overview-count-heading h2{font-size:17px;margin:0}
+.dashboard-app .overview-count-heading p{font-size:12px;margin:0}
+.dashboard-app.viewing-overview .tracking-cards{margin:10px 0 0;gap:10px}
+.dashboard-app.viewing-overview .tracking-cards article{padding:8px 12px;display:grid;grid-template-columns:1fr auto;align-items:center;gap:2px 8px}
+.dashboard-app.viewing-overview .tracking-cards strong{font-size:23px;margin:0;grid-column:2;grid-row:1/3}
+.dashboard-app.viewing-overview .tracking-cards small{font-size:11px}
+.dashboard-app.viewing-overview .overview-grid{gap:12px}
+.dashboard-app.viewing-overview .overview-grid .panel-heading{margin-bottom:8px}
+.dashboard-app.viewing-overview .overview-grid h2{font-size:17px}
+.dashboard-app.viewing-overview .overview-grid p{margin:6px 0;font-size:12px}
+.dashboard-app.viewing-overview .overview-attempt-metrics{margin:6px 0;gap:10px}
+.dashboard-app.viewing-overview .overview-attempt-metrics dd{font-size:20px;margin:2px 0}
+.dashboard-app.viewing-overview .overview-list-basis{min-height:0}
+.dashboard-app.viewing-overview .overview-media-row{padding:8px 0;gap:10px;min-height:70px}
+.dashboard-app.viewing-overview .overview-poster{flex-basis:36px;width:36px;height:54px}
+.dashboard-app.viewing-overview .overview-title-button{display:block;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4;font-size:13px}
+.dashboard-app.viewing-overview .overview-media-copy p{margin:2px 0;font-size:12px;line-height:1.4}
+@media(max-width:800px){.dashboard-app.viewing-overview .dashboard-status{grid-template-columns:1fr}.dashboard-app.viewing-overview .run-cards{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:520px){.dashboard-app .workspace-nav a{padding:9px 11px}.dashboard-app.viewing-overview .run-cards{grid-template-columns:1fr}.dashboard-app.viewing-overview .overview-count-heading{align-items:flex-start;flex-direction:column}}
+@media(min-width:801px){.dashboard-app.viewing-overview .topbar{padding-top:12px;padding-bottom:12px;min-height:76px}.dashboard-app.viewing-overview .workspace-nav{padding-top:6px;padding-bottom:6px}.dashboard-app.viewing-overview .tracking-cards{margin-top:6px}.dashboard-app.viewing-overview .overview-media-row{padding-top:6px;padding-bottom:6px;min-height:66px}.dashboard-app.viewing-overview main{margin-bottom:8px}}
+@media(min-width:801px){.dashboard-app.viewing-overview .run-controls{margin-top:8px;gap:10px}.dashboard-app.viewing-overview .run-controls button{white-space:nowrap;padding:8px 12px;font-size:13px}.dashboard-app.viewing-overview .run-controls span{font-size:12px}.dashboard-app.viewing-overview main{margin-top:10px}.dashboard-app.viewing-overview .overview-grid .panel-heading{margin-bottom:4px}.dashboard-app.viewing-overview .overview-browse-links button{padding-top:4px;padding-bottom:4px}}

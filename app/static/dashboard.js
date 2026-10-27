@@ -22,7 +22,8 @@ const workspaces = document.querySelectorAll('[data-workspace]');
 const libraryNames = ['Movies', 'TV Shows'];
 let lastLibrary = 'Movies';
 const descriptions = {
-  Overview: 'Review library coverage, tracking gaps and scheduler observations.',
+  Overview: 'Collection status at a glance · live freshness unverified.',
+  Review: 'Inspect coverage gaps and collection findings. No tracking changes are performed.',
   Library: 'Browse movie and TV folders by lifecycle stage.',
   'Audit Preview': 'Review saved-date estimates before a future audit.',
   Activity: 'Inspect recent action log entries for both libraries.',
@@ -34,6 +35,8 @@ function openSection(name) {
   const isLibrary = libraryNames.includes(name);
   if (isLibrary) lastLibrary = name;
   const workspace = isLibrary ? 'Library' : name;
+  document.body.classList.toggle('viewing-overview', workspace === 'Overview');
+  document.body.classList.toggle('viewing-review', workspace === 'Review');
   closeInspector(false);
   document.getElementById('library-layout').classList.toggle('hidden-section', !isLibrary);
   tabs.forEach(tab => {
@@ -41,7 +44,10 @@ function openSection(name) {
     tab.classList.toggle('selected', selected);
     tab.setAttribute('aria-pressed', String(selected));
   });
-  workspaces.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.workspace === workspace)));
+  workspaces.forEach(link => {
+    if (link.dataset.workspace === workspace) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  });
   panels.forEach(panel => panel.classList.toggle('hidden-section', panel.dataset.panel !== name));
   document.getElementById('library-toolbar').classList.toggle('hidden-section', !isLibrary);
   document.querySelectorAll('[data-workspace-context]').forEach(element =>
@@ -50,10 +56,22 @@ function openSection(name) {
   document.getElementById('workspace-description').textContent = descriptions[workspace];
   if (isLibrary) filterLibrary();
 }
-workspaces.forEach(button => button.addEventListener('click', () => openSection(button.dataset.workspace)));
+workspaces.forEach(link => link.addEventListener('click', event => {
+  if (link.dataset.workspace === 'Review' || document.body.dataset.initialWorkspace === 'Review') return;
+  if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+  event.preventDefault();
+  openSection(link.dataset.workspace);
+  history.replaceState(null, '', link.getAttribute('href'));
+}));
 tabs.forEach(tab => tab.addEventListener('click', () => openSection(tab.dataset.tab)));
 document.querySelectorAll('[data-open-library]').forEach(button =>
-  button.addEventListener('click', () => openSection(button.dataset.openLibrary)));
+  button.addEventListener('click', () => {
+    if (document.body.dataset.initialWorkspace === 'Review') {
+      location.assign('/#' + encodeURIComponent(button.dataset.openLibrary));
+      return;
+    }
+    openSection(button.dataset.openLibrary);
+  }));
 let inspectorTrigger = null;
 function closeInspector(returnFocus) {
   document.getElementById('title-inspector').classList.add('hidden-section');
@@ -109,7 +127,11 @@ document.querySelectorAll('.inspect-title').forEach(button => button.addEventLis
   document.getElementById('close-inspector').focus();
 }));
 document.body.classList.add('dashboard-ready');
-openSection('Overview');
+let initialWorkspace = document.body.dataset.initialWorkspace || 'Overview';
+if (initialWorkspace !== 'Review') {
+  try { initialWorkspace = decodeURIComponent(location.hash.slice(1)) || initialWorkspace; } catch (_) {}
+}
+openSection(initialWorkspace);
 document.querySelectorAll('[data-stage-tab]').forEach(tab => tab.addEventListener('click', () => {
   const section = tab.closest('[data-panel]');
   closeInspector(false);
@@ -157,12 +179,6 @@ button?.addEventListener('click', async () => {
 // Overview navigation reuses the Library's existing stage and Details controls.
 document.querySelectorAll('[data-open-workspace]').forEach(button =>
   button.addEventListener('click', () => openSection(button.dataset.openWorkspace)));
-document.querySelectorAll('[data-open-details]').forEach(button => button.addEventListener('click', () => {
-  const target = document.getElementById(button.dataset.openDetails);
-  target.open = true;
-  target.querySelector('summary').focus();
-  target.scrollIntoView({block: 'nearest', behavior: 'auto'});
-}));
 document.querySelectorAll('[data-open-title]').forEach(button => button.addEventListener('click', () => {
   document.getElementById('library-search').value = '';
   openSection(button.dataset.library === 'TV' ? 'TV Shows' : 'Movies');

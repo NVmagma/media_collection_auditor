@@ -22,7 +22,7 @@ Development branch: `feature/interface-api`. Production is unchanged.
 
 The first shell/Library preview received positive user feedback. Overview now
 adds read-only attention items, a compact scheduler summary, a latest-attempt
-proposal summary and two five-title lists combining enabled movie/TV libraries.
+proposal summary and two three-title lists combining enabled movie/TV libraries.
 Selecting a list title opens its matching Library stage and Details panel. Poster
 requests use the existing authenticated image route, with an inert fallback.
 The new lists use the already enriched inventory; they do not rescan directories
@@ -88,3 +88,18 @@ include coverage expansion, movie/TV title-to-inspector navigation and mobile
 overflow, alongside the existing search/sort/focus checks. The synthetic server
 also served the Overview over private HTTP while rejecting action requests.
 The Tower visual review for this Overview increment is pending.
+
+## Dedicated Review page and compact Overview
+
+Coverage and collection diagnostics now live at `/review`, behind the same
+sign-in and preview-binding checks as Dashboard. Overview does not embed those
+diagnostic sections or expand them in place. Review coverage/findings links
+navigate to the separate page; both sections are open there. Library navigation
+from Review returns to the main Library workspace.
+
+Overview contains brief finding summaries and three titles per list; detailed
+explanations remain on Review. The compact desktop layout is browser-tested at
+1280×1000 and 1440×1000 with administrator controls visible and no page scroll for
+the representative synthetic collection. This is not a fixed-height/clipped view:
+phone layouts stack, and critical errors or unusually long content may still
+require scrolling. The full Library and Review content remain available.

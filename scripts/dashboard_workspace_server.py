@@ -12,8 +12,9 @@ def create_preview_app():
     app = Flask('dashboard_workspace_fixture', static_folder=str(root / 'app/static'))
 
     @app.get('/')
+    @app.get('/review')
     def dashboard():
-        page = render_workspace().get_data(as_text=True)
+        page = render_workspace(workspace='Review' if request.path == '/review' else 'Overview').get_data(as_text=True)
         page = page.replace('<main>', '<main><p class="notice" role="status">Disposable design preview · synthetic titles only · no production services connected.</p>', 1)
         return Response(page, mimetype='text/html')
 

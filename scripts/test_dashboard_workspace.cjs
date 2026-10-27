@@ -15,7 +15,7 @@ if (!file) throw Error('Pass the synthetic page rendered by tests/dashboard_work
     await page.route('**/*', route => {
       const request = route.request(), url = new URL(request.url());
       if (request.method() !== 'GET') posts.push(request.method());
-      const assets = {'/': [file, 'text/html'],
+      const assets = {'/': [url.searchParams.get('role') === 'admin' ? file + '.admin.html' : file, 'text/html'], '/review': [file + '.review.html', 'text/html'],
         '/static/style.css': [path.join(root, 'app/static/style.css'), 'text/css'],
         '/static/dashboard.js': [path.join(root, 'app/static/dashboard.js'), 'text/javascript'],
         '/static/auditor-badge.png': [path.join(root, 'unraid/assets/Media_Collection_Auditor_Badge.png'), 'image/png']};
@@ -30,9 +30,15 @@ if (!file) throw Error('Pass the synthetic page rendered by tests/dashboard_work
     }
     await section('Overview');
     assert.equal(await page.locator('#library-toolbar').isVisible(), false);
-    await page.locator('[data-open-details="clock-coverage"]').first().click();
+    assert.equal(await page.locator('#clock-coverage').count(), 0);
+    await page.locator('a[href="/review#clock-coverage"]').click();
+    await section('Review');
+    assert.equal(new URL(page.url()).pathname, '/review');
     assert.equal(await page.locator('#clock-coverage').getAttribute('open'), '');
-    assert.equal(await page.evaluate(() => document.activeElement.parentElement.id), 'clock-coverage');
+    assert.equal(await page.locator('[data-workspace="Review"]').getAttribute('aria-current'), 'page');
+    await page.locator('[data-workspace="Overview"]').click();
+    await section('Overview');
+    assert.equal(await page.locator('#clock-coverage').count(), 0);
     await page.locator('[data-open-title="Summer Frontier (2026)"]').click();
     await section('Movies');
     assert.equal(await page.locator('[data-stage-panel="Movies:Holding"]').isVisible(), true);
@@ -103,15 +109,17 @@ if (!file) throw Error('Pass the synthetic page rendered by tests/dashboard_work
     await page.locator('[data-workspace="Overview"]').click();
     await page.locator('[data-open-library="Movies"]').click();
     await section('Movies');
-    assert.equal(await page.locator('[data-workspace="Library"]').getAttribute('aria-pressed'), 'true');
+    assert.equal(await page.locator('[data-workspace="Library"]').getAttribute('aria-current'), 'page');
     await page.locator('[data-view="table"]').click();
     await page.reload();
     await section('Overview');
     await page.locator('[data-workspace="Library"]').click();
     assert.equal(await page.locator('[data-view="table"]').getAttribute('aria-pressed'), 'true');
+    await page.reload();
+    await section('Movies');
     for (const width of [1280, 736, 390, 320]) {
       await page.setViewportSize({width, height: 1000});
-      for (const workspace of ['Overview', 'Library', 'Audit Preview', 'Activity', 'History']) {
+      for (const workspace of ['Overview', 'Library', 'Audit Preview', 'Activity', 'History', 'Review']) {
         await page.locator(`[data-workspace="${workspace}"]`).click();
         if (workspace === 'Library') {
           await page.locator('[data-stage-panel="Movies:Waiting"] tbody .inspect-title').first().click();
@@ -121,12 +129,26 @@ if (!file) throw Error('Pass the synthetic page rendered by tests/dashboard_work
           `Horizontal page overflow at ${width}px in ${workspace}`);
       }
     }
+    await page.locator('[data-panel="Review"] [data-open-library="TV Shows"]').click();
+    await section('TV Shows');
+    assert.equal(new URL(page.url()).pathname, '/');
+    await page.goto('http://fixture.invalid/?role=admin#Overview');
+    assert.equal(await page.locator('#run-now').isVisible(), true);
+    for (const [width, height] of [[1280, 1000], [1440, 1000]]) {
+      await page.setViewportSize({width, height});
+      const measured = await page.evaluate(() => document.documentElement.scrollHeight);
+      if (measured > height && process.env.DASHBOARD_SCREENSHOT_DIRECTORY) await page.screenshot({path: path.join(process.env.DASHBOARD_SCREENSHOT_DIRECTORY, 'dashboard-fit.png'), fullPage: true});
+      assert.equal(measured <= height, true, `Overview requires ${measured}px at ${width}x${height}`);
+    }
+    await page.goto('http://fixture.invalid/');
     assert.deepEqual(posts, []);
     assert.deepEqual(errors, []);
     if (process.env.DASHBOARD_SCREENSHOT_DIRECTORY) {
       await page.setViewportSize({width: 1280, height: 1000});
       await page.locator('[data-workspace="Overview"]').click();
       await page.screenshot({path: path.join(process.env.DASHBOARD_SCREENSHOT_DIRECTORY, 'dashboard-overview.png'), fullPage: true});
+      await page.locator('[data-workspace="Review"]').click();
+      await page.screenshot({path: path.join(process.env.DASHBOARD_SCREENSHOT_DIRECTORY, 'dashboard-review.png'), fullPage: true});
       await page.locator('[data-workspace="Library"]').click();
       await page.locator('[data-stage-panel="Movies:Waiting"] tbody .inspect-title').first().click();
       await page.screenshot({path: path.join(process.env.DASHBOARD_SCREENSHOT_DIRECTORY, 'dashboard-library.png'), fullPage: true});
@@ -134,6 +156,7 @@ if (!file) throw Error('Pass the synthetic page rendered by tests/dashboard_work
       await page.screenshot({path: path.join(process.env.DASHBOARD_SCREENSHOT_DIRECTORY, 'dashboard-mobile.png'), fullPage: true});
     }
     console.log(JSON.stringify({status: 'dashboard_workspace_browser_verified', widths: [1280,736,390,320],
-      navigation_and_view_state_verified: true, external_requests_performed: false, production_changes_performed: false}));
+      navigation_and_view_state_verified: true, separate_review_page_verified: true,
+      desktop_overview_fits: [[1280,1000],[1440,1000]], external_requests_performed: false, production_changes_performed: false}));
   } finally {await browser.close();}
 })().catch(error => {console.error(error); process.exitCode = 1;});

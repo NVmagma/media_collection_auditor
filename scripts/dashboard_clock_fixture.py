@@ -71,6 +71,9 @@ def actual_image_acceptance():
         assert response.status_code==302
         response=session.get(base+'/',timeout=30)
         assert response.status_code==200
+        assert 'id="clock-coverage"' not in response.text
+        response=session.get(base+'/review',timeout=30)
+        assert response.status_code==200
         page=response.text
         assert '62 folders without a stage date' in page
         assert '2 records without a matching stage folder' in page

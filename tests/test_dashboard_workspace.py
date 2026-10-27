@@ -18,11 +18,11 @@ def test_readonly_workspace_keeps_all_existing_sections_without_action_controls(
     page = response.get_data(as_text=True)
     parser = Elements(); parser.feed(page)
     assert [attrs['data-workspace'] for _, attrs in parser.elements if 'data-workspace' in attrs] == [
-        'Overview', 'Library', 'Audit Preview', 'Activity', 'History']
+        'Overview', 'Library', 'Review', 'Audit Preview', 'Activity', 'History']
     assert {attrs['data-panel'] for _, attrs in parser.elements if 'data-panel' in attrs} == {
         'Overview', 'Movies', 'TV Shows', 'Audit Preview', 'Activity', 'History'}
     assert 'id="run-now"' not in page and 'rescue-choice' not in page
-    assert 'Saved tracking records' in page and 'these totals can differ' in page
+    assert 'Saved tracking records' in page and 'These totals can differ' in page
     assert 'The Quiet Orbit (2026)' in page and 'Lantern House (2026)' in page
     assert 'src="/static/dashboard.js" defer' in page
     assert '/static/auditor-badge.png' in page
@@ -41,6 +41,7 @@ def test_disposable_server_has_synthetic_banner_and_refuses_actions():
     from scripts.dashboard_workspace_server import create_preview_app
     client = create_preview_app().test_client()
     assert 'Disposable design preview' in client.get('/').get_data(as_text=True)
+    assert 'id="clock-coverage"' in client.get('/review').get_data(as_text=True)
     assert client.get('/static/dashboard.js').status_code == 200
     assert client.get('/static/auditor-badge.png').mimetype == 'image/png'
     for endpoint in ('/api/run-now', '/api/rescue', '/settings'):
@@ -53,7 +54,7 @@ def test_overview_findings_estimates_and_unavailable_lists_are_explicit():
     assert '1 folder has no saved stage date' in page
     assert '1 record has no matching stage folder' in page
     assert 'Latest scheduler observation needs review' in page
-    assert 'estimated calendar dates, not deletion dates' in page
+    assert 'Estimated calendar dates, not deletion dates' in page
     assert 'Proposals are not completed media actions' in page
     unavailable = render_workspace(tracking_available=False).get_data(as_text=True)
     assert unavailable.count('Tracking unavailable; this list cannot be verified.') == 2
@@ -66,3 +67,19 @@ def test_latest_attempt_does_not_replace_unreported_counts_with_zero():
     assert 'No result recorded' in page
     assert page.count('<dd>—</dd>') == 2
     assert 'Scheduler observations are unavailable in this process' in page
+
+
+def test_review_is_a_separate_authenticated_page_not_embedded_in_overview():
+    from unittest.mock import patch
+    import web
+    overview = render_workspace().get_data(as_text=True)
+    review = render_workspace(workspace='Review').get_data(as_text=True)
+    assert 'id="clock-coverage"' not in overview
+    assert 'id="health-findings"' not in overview
+    assert 'href="/review#clock-coverage"' in overview
+    assert 'data-panel="Review"' in review
+    assert 'id="clock-coverage" open' in review
+    assert 'id="health-findings" open' in review
+    with patch.object(web, 'current_user', return_value=None):
+        response = web.app.test_client().get('/review')
+    assert response.status_code == 302 and '/login' in response.location

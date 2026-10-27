@@ -449,7 +449,7 @@ def collection_health(state, stages, warnings, config=None):
 
 
 @app.get("/")
-def dashboard():
+def dashboard(initial_workspace="Overview"):
     actions = load_actions()
     state_error = None
     try:
@@ -515,8 +515,14 @@ def dashboard():
                                     "stage": stage, "action": action})
     preview.sort(key=lambda item: (item["library"], item["stage"], item["title"].casefold()))
     display_zone=config.get('SQLITE_DAILY_RUN_TIMEZONE') or os.environ.get('SQLITE_DAILY_RUN_TIMEZONE') or os.environ.get('TZ')
-    return render_template("dashboard.html", overview=dashboard_overview(stages, clock_coverage, libraries=enabled_libraries, tracking_available=state_error is None), dashboard_timezone=display_zone, clock_coverage=clock_coverage, actions=actions, state=state, state_error=state_error, stages=stages, inventory_warnings=inventory_warnings, health_issues=health_issues, run=selected_run_snapshot(snapshot), history=selected_run_history(read_history, 100),
+    return render_template("dashboard.html", initial_workspace=initial_workspace, overview=dashboard_overview(stages, clock_coverage, libraries=enabled_libraries, tracking_available=state_error is None, limit=3), dashboard_timezone=display_zone, clock_coverage=clock_coverage, actions=actions, state=state, state_error=state_error, stages=stages, inventory_warnings=inventory_warnings, health_issues=health_issues, run=selected_run_snapshot(snapshot), history=selected_run_history(read_history, 100),
                            preview=preview, dry_run=load_config().get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "true")
+
+
+@app.get("/review")
+def dashboard_review():
+    """Separate read-only diagnostics page using the same dashboard capture path."""
+    return dashboard(initial_workspace="Review")
 
 
 # Cache Jellyfin's folder-to-image mapping to avoid a library scan per poster.

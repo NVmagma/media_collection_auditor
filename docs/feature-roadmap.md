@@ -189,3 +189,11 @@ until the production switch is separately approved.
   unavailable tracking remain distinct. Positive user feedback recorded for the
   preceding shell/Library preview. Overview passed 148 focused Linux checks plus
   real Chromium/private HTTP checks; Tower visual acceptance remains pending.
+
+- User-requested Overview simplification: detailed coverage and collection
+  findings moved to a separate authenticated `/review` page. Overview retains
+  short attention summaries, three-title lists and direct review links. The
+  representative desktop Overview fits without scrolling at 1280×1000 and
+  1440×1000 with administrator controls; mobile remains readable and naturally
+  scrolls. Linux regressions (150) and real browser page/focus/layout checks pass.
+  Production is unchanged; the revised disposable preview awaits user review.

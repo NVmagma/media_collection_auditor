@@ -7,7 +7,7 @@ os.environ.setdefault('WEB_SESSION_SECRET', 'fixture-dashboard-secret')
 import web
 
 
-def render_workspace(*, admin=False, tracking_available=True, run_updates=None):
+def render_workspace(*, admin=False, tracking_available=True, run_updates=None, workspace="Overview"):
     state = {'first_seen': {'The Quiet Orbit (2026)': '2026-10-01T11:30:00',
                             'TV/Lantern House (2026)': '2026-10-02T11:30:00',
                             'A & B <Moon> (2026)': '2026-10-03T11:30:00'},
@@ -38,12 +38,14 @@ def render_workspace(*, admin=False, tracking_available=True, run_updates=None):
             stack.enter_context(patch.object(web, name, return_value=value))
         stack.enter_context(patch.object(web, 'load_state', **({'return_value': state} if tracking_available else
                                                               {'side_effect': RuntimeError('Fixture tracking unavailable')})))
-        return web.app.test_client().get('/')
+        return web.app.test_client().get('/review' if workspace == 'Review' else '/')
 
 
 if __name__ == '__main__':
     import sys
     from pathlib import Path
-    response = render_workspace()
+    response = render_workspace(workspace='Review' if len(sys.argv) > 2 and sys.argv[2] == 'Review' else 'Overview')
     assert response.status_code == 200
     Path(sys.argv[1]).write_bytes(response.data)
+    Path(sys.argv[1] + '.review.html').write_bytes(render_workspace(workspace='Review').data)
+    Path(sys.argv[1] + '.admin.html').write_bytes(render_workspace(admin=True).data)

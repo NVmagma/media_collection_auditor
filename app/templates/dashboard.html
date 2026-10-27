@@ -6,7 +6,7 @@
   <title>Media Collection Auditor</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
-<body class="dashboard-app">
+<body class="dashboard-app" data-initial-workspace="{{ initial_workspace }}">
   <header class="topbar">
     <div>
       <h1><img class="brand-icon" src="/static/auditor-badge.png" alt="Auditor logo"> Media Collection Auditor</h1>
@@ -15,15 +15,17 @@
     <nav><a href="/">Dashboard</a><a href="/logs">Logs</a>{% if viewer.admin %}<a href="/settings">Settings</a>{% if experimental_sqlite_recovery_enabled %}<a href="/experimental/sqlite/recovery">SQLite recovery (experimental)</a>{% endif %}{% endif %} <span class="viewer-indicator" title="Signed in as {{ viewer.name }}">{{ viewer.name }} <span class="viewer-role">{{ "Administrator" if viewer.admin else "Read only" }}</span></span> <form method="post" action="/logout" style="display:inline"><button type="submit">Sign out</button></form></nav>
   </header>
   <nav class="workspace-nav" aria-label="Dashboard workspace">
-    <button type="button" data-workspace="Overview" aria-pressed="true">Overview</button>
-    <button type="button" data-workspace="Library" aria-pressed="false">Library</button>
-    <button type="button" data-workspace="Audit Preview" aria-pressed="false">Scans</button>
-    <button type="button" data-workspace="Activity" aria-pressed="false">Activity</button>
-    <button type="button" data-workspace="History" aria-pressed="false">History</button>
+    <a href="/#Overview" data-workspace="Overview">Overview</a>
+    <a href="/#Library" data-workspace="Library">Library</a>
+    <a href="/review" data-workspace="Review">Review</a>
+    <a href="/#Audit%20Preview" data-workspace="Audit Preview">Scans</a>
+    <a href="/#Activity" data-workspace="Activity">Activity</a>
+    <a href="/#History" data-workspace="History">History</a>
   </nav>
   <main>
-    <div class="workspace-heading"><div><p class="workspace-eyebrow">COLLECTION WORKSPACE</p><h2 id="workspace-title">Overview</h2><p id="workspace-description" class="muted">Review library coverage, tracking gaps and scheduler observations.</p></div></div>
+    <div class="workspace-heading"><div><p class="workspace-eyebrow">COLLECTION WORKSPACE</p><h2 id="workspace-title">{{ 'Review' if initial_workspace == 'Review' else 'Overview' }}</h2><p id="workspace-description" class="muted">Review library coverage, tracking gaps and scheduler observations.</p></div></div>
     {% if state_error %}<section role="alert" class="notice warning"><strong>Tracking state unavailable:</strong> {{ state_error }}. Dashboard lifecycle ages and predictions may be inaccurate. Do not rely on this display for media removal decisions.</section>{% endif %}
+    <div class="dashboard-status">
     <section class="hero">
       <div class="scheduler-label">{% if run.get("storage_authority") == "sqlite" %}Daily scheduler observations{% else %}Auditor configuration{% endif %}</div>
       <strong>{% if run.get('production_activation') == 'preview_only' %}SQLite scheduled preview · media changes disabled{% elif run.get('storage_authority') == 'sqlite' %}Scheduled backend · activation {{ run.get('production_activation', 'unavailable') }}{% else %}Current configuration: {{ 'Dry Run (preview only)' if dry_run else 'LIVE MODE — changes to media are enabled' }}{% endif %}</strong>
@@ -34,6 +36,7 @@
       <article><span>Last finished attempt</span><strong class="small-metric">{{ run.last_finished|observation_datetime(dashboard_timezone) }}</strong></article>
       <article><span>Next scheduled audit</span><strong class="small-metric">{{ run.next_run|observation_datetime(dashboard_timezone) if run.next_run else ('Unavailable' if run.get('storage_authority') == 'sqlite' else 'Manual only / pending') }}</strong></article>
     </section>
+    </div>
     <section class="library-toolbar hidden-section" id="library-toolbar" aria-label="Library controls">
       <div class="library-picker" role="group" aria-label="Media library">
         <button type="button" data-tab="Movies" aria-pressed="true">Movies</button>
@@ -45,10 +48,9 @@
         <button type="button" class="view-switch-button" data-view="posters" aria-pressed="false">Posters</button>
       </div>
     </section>
-    <section class="dashboard-section overview-workspace" data-panel="Overview">
+    <section class="dashboard-section overview-workspace{% if initial_workspace == 'Review' %} hidden-section{% endif %}" data-panel="Overview">
     <div class="panel overview-totals">
-      <h2>Library overview</h2>
-      <p class="muted">Saved tracking records · these totals can differ from the folders currently present.</p>
+      <div class="overview-count-heading"><h2>Saved tracking records</h2><p class="muted">These totals can differ from the folders currently present.</p></div>
       <div class="cards tracking-cards">
         {% for section, label in [('first_seen','Waiting'),('queued','Holding'),('keep_seen','Keep'),('in_removal','Removal')] %}
         <article><span>{{ label }}</span><strong>{{ state.get(section, {})|length if not state_error else '—' }}</strong><small>{{ 'Tracking unavailable' if state_error else 'Tracking records' }}</small></article>
@@ -58,18 +60,18 @@
     <div class="overview-grid">
     <section class="panel overview-attention" aria-labelledby="attention-title">
       <div class="panel-heading"><h2 id="attention-title">Needs attention</h2><span class="muted">Read-only findings</span></div>
-      {% if overview.attention %}
-      {% for finding in overview.attention %}<article class="attention-finding"><strong>{{ finding.title }}</strong><p class="muted">{{ finding.detail }}</p><button type="button" data-open-details="{{ finding.target }}">Review coverage</button></article>{% endfor %}
-      {% elif not health_issues %}<p class="muted">No known tracking discrepancies in the readable inputs. Live inventory freshness remains unverified.</p>{% endif %}
-      {% if health_issues %}<p><button type="button" class="overview-review-findings" data-open-details="health-findings">Review all {{ health_issues|length }} collection findings</button></p><p class="muted">Includes stage mismatches and pending Arr updates; some findings overlap coverage items above.</p>{% endif %}
-      {% if run.get('scheduler_state') == 'blocked' or run.get('last_result') == 'failed' %}<article class="attention-finding"><strong>Latest scheduler observation needs review</strong><p class="muted">The schedule is blocked or the last attempt failed. Review History and logs before assuming a scan completed.</p><button type="button" data-open-workspace="History">Review History</button></article>{% endif %}
+      {% if overview.attention %}<ul class="overview-finding-summary">{% for finding in overview.attention %}<li>{{ finding.title }}</li>{% endfor %}</ul>
+      {% elif not health_issues %}<p class="muted">No known discrepancies in readable inputs.</p>{% endif %}
+      
+      <a class="overview-review-link" href="{{ url_for('dashboard_review') }}#clock-coverage">Review coverage</a>
+      {% if health_issues %}<a class="overview-review-link" href="{{ url_for('dashboard_review') }}#health-findings">Review findings ({{ health_issues|length }})</a>{% endif %}
+      {% if run.get('scheduler_state') == 'blocked' or run.get('last_result') == 'failed' %}<p class="overview-partial">Latest scheduler observation needs review. <button type="button" data-open-workspace="History">History</button></p>{% endif %}
       {% if run.get('status') == 'unavailable' %}<p class="muted">Scheduler observations are unavailable in this process.</p>{% endif %}
     </section>
     <section class="panel overview-context" aria-labelledby="overview-context-title">
       <div class="panel-heading"><h2 id="overview-context-title">Latest attempt</h2><span class="muted">{% if run.running %}In progress{% elif run.last_result %}{{ run.last_result|capitalize }}{% else %}No result recorded{% endif %}</span></div>
       <dl class="overview-attempt-metrics"><div><dt>Proposed moves</dt><dd>{{ run.get('moves_proposed') if run.get('moves_proposed') is not none else '—' }}</dd></div><div><dt>Discovery changes</dt><dd>{{ run.get('discovery_changes') if run.get('discovery_changes') is not none else '—' }}</dd></div></dl>
       <p class="muted">— means not reported. Proposals are not completed media actions.</p>
-      <p class="muted">{% if run.get('storage_authority') == 'sqlite' %}Observations cover this scheduler process only; live inventory freshness is unverified.{% else %}Recorded audit results do not verify live inventory freshness.{% endif %}</p>
       <button type="button" data-open-workspace="History">Review History</button>
     </section>
     </div>
@@ -78,7 +80,7 @@
       {% set listing = overview.lists[name] %}
       <section class="panel overview-title-list" aria-label="{{ heading }}">
         <div class="panel-heading"><h2>{{ heading }}</h2><span class="muted">Movies + TV</span></div>
-        <p class="overview-list-basis muted">{% if name == 'leaving_soon' %}Holding folders · estimated calendar dates, not deletion dates. Protection checks can prevent moves.{% else %}Waiting folders · ordered by recorded days in stage, then title.{% endif %}</p>
+        <p class="overview-list-basis muted">{% if name == 'leaving_soon' %}Estimated calendar dates, not deletion dates.{% else %}Ordered by recorded days in stage, then title.{% endif %}</p>
         {% if listing.status == 'unavailable' %}<p class="empty">Tracking unavailable; this list cannot be verified.</p>
         {% else %}
         {% if listing.status == 'partial' %}<p role="status" class="overview-partial">Directory coverage is incomplete; this list may omit titles.</p>{% endif %}
@@ -91,19 +93,22 @@
         </article>
         {% else %}<p class="empty">{% if listing.status == 'partial' %}No folders observed in the readable directories.{% else %}No {{ 'Holding' if name == 'leaving_soon' else 'Waiting' }} folders observed in enabled libraries.{% endif %}</p>{% endfor %}
         {% if listing.more %}<p class="muted">{{ listing.more }} more observed folders · open Library to browse.</p>{% endif %}
-        {% if listing.unusable_dates %}<p class="muted">{{ listing.unusable_dates }} folders have no usable {{ 'transition estimate' if name == 'leaving_soon' else 'recorded age' }}; unknown dates sort last.</p>{% endif %}
+
         {% endif %}
       </section>
       {% endfor %}
     </div>
-    <section class="panel overview-diagnostics" aria-label="Collection diagnostics">
+    <div class="overview-browse-links"><button type="button" data-open-library="Movies">Browse Movies</button><button type="button" data-open-library="TV Shows">Browse TV Shows</button></div>
+    </section>
+    {% if initial_workspace == 'Review' %}
+    <section class="panel dashboard-section overview-diagnostics" data-panel="Review" aria-label="Collection diagnostics">
       <h2>Coverage &amp; collection review</h2>
       {% if inventory_warnings %}
       <p role="alert"><strong>Filesystem inventory incomplete:</strong> counts for unavailable directories are not reliable.</p>
       {% for warning in inventory_warnings %}<p class="muted">{{ warning }}</p>{% endfor %}
       {% endif %}
       <p class="muted">Choose Movies or TV Shows to see their individual lifecycle stages. Activity and History cover both libraries.</p>
-      <details id="health-findings">
+      <details id="health-findings" open>
         <summary>Collection health · {{ health_issues|length }} item(s) needing review</summary>
         <p class="muted">Read-only comparison of media folders, tracking timestamps, and pending Arr updates. A newly moved title may appear here until the next audit.</p>
         {% if health_issues %}
@@ -112,7 +117,7 @@
         {% endfor %}</ul>
         {% else %}<p class="muted">No discrepancies found in readable directories.</p>{% endif %}
       </details>
-      <details class="clock-coverage" id="clock-coverage">
+      <details class="clock-coverage" id="clock-coverage" open>
         <summary>Saved date coverage · {{ clock_coverage.missing_dates }} folders without a stage date · {{ clock_coverage.records_without_stage_folder }} records without a matching stage folder{% if not clock_coverage.complete %} · incomplete{% endif %}</summary>
         <p class="muted">These are observed tracking gaps. Missing dates remain untracked; folder dates and dates from other stages are not substituted. Records without a matching stage folder need review, not automatic removal.</p>
         {% if not clock_coverage.complete %}<p role="status">Coverage is incomplete. Unavailable counts are shown as —.</p>{% endif %}
@@ -135,7 +140,7 @@
         {% endfor %}
       </div>
     </section>
-    </section>
+    {% endif %}
     <div class="library-layout hidden-section" id="library-layout">
     <div class="library-browser">
       <div class="library-search-tools">
