@@ -83,3 +83,11 @@ Local compilation and synthetic render-tree checks pass; this is not a claim of
 Homarr rendering acceptance. The new `compact` fixture supports both filtered
 Holding lists without changing the existing artwork scenario. Actual card layout,
 image loading and saved-board behavior require a temporary Homarr preview.
+
+October 27 compact acceptance: the user reported a successful movie fixture
+preview, then successful production movie rendering after correcting a duplicated
+HTTP scheme in the source URL. Compact movie presentation and production API
+connectivity are manually accepted. No production image was changed. TV live
+Holding data, complete JSON import, saved-board persistence and all visual
+failure states remain separate acceptance items; synthetic render checks cover
+loading/error/empty behavior without claiming vendor visual acceptance.

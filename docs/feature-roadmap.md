@@ -159,3 +159,10 @@ until the production switch is separately approved.
   recovery, lost-acknowledgement refusal and an actual controller SIGKILL rehearsal.
   Local 25-case fault lab and actual-image HTTP/recovery tests passed; Tower
   acceptance is next. Production update orchestration remains a separate step.
+
+- October 27: compact Homarr movie rows passed user fixture and production
+  preview acceptance. Separate TV/movie templates and synthetic loading/error/
+  empty checks are available. No auditor image update is required for templates.
+- Dashboard navigation polish: consistent visited/unvisited Jellyfin title
+  colors, visible keyboard focus, and narrow-screen wrapping prepared. Browser
+  acceptance and deployment remain pending; no lifecycle or tracking changes.

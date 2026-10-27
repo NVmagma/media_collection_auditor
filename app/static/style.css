@@ -65,3 +65,9 @@
 .media-poster-placeholder{position:relative;overflow:hidden}.media-poster-placeholder img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 
 .media-poster-link{text-decoration:none;cursor:pointer}.media-poster-link:hover,.media-poster-link:focus-visible{outline:2px solid #70acff;outline-offset:2px}
+
+/* Jellyfin navigation stays legible before and after visiting a title. */
+.media-title-link,.media-title-link:visited{color:#9bc8ff;text-decoration:none;text-underline-offset:3px;overflow-wrap:anywhere}
+.media-title-link:hover{color:#d0e5ff;text-decoration:underline}
+.media-title-link:focus-visible{outline:2px solid #70acff;outline-offset:4px;border-radius:2px;text-decoration:underline}
+@media(max-width:600px){.lifecycle-panel .table-wrap td:first-child{white-space:normal;min-width:180px}.topbar nav{flex-wrap:wrap}.dashboard-view-switch{flex-wrap:wrap}}
