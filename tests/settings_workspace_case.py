@@ -38,6 +38,16 @@ def render_settings_workspace(scenario='ready'):
             settings_applied=False, settings_restored=False, settings_apply_busy=False, settings_apply_error=False)
 
 
+def render_integration_workspace():
+    """Render synthetic readiness without inspecting host config or tracking."""
+    with web.app.test_request_context('/integrations'):
+        g.user = {'name':'Synthetic administrator', 'admin':True}
+        return render_template('integrations.html', token_ready=True, readiness={
+            'tracking_available':True, 'storage_authority':'sqlite',
+            'binding_status':'verified', 'title_details_enabled':True,
+            'poster_lookup_enabled':True, 'coordinator_scope':'current_process'})
+
+
 if __name__ == '__main__':
     import sys
     from pathlib import Path

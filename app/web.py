@@ -51,11 +51,17 @@ def require_login():
     gate = _preview_backend_gate()
     preview = gate.preview_release_enabled()
     if read_only_service_enabled() and not preview and request.endpoint not in (
-            "integration_summary", "integration_audit_status", "integration_titles", "health"):
+            "integration_summary", "integration_audit_status", "integration_titles", "integration_readiness", "health"):
         return {"status": "read_only_service"}, 404
-    if request.endpoint in ("integration_summary", "integration_audit_status", "integration_titles"):
+    if request.path.startswith("/api/v1/"):
         failure = authorize_summary(request.headers.get("Authorization"))
         if failure is not None: return failure
+        if request.endpoint is None and getattr(request.routing_exception, "code", None) == 404:
+            return {"status": "route_not_found", "schema_version": 1,
+                    "message": "Unknown integration route. See /api/v1/readiness for supported routes."}, 404
+    if request.endpoint == "integration_readiness":
+        return None
+    if request.endpoint in ("integration_summary", "integration_audit_status", "integration_titles"):
         if preview:
             try: gate.require_sqlite_production_activation()
             except RuntimeError:
@@ -69,13 +75,13 @@ def require_login():
         if request.path.startswith("/api/"):
             return {"ok": False, "message": "Please sign in."}, 401
         return redirect(url_for("login"))
-    if preview and request.endpoint not in ('settings','logout','run_now','apply_preview_settings','restore_preview_settings'):
+    if preview and request.endpoint not in ('settings','logout','run_now','apply_preview_settings','restore_preview_settings','integration_setup'):
         try: gate.require_sqlite_production_activation()
         except RuntimeError:
             if request.path.startswith('/api/'):
                 return {'status':'preview_paused','media_actions_authorized':False}, 503
             return render_template('preview-paused.html'), 503
-    if request.endpoint in ("settings", "test_connection", "run_now", "rescue", "apply_preview_settings", "restore_preview_settings") and not g.user["admin"]:
+    if request.endpoint in ("settings", "test_connection", "run_now", "rescue", "apply_preview_settings", "restore_preview_settings", "integration_setup") and not g.user["admin"]:
         if request.path.startswith("/api/"):
             return {"ok": False, "message": "Administrator access required."}, 403
         return Response("Administrator access required.", 403)
@@ -141,12 +147,55 @@ STATE_FILE = os.environ.get("STATE_FILE", "/app/logs/auditor_state.json")
 
 @app.after_request
 def integration_response_headers(response):
-    if request.path in ("/api/v1/summary", "/api/v1/audit-status",
-                         "/api/v1/titles/oldest-waiting", "/api/v1/titles/leaving-soon"):
+    if request.path.startswith("/api/v1/") or request.endpoint == "integration_setup":
         response.headers["Cache-Control"] = "no-store"
         response.headers["Vary"] = "Authorization"
         response.headers["X-Content-Type-Options"] = "nosniff"
     return response
+
+
+def _integration_readiness():
+    """Selected tracking readiness; no remote collection or credential projection."""
+    gate = _preview_backend_gate()
+    preview = gate.preview_release_enabled()
+    binding = 'not_required'
+    if preview:
+        try:
+            gate.require_sqlite_production_activation()
+            binding = 'verified'
+        except RuntimeError:
+            binding = 'review_required'
+    report = None if binding == 'review_required' else read_tracking_status(STATE_FILE)
+    available = isinstance(report, dict) and report.get('status') == 'advisory_only'
+    return {
+        'schema_version': 1, 'api_version': 'v1',
+        'status': 'ready' if available else 'unavailable',
+        'tracking_available': available, 'binding_status': binding,
+        'storage_authority': os.environ.get('AUDITOR_STATE_BACKEND', 'json') if os.environ.get('AUDITOR_STATE_BACKEND', 'json') in ('json', 'sqlite') else 'unavailable',
+        'freshness_verified': False, 'read_only': True,
+        'media_actions_authorized': False,
+        'execution_mode': 'scheduled_preview' if preview else 'read_only_integration',
+        'title_details_enabled': os.environ.get('INTEGRATION_API_TITLE_DETAILS', 'false').lower() == 'true',
+        'poster_lookup_enabled': os.environ.get('INTEGRATION_API_MEDIA', 'false').lower() == 'true',
+        'coordinator_scope': 'unavailable' if read_only_service_enabled() else 'current_process',
+        'routes': ['/api/v1/readiness', '/api/v1/summary', '/api/v1/audit-status',
+                   '/api/v1/titles/oldest-waiting', '/api/v1/titles/leaving-soon'],
+        'libraries': ['Movies', 'TV'], 'title_limit': 10,
+    }
+
+
+@app.get('/api/v1/readiness')
+def integration_readiness():
+    report = _integration_readiness()
+    return report, 200 if report['status'] == 'ready' else 503
+
+
+@app.get('/integrations')
+def integration_setup():
+    # Browser administrator only; integration credentials do not grant access.
+    configured = authorize_summary(None)
+    token_ready = configured is not None and configured[1] == 401
+    return render_template('integrations.html', readiness=_integration_readiness(), token_ready=token_ready)
 
 
 @app.get("/api/v1/summary")

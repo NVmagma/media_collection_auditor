@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>API setup · Media Collection Auditor</title><link rel="stylesheet" href="/static/style.css"></head>
+<body class="app-shell settings-app integrations-app">
+<aside class="sidebar"><a class="sidebar-brand" href="/"><img class="brand-icon" src="/static/auditor-badge.png" alt="Media Auditor"><span>Media<br>Auditor</span></a><nav class="side-nav" aria-label="Main navigation"><a href="/" aria-label="Dashboard">▦ <span>Dashboard</span></a><a href="/settings" aria-label="Settings">⚙ <span>Settings</span></a><a class="active" href="/integrations" aria-current="page" aria-label="API setup">↗ <span>API setup</span></a></nav></aside>
+<div class="app-content"><header class="settings-header"><div><h1>API &amp; integrations</h1><p>Connect read-only dashboards without sharing your administrator login.</p></div></header>
+<main class="settings-main">
+<section class="settings-status-grid" aria-label="API status">
+<article class="settings-status-card"><h2>Credential</h2><p>{{ 'Configured' if token_ready else 'Missing or invalid' }}</p><p>The integration token grants read-only API access. Its value is never displayed here.</p></article>
+<article class="settings-status-card"><h2>Tracking</h2><p>{{ 'Available' if readiness.tracking_available else 'Needs review' }}</p><p>Authority: {{ readiness.storage_authority }} · Binding: {{ readiness.binding_status }}</p><p>Availability does not verify freshness or authorize media actions.</p></article>
+<article class="settings-status-card"><h2>Presentation</h2><p>Title details: {{ 'enabled' if readiness.title_details_enabled else 'disabled' }} · Posters: {{ 'enabled' if readiness.poster_lookup_enabled else 'disabled' }}</p><p>Coordinator observations: {{ readiness.coordinator_scope }}.</p></article>
+</section>
+<section class="panel"><h2>Homarr / Homepage connection</h2><p>Use HTTP API, private network access, and Bearer authentication. Paste only the token into the credential field; omit the word Bearer. Each widget needs its own query and matching template.</p>
+<label for="integration-base">Base URL</label><input id="integration-base" readonly><button type="button" data-copy="integration-base">Copy base URL</button>
+<p>Confirm this address is reachable from the dashboard container. Use one http:// or https:// prefix. Container IP addresses may change after recreation.</p>
+<table><thead><tr><th>View</th><th>Path</th><th>Query</th></tr></thead><tbody>
+{% for view in ('leaving-soon','oldest-waiting') %}{% for library in ('Movies','TV') %}
+<tr><td>{{ library }} · {{ view }}</td><td><input aria-label="{{ library }} {{ view }} path" id="path-{{ view }}-{{ library }}" readonly value="/api/v1/titles/{{ view }}"><button type="button" data-copy="path-{{ view }}-{{ library }}">Copy path</button></td><td>Key <code>library</code> · Literal <code>{{ library }}</code></td></tr>
+{% endfor %}{% endfor %}</tbody></table>
+<p>For Homarr, keep the path and query separate: expand “Query, body and behavior”, add key <code>library</code>, value source Literal, and value <code>Movies</code> or <code>TV</code>. Request ID: <code>titles</code>. Maximum: 10 records. An empty list means no matching tracking records.</p>
+<p id="integration-copy-status" role="status" aria-live="polite"></p></section>
+<section class="panel"><h2>Diagnose a connection</h2><ul>
+<li><strong>401 Unauthorized:</strong> token missing or incorrect. A browser sign-in cannot replace Bearer authentication.</li>
+<li><strong>404:</strong> check the path; title routes also return 404 when title details are disabled. Missing or invalid server token configuration disables the API.</li>
+<li><strong>400:</strong> library must be exactly Movies or TV, with only one library query value.</li>
+<li><strong>503:</strong> tracking, preview binding or coordinator information is unavailable; this is not a healthy empty result.</li>
+<li><strong>External request failed:</strong> check the base URL, dashboard private-network access, connectivity and timeouts. This message alone cannot identify the cause.</li>
+</ul><p>Authenticated <code>GET /api/v1/readiness</code> lists supported routes and tracking readiness without collecting Jellyfin data. <code>/health</code> checks the web process only.</p></section>
+<section class="panel"><h2>Replace the integration token</h2><ol>
+<li>Generate a new random token locally: <code>docker exec media_collection_auditor python -c 'import secrets; print(secrets.token_urlsafe(32))'</code>. Keep it private.</li>
+<li>In the existing Unraid template, replace only <code>INTEGRATION_API_TOKEN</code> and apply the container change. Preserve the image reference, three mounts, read-only flags and other settings.</li>
+<li>Replace the Bearer credential in every Homarr/Homepage widget. Verify the new token returns 200 from readiness; the previous token must return 401.</li>
+</ol><p>Token replacement requires container recreation. This page does not change credentials or services. Never paste tokens into URLs, screenshots, logs or support messages.</p></section>
+</main></div><script src="/static/integrations.js" defer></script></body></html>

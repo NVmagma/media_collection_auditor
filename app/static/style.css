@@ -262,3 +262,16 @@
 @media(max-width:1050px){.settings-app .settings-status-grid{grid-template-columns:1fr}.settings-app .settings-editor-note{align-items:flex-start;flex-direction:column}}
 .settings-app fieldset:disabled .save-button{opacity:.5;cursor:not-allowed}
 .settings-app fieldset:disabled input,.settings-app fieldset:disabled select{opacity:.65;cursor:not-allowed}
+
+/* Public connection coordinates wrap without pushing narrow screens sideways. */
+.integrations-app .panel { margin-bottom: 20px; padding: 20px; min-width: 0; }
+.integrations-app input { max-width: 100%; min-width: 0; box-sizing: border-box; }
+.integrations-app code, .integrations-app p, .integrations-app li { overflow-wrap: anywhere; }
+.integrations-app table { width: 100%; table-layout: fixed; }
+.integrations-app td, .integrations-app th { min-width: 0; white-space: normal; overflow-wrap: anywhere; padding: 8px; text-align: left; }
+.integrations-app #integration-base { width: min(100%, 440px); }
+@media (max-width: 600px) {
+  .integrations-app table, .integrations-app tbody, .integrations-app tr, .integrations-app td { display: block; width: auto; }
+  .integrations-app thead { display: none; }
+  .integrations-app tr { border-bottom: 1px solid var(--border, #334155); padding: 8px 0; }
+}

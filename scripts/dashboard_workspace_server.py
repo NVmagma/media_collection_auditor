@@ -5,7 +5,7 @@ import threading
 from flask import Flask, Response, request, send_file
 from werkzeug.serving import make_server
 from dashboard_workspace_case import render_workspace
-from settings_workspace_case import render_settings_workspace
+from settings_workspace_case import render_settings_workspace, render_integration_workspace
 
 
 def create_preview_app():
@@ -17,6 +17,11 @@ def create_preview_app():
     def dashboard():
         page = render_workspace(workspace='Review' if request.path == '/review' else 'Overview').get_data(as_text=True)
         page = page.replace('<main>', '<main><p class="notice" role="status">Disposable design preview · synthetic titles only · no production services connected.</p>', 1)
+        return Response(page, mimetype='text/html')
+
+    @app.get('/integrations')
+    def integrations():
+        page = render_integration_workspace().replace('<main class="settings-main">', '<main class="settings-main"><p role="status">Synthetic integration setup. No production state or credentials are connected.</p>', 1)
         return Response(page, mimetype='text/html')
 
     @app.get('/settings')

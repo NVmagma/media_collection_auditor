@@ -12,7 +12,7 @@
       <h1><img class="brand-icon" src="/static/auditor-badge.png" alt="Auditor logo"> Media Collection Auditor</h1>
       <p>Library tracking &amp; lifecycle review</p>
     </div>
-    <nav><a href="/">Dashboard</a><a href="/logs">Logs</a>{% if viewer.admin %}<a href="/settings">Settings</a>{% if experimental_sqlite_recovery_enabled %}<a href="/experimental/sqlite/recovery">SQLite recovery (experimental)</a>{% endif %}{% endif %} <span class="viewer-indicator" title="Signed in as {{ viewer.name }}">{{ viewer.name }} <span class="viewer-role">{{ "Administrator" if viewer.admin else "Read only" }}</span></span> <form method="post" action="/logout" style="display:inline"><button type="submit">Sign out</button></form></nav>
+    <nav><a href="/">Dashboard</a><a href="/logs">Logs</a>{% if viewer.admin %}<a href="/settings">Settings</a><a href="/integrations">API setup</a>{% if experimental_sqlite_recovery_enabled %}<a href="/experimental/sqlite/recovery">SQLite recovery (experimental)</a>{% endif %}{% endif %} <span class="viewer-indicator" title="Signed in as {{ viewer.name }}">{{ viewer.name }} <span class="viewer-role">{{ "Administrator" if viewer.admin else "Read only" }}</span></span> <form method="post" action="/logout" style="display:inline"><button type="submit">Sign out</button></form></nav>
   </header>
   <nav class="workspace-nav" aria-label="Dashboard workspace">
     <a href="/#Overview" data-workspace="Overview">Overview</a>

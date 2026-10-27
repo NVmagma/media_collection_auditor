@@ -221,3 +221,14 @@ until the production switch is separately approved.
   and typed acknowledgement. Recovery and legacy live-mode confirmations remain.
   Verified with 128 Linux tests, 8 subtests and Chromium form/layout checks.
   Production remains unchanged; GitHub Actions billing remains an external blocker.
+
+- API setup increment: authenticated `/api/v1/readiness` and administrator-only
+  `/integrations` with credential-free copy controls, movie/TV query instructions,
+  explicit auth/route/unavailable diagnostics and token-replacement guidance.
+  Preview binding failures remain diagnosable without unbound tracking reads.
+  See [contract and future API proposals](integration-api-setup.md).
+  Token replacement remains an explicit container operation; no secrets are
+  displayed or rotated by the setup page. Production remains unchanged.
+  Verified with 216 Linux integration/security/runtime checks, two additional
+  fixture/token tests and Chromium copy/responsive checks; existing Dashboard and
+  Settings browser checks also pass. Tower visual acceptance remains pending.
