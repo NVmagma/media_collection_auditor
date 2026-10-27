@@ -103,3 +103,31 @@ explanations remain on Review. The compact desktop layout is browser-tested at
 the representative synthetic collection. This is not a fixed-height/clipped view:
 phone layouts stack, and critical errors or unusually long content may still
 require scrolling. The full Library and Review content remain available.
+
+## Scans and process-local History
+
+The SQLite Scans workspace now separates current running/queued/waiting/blocked
+observations, the latest recorded attempt, and the existing saved-date timer
+estimates. A missed daily slot is not presented as a completed scan. Run Preview
+retains its existing administrator and backend-mode checks.
+
+History renders a scalar-only projection of the scheduler's existing records,
+with result filters, five-entry pages and expandable outcome details. Preview
+proposals, discovery changes, completed moves and Arr updates remain distinct.
+Missing counts stay unknown. Valid aware start/finish times provide durations;
+missing/reversed/naive times cannot certify completion. Times display using the
+configured dashboard zone where available. Mode comes from each record, not
+from current settings; an absent mode is not labeled Live. Raw exceptions,
+unknown keys, source payloads and unrecognized reason text are not forwarded to
+the new SQLite view. The legacy JSON history table remains compatible.
+
+No new scheduler history is collected or persisted. SQLite history is still
+bounded to the current process (up to 100 entries) and resets after restart.
+Per-title proposal manifests and skipped/blocked title counts/reasons are not
+retained in these observations; the UI explicitly says they are not recorded.
+It does not infer them from folder inventory or action-log totals, retry a run,
+reconcile an intent or authorize any media operation.
+
+The disposable preview includes synthetic completed previews, a recorded live
+outcome and failed/uncertain outcomes to exercise the labels and filters. These
+are illustrative records; no actual scan or media operation took place.

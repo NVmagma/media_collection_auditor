@@ -60,7 +60,7 @@ jobs:
         env:
           WEB_SESSION_SECRET: ci-only-session-secret
           PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/app:${{ github.workspace }}/tests
-        run: python -B -m pytest -q tests/test_dashboard_clocks.py tests/test_dashboard_clock_coverage.py tests/test_dashboard_clock_summary.py tests/test_dashboard_clock_fixture.py tests/test_dashboard_inventory.py tests/test_dashboard_lifecycle_visibility.py tests/test_dashboard_workspace.py tests/test_dashboard_overview.py tests/test_docker_runtime_context.py
+        run: python -B -m pytest -q tests/test_dashboard_clocks.py tests/test_dashboard_clock_coverage.py tests/test_dashboard_clock_summary.py tests/test_dashboard_clock_fixture.py tests/test_dashboard_inventory.py tests/test_dashboard_lifecycle_visibility.py tests/test_dashboard_workspace.py tests/test_dashboard_overview.py tests/test_dashboard_scan_view.py tests/test_docker_runtime_context.py
       - name: Run synthetic widget fixture and filter checks
         env:
           WEB_SESSION_SECRET: ci-only-session-secret

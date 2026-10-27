@@ -1,5 +1,6 @@
-"""Explicit, detached dashboard reads; production authority remains JSON."""
+"""Detached tracking reads and read-only dashboard presentation projections."""
 from dataclasses import dataclass, field
+from datetime import datetime
 import json
 from pathlib import Path
 from typing import Callable
@@ -239,3 +240,94 @@ def dashboard_overview(stages, coverage, *, libraries, tracking_available=True, 
         if count:
             attention.append({'title': prefix + str(count) + ' ' + (singular if count == 1 else plural), 'detail': detail, 'target': 'clock-coverage'})
     return result
+
+
+# Presentation of scheduler records; no new Docker runtime dependency.
+_SCAN_REASON = {
+    'worker_return': 'The worker returned a recorded result. This does not verify live inventory freshness.',
+    'blocked_or_uncertain': 'The attempt stopped with a blocked or uncertain outcome. Review logs and retained operation state; do not assume it is safe to replay.',
+    'observation_unavailable': 'Completion timing could not be recorded. This is not proof of a successful scan.'}
+
+
+def _scan_counter(value):
+    return value if type(value) is int and 0 <= value <= 100000 else None
+
+
+def _scan_time(value):
+    if not isinstance(value, str) or not 1 <= len(value) <= 80:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace('Z', '+00:00'))
+        return parsed if parsed.tzinfo is not None else None
+    except (ValueError, TypeError, OverflowError):
+        return None
+
+
+def _scan_entry(record, zone):
+    """Project only known scalar fields; never pass free-text errors/payloads through."""
+    start, finish = _scan_time(record.get('started_at')), _scan_time(record.get('finished_at'))
+    duration = None
+    if start is not None and finish is not None:
+        try:
+            seconds = (finish - start).total_seconds()
+            if 0 <= seconds <= 1e9:
+                duration = round(seconds, 2)
+        except (ValueError, TypeError, OverflowError):
+            pass
+    preview = record.get('dry_run')
+    mode = 'Preview' if preview is True else 'Live (recorded)' if preview is False else 'Not reported'
+    result, basis, trigger = (record.get(key) for key in ('result', 'result_basis', 'trigger'))
+    label, group = 'Outcome not recorded', 'unknown'
+    if result == 'completed':
+        if duration is None:
+            label, group = 'Completion unverified', 'review'
+        else:
+            label, group = ('Preview completed' if preview is True else 'Attempt completed'), 'completed'
+    elif result == 'failed':
+        label, group = ('Blocked / uncertain' if basis == 'blocked_or_uncertain' else 'Attempt failed'), 'review'
+    elif result == 'stopped':
+        label, group = 'Attempt stopped', 'review'
+    reason = _SCAN_REASON.get(basis, 'No detailed outcome reason was recorded.') if isinstance(basis, str) else 'No detailed outcome reason was recorded.'
+    if result == 'completed' and duration is None:
+        reason = 'A completed result was recorded, but valid start/finish timing is unavailable. Completion cannot be confirmed from these observations.'
+    trigger_label = {'scheduled': 'Daily schedule', 'manual': 'Manual preview' if preview is True else 'Manual request',
+                     'startup': 'Startup', 'rescue': 'Manual rescue'}.get(trigger, 'Not reported') if isinstance(trigger, str) else 'Not reported'
+    duration_display = 'Not recorded'
+    if duration is not None:
+        minutes, seconds = divmod(duration, 60)
+        duration_display = f'{int(minutes)}m {seconds:g}s' if minutes else f'{seconds:g}s'
+    return {'label': label, 'group': group, 'mode': mode, 'trigger': trigger_label,
+        'started': observation_datetime(start.isoformat(), zone) if start else 'Not recorded',
+        'finished': observation_datetime(finish.isoformat(), zone) if finish else 'Not recorded',
+        'duration': duration, 'duration_display': duration_display, 'reason': reason,
+        'moves_proposed': _scan_counter(record.get('moves_proposed')),
+        'discovery_changes': _scan_counter(record.get('discovery_changes')),
+        'moves_completed': _scan_counter(record.get('moves_completed')),
+        'arr_completed': _scan_counter(record.get('arr_completed'))}
+
+
+def build_scan_view(run, history, *, timezone_name=None):
+    """Render passed-in observations only; no filesystem/network/history fallback."""
+    run = run if isinstance(run, dict) else {}
+    if run.get('status') == 'unavailable':
+        state, detail = 'Unavailable', 'No current scheduler observation is available.'
+    elif run.get('running') is True:
+        state, detail = 'Running', 'An attempt is in progress. Final counts are not available yet.'
+    elif run.get('queued') is True:
+        state, detail = 'Queued', 'A request is queued; this is not a completed scan.'
+    elif run.get('scheduler_state') == 'blocked':
+        state, detail = 'Blocked', 'The scheduler needs review before another attempt can proceed.'
+    elif run.get('scheduler_state') == 'missed_slot_skipped':
+        state, detail = 'Slot missed', 'The daily slot was missed. This observation does not represent a completed scan or authorize catch-up.'
+    elif run.get('running') is False and run.get('queued') is False:
+        state, detail = 'Waiting', 'No attempt is currently running or queued.'
+    else:
+        state, detail = 'Unavailable', 'Current running and queued state was not reported.'
+    valid_history = isinstance(history, list)
+    rows = [_scan_entry(record, timezone_name) for record in history[:100] if isinstance(record, dict)] if valid_history else []
+    available = valid_history and run.get('history_scope') == 'current_process' and (not history or bool(rows))
+    return {'current_state': state, 'current_detail': detail, 'history_available': available,
+        'history_partial': valid_history and any(not isinstance(record, dict) for record in history[:100]),
+        'rows': rows if available else [], 'latest': rows[0] if available and rows else None,
+        'history_scope': 'current_process', 'freshness_verified': False,
+        'skipped_title_count': None, 'blocked_title_count': None}

@@ -50,6 +50,22 @@ if (!file) throw Error('Pass the synthetic page rendered by tests/dashboard_work
     await page.locator('[data-workspace="Overview"]').click();
     await page.locator('[data-open-workspace="History"]').first().click();
     await section('History');
+    assert.equal(await page.locator('.history-entry:visible').count(), 5);
+    assert.match(await page.locator('#history-page-status').textContent(), /Showing 1–5 of 7/);
+    await page.locator('#history-next').click();
+    assert.equal(await page.locator('.history-entry:visible').count(), 2);
+    await page.locator('#history-previous').click();
+    await page.locator('#history-filter').selectOption('review');
+    assert.equal(await page.locator('.history-entry:visible').count(), 2);
+    assert.equal(await page.locator('#history-next').isDisabled(), true);
+    await page.locator('#history-filter').selectOption('unknown');
+    assert.equal(await page.locator('#history-no-results').isVisible(), true);
+    await page.locator('#history-filter').selectOption('all');
+    await page.locator('.history-entry:visible details summary').first().click();
+    assert.equal(await page.locator('.history-entry:visible details').first().getAttribute('open'), '');
+    await page.locator('[data-workspace="Audit Preview"]').click();
+    assert.match(await page.locator('[data-panel="Audit Preview"]').textContent(), /Timer estimates · not scan results/);
+    assert.match(await page.locator('[data-panel="Audit Preview"]').textContent(), /Per-title proposals, skipped-title counts/);
     await page.locator('[data-workspace="Overview"]').click();
     await page.locator('[data-open-library="Movies"]').click();
     await page.locator('[data-stage-tab="Movies:Waiting"]').click();
@@ -103,7 +119,7 @@ if (!file) throw Error('Pass the synthetic page rendered by tests/dashboard_work
     await section('TV Shows');
     await page.locator('[data-workspace="History"]').click();
     await section('History');
-    assert.equal(await page.locator('.run-cards').isVisible(), true);
+    assert.equal(await page.locator('.run-cards').isVisible(), false);
     await page.locator('[data-workspace="Activity"]').click();
     await section('Activity');
     await page.locator('[data-workspace="Overview"]').click();
@@ -147,6 +163,10 @@ if (!file) throw Error('Pass the synthetic page rendered by tests/dashboard_work
       await page.setViewportSize({width: 1280, height: 1000});
       await page.locator('[data-workspace="Overview"]').click();
       await page.screenshot({path: path.join(process.env.DASHBOARD_SCREENSHOT_DIRECTORY, 'dashboard-overview.png'), fullPage: true});
+      await page.locator('[data-workspace="Audit Preview"]').click();
+      await page.screenshot({path: path.join(process.env.DASHBOARD_SCREENSHOT_DIRECTORY, 'dashboard-scans.png'), fullPage: true});
+      await page.locator('[data-workspace="History"]').click();
+      await page.screenshot({path: path.join(process.env.DASHBOARD_SCREENSHOT_DIRECTORY, 'dashboard-history.png'), fullPage: true});
       await page.locator('[data-workspace="Review"]').click();
       await page.screenshot({path: path.join(process.env.DASHBOARD_SCREENSHOT_DIRECTORY, 'dashboard-review.png'), fullPage: true});
       await page.locator('[data-workspace="Library"]').click();
@@ -157,6 +177,6 @@ if (!file) throw Error('Pass the synthetic page rendered by tests/dashboard_work
     }
     console.log(JSON.stringify({status: 'dashboard_workspace_browser_verified', widths: [1280,736,390,320],
       navigation_and_view_state_verified: true, separate_review_page_verified: true,
-      desktop_overview_fits: [[1280,1000],[1440,1000]], external_requests_performed: false, production_changes_performed: false}));
+      desktop_overview_fits: [[1280,1000],[1440,1000]], history_filter_pagination_verified: true, external_requests_performed: false, production_changes_performed: false}));
   } finally {await browser.close();}
 })().catch(error => {console.error(error); process.exitCode = 1;});

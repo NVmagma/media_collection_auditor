@@ -65,7 +65,8 @@ def test_latest_attempt_does_not_replace_unreported_counts_with_zero():
     page = render_workspace(run_updates={'moves_proposed': None, 'discovery_changes': None,
                                         'last_result': None, 'status': 'unavailable'}).get_data(as_text=True)
     assert 'No result recorded' in page
-    assert page.count('<dd>—</dd>') == 2
+    metrics = page.split('<dl class="overview-attempt-metrics">', 1)[1].split('</dl>', 1)[0]
+    assert metrics.count('<dd>—</dd>') == 2
     assert 'Scheduler observations are unavailable in this process' in page
 
 
@@ -83,3 +84,20 @@ def test_review_is_a_separate_authenticated_page_not_embedded_in_overview():
     with patch.object(web, 'current_user', return_value=None):
         response = web.app.test_client().get('/review')
     assert response.status_code == 302 and '/login' in response.location
+
+
+def test_scan_and_history_distinguish_preview_completed_work_and_unrecorded_reasons():
+    page = render_workspace().get_data(as_text=True)
+    assert 'Timer estimates · not scan results' in page
+    assert 'Preview completed' in page and 'Blocked / uncertain' in page
+    assert 'Live (recorded)' in page
+    assert 'Per-title proposals, skipped-title counts and blocked-title reasons are not retained' in page
+    assert 'id="history-filter"' in page and page.count('data-history-result=') == 7
+    assert 'Completed moves' in page and 'Proposed moves' in page
+
+
+def test_history_missing_is_not_reported_as_healthy_empty():
+    missing = render_workspace(run_updates={'history_scope': 'unavailable'}, history_records=[]).get_data(as_text=True)
+    empty = render_workspace(history_records=[]).get_data(as_text=True)
+    assert 'History observations are unavailable; an empty history cannot be confirmed.' in missing
+    assert 'No finished attempts recorded in this process.' in empty

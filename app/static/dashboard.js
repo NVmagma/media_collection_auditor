@@ -25,7 +25,7 @@ const descriptions = {
   Overview: 'Collection status at a glance · live freshness unverified.',
   Review: 'Inspect coverage gaps and collection findings. No tracking changes are performed.',
   Library: 'Browse movie and TV folders by lifecycle stage.',
-  'Audit Preview': 'Review saved-date estimates before a future audit.',
+  'Audit Preview': 'Scheduler observations, recorded outcomes and separate timer estimates.',
   Activity: 'Inspect recent action log entries for both libraries.',
   History: 'Review recorded audit attempts and their reported outcomes.'
 };
@@ -37,6 +37,7 @@ function openSection(name) {
   const workspace = isLibrary ? 'Library' : name;
   document.body.classList.toggle('viewing-overview', workspace === 'Overview');
   document.body.classList.toggle('viewing-review', workspace === 'Review');
+  document.body.classList.toggle('viewing-history', workspace === 'History');
   closeInspector(false);
   document.getElementById('library-layout').classList.toggle('hidden-section', !isLibrary);
   tabs.forEach(tab => {
@@ -190,3 +191,28 @@ document.querySelectorAll('[data-open-title]').forEach(button => button.addEvent
     item.dataset.mediaTitle === button.dataset.openTitle && item.getClientRects().length);
   row?.querySelector('.inspect-title').click();
 }));
+
+// Paginate only the already-rendered process history; no polling or replay requests.
+const historyEntries = Array.from(document.querySelectorAll('[data-history-result]'));
+if (historyEntries.length) {
+  const resultFilter = document.getElementById('history-filter');
+  const previous = document.getElementById('history-previous');
+  const next = document.getElementById('history-next');
+  let historyPage = 0;
+  function renderHistory() {
+    const matching = historyEntries.filter(entry => resultFilter.value === 'all' || entry.dataset.historyResult === resultFilter.value);
+    const pages = Math.max(1, Math.ceil(matching.length / 5));
+    historyPage = Math.max(0, Math.min(historyPage, pages - 1));
+    const visible = new Set(matching.slice(historyPage * 5, historyPage * 5 + 5));
+    historyEntries.forEach(entry => {entry.hidden = !visible.has(entry);});
+    document.getElementById('history-page-status').textContent = matching.length ?
+      'Showing ' + (historyPage * 5 + 1) + '–' + Math.min(historyPage * 5 + 5, matching.length) + ' of ' + matching.length + ' attempts' : '0 matching attempts';
+    document.getElementById('history-no-results').hidden = matching.length !== 0;
+    previous.disabled = historyPage === 0;
+    next.disabled = historyPage >= pages - 1;
+  }
+  resultFilter.addEventListener('change', () => {historyPage = 0; renderHistory();});
+  previous.addEventListener('click', () => {historyPage--; renderHistory();});
+  next.addEventListener('click', () => {historyPage++; renderHistory();});
+  renderHistory();
+}

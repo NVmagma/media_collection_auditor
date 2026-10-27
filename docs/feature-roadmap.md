@@ -197,3 +197,14 @@ until the production switch is separately approved.
   1440×1000 with administrator controls; mobile remains readable and naturally
   scrolls. Linux regressions (150) and real browser page/focus/layout checks pass.
   Production is unchanged; the revised disposable preview awaits user review.
+
+- Scans/History modernization: current scheduler observations and the latest
+  recorded outcome are separated from saved-date timer estimates. SQLite attempt
+  history now has scalar-only outcome details, configured-zone times, durations,
+  result filters and five-entry pages. Preview proposals and completed moves/Arr
+  updates remain separate; unknown counts and unrecorded per-title skip/block
+  reasons stay explicit. No coordinator persistence or execution changes.
+  Legacy JSON history stays compatible. User acceptance recorded for the prior
+  separate Review/compact Overview increment. New Scans/History passed 191 Linux
+  checks (including both runtime layouts) and real Chromium interaction checks;
+  disposable Tower visual review is pending.

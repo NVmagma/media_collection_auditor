@@ -31,7 +31,7 @@
       <strong>{% if run.get('production_activation') == 'preview_only' %}SQLite scheduled preview · media changes disabled{% elif run.get('storage_authority') == 'sqlite' %}Scheduled backend · activation {{ run.get('production_activation', 'unavailable') }}{% else %}Current configuration: {{ 'Dry Run (preview only)' if dry_run else 'LIVE MODE — changes to media are enabled' }}{% endif %}</strong>
       {% if viewer.admin %}{% set manual_preview = run.get("execution_mode") == "scheduled_preview" %}<div class="run-controls"><button id="run-now" type="button" data-preview="{{ 'true' if manual_preview else 'false' }}" {% if (run.get("storage_authority") == "sqlite" and not manual_preview) or run.get("running") or run.get("queued") %}disabled{% endif %}>{% if manual_preview %}Run Preview Now{% elif run.get("storage_authority") == "sqlite" %}Daily schedule only{% else %}Run Now{% endif %}</button><span id="run-result" role="status" aria-live="polite">{% if manual_preview %}Read-only scan; daily schedule unchanged.{% elif run.get("storage_authority") == "sqlite" %}Runs start only at the configured daily time.{% else %}Administrator access required.{% endif %}</span></div>{% endif %}
     </section>
-    <section class="cards run-cards" data-workspace-context="Overview History">
+    <section class="cards run-cards" data-workspace-context="Overview">
       <article><span>Audit status</span><strong>{{ 'Unavailable' if run.get('storage_authority') == 'sqlite' and run.get('status') == 'unavailable' else 'Blocked' if run.get('storage_authority') == 'sqlite' and run.get('scheduler_state') == 'blocked' else 'Running' if run.running else 'Queued' if run.queued else run.last_result|capitalize if run.last_result else 'Waiting' }}</strong></article>
       <article><span>Last finished attempt</span><strong class="small-metric">{{ run.last_finished|observation_datetime(dashboard_timezone) }}</strong></article>
       <article><span>Next scheduled audit</span><strong class="small-metric">{{ run.next_run|observation_datetime(dashboard_timezone) if run.next_run else ('Unavailable' if run.get('storage_authority') == 'sqlite' else 'Manual only / pending') }}</strong></article>
@@ -206,7 +206,24 @@
     </aside>
     </div>
     <section class="panel dashboard-section hidden-section" data-panel="Audit Preview">
-      <h2>Audit preview · deadline candidates</h2>
+      <div class="panel-heading"><h2>Scan workspace</h2><span class="scan-outcome outcome-{{ 'review' if scan_view.current_state == 'Blocked' else 'unknown' }}">{{ scan_view.current_state }}</span></div>
+      <p class="muted">{{ scan_view.current_detail }}</p>
+      {% if run.get('storage_authority') == 'sqlite' %}
+      <div class="scan-summary-grid">
+        <section class="scan-summary"><h3>Latest recorded attempt</h3>
+        {% if not scan_view.history_available %}<p class="empty">History observations are unavailable.</p>
+        {% elif scan_view.latest %}{% set attempt = scan_view.latest %}
+        <p><span class="scan-outcome outcome-{{ attempt.group }}">{{ attempt.label }}</span> <span class="muted">{{ attempt.trigger }} · {{ attempt.mode }}</span></p>
+        <p class="muted">Finished: {{ attempt.finished }}</p>
+        <dl class="scan-metrics"><div><dt>Proposed moves</dt><dd>{{ attempt.moves_proposed if attempt.moves_proposed is not none else '—' }}</dd></div><div><dt>Discovery changes</dt><dd>{{ attempt.discovery_changes if attempt.discovery_changes is not none else '—' }}</dd></div></dl>
+        <p>{{ attempt.reason }}</p><button type="button" class="scan-secondary" data-open-workspace="History">Open attempt history</button>
+        {% else %}<p class="empty">No finished attempts recorded in this scheduler process.</p>{% endif %}
+        </section>
+        <section class="scan-summary"><h3>What is recorded</h3><p>Preview counts describe proposals. Completed moves and Arr updates are separate observations.</p><p class="muted">Per-title proposals, skipped-title counts and blocked-title reasons are not retained in these scheduler records. — means not reported, not zero.</p><p class="muted">History covers this process and resets after restart. It does not establish live inventory freshness.</p></section>
+      </div>
+      {% endif %}
+      <div class="deadline-estimates">
+      <h3>Timer estimates · not scan results</h3>
       <p class="muted">Read-only estimate from saved lifecycle dates, not a simulation of the auditor. These are titles whose stage timers have expired. Jellyfin playback, favorites, protection tags, filesystem checks, action limits, and service availability are NOT checked here. Nothing on this page moves or deletes files.</p>
       {% if preview %}
       <p><strong>{{ preview|length }} candidates</strong> for review on a future audit. These actions are not guaranteed.</p>
@@ -214,6 +231,7 @@
       {% for item in preview %}<tr><td>{{ item.library }}</td><td>{{ item.title }}</td><td>{{ item.stage }}</td><td>{{ item.action }}</td></tr>{% endfor %}
       </tbody></table></div>
       {% else %}<p class="empty">No tracked stage deadlines have expired. This does not guarantee the next audit will take no action.</p>{% endif %}
+      </div>
     </section>
     <section class="panel dashboard-section hidden-section" data-panel="Activity">
       <div class="panel-heading"><h2>Recent activity</h2><a href="/logs">View all logs →</a></div>
@@ -224,6 +242,26 @@
       {% else %}<p class="empty">No action log entries yet.</p>{% endif %}
     </section>
     <section class="panel dashboard-section hidden-section" data-panel="History">
+      {% if run.get('storage_authority') == 'sqlite' %}
+      <div class="panel-heading"><h2>Attempt history</h2><span class="muted">Current scheduler process only</span></div>
+      <p class="muted">Preview completion means the worker returned a preview result. It does not mean media moved. History resets after restart; up to 100 attempts are retained.</p>
+      {% if not scan_view.history_available %}<p class="empty" role="status">History observations are unavailable; an empty history cannot be confirmed.</p>
+      {% elif not scan_view.rows %}<p class="empty">No finished attempts recorded in this process. A queued or running request appears here only after it finishes.</p>
+      {% else %}
+      {% if scan_view.history_partial %}<p role="status">Some history records could not be read.</p>{% endif %}
+      <div class="history-controls"><label>Result<select id="history-filter"><option value="all">All attempts</option><option value="completed">Completed</option><option value="review">Needs review</option><option value="unknown">Unreported outcome</option></select></label><span id="history-page-status" role="status" aria-live="polite"></span><div><button type="button" id="history-previous">Previous</button><button type="button" id="history-next">Next</button></div></div>
+      <div id="attempt-history">
+      {% for attempt in scan_view.rows %}
+      <article class="history-entry" data-history-result="{{ attempt.group }}">
+        <div class="history-entry-heading"><span class="scan-outcome outcome-{{ attempt.group }}">{{ attempt.label }}</span><strong>{{ attempt.trigger }}</strong><span class="muted">{{ attempt.mode }}</span><span class="muted history-entry-time">{{ attempt.started }} · {{ attempt.duration_display }}</span></div>
+        <dl class="scan-metrics"><div><dt>Proposed moves</dt><dd>{{ attempt.moves_proposed if attempt.moves_proposed is not none else '—' }}</dd></div><div><dt>Discovery changes</dt><dd>{{ attempt.discovery_changes if attempt.discovery_changes is not none else '—' }}</dd></div><div><dt>Completed moves</dt><dd>{{ attempt.moves_completed if attempt.moves_completed is not none else '—' }}</dd></div><div><dt>Arr updates</dt><dd>{{ attempt.arr_completed if attempt.arr_completed is not none else '—' }}</dd></div></dl>
+        <details><summary>Recorded outcome details</summary><p>{{ attempt.reason }}</p><p>Started: {{ attempt.started }}<br>Finished: {{ attempt.finished }}</p><p>Per-title proposals and skipped/blocked title counts were not recorded. Missing values are unknown.</p></details>
+      </article>
+      {% endfor %}
+      </div><p id="history-no-results" class="empty" hidden>No attempts match this result filter.</p>
+      {% endif %}
+      {% else %}
+
       <p class="muted">Last reported folder counts: Movies {{ run.movies_processed if run.movies_processed is not none else '—' }} · TV {{ run.tv_processed if run.tv_processed is not none else '—' }}. Mode: {{ 'Dry Run' if dry_run else 'Live' }}.</p>
       <div class="panel-heading"><h2>Audit history</h2><span class="muted">{% if run.get("storage_authority") == "sqlite" %}Current scheduler process only · live inventory freshness unverified{% else %}Last {{ history|length }} runs · stored in appdata{% endif %}</span></div>
       <p class="muted">{% if run.get("storage_authority") == "sqlite" %}Scheduled results report completed moves, not a verified live inventory. Times are UTC.{% else %}Movie and TV counts reflect titles appearing in action logs, not every title scanned. Times are UTC.{% endif %}</p>
@@ -241,6 +279,7 @@
       </td></tr>
       {% endfor %}</tbody></table></div>
       {% else %}<p class="empty">No recorded audits yet. New runs will appear here after completion.</p>{% endif %}
+      {% endif %}
     </section>
   </main>
 <script src="{{ url_for('static', filename='dashboard.js') }}" defer></script></body>
