@@ -405,3 +405,38 @@ def read_selected_coverage(path, build):
             or read_json_dashboard_snapshot(source, require_existing=True).state != state):
         raise RuntimeError('Tracking changed during observation')
     return {**report, 'storage_authority':'json', 'state_revision':None}
+
+
+def selected_scan_capture():
+    """Process observations only. No JSON/log reconstruction or remote reads."""
+    if os.environ.get('AUDITOR_STATE_BACKEND', 'json') != 'sqlite':
+        return None
+    try:
+        _require_sqlite_authority()
+        from app.sqlite_scheduled_observations import COORDINATOR
+        capture = COORDINATOR.capture()
+        _require_sqlite_authority()
+        return capture
+    except RuntimeError:
+        return None
+
+
+def project_scan_capture(capture):
+    """Fixed safe presentation contract shared by history and proposal APIs."""
+    if __package__:
+        from .dashboard_tracking_snapshot import build_scan_view
+    else:
+        from dashboard_tracking_snapshot import build_scan_view
+    base = {'schema_version':1, 'read_only':True, 'freshness_verified':False,
+            'media_actions_authorized':False, 'history_scope':'current_process',
+            'history_persistent':False, 'per_title_details_available':False,
+            'skipped_title_count':None, 'blocked_title_count':None}
+    if not isinstance(capture, dict) or not isinstance(capture.get('run'), dict):
+        return {**base, 'status':'unavailable', 'current':None, 'rows':None}
+    run = capture['run']
+    view = build_scan_view(run, capture.get('history'))
+    if run.get('status') != 'advisory_only' or not view['history_available']:
+        return {**base, 'status':'unavailable', 'current':None, 'rows':None}
+    return {**base, 'status':'advisory_only', 'history_partial':view['history_partial'],
+            'current':{'state':view['current_state'], 'detail':view['current_detail']},
+            'rows':view['rows']}

@@ -138,20 +138,29 @@ class ScheduledRunObservations:
 
     def report(self):
         with self._lock:
-            latest = self._active if self._running else (self._history[-1] if self._history else {})
-            return {'schema_version': 1, 'status': 'advisory_only' if self._observed else 'unavailable',
-                'source': 'sqlite_scheduler_process', 'storage_authority': 'sqlite_candidate',
-                'read_only': True, 'production_activation': 'disabled', 'production_authorized': False,
-                'freshness_verified': False, 'history_scope': 'current_process', 'history_persistent': False,
-                'running': self._running if self._observed else None,
-                'queued': (self._manual_pending or self._manual_claimed) if self._observed else None, 'rescuing': False if self._observed else None,
-                'scheduler_state': self._scheduler_state, 'next_run': self._next_run,
-                'last_started': latest.get('started_at'), 'last_finished': None if self._running else latest.get('finished_at'),
-                'last_result': None if self._running else latest.get('result'), 'last_trigger': latest.get('trigger'),
-                'result_basis': latest.get('result_basis'),
-                'state_revision': latest.get('state_revision'), 'moves_completed': latest.get('moves_completed'),
-                'dry_run': latest.get('dry_run'), 'moves_proposed': latest.get('moves_proposed'),
-                'discovery_changes': latest.get('discovery_changes')}
+            return self._report_locked()
+
+    def capture(self):
+        """One detached process observation and history under the same lock."""
+        with self._lock:
+            return {'run': self._report_locked(),
+                    'history': deepcopy(list(reversed(self._history)))}
+
+    def _report_locked(self):
+        latest = self._active if self._running else (self._history[-1] if self._history else {})
+        return {'schema_version': 1, 'status': 'advisory_only' if self._observed else 'unavailable',
+            'source': 'sqlite_scheduler_process', 'storage_authority': 'sqlite_candidate',
+            'read_only': True, 'production_activation': 'disabled', 'production_authorized': False,
+            'freshness_verified': False, 'history_scope': 'current_process', 'history_persistent': False,
+            'running': self._running if self._observed else None,
+            'queued': (self._manual_pending or self._manual_claimed) if self._observed else None, 'rescuing': False if self._observed else None,
+            'scheduler_state': self._scheduler_state, 'next_run': self._next_run,
+            'last_started': latest.get('started_at'), 'last_finished': None if self._running else latest.get('finished_at'),
+            'last_result': None if self._running else latest.get('result'), 'last_trigger': latest.get('trigger'),
+            'result_basis': latest.get('result_basis'),
+            'state_revision': latest.get('state_revision'), 'moves_completed': latest.get('moves_completed'),
+            'dry_run': latest.get('dry_run'), 'moves_proposed': latest.get('moves_proposed'),
+            'discovery_changes': latest.get('discovery_changes')}
 
 
 COORDINATOR = ScheduledRunObservations()

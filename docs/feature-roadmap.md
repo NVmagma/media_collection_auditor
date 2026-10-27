@@ -241,3 +241,13 @@ until the production switch is separately approved.
   Chromium setup-page checks. Disposable Tower HTTP acceptance is next; production
   remains unchanged and no image publication is claimed while CI billing is blocked.
 - User visual acceptance recorded for the API setup page on Tower port 18091.
+
+- Tower coverage acceptance recorded for revision 8225f86: all five private HTTP
+  cases passed on `/mnt/user/sql_test`; production services and media unchanged.
+- Scan observation APIs: `/api/v1/scan-history` adds bounded page/outcome filtering;
+  `/api/v1/proposals` reports latest recorded preview counts, never fabricated
+  per-title plans. One coordinator lock captures current status and retained history.
+  Restart-local scope, unknown counts and separate-service unavailability remain
+  explicit. No history persistence, worker execution or media authority added.
+  Verified with 278 Linux regressions, five actual loopback HTTP tests and browser
+  checks for setup guidance. Disposable Tower scan API acceptance is next.

@@ -71,3 +71,42 @@ as a Python/Flask runtime, current committed source, and newly created fixture
 folders/state. Five actual loopback HTTP cases exercise auth/opt-in, filtering,
 missing directories/state and source changes. No production mounts, host ports,
 Docker socket, external connections or worker are used. Artifacts are retained.
+
+## Scan history and proposals
+
+`GET /api/v1/scan-history` uses the dedicated Bearer credential. Parameters:
+
+- `page`: 1–100, default 1.
+- `page_size`: 1–20, default 5.
+- `outcome`: `all`, `completed`, `review` or `unknown`; default `all`.
+
+The response contains `items`, `total_records`, `has_more`, the requested page
+and outcome, and a separate `current` scheduler presentation. Rows use the same
+allowlisted projection as Scans/History: normalized outcome, timing, duration,
+trigger, reason and counts. Invalid duplicate parameters return 400 before capture.
+Unknown counts are null; free-text errors and private worker payloads are omitted.
+At most 100 attempts are retained. Pagination is relative to each capture; new
+attempts can shift page boundaries between requests. It is not a durable cursor.
+
+`GET /api/v1/proposals` reports `proposal_scope=latest_recorded_attempt` and
+`proposal_kind=counts_only`. `moves_proposed` and `discovery_changes` are exposed
+as preview-completion counts only when the latest retained attempt has a verified
+completed preview result. Failure, missing timing or an empty history does not
+reuse older successful counts. The normalized `latest_attempt` and current
+scheduler state remain separate. During a running attempt, the latest recorded
+attempt can therefore describe an earlier run. Per-title proposal/skip/block
+details are not retained, so no endpoint invents them or rescans media to fill in.
+
+Both endpoints take one detached coordinator capture under its existing lock,
+checking preview authority before and after selection. No worker invocation,
+tracking mutation, JSON-history fallback, remote collection or action permission
+is added. History is **current-process only**, not persistent across restart.
+Before a coordinator observation, on a separate API-only service, on legacy JSON
+workers or when binding is unavailable, return 503 with unknown data. An observed
+waiting coordinator with no retained attempts returns an honest empty history.
+
+Run `bash scripts/integration_scans_lab.sh EXISTING_LAB_PARENT` for five disposable
+real-loopback HTTP checks on Tower. It uses the cached Python/Flask runtime,
+current committed source and an isolated in-process test coordinator. No production
+worker, state, services or ports are connected. The fixture tests transport and
+projection; it does not assert that a production coordinator is available.

@@ -24,7 +24,7 @@ from auth import session_key, jellyfin_login, current_user, store_token, discard
 from run_control import snapshot, request_run
 from config_store import FIELDS, KEYS, SECRETS, BOOLS, DEFAULTS, FIELD_HELP, load_config, save_config, validate, redacted_config
 from integration_api import authorize_summary, read_only_service_enabled
-from integration_status import (read_selected_coverage, selected_run_snapshot, selected_run_history, selected_audit_status_report, audit_status_report, collect_widget_media_index, widget_media_urls, widget_media_base,
+from integration_status import (selected_scan_capture, project_scan_capture, read_selected_coverage, selected_run_snapshot, selected_run_history, selected_audit_status_report, audit_status_report, collect_widget_media_index, widget_media_urls, widget_media_base,
     read_selected_tracking_status as read_tracking_status,
     read_selected_tracking_titles as read_tracking_titles,
     read_selected_dashboard_state as read_dashboard_state)
@@ -51,7 +51,7 @@ def require_login():
     gate = _preview_backend_gate()
     preview = gate.preview_release_enabled()
     if read_only_service_enabled() and not preview and request.endpoint not in (
-            "integration_summary", "integration_audit_status", "integration_titles", "integration_readiness", "integration_coverage", "health"):
+            "integration_summary", "integration_audit_status", "integration_titles", "integration_readiness", "integration_coverage", "integration_scan_history", "integration_proposals", "health"):
         return {"status": "read_only_service"}, 404
     if request.path.startswith("/api/v1/"):
         failure = authorize_summary(request.headers.get("Authorization"))
@@ -61,7 +61,7 @@ def require_login():
                     "message": "Unknown integration route. See /api/v1/readiness for supported routes."}, 404
     if request.endpoint == "integration_readiness":
         return None
-    if request.endpoint in ("integration_summary", "integration_audit_status", "integration_titles", "integration_coverage"):
+    if request.endpoint in ("integration_summary", "integration_audit_status", "integration_titles", "integration_coverage", "integration_scan_history", "integration_proposals"):
         if preview:
             try: gate.require_sqlite_production_activation()
             except RuntimeError:
@@ -179,7 +179,7 @@ def _integration_readiness():
         'poster_lookup_enabled': os.environ.get('INTEGRATION_API_MEDIA', 'false').lower() == 'true',
         'coordinator_scope': 'unavailable' if read_only_service_enabled() else 'current_process',
         'routes': ['/api/v1/readiness', '/api/v1/summary', '/api/v1/audit-status',
-                   '/api/v1/titles/oldest-waiting', '/api/v1/titles/leaving-soon', '/api/v1/coverage'],
+                   '/api/v1/titles/oldest-waiting', '/api/v1/titles/leaving-soon', '/api/v1/coverage', '/api/v1/scan-history', '/api/v1/proposals'],
         'libraries': ['Movies', 'TV'], 'title_limit': 10,
         'coverage_enabled': os.environ.get('INTEGRATION_API_COVERAGE', 'false').lower() == 'true',
     }
@@ -197,6 +197,47 @@ def integration_setup():
     configured = authorize_summary(None)
     token_ready = configured is not None and configured[1] == 401
     return render_template('integrations.html', readiness=_integration_readiness(), token_ready=token_ready)
+
+
+def _scan_api_report():
+    capture = None if read_only_service_enabled() else selected_scan_capture()
+    return project_scan_capture(capture)
+
+
+@app.get('/api/v1/scan-history')
+def integration_scan_history():
+    values = {}
+    for key, default, maximum in (('page', '1', 100), ('page_size', '5', 20)):
+        raw = request.args.get(key, default)
+        if len(request.args.getlist(key)) > 1 or not re.fullmatch(r'[1-9][0-9]{0,2}', raw) or int(raw) > maximum:
+            return {'status':'invalid_pagination'}, 400
+        values[key] = int(raw)
+    outcome = request.args.get('outcome', 'all')
+    if outcome not in ('all','completed','review','unknown') or len(request.args.getlist('outcome')) > 1:
+        return {'status':'invalid_outcome'}, 400
+    report = _scan_api_report()
+    rows = report.pop('rows')
+    base = {**report, **values, 'outcome':outcome, 'pagination_scope':'current_capture',
+            'retained_limit':100}
+    if rows is None:
+        return {**base, 'items':None, 'total_records':None, 'has_more':False}, 503
+    rows = [row for row in rows if outcome == 'all' or row['group'] == outcome]
+    start = (values['page'] - 1) * values['page_size']
+    return {**base, 'items':rows[start:start+values['page_size']], 'total_records':len(rows),
+            'has_more':start+values['page_size'] < len(rows)}, 200
+
+
+@app.get('/api/v1/proposals')
+def integration_proposals():
+    report = _scan_api_report()
+    rows = report.pop('rows')
+    latest = rows[0] if rows else None
+    verified = bool(latest and latest['group'] == 'completed' and latest['mode'] == 'Preview')
+    return {**report, 'proposal_scope':'latest_recorded_attempt',
+            'proposal_kind':'counts_only', 'latest_attempt':latest,
+            'preview_completed':verified,
+            'moves_proposed':latest['moves_proposed'] if verified else None,
+            'discovery_changes':latest['discovery_changes'] if verified else None}, 503 if rows is None else 200
 
 
 @app.get('/api/v1/coverage')
