@@ -182,6 +182,17 @@ class SettingsApplyFixtureTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):self.restore()
         self.assertEqual(self.saved.read_bytes(),active);self.assertTrue(self.marker.exists())
 
+    def test_identical_transaction_directory_replacement_is_not_adopted(self):
+        import shutil
+        self.interrupt('after_config')
+        tx=self.control.parent/('settings-apply-'+self.digest)
+        retained=tx.with_name('retained-transaction')
+        tx.rename(retained);shutil.copytree(retained,tx)
+        active=self.saved.read_bytes()
+        with self.assertRaises(RuntimeError):self.restore()
+        self.assertEqual(self.saved.read_bytes(),active);self.assertTrue(self.marker.exists())
+        self.unchanged_tracking()
+
     def test_actual_sigkill_after_config_keeps_interface_gate_paused_and_tracking(self):
         code='''
 import json,os,signal,sys

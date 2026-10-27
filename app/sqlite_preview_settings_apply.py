@@ -9,6 +9,7 @@ import hashlib
 import os
 from pathlib import Path
 import re
+import stat
 
 from app.config_store import KEYS, DEFAULTS, validate
 from app.sqlite_disposable_restore import _write_private
@@ -131,7 +132,8 @@ def apply_requested_settings(*, settings, request_sha256):
                 'stages':stages,'artifacts':{name:_sha(raw) for name,raw in artifacts.items()},
                 'snapshot_sha256':_sha(_encode(state)),'media_actions_authorized':False}
             _write_private(tx,'plan.json',_encode(record))
-            marker=_encode({'schema_version':1,'attempt':attempt,'plan_sha256':_sha(_encode(record))})
+            marker=_encode({'schema_version':1,'attempt':attempt,'attempt_inode':_inode(os.fstat(tx)),
+                'plan_sha256':_sha(_encode(record))})
             check();validate_preview_activation(settings=settings)
             _write_private(parent,SETTINGS_MARKER,marker)
             _boundary('after_intent')
@@ -167,6 +169,10 @@ def restore_previous_settings(*,settings,request_sha256):
             if not isinstance(selected,dict):raise RuntimeError('Settings marker needs review')
             if selected.get('attempt')!=attempt:raise RuntimeError('Different settings attempt selected')
             tx=os.open(attempt,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=root_fd);stack.callback(os.close,tx)
+            transaction=os.fstat(tx)
+            if (_inode(transaction)!=selected.get('attempt_inode') or transaction.st_uid!=os.geteuid()
+                    or stat.S_IMODE(transaction.st_mode)!=0o700):
+                raise RuntimeError('Private settings transaction directory changed')
             plan_raw,_=_local(tx,'plan.json');plan=parse_unique_json(plan_raw)
             if not isinstance(plan,dict):raise RuntimeError('Settings plan needs review')
             if (_sha(plan_raw)!=selected.get('plan_sha256') or plan.get('source_revision')!=_revision()

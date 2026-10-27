@@ -13,11 +13,11 @@
 <nav class="settings-tabs" aria-label="Settings categories">
 {% for group in groups %}<button type="button" class="tab-button{% if loop.first %} selected{% endif %}" data-tab="{{ group }}" aria-selected="{{ 'true' if loop.first else 'false' }}">{{ group }}</button>{% endfor %}
 </nav>
-{% if preview_mode %}<div class="alert" role="status">Preview mode: this form requests settings changes. Your active settings stay in place until the request is validated and applied.</div>{% endif %}
+{% if preview_mode %}<div class="alert" role="status">{% if settings_application.status == 'recovery_required' %}An application was interrupted. Scans are paused; restore the previous settings before editing again.{% else %}Preview mode: this form requests settings changes. Your active settings stay in place until the request is validated and applied.{% endif %}</div>{% endif %}
 {% if requested %}<div class="alert" role="status">Requested settings saved. Active settings have not changed.</div>{% endif %}
 {% if pending_settings.status == 'requested' %}
 <div class="alert" role="status"><strong>Settings request pending</strong>
-<p>Active settings are shown below and continue to control scans. Use Apply Requested Settings to validate and apply the saved request.</p>
+{% if settings_application.status != 'recovery_required' %}<p>Active settings are shown below and continue to control scans. Use Apply Requested Settings to validate and apply the saved request.</p>{% endif %}
 {% if pending_settings.changed_keys %}<p>Requested changes: {% for key in pending_settings.changed_keys %}{{ help_text[key][0] }}{{ ', ' if not loop.last else '.' }}{% endfor %}</p>{% endif %}</div>
 {% elif pending_settings.status == 'stale' %}
 <div class="alert error" role="status">The saved request was made against an older configuration. It has not been applied. Review the active settings before submitting a new request.</div>
@@ -45,6 +45,7 @@
 <div class="alert" role="status">This request has a retained application attempt. Review your selections and save a new request before applying again.</div>
 {% endif %}
 <form method="post" action="/settings" id="settings-form">
+<fieldset style="border:0;padding:0;margin:0;min-width:0" {% if settings_application.status == 'recovery_required' %}disabled{% endif %}>
 {% for group, keys in groups.items() %}
 <section class="settings-section{% if not loop.first %} hidden-section{% endif %}" data-panel="{{ group }}">
 <h2>{{ group }} Settings</h2>
@@ -74,7 +75,7 @@
 <label class="confirm-label" for="safety_confirmation">Safety confirmation (when required)</label>
 <input id="safety_confirmation" name="safety_confirmation" autocomplete="off" placeholder="Type I UNDERSTAND"></div>
 <button class="save-button" type="submit">{{ 'Save Requested Changes' if preview_mode else 'Save Changes' }}</button></div>
-</form></main></div>
+</fieldset></form></main></div>
 <script>
 const tabs = document.querySelectorAll('[data-tab]');
 const panels = document.querySelectorAll('[data-panel]');

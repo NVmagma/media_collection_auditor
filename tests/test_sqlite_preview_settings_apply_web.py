@@ -60,6 +60,18 @@ def test_failed_application_keeps_ui_and_explicit_restore_available(page):
     case.unchanged_tracking()
 
 
+def test_interrupted_settings_cannot_be_edited_before_restoration(page):
+    client,case,_=page
+    case.interrupt('after_config')
+    original_request=case.pending.read_bytes()
+    response=client.post('/settings',data={'HOLDING_DAYS':'13'},headers={'Origin':'http://localhost'})
+    assert response.status_code==302 and 'apply_error=1' in response.location
+    assert case.pending.read_bytes()==original_request
+    body=client.get('/settings').text
+    assert 'Restore Previous Settings' in body and 'before editing again' in body
+    case.unchanged_tracking()
+
+
 def test_busy_scan_retains_request_and_has_no_application_intent(page):
     client,case,_=page
     with state_writer_lock(case.source):response=post(client,case)

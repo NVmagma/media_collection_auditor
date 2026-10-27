@@ -795,6 +795,8 @@ def settings():
         origin = request.headers.get("Origin") or request.headers.get("Referer")
         if not origin or urlsplit(origin).netloc != request.host:
             return Response("Invalid request origin", 403)
+        if preview_mode and settings_application['status']=='recovery_required':
+            return redirect(url_for('settings',apply_error='1'))
         updated = dict(saved)
         try:
             for key in KEYS:
