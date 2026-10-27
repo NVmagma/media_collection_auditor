@@ -8,13 +8,16 @@
 <div class="sidebar-footer"><span class="viewer-indicator" title="Signed in as {{ viewer.name }}">{{ viewer.name }} <span class="viewer-role">{{ "Administrator" if viewer.admin else "Read only" }}</span></span> <form method="post" action="/logout" style="display:inline"><button type="submit">Sign out</button></form></div>
 </aside>
 <div class="app-content">
-<header class="settings-header"><div><h1>Settings</h1><p>Manage your auditor without editing Docker environment variables.</p></div><span class="header-note">Changes apply next audit</span></header>
+<header class="settings-header"><div><h1>Settings</h1><p>Manage your auditor without editing Docker environment variables.</p></div><span class="header-note">{{ 'Requests require validation before applying' if preview_mode else 'Changes apply next audit' }}</span></header>
 <main class="settings-main">
 <nav class="settings-tabs" aria-label="Settings categories">
 {% for group in groups %}<button type="button" class="tab-button{% if loop.first %} selected{% endif %}" data-tab="{{ group }}" aria-selected="{{ 'true' if loop.first else 'false' }}">{{ group }}</button>{% endfor %}
 </nav>
+{% if preview_mode %}<div class="alert" role="status">Preview mode: this form requests settings changes. Your active settings stay in place until the request is validated and applied.</div>{% endif %}
+{% if requested %}<div class="alert" role="status">Requested settings saved. Active settings have not changed.</div>{% endif %}
+{% if unchanged %}<div class="alert" role="status">No active settings changes were requested.</div>{% endif %}
 {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
-{% if success %}<div class="alert" role="status">Settings saved. Changes will apply at the next audit run.</div>{% endif %}
+{% if success and not preview_mode %}<div class="alert" role="status">Settings saved. Changes will apply at the next audit run.</div>{% endif %}
 <form method="post" action="/settings" id="settings-form">
 {% for group, keys in groups.items() %}
 <section class="settings-section{% if not loop.first %} hidden-section{% endif %}" data-panel="{{ group }}">
@@ -33,7 +36,7 @@
 {% endfor %}
 {% if group == 'Connections' %}
 <div class="connection-tests">
-<h3>Test saved connections</h3><p class="section-description">Save your connection settings first. Tests use saved settings or Unraid defaults, and never change your media.</p>
+<h3>Test saved connections</h3><p class="section-description">{% if preview_mode %}Tests use active settings. Requested changes are not used until applied.{% else %}Save your connection settings first. Tests use saved settings or Unraid defaults, and never change your media.{% endif %}</p>
 {% for service in ['jellyfin', 'radarr', 'sonarr'] %}
 <div class="connection-test-row"><span>{{ service|capitalize }}</span><button type="button" class="test-button" data-test-service="{{ service }}">Test Connection</button><span class="test-result" data-test-result="{{ service }}" role="status" aria-live="polite"></span></div>
 {% endfor %}
@@ -41,10 +44,10 @@
 {% endif %}
 </section>
 {% endfor %}
-<div class="save-panel"><div><strong>Save configuration</strong><p>Settings are stored in persistent appdata. Potentially destructive options require confirmation.</p>
+<div class="save-panel"><div><strong>{{ 'Request configuration change' if preview_mode else 'Save configuration' }}</strong><p>{% if preview_mode %}Requests are stored separately from active settings. Media actions remain disabled.{% else %}Settings are stored in persistent appdata. Potentially destructive options require confirmation.{% endif %}</p>
 <label class="confirm-label" for="safety_confirmation">Safety confirmation (when required)</label>
 <input id="safety_confirmation" name="safety_confirmation" autocomplete="off" placeholder="Type I UNDERSTAND"></div>
-<button class="save-button" type="submit">Save Changes</button></div>
+<button class="save-button" type="submit">{{ 'Save Requested Changes' if preview_mode else 'Save Changes' }}</button></div>
 </form></main></div>
 <script>
 const tabs = document.querySelectorAll('[data-tab]');

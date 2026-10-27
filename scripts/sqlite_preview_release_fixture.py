@@ -226,14 +226,28 @@ def actual_image_acceptance():
             return subprocess.Popen([sys.executable, '-B', '-m', 'app.main'], env=environment,
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         def reject(environment):
-            rejected = child(environment)
+            paused = child(environment)
             try:
-                out, err = rejected.communicate(timeout=10)
-                assert rejected.returncode != 0 and 'preview release binding unavailable' in err
+                for _ in range(100):
+                    assert paused.poll() is None, 'Paused preview must keep its web process alive'
+                    try:
+                        with urllib.request.urlopen(f'http://127.0.0.1:{port}/login', timeout=1) as response:
+                            if response.status == 200: break
+                    except (OSError, urllib.error.URLError): time.sleep(0.05)
+                else: raise RuntimeError('Paused preview login unavailable')
+                req = urllib.request.Request(f'http://127.0.0.1:{port}/api/v1/summary',
+                    headers={'Authorization':'Bearer '+token})
+                try: urllib.request.urlopen(req, timeout=1)
+                except urllib.error.HTTPError as error:
+                    assert error.code == 503
+                    with error: assert json.loads(error.read())['status'] == 'preview_paused'
+                else: raise AssertionError('Invalid preview exposed tracking')
+                assert source.read_bytes() == original
+                assert GuardedSQLiteStateStore(control / 'state.db').load_with_revision() == before
+                assert not case.server.calls
             finally:
-                if rejected.poll() is None:
-                    rejected.kill(); rejected.communicate(timeout=5)
-        # Missing binding and JSON fallback both fail before web/worker startup.
+                paused.kill(); paused.communicate(timeout=5)
+        # Invalid bindings pause scans while the web process remains available.
         path = control / activation.BINDING; retained = control / 'retained-binding.json'
         path.rename(retained)
         reject(env)

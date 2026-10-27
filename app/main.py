@@ -23,7 +23,7 @@ def apply_settings():
 
 
 def start_web():
-    from web import app  # Validate a preview release before session/UI initialization.
+    from web import app  # Scan readiness is checked separately from UI availability.
     app.run(host="0.0.0.0", port=WEB_PORT, debug=False, use_reloader=False)
 
 
@@ -49,22 +49,20 @@ def audit_counts(path, offset):
 if __name__ == "__main__":
     from sqlite_backend_gate import preview_release_enabled, require_sqlite_production_activation
     if preview_release_enabled():
-        # A preview release cannot fall back to the legacy JSON worker, even if
-        # its environment/configuration is incomplete or changed at restart.
-        require_sqlite_production_activation()
-    if read_only_service_enabled():
-        start_web()
-        raise SystemExit(0)
-    if os.environ.get("AUDITOR_STATE_BACKEND", "json") == "sqlite":
-        from sqlite_backend_gate import require_sqlite_production_activation
-        require_sqlite_production_activation()
+        # UI availability is separate from scan readiness. A changed binding
+        # pauses the preview worker; it never selects the legacy JSON worker.
         from app.sqlite_scheduled_service import run_daily_service
         threading.Thread(target=start_web, name="web-ui", daemon=True).start()
         try:
             run_daily_service(apply_settings=apply_settings)
         except KeyboardInterrupt:
-            pass  # SIGINT is the image's explicit clean-stop signal.
+            pass
         raise SystemExit(0)
+    if read_only_service_enabled():
+        start_web()
+        raise SystemExit(0)
+    if os.environ.get("AUDITOR_STATE_BACKEND", "json") == "sqlite":
+        require_sqlite_production_activation()  # Sealed builds still refuse SQLite.
     threading.Thread(target=start_web, name="web-ui", daemon=True).start()
     auditor = None
     while True:

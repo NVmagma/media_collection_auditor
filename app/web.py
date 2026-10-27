@@ -36,11 +36,20 @@ app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
 
 @app.before_request
 def require_login():
-    if read_only_service_enabled() and request.endpoint not in (
+    from app.sqlite_backend_gate import preview_release_enabled, require_sqlite_production_activation
+    preview = preview_release_enabled()
+    if read_only_service_enabled() and not preview and request.endpoint not in (
             "integration_summary", "integration_audit_status", "integration_titles", "health"):
         return {"status": "read_only_service"}, 404
     if request.endpoint in ("integration_summary", "integration_audit_status", "integration_titles"):
-        return authorize_summary(request.headers.get("Authorization"))
+        failure = authorize_summary(request.headers.get("Authorization"))
+        if failure is not None: return failure
+        if preview:
+            try: require_sqlite_production_activation()
+            except RuntimeError:
+                return {"status":"preview_paused", "read_only":True, "media_actions_authorized":False,
+                        "message":"Preview scans are paused; settings or tracking need review."}, 503
+        return None
     if request.endpoint in ("login", "login_background", "health", "static"):
         return None
     g.user = current_user()
@@ -48,6 +57,12 @@ def require_login():
         if request.path.startswith("/api/"):
             return {"ok": False, "message": "Please sign in."}, 401
         return redirect(url_for("login"))
+    if preview and request.endpoint not in ('settings','logout','run_now'):
+        try: require_sqlite_production_activation()
+        except RuntimeError:
+            if request.path.startswith('/api/'):
+                return {'status':'preview_paused','media_actions_authorized':False}, 503
+            return render_template('preview-paused.html'), 503
     if request.endpoint in ("settings", "test_connection", "run_now", "rescue") and not g.user["admin"]:
         if request.path.startswith("/api/"):
             return {"ok": False, "message": "Administrator access required."}, 403
@@ -749,9 +764,13 @@ def settings():
     if not admin_authorized():
         return Response("Settings require WEB_ADMIN_PASSWORD (and HTTP Basic authentication).",
                         401, {"WWW-Authenticate": 'Basic realm="Auditor settings"'})
+    from app.sqlite_backend_gate import preview_release_enabled
+    preview_mode = preview_release_enabled()
     saved = load_config()
     error = None
     success = request.args.get("saved") == "1"
+    requested = request.args.get("requested") == "1"
+    unchanged = request.args.get("unchanged") == "1"
     if request.method == "POST":
         # Reject cross-origin browser submissions; don't accept unauthenticated writes.
         origin = request.headers.get("Origin") or request.headers.get("Referer")
@@ -774,6 +793,11 @@ def settings():
                     or updated.get("ENABLE_SEASON_PRUNING", "false") == "true"):
                 if request.form.get("safety_confirmation") != "I UNDERSTAND":
                     raise ValueError("Type I UNDERSTAND to confirm potentially destructive settings.")
+            if preview_mode:
+                from app.sqlite_preview_settings import request_settings
+                from config_store import CONFIG_FILE
+                result = request_settings(config_path=CONFIG_FILE, updated=updated)
+                return redirect(url_for('settings', **{result['status']: '1'}))
             save_config(updated)
             return redirect(url_for("settings", saved=1))
         except (ValueError, OSError) as exc:
@@ -786,7 +810,7 @@ def settings():
         values[key] = ""  # Never send stored tokens to the browser.
     return render_template("settings.html", groups=FIELDS, values=values,
                            secrets=SECRETS, bools=BOOLS, sources=sources, help_text=FIELD_HELP, error=error,
-                           success=success)
+                           success=success, preview_mode=preview_mode, requested=requested, unchanged=unchanged)
 
 
 @app.post("/api/test-connection/<service>")
@@ -809,8 +833,8 @@ def run_now():
     if not origin or urlsplit(origin).netloc != request.host:
         return {"ok": False, "message": "Invalid request origin."}, 403
     backend = os.environ.get('AUDITOR_STATE_BACKEND', 'json')
-    if backend == 'sqlite':
-        from app.sqlite_backend_gate import preview_release_enabled, require_sqlite_production_activation
+    from app.sqlite_backend_gate import preview_release_enabled, require_sqlite_production_activation
+    if preview_release_enabled() or backend == 'sqlite':
         if not preview_release_enabled():
             return {'ok': False, 'message': 'This backend runs only at its configured daily time.'}, 409
         try:

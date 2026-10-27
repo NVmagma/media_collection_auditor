@@ -14,16 +14,19 @@ def run_daily_service(*, apply_settings):
     never runs in deployed JSON mode and cannot be entered through environment
     selection while the release gate is closed.
     """
-    require_sqlite_production_activation()
+    from app.sqlite_backend_gate import preview_release_enabled
+    if not preview_release_enabled():
+        require_sqlite_production_activation()
     from run_control import wait_for_run
     from app.sqlite_scheduled_observations import COORDINATOR
     cycle = ScheduledWorkerCycle()
     while True:
-        apply_settings()
-        if os.environ.get('AUDITOR_STATE_BACKEND', 'json') != 'sqlite':
-            return
         now = datetime.now(timezone.utc)
         try:
+            apply_settings()
+            if os.environ.get('AUDITOR_STATE_BACKEND', 'json') != 'sqlite':
+                raise RuntimeError('Preview cannot select a different backend')
+            require_sqlite_production_activation()
             result = production_cycle_step(cycle=cycle, settings=dict(os.environ), now=now, observer=COORDINATOR)
             run_requested_preview(settings=dict(os.environ), now=datetime.now(timezone.utc), observer=COORDINATOR)
             delay = max(0, (result.next_run - datetime.now(timezone.utc)).total_seconds())
