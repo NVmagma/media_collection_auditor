@@ -25,6 +25,7 @@ from app.sqlite_scheduled_paths import _canonical, _open_directory
 from app.state_store import GuardedSQLiteStateStore
 
 BINDING = 'preview-release.json'
+SETTINGS_MARKER = '.settings-apply.json'
 PROFILE = 'scheduled-preview-v1'
 
 
@@ -134,6 +135,20 @@ def create_preview_binding(*, settings=None):
 
 
 def validate_preview_activation(*, settings=None):
+    # An interrupted settings transaction must never be silently adopted.
+    values = dict(os.environ if settings is None else settings)
+    database = Path(_canonical(values.get('SQLITE_STATE_FILE', '/app/logs/sqlite_worker/state.db')))
+    marker = database.parent / SETTINGS_MARKER
+    if os.path.lexists(marker):
+        raise RuntimeError('Preview settings application needs explicit recovery')
+    result = _validate_bound_preview(settings=settings)
+    if os.path.lexists(marker):
+        raise RuntimeError('Preview settings application started during validation')
+    return result
+
+
+def _validate_bound_preview(*, settings=None):
+    """Full binding validator used under the settings transaction's held locks."""
     revision = _revision()
     values, config_sha = _effective(settings)
     config, source, database, policy_sha = _policy(values)

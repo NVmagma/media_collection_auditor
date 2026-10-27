@@ -76,7 +76,7 @@ def request_settings(*, config_path, updated, environment=None):
         raise ValueError('This preview cannot enable media actions or season pruning. Active settings were not changed.')
     changed = sorted(key for key in KEYS if before[key] != after[key])
     if not changed: return {'status':'unchanged','active_settings_changed':False}
-    payload = {'schema_version':1, 'base_config_sha256':hashlib.sha256(raw).hexdigest(),
+    payload = {'schema_version':1, 'request_id':secrets.token_hex(16), 'base_config_sha256':hashlib.sha256(raw).hexdigest(),
                'requested_config':proposed, 'media_actions_authorized':False}
     parent = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     temporary = '.pending-settings-'+secrets.token_hex(12)

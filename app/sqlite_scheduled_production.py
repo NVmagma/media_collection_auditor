@@ -108,6 +108,14 @@ def _run_bound_production_slot(*, settings, scheduled_at, now, clock, timer=mono
     started = timer()
     with audit_run_lock(source) as verify_json:
         with _hold_control_database(control, database) as verify_control:
+            # A settings application may have finished after the outer gate but
+            # before this run acquired its locks. Never scan under the old policy.
+            from app.sqlite_backend_gate import preview_release_enabled
+            if preview_release_enabled():
+                from app.sqlite_preview_activation import _policy
+                fresh = require_sqlite_production_activation(settings=settings)
+                if _policy(fresh)[3] != _policy(settings)[3]:
+                    raise RuntimeError('Preview settings changed before scan lock')
             def verify_binding():
                 verify_json(); verify_control()
             claim = (nullcontext(verify_binding) if manual_preview else
