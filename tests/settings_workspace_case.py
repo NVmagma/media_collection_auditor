@@ -45,7 +45,7 @@ def render_integration_workspace():
         return render_template('integrations.html', token_ready=True, readiness={
             'tracking_available':True, 'storage_authority':'sqlite',
             'binding_status':'verified', 'title_details_enabled':True,
-            'poster_lookup_enabled':True, 'coverage_enabled':True, 'coordinator_scope':'current_process'})
+            'poster_lookup_enabled':True, 'coverage_enabled':True, 'backup_selection_configured':False, 'coordinator_scope':'current_process'})
 
 
 if __name__ == '__main__':

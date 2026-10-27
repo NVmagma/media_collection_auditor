@@ -251,3 +251,13 @@ until the production switch is separately approved.
   explicit. No history persistence, worker execution or media authority added.
   Verified with 278 Linux regressions, five actual loopback HTTP tests and browser
   checks for setup guidance. Disposable Tower scan API acceptance is next.
+
+- Tower scan API acceptance recorded for revision 8429c3e: five real loopback HTTP
+  cases passed; no production worker/state/services connected.
+- Backup status API: authenticated `/api/v1/backup-status` verifies one explicitly
+  pinned private logical packet using the shared update/recovery inspector. It
+  never discovers or creates backups, compares current tracking or grants restore
+  authority. New receipts record capture time; legacy age remains unknown.
+  Verified with 317 Linux integration/backup/update/recovery/security regressions,
+  five actual loopback HTTP cases and setup browser checks. Disposable Tower
+  backup-status acceptance is next; production remains unchanged.

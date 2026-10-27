@@ -239,3 +239,76 @@ def main(argv=None):
 
 if __name__ == '__main__':
     raise SystemExit(main())
+
+
+UPDATE_BACKUP_FILES = ('current.inspect.json', 'current-template.xml', 'saved-config.json',
+         'retained-source.json', 'current-binding.json', 'tracking-snapshot.json')
+
+
+def _backup_capture_time(value):
+    """Old receipts have no capture time. Never substitute a file mtime."""
+    from datetime import datetime, timezone
+    if not isinstance(value, str) or not 1 <= len(value) <= 80:
+        return None
+    try:
+        moment = datetime.fromisoformat(value.replace('Z', '+00:00'))
+        return moment.astimezone(timezone.utc).isoformat() if moment.tzinfo is not None else None
+    except (ValueError, TypeError, OverflowError):
+        return None
+
+
+def inspect_update_backup(*, directory, expected_identity, expected_fingerprint, max_total_bytes=None):
+    """Verify one explicitly selected complete packet; never adopt a partial one."""
+    from app.sqlite_preview_install import _private_root
+    from app.sqlite_state import SECTIONS
+    FILES = UPDATE_BACKUP_FILES
+    if max_total_bytes is not None and (type(max_total_bytes) is not int or max_total_bytes <= 0):
+        raise ValueError('Positive inspection budget required')
+    if not re.fullmatch('[0-9a-f]{64}', expected_fingerprint or ''):
+        raise ValueError('Exact backup receipt fingerprint required')
+    fd = _private_root(Path(directory), expected_identity)
+    try:
+        raw, receipt_info = _local(fd, 'backup-complete.json')
+        if hashlib.sha256(raw).hexdigest() != expected_fingerprint:
+            raise RuntimeError('Selected backup receipt changed')
+        receipt = parse_unique_json(raw)
+        if (type(receipt.get('schema_version')) is not int or receipt.get('schema_version') != 1 or receipt.get('status') != 'preview_update_backup_captured'
+                or type(receipt.get('snapshot_revision')) is not int or receipt.get('snapshot_revision') != 0 or receipt.get('update_authorized') is not False
+                or receipt.get('backup_kind') != 'logical_tracking_and_settings'
+                or set(receipt.get('sha256', {})) != set(FILES)):
+            raise RuntimeError('Complete known backup receipt required')
+        request, request_info = _local(fd, 'backup-request.json')
+        if hashlib.sha256(request).hexdigest() != receipt.get('request_sha256'):
+            raise RuntimeError('Backup request changed')
+        captured = {}
+        total_bytes = len(raw) + len(request)
+        for name in FILES:
+            if max_total_bytes is not None and total_bytes + os.stat(name, dir_fd=fd, follow_symlinks=False).st_size > max_total_bytes:
+                raise RuntimeError('Backup inspection budget exceeded')
+            data, info = _local(fd, name)
+            total_bytes += len(data)
+            if max_total_bytes is not None and total_bytes > max_total_bytes:
+                raise RuntimeError('Backup inspection budget exceeded')
+            if hashlib.sha256(data).hexdigest() != receipt['sha256'][name]:
+                raise RuntimeError('Backup content changed')
+            captured[name] = data, _identity(info)
+        state = parse_unique_json(captured['tracking-snapshot.json'][0]); validate_snapshot(state)
+        if INTENTS_KEY in state:
+            raise RuntimeError('Pending operation in backup')
+        for name, value in captured.items():
+            data, info = _local(fd, name)
+            if (data, _identity(info)) != value:
+                raise RuntimeError('Backup changed during inspection')
+        current, info = _local(fd, 'backup-complete.json')
+        if current != raw or _identity(info) != _identity(receipt_info):
+            raise RuntimeError('Backup receipt replaced')
+        current, info = _local(fd, 'backup-request.json')
+        if current != request or _identity(info) != _identity(request_info):
+            raise RuntimeError('Backup request replaced')
+        reopened = _private_root(Path(directory), expected_identity); os.close(reopened)
+        return {'status': 'preview_update_backup_verified', 'backup_kind': 'logical_tracking_and_settings',
+                'update_authorized': False, 'automatic_restoration': False,
+                'tracking_counts': {key: len(state.get(key, {})) for key in SECTIONS},
+                'captured_at': _backup_capture_time(receipt.get('captured_at'))}
+    finally:
+        os.close(fd)

@@ -440,3 +440,36 @@ def project_scan_capture(capture):
     return {**base, 'status':'advisory_only', 'history_partial':view['history_partial'],
             'current':{'state':view['current_state'], 'detail':view['current_detail']},
             'rows':view['rows']}
+
+
+def selected_backup_status():
+    """Inspect one operator-pinned packet; never find, create or adopt a backup."""
+    import re
+    from datetime import datetime, timezone
+    base = {'schema_version':1, 'read_only':True, 'automatic_action':'none',
+            'media_actions_authorized':False, 'restore_authorized':False,
+            'restore_tested':False, 'current_state_comparison':'not_performed',
+            'backup_scope':'explicitly_selected_packet', 'freshness_verified':False,
+            'backup_kind':'logical_tracking_and_settings', 'captured_at':None,
+            'age_seconds':None, 'verified_at':None, 'capture_time_status':'unknown'}
+    directory = os.environ.get('INTEGRATION_API_BACKUP_DIRECTORY', '')
+    identity = os.environ.get('INTEGRATION_API_BACKUP_IDENTITY', '')
+    fingerprint = os.environ.get('INTEGRATION_API_BACKUP_FINGERPRINT', '')
+    if not any((directory, identity, fingerprint)):
+        return {**base, 'status':'not_configured', 'packet_verified':False}
+    if (not directory or not re.fullmatch(r'[0-9]{1,20}:[0-9]{1,20}', identity)
+            or not re.fullmatch(r'[0-9a-f]{64}', fingerprint)):
+        return {**base, 'status':'selection_invalid', 'packet_verified':False}
+    try:
+        from app.sqlite_release_recovery import inspect_update_backup
+        report = inspect_update_backup(directory=directory, expected_identity=tuple(map(int,identity.split(':'))),
+                                       expected_fingerprint=fingerprint, max_total_bytes=16 * 1024 * 1024)
+        now = datetime.now(timezone.utc)
+        captured = report['captured_at']
+        age = (now - datetime.fromisoformat(captured)).total_seconds() if captured else None
+        return {**base, 'status':'packet_verified', 'packet_verified':True,
+                'captured_at':captured, 'age_seconds':int(age) if age is not None and age >= 0 else None,
+                'capture_time_status':'unknown' if age is None else 'future' if age < 0 else 'recorded',
+                'verified_at':now.isoformat(), 'payload_files_verified':6}
+    except (ImportError, OSError, RuntimeError, ValueError, TypeError, KeyError, AttributeError):
+        return {**base, 'status':'verification_failed', 'packet_verified':False}

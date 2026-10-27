@@ -4,6 +4,7 @@ This is a bounded observation of the frozen preview, not a writer-exclusion
 permit or a physical SQLite database backup. Partial packets remain for review.
 """
 import hashlib
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -18,8 +19,7 @@ from app.sqlite_release_recovery import _encode, _local
 from app.sqlite_scheduled_paths import _open_directory, scan_held_directory
 from app.sqlite_state import SECTIONS, validate_snapshot
 
-FILES = ('current.inspect.json', 'current-template.xml', 'saved-config.json',
-         'retained-source.json', 'current-binding.json', 'tracking-snapshot.json')
+from app.sqlite_release_recovery import UPDATE_BACKUP_FILES as FILES
 
 
 def _boundary(phase):
@@ -73,6 +73,7 @@ def capture_backup(*, directory, expected_identity, container, template, source_
         request_raw = _local(fd, 'backup-request.json')[0]
         receipt = {'schema_version': 1, 'status': 'preview_update_backup_captured',
             'backup_kind': 'logical_tracking_and_settings', 'source_revision': source_revision,
+            'captured_at': datetime.now(timezone.utc).isoformat(),
             'reviewed_settings_change': reviewed_settings_change,
             'container_id': container['Id'], 'image_id': container['Image'], 'snapshot_revision': revision,
             'request_sha256': hashlib.sha256(request_raw).hexdigest(),
@@ -166,49 +167,10 @@ def capture_current(*, directory, expected_identity, container, templates, selec
 
 
 def inspect_backup(*, directory, expected_identity, expected_fingerprint):
-    """Verify one explicitly selected complete packet; never adopt a partial one."""
-    from app.sqlite_json import parse_unique_json
-    if not re.fullmatch('[0-9a-f]{64}', expected_fingerprint or ''):
-        raise ValueError('Exact backup receipt fingerprint required')
-    fd = _private_root(Path(directory), expected_identity)
-    try:
-        raw, receipt_info = _local(fd, 'backup-complete.json')
-        if hashlib.sha256(raw).hexdigest() != expected_fingerprint:
-            raise RuntimeError('Selected backup receipt changed')
-        receipt = parse_unique_json(raw)
-        if (type(receipt.get('schema_version')) is not int or receipt.get('schema_version') != 1 or receipt.get('status') != 'preview_update_backup_captured'
-                or type(receipt.get('snapshot_revision')) is not int or receipt.get('snapshot_revision') != 0 or receipt.get('update_authorized') is not False
-                or receipt.get('backup_kind') != 'logical_tracking_and_settings'
-                or set(receipt.get('sha256', {})) != set(FILES)):
-            raise RuntimeError('Complete known backup receipt required')
-        request, request_info = _local(fd, 'backup-request.json')
-        if hashlib.sha256(request).hexdigest() != receipt.get('request_sha256'):
-            raise RuntimeError('Backup request changed')
-        captured = {}
-        for name in FILES:
-            data, info = _local(fd, name)
-            if hashlib.sha256(data).hexdigest() != receipt['sha256'][name]:
-                raise RuntimeError('Backup content changed')
-            captured[name] = data, _identity(info)
-        state = parse_unique_json(captured['tracking-snapshot.json'][0]); validate_snapshot(state)
-        if INTENTS_KEY in state:
-            raise RuntimeError('Pending operation in backup')
-        for name, value in captured.items():
-            data, info = _local(fd, name)
-            if (data, _identity(info)) != value:
-                raise RuntimeError('Backup changed during inspection')
-        current, info = _local(fd, 'backup-complete.json')
-        if current != raw or _identity(info) != _identity(receipt_info):
-            raise RuntimeError('Backup receipt replaced')
-        current, info = _local(fd, 'backup-request.json')
-        if current != request or _identity(info) != _identity(request_info):
-            raise RuntimeError('Backup request replaced')
-        reopened = _private_root(Path(directory), expected_identity); os.close(reopened)
-        return {'status': 'preview_update_backup_verified', 'backup_kind': 'logical_tracking_and_settings',
-                'update_authorized': False, 'automatic_restoration': False,
-                'tracking_counts': {key: len(state.get(key, {})) for key in SECTIONS}}
-    finally:
-        os.close(fd)
+    """Compatibility entrypoint for the shared read-only packet inspector."""
+    from app.sqlite_release_recovery import inspect_update_backup
+    return inspect_update_backup(directory=directory, expected_identity=expected_identity,
+                                 expected_fingerprint=expected_fingerprint)
 
 
 def load_backup_payloads(*, directory, expected_identity, expected_fingerprint):

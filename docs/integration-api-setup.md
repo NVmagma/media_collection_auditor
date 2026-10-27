@@ -28,10 +28,6 @@ The page neither displays nor changes secrets, settings, state or services.
 
 ## Additional useful APIs to consider
 
-- Scan observations: bounded process-local history and proposal counts, with
-  unknown counts and restart scope explicit.
-- Backup status: last verified backup receipt and age without private paths or
-  contents. This would require a defined trusted receipt source first.
 - Notification delivery: opt-in redacted scan-failure/settings-review events,
   with destinations and retry policy explicitly configured.
 
@@ -110,3 +106,46 @@ real-loopback HTTP checks on Tower. It uses the cached Python/Flask runtime,
 current committed source and an isolated in-process test coordinator. No production
 worker, state, services or ports are connected. The fixture tests transport and
 projection; it does not assert that a production coordinator is available.
+
+## Selected backup status
+
+`GET /api/v1/backup-status` requires the dedicated Bearer credential. The API
+accepts no query parameters and never discovers or selects a packet from a URL.
+Configure all three operator-pinned environment values together:
+
+- `INTEGRATION_API_BACKUP_DIRECTORY`: canonical container-visible private packet directory.
+- `INTEGRATION_API_BACKUP_IDENTITY`: reviewed directory `device:inode`.
+- `INTEGRATION_API_BACKUP_FINGERPRINT`: SHA-256 of its reviewed `backup-complete.json`.
+
+The packet must be accessible through a separately reviewed deployment layout.
+This increment does not add mounts, copy production packets or change templates.
+Do not expose private packet contents through static/web directories or logs.
+
+The endpoint uses the same inspector as update/recovery tooling, now shared in
+`app/sqlite_release_recovery.py`. It verifies the pinned receipt, request hash,
+all six payload hashes, private file/directory identities and valid tracking
+without pending operation intents. It rechecks contents/identities before
+returning. API inspection has a 16 MiB total packet-content budget; oversized,
+inaccessible, corrupt, replaced or partial packets return 503 with a redacted
+failure. Existing offline inspection retains its prior byte limits.
+
+A successful response says `packet_verified`, `backup_scope=explicitly_selected_packet`,
+`current_state_comparison=not_performed`, `restore_tested=false` and
+`restore_authorized=false`. It does not prove newest-backup selection, current
+tracking coverage, off-host durability, writer exclusion or a successful restore.
+No private paths, fingerprints, names, tokens or backup payloads are returned.
+The authenticated endpoint remains usable while the preview binding is paused;
+backup verification never grants worker activation or recovery authority.
+
+New backup captures include a UTC `captured_at` in their completion receipt.
+Older or unparseable receipt times yield unknown age; future times yield unknown
+age with a future-clock status. No age is guessed from modification times.
+`verified_at` is this request's inspection time, not backup creation time.
+No receipt or tracking file is modified by inspection. No status is persisted
+or automatically restored, and unconfigured selection returns explicit 503.
+
+Run `bash scripts/integration_backup_lab.sh EXISTING_LAB_PARENT` for five
+private-loopback HTTP cases using only new fixture packets and a new container.
+The cached auditor image supplies Python/Flask; current committed code supplies
+the test. Production paths and Docker sockets are not mounted, no host ports are
+published, and no service or restoration commands run.

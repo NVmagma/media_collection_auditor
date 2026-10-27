@@ -24,7 +24,7 @@ from auth import session_key, jellyfin_login, current_user, store_token, discard
 from run_control import snapshot, request_run
 from config_store import FIELDS, KEYS, SECRETS, BOOLS, DEFAULTS, FIELD_HELP, load_config, save_config, validate, redacted_config
 from integration_api import authorize_summary, read_only_service_enabled
-from integration_status import (selected_scan_capture, project_scan_capture, read_selected_coverage, selected_run_snapshot, selected_run_history, selected_audit_status_report, audit_status_report, collect_widget_media_index, widget_media_urls, widget_media_base,
+from integration_status import (selected_backup_status, selected_scan_capture, project_scan_capture, read_selected_coverage, selected_run_snapshot, selected_run_history, selected_audit_status_report, audit_status_report, collect_widget_media_index, widget_media_urls, widget_media_base,
     read_selected_tracking_status as read_tracking_status,
     read_selected_tracking_titles as read_tracking_titles,
     read_selected_dashboard_state as read_dashboard_state)
@@ -51,7 +51,7 @@ def require_login():
     gate = _preview_backend_gate()
     preview = gate.preview_release_enabled()
     if read_only_service_enabled() and not preview and request.endpoint not in (
-            "integration_summary", "integration_audit_status", "integration_titles", "integration_readiness", "integration_coverage", "integration_scan_history", "integration_proposals", "health"):
+            "integration_summary", "integration_audit_status", "integration_titles", "integration_readiness", "integration_coverage", "integration_scan_history", "integration_proposals", "integration_backup_status", "health"):
         return {"status": "read_only_service"}, 404
     if request.path.startswith("/api/v1/"):
         failure = authorize_summary(request.headers.get("Authorization"))
@@ -59,7 +59,7 @@ def require_login():
         if request.endpoint is None and getattr(request.routing_exception, "code", None) == 404:
             return {"status": "route_not_found", "schema_version": 1,
                     "message": "Unknown integration route. See /api/v1/readiness for supported routes."}, 404
-    if request.endpoint == "integration_readiness":
+    if request.endpoint in ("integration_readiness", "integration_backup_status"):
         return None
     if request.endpoint in ("integration_summary", "integration_audit_status", "integration_titles", "integration_coverage", "integration_scan_history", "integration_proposals"):
         if preview:
@@ -179,8 +179,9 @@ def _integration_readiness():
         'poster_lookup_enabled': os.environ.get('INTEGRATION_API_MEDIA', 'false').lower() == 'true',
         'coordinator_scope': 'unavailable' if read_only_service_enabled() else 'current_process',
         'routes': ['/api/v1/readiness', '/api/v1/summary', '/api/v1/audit-status',
-                   '/api/v1/titles/oldest-waiting', '/api/v1/titles/leaving-soon', '/api/v1/coverage', '/api/v1/scan-history', '/api/v1/proposals'],
+                   '/api/v1/titles/oldest-waiting', '/api/v1/titles/leaving-soon', '/api/v1/coverage', '/api/v1/scan-history', '/api/v1/proposals', '/api/v1/backup-status'],
         'libraries': ['Movies', 'TV'], 'title_limit': 10,
+        'backup_selection_configured': all(os.environ.get(key) for key in ('INTEGRATION_API_BACKUP_DIRECTORY', 'INTEGRATION_API_BACKUP_IDENTITY', 'INTEGRATION_API_BACKUP_FINGERPRINT')),
         'coverage_enabled': os.environ.get('INTEGRATION_API_COVERAGE', 'false').lower() == 'true',
     }
 
@@ -197,6 +198,14 @@ def integration_setup():
     configured = authorize_summary(None)
     token_ready = configured is not None and configured[1] == 401
     return render_template('integrations.html', readiness=_integration_readiness(), token_ready=token_ready)
+
+
+@app.get('/api/v1/backup-status')
+def integration_backup_status():
+    if request.args:
+        return {'status':'invalid_query'}, 400
+    report = selected_backup_status()
+    return report, 200 if report['packet_verified'] else 503
 
 
 def _scan_api_report():
