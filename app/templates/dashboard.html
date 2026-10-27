@@ -62,7 +62,7 @@
       <div class="panel-heading"><h2 id="attention-title">Needs attention</h2><span class="muted">Read-only findings</span></div>
       {% if overview.attention %}<ul class="overview-finding-summary">{% for finding in overview.attention %}<li>{{ finding.title }}</li>{% endfor %}</ul>
       {% elif not health_issues %}<p class="muted">No known discrepancies in readable inputs.</p>{% endif %}
-      
+
       <a class="overview-review-link" href="{{ url_for('dashboard_review') }}#clock-coverage">Review coverage</a>
       {% if health_issues %}<a class="overview-review-link" href="{{ url_for('dashboard_review') }}#health-findings">Review findings ({{ health_issues|length }})</a>{% endif %}
       {% if run.get('scheduler_state') == 'blocked' or run.get('last_result') == 'failed' %}<p class="overview-partial">Latest scheduler observation needs review. <button type="button" data-open-workspace="History">History</button></p>{% endif %}
