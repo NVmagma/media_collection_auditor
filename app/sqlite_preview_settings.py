@@ -55,7 +55,9 @@ def pending_request_summary(*, config_path, environment=None):
         return {'status':'review_required', 'changed_keys':[]}
 
 
-def request_settings(*, config_path, updated, environment=None):
+def request_settings(*, config_path, updated, environment=None, include_digest=False):
+    if type(include_digest) is not bool:
+        raise ValueError("Explicit digest selection required")
     environment = dict(os.environ if environment is None else environment)
     path = Path(config_path)
     try:
@@ -78,13 +80,14 @@ def request_settings(*, config_path, updated, environment=None):
     if not changed: return {'status':'unchanged','active_settings_changed':False}
     payload = {'schema_version':1, 'request_id':secrets.token_hex(16), 'base_config_sha256':hashlib.sha256(raw).hexdigest(),
                'requested_config':proposed, 'media_actions_authorized':False}
+    encoded = json.dumps(payload,sort_keys=True,allow_nan=False).encode()+b'\n'
     parent = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     temporary = '.pending-settings-'+secrets.token_hex(12)
     try:
         # New private file + atomic replacement; no active file is written.
         out = os.open(temporary,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600,dir_fd=parent)
         with os.fdopen(out,'wb') as stream:
-            stream.write(json.dumps(payload,sort_keys=True,allow_nan=False).encode()+b'\n'); stream.flush(); os.fsync(stream.fileno())
+            stream.write(encoded); stream.flush(); os.fsync(stream.fileno())
         if path.read_bytes() != raw:
             raise ValueError('Active settings changed during the request. Please reload and try again.')
         os.replace(temporary,PENDING,src_dir_fd=parent,dst_dir_fd=parent); os.fsync(parent)
@@ -92,4 +95,7 @@ def request_settings(*, config_path, updated, environment=None):
         try: os.unlink(temporary,dir_fd=parent)
         except FileNotFoundError: pass
         os.close(parent)
-    return {'status':'requested','active_settings_changed':False}
+    result = {'status':'requested','active_settings_changed':False}
+    if include_digest:
+        result['request_sha256'] = hashlib.sha256(encoded).hexdigest()
+    return result

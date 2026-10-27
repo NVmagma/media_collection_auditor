@@ -46,7 +46,7 @@ if (editor && draftStatus) {
       if (dirty) changed++;
     });
     draftStatus.textContent = paused ? 'Editing paused until previous settings are restored.' : changed ?
-      changed + (changed === 1 ? ' unsaved field edit' : ' unsaved field edits') + (editor.dataset.preview === 'true' ? ' · saved request unchanged' : ' · not saved yet') : 'No unsaved field edits';
+      changed + (changed === 1 ? ' unsaved field edit' : ' unsaved field edits') + (editor.dataset.preview === 'true' ? ' · choose Apply Requested Settings to submit' : ' · not saved yet') : 'No unsaved field edits';
   }
   fields.forEach(field => {
     field.addEventListener('input', updateDraft);

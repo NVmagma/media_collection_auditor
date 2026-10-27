@@ -810,7 +810,7 @@ def settings():
                     updated.pop(key, None)  # Fall back to Unraid environment.
                 else:
                     updated[key] = validate(key, raw)
-            if (updated.get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "false"
+            if not preview_mode and (updated.get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "false"
                     or updated.get("ALLOW_PERMANENT_DELETE", "false") == "true"
                     or updated.get("ALLOW_FILESYSTEM_DELETE", "false") == "true"
                     or updated.get("ALLOW_CROSS_FILESYSTEM_MOVES", "false") == "true"
@@ -820,7 +820,17 @@ def settings():
             if preview_mode:
                 from app.sqlite_preview_settings import request_settings
                 from config_store import CONFIG_FILE
-                result = request_settings(config_path=CONFIG_FILE, updated=updated, environment=baseline)
+                apply_now = request.form.get('settings_action') == 'apply'
+                result = request_settings(config_path=CONFIG_FILE, updated=updated, environment=baseline,
+                                          include_digest=apply_now)
+                if apply_now:
+                    # Pin the exact request just staged by this submission. If
+                    # unchanged, only an explicitly supplied retained digest may
+                    # select the previously reviewed request. Never adopt a newer
+                    # request by rereading its digest after staging.
+                    digest = result.get('request_sha256') if result['status'] == 'requested' else request.form.get('request_sha256')
+                    if digest:
+                        return _change_preview_settings(restore=False, request_sha256=digest)
                 return redirect(url_for('settings', **{result['status']: '1'}))
             save_config(updated)
             return redirect(url_for("settings", saved=1))
@@ -854,7 +864,7 @@ def test_connection(service):
     return check_connection(service)
 
 
-def _change_preview_settings(*, restore):
+def _change_preview_settings(*, restore, request_sha256=None):
     if not admin_authorized():
         return Response('Administrator access required.',403)
     origin = request.headers.get('Origin') or request.headers.get('Referer')
@@ -867,7 +877,8 @@ def _change_preview_settings(*, restore):
     from app.sqlite_preview_settings_apply import apply_requested_settings, restore_previous_settings
     try:
         action = restore_previous_settings if restore else apply_requested_settings
-        action(settings=initial_environment(),request_sha256=request.form.get('request_sha256',''))
+        digest = request.form.get('request_sha256','') if request_sha256 is None else request_sha256
+        action(settings=initial_environment(),request_sha256=digest)
     except StateLockBusy:
         return redirect(url_for('settings',apply_busy='1'))
     except Exception:

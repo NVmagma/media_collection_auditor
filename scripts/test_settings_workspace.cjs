@@ -34,7 +34,10 @@ if (!prefix) throw Error('Pass the synthetic output prefix from tests/settings_w
     });
     await page.goto('http://fixture.invalid/settings');
     assert.equal(await page.locator('#settings-draft-status').textContent(),'No unsaved field edits');
-    assert.equal(await page.locator('form[action="/settings/apply"]').count(),1);
+    assert.equal(await page.locator('form[action="/settings/apply"]').count(),0);
+    assert.equal(await page.locator('#apply-settings-button').evaluate(button=>button.form.id),'settings-form');
+    assert.equal(await page.locator('#safety_confirmation').count(),0);
+    assert.equal(await page.getByText('Save Requested Changes',{exact:true}).count(),0);
     assert.equal(await page.locator('input[name="request_sha256"]').inputValue(),'a'.repeat(64));
     await page.locator('.pending-field-names summary').click();
     assert.match(await page.locator('.pending-field-names').textContent(),/Manage TV Shows/);
@@ -70,12 +73,24 @@ if (!prefix) throw Error('Pass the synthetic output prefix from tests/settings_w
       assert.equal(await page.locator('form[action="/settings/apply"]').count(),0);
       assert.equal(await page.locator('form[action="/settings/restore"]').count(),0);
       assert.equal(await page.locator('#field-JELLYFIN_API_TOKEN').inputValue(),'');
+      assert.equal(await page.locator('input[name="request_sha256"]').count(),0);
     }
     await page.goto('http://fixture.invalid/settings?scenario=recovery');
     assert.match(await page.locator('#settings-draft-status').textContent(),/Editing paused/);
     assert.equal(await page.locator('#field-JELLYFIN_HOST_URL').isDisabled(),true);
     assert.equal(await page.locator('form[action="/settings/restore"] button').isEnabled(),true);
     assert.equal(await page.locator('form[action="/settings/apply"]').count(),0);
+    await page.goto('http://fixture.invalid/settings');
+    await page.locator('[data-tab="Lifecycle"]').click();
+    await page.locator('#field-HOLDING_DAYS').fill('11');
+    await page.locator('#apply-settings-button').click();
+    assert.equal(posts.length,2);
+    assert.equal(posts[1].path,'/settings');
+    const submitted=new URLSearchParams(posts[1].body);
+    assert.equal(submitted.get('settings_action'),'apply');
+    assert.equal(submitted.get('HOLDING_DAYS'),'11');
+    assert.equal(submitted.get('request_sha256'),'a'.repeat(64));
+    assert.equal(submitted.has('safety_confirmation'),false);
     assert.deepEqual(errors,[]);
     if(process.env.DASHBOARD_SCREENSHOT_DIRECTORY) {
       await page.setViewportSize({width:1440,height:1000});

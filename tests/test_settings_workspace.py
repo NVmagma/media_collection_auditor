@@ -14,22 +14,26 @@ class Elements(HTMLParser):
 def test_pending_fields_are_names_only_and_active_values_are_not_replaced():
     page=render_settings_workspace(); parsed=Elements(); parsed.feed(page)
     assert 'Settings request pending' in page and 'Requested field names (3)' in page
-    assert 'Manage TV Shows' in page and 'Save Requested Changes' in page
+    assert 'Manage TV Shows' in page and 'Apply Requested Settings' in page
+    assert 'Save Requested Changes' not in page and 'I UNDERSTAND' not in page
     inputs={attrs.get('name'):attrs for tag,attrs in parsed.elements if tag=='input'}
     assert inputs['JELLYFIN_API_TOKEN']['value']==''
     assert inputs['HOLDING_DAYS']['value']=='7'
     forms={attrs['action'] for tag,attrs in parsed.elements if tag=='form'}
-    assert '/settings/apply' in forms and '/settings/restore' not in forms
+    assert '/settings/apply' not in forms and '/settings/restore' not in forms
+    assert inputs['settings_action']['value']=='apply'
     assert inputs['request_sha256']['value']=='a'*64
     assert 'settings.js' in page
 
 
 @pytest.mark.parametrize('scenario', ['stale','clean','review','resubmit'])
-def test_nonready_states_never_offer_application(scenario):
+def test_nonready_states_cannot_select_an_existing_request_without_new_edits(scenario):
     page=render_settings_workspace(scenario)
     assert 'action="/settings/apply"' not in page
     assert 'action="/settings/restore"' not in page
     assert 'id="settings-form"' in page
+    assert 'id="apply-settings-button"' in page
+    assert 'name="request_sha256"' not in page
 
 
 def test_interrupted_state_locks_editor_but_keeps_explicit_restore_outside_it():

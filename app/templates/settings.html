@@ -14,23 +14,24 @@
 <section class="settings-status-grid" aria-label="Configuration status">
   <article class="settings-status-card"><span class="settings-step">1 · ACTIVE CONFIGURATION</span><h2>{{ 'Recovery required' if settings_application.status == 'recovery_required' else 'Active values loaded' }}</h2>
     {% if settings_application.status == 'recovery_required' %}<p>An application was interrupted. Scans are paused; restore the previous settings before editing again.</p>
-    {% else %}<p>The form starts from active settings. Editing it or saving a request does not apply changes.</p><p class="muted">Connection tests use active settings, not your unsaved edits or pending request.</p>{% endif %}
+    {% else %}<p>The form starts from active settings. Edits remain local until you choose Apply Requested Settings.</p><p class="muted">Connection tests use active settings, not your unsaved edits or pending request.</p>{% endif %}
   </article>
   <article class="settings-status-card"><span class="settings-step">2 · SAVED REQUEST</span>
     {% if pending_settings.status == 'requested' %}<h2>Settings request pending</h2><p>Active settings have not changed merely because a request was saved.</p>
     {% if pending_settings.changed_keys %}<details class="pending-field-names"><summary>Requested field names ({{ pending_settings.changed_keys|length }})</summary><ul>{% for key in pending_settings.changed_keys if key in help_text %}<li>{{ help_text[key][0] }}</li>{% endfor %}</ul></details>{% endif %}
     {% elif pending_settings.status == 'stale' %}<h2>Out-of-date request</h2><p>The saved request was made against an older configuration. It has not been applied. Review the active settings before submitting a new request.</p>
-    {% elif pending_settings.status == 'none' %}<h2>No pending changes</h2><p>Save Requested Changes stores a separate request for review. It does not queue a scan.</p>
+    {% elif pending_settings.status == 'none' %}<h2>No pending changes</h2><p>Apply Requested Settings validates your edits and applies them together. It does not queue a scan.</p>
     {% else %}<h2>Request needs review</h2><p>The saved settings request needs review. Active settings have not been changed by this request.</p>{% endif %}
   </article>
   <article class="settings-status-card {% if settings_application.status == 'recovery_required' %}settings-recovery-card{% endif %}"><span class="settings-step">3 · APPLY / RECOVER</span>
-    {% if settings_application.status == 'ready' %}<h2>Ready for application</h2>
-    <form method="post" action="/settings/apply"><p>Apply the saved request to this read-only preview. The active configuration and its binding are validated together; tracking is preserved.</p><p class="muted">Only the saved request is applied; unsaved field edits are not included.</p><input type="hidden" name="request_sha256" value="{{ settings_application.request_sha256 }}"><button class="save-button" type="submit">Apply Requested Settings</button></form>
-    {% elif settings_application.status == 'recovery_required' %}<h2>Restore before editing</h2>
+    {% if settings_application.status == 'recovery_required' %}<h2>Restore before editing</h2>
     <form method="post" action="/settings/restore"><p>A settings application was interrupted. Scans are paused. Restore the previous settings to recover; tracking is preserved.</p><input type="hidden" name="request_sha256" value="{{ settings_application.request_sha256 }}"><button class="save-button" type="submit">Restore Previous Settings</button></form>
-    {% elif settings_application.status == 'resubmit_required' %}<h2>New request needed</h2><p>This request has a retained application attempt. Review your selections and save a new request before applying again.</p>
-    {% elif settings_application.status == 'none' %}<h2>No application pending</h2><p>Save a request first. Media actions remain disabled in this preview.</p>
-    {% else %}<h2>Application needs review</h2><p>Application is unavailable. Review the request status before proceeding.</p>{% endif %}
+    {% else %}<h2>{{ 'Ready for application' if settings_application.status == 'ready' else 'Apply reviewed edits' }}</h2>
+    <p>Apply validates and applies your edits in one action. If nothing was edited, it applies the saved request shown here, when available.</p>
+    {% if settings_application.status == 'resubmit_required' %}<p>A retained attempt needs new edits before another request can be applied.</p>{% endif %}
+    <p class="muted">Tracking and lifecycle clocks are preserved. Media actions remain disabled.</p>
+    <button class="save-button" id="apply-settings-button" form="settings-form" type="submit">Apply Requested Settings</button>
+    {% endif %}
   </article>
 </section>
 {% endif %}
@@ -42,11 +43,12 @@
 {% if settings_restored %}<div class="alert" role="status">Previous settings restored. Tracking and lifecycle clocks were preserved.</div>{% endif %}
 {% if settings_apply_busy %}<div class="alert" role="status">A scan or settings operation is active. The request is retained; try again when it finishes.</div>{% endif %}
 {% if settings_apply_error %}<div class="alert error" role="alert">The settings operation did not complete. Review the status below before trying again. Tracking was not reset.</div>{% endif %}
-<div class="settings-editor-note"><p>{% if settings_application.status == 'recovery_required' %}Editing is paused. Restore previous settings before making another request.{% elif preview_mode %}Fields start from active values. Make edits, save a request, then apply it after review.{% else %}Fields show the current configuration. Changes apply after saving.{% endif %}</p><span id="settings-draft-status" role="status" aria-live="polite">No unsaved field edits</span></div>
+<div class="settings-editor-note"><p>{% if settings_application.status == 'recovery_required' %}Editing is paused. Restore previous settings before making another request.{% elif preview_mode %}Fields start from active values. Edit them, then choose Apply Requested Settings.{% else %}Fields show the current configuration. Changes apply after saving.{% endif %}</p><span id="settings-draft-status" role="status" aria-live="polite">No unsaved field edits</span></div>
 <nav class="settings-tabs" aria-label="Settings categories">
 {% for group in groups %}<button type="button" class="tab-button{% if loop.first %} selected{% endif %}" data-tab="{{ group }}" aria-pressed="{{ 'true' if loop.first else 'false' }}">{{ group }}</button>{% endfor %}
 </nav>
 <form method="post" action="/settings" id="settings-form" data-preview="{{ 'true' if preview_mode else 'false' }}">
+{% if preview_mode %}<input type="hidden" name="settings_action" value="apply">{% if settings_application.status == 'ready' %}<input type="hidden" name="request_sha256" value="{{ settings_application.request_sha256 }}">{% endif %}{% endif %}
 <fieldset style="border:0;padding:0;margin:0;min-width:0" {% if settings_application.status == 'recovery_required' %}disabled{% endif %}>
 {% for group, keys in groups.items() %}
 <section class="settings-section{% if not loop.first %} hidden-section{% endif %}" data-panel="{{ group }}">
@@ -73,9 +75,11 @@
 {% endif %}
 </section>
 {% endfor %}
-<div class="save-panel"><div><strong>{{ 'Request configuration change' if preview_mode else 'Save configuration' }}</strong><p>{% if preview_mode %}Requests are stored separately from active settings. Media actions remain disabled.{% else %}Settings are stored in persistent appdata. Potentially destructive options require confirmation.{% endif %}</p>
+{% if not preview_mode %}
+<div class="save-panel"><div><strong>Save configuration</strong><p>Settings are stored in persistent appdata. Potentially destructive options require confirmation.</p>
 <label class="confirm-label" for="safety_confirmation">Safety confirmation (when required)</label>
 <input id="safety_confirmation" name="safety_confirmation" autocomplete="off" placeholder="Type I UNDERSTAND"></div>
-<button class="save-button" type="submit">{{ 'Save Requested Changes' if preview_mode else 'Save Changes' }}</button></div>
+<button class="save-button" type="submit">Save Changes</button></div>
+{% endif %}
 </fieldset></form></main></div>
 <script src="{{ url_for('static', filename='settings.js') }}" defer></script></body></html>

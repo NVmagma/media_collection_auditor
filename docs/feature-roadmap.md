@@ -215,3 +215,9 @@ until the production switch is separately approved.
   are unchanged. Positive user feedback recorded for Scans/History. Settings
   passed 117 Linux tests and 8 subtests plus real browser/private HTTP checks;
   the synthetic Tower Settings preview is ready for visual review.
+
+- Preview Settings simplification: one Apply Requested Settings action stages and
+  applies the exact validated request. Removed the separate preview save button
+  and typed acknowledgement. Recovery and legacy live-mode confirmations remain.
+  Verified with 128 Linux tests, 8 subtests and Chromium form/layout checks.
+  Production remains unchanged; GitHub Actions billing remains an external blocker.

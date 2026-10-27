@@ -139,12 +139,16 @@ application/recovery into three status cards. Only allowlisted field names are
 shown for requested changes; pending values and credentials are not projected.
 The editor begins with the existing values. Local changes receive an unsaved
 indicator; edits and indicator text are not autosaved or put in browser storage.
-Applying still uses the saved request and its existing digest, never local draft
-values. The existing backend origin, administrator, binding, locking, request
-validation and restore checks are unchanged.
+Preview Settings has one Apply Requested Settings action. It validates and stages
+the submitted edits, then applies that exact request through the guarded transaction.
+With unchanged edits, only the explicitly rendered ready request digest can be
+applied. Concurrent replacement requests are never substituted. The separate
+Save Requested Changes button and typed acknowledgement are removed in preview;
+backend origin, administrator, binding, locking, validation and restore checks remain.
 
 Recovery retains the disabled editor and explicit Restore form outside it.
-Stale/review/resubmit states offer no Apply button. Connection tests keep using
+Stale/review/resubmit states allow submitting newly reviewed edits without adopting
+a retained request digest. Recovery offers Restore only. Connection tests keep using
 the active server endpoint; typed draft values are not sent by those tests.
 The legacy non-preview save flow remains supported.
 
@@ -154,9 +158,9 @@ are generated demonstration states, not the host's actual settings. All POST
 submissions are refused by that fixture server. Use placeholder edits only;
 actual apply/restore behavior is covered separately by disposable backend tests.
 
-Settings verification: 117 focused Linux tests and 8 subtests passed, including
+Settings verification: 128 focused Linux tests and 8 subtests passed, including
 application/recovery/security and Docker runtime checks. Real Chromium checks
 cover local draft counts, credential masking, all six status states, category
-switching and 1440/900/390/320px widths. A private HTTP fixture check verified the
+switching, the single Apply form submission and 1440/900/390/320px widths. A private HTTP fixture check verified the
 page and script while refusing application. Existing Dashboard browser checks
 still pass. User visual acceptance is pending; no production service changed.

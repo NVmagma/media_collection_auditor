@@ -36,7 +36,8 @@ def test_apply_form_preserves_tracking_and_shows_active_settings(page):
     assert response.status_code==302 and 'applied=1' in response.location
     result=client.get(response.location)
     assert result.status_code==200 and 'Requested settings applied' in result.text
-    assert 'Apply Requested Settings' not in result.text
+    assert 'Apply Requested Settings' in result.text
+    assert 'name="request_sha256"' not in result.text
     case.unchanged_tracking()
 
 
@@ -104,3 +105,93 @@ def test_bearer_alone_cannot_apply_settings(page,monkeypatch):
         headers={'Origin':'http://localhost','Authorization':'Bearer '+token})
     assert response.status_code==302 and '/login' in response.location
     assert not case.marker.exists() and case.saved.read_bytes()==case.original
+
+
+def edit_form(case, **changes):
+    from config_store import KEYS,DEFAULTS,SECRETS
+    values={key:str(case.values.get(key,DEFAULTS.get(key,''))) for key in KEYS}
+    values.update({key:'' for key in SECRETS})
+    values.update(settings_action='apply',**changes)
+    return values
+
+
+def test_one_apply_submission_preserves_tracking_and_does_not_queue_scan(page,monkeypatch):
+    import json,run_control
+    from unittest.mock import Mock
+    client,case,_=page
+    wake=Mock();monkeypatch.setattr(run_control,'wake_worker',wake)
+    monkeypatch.setattr(web,'request_run',Mock(side_effect=AssertionError('No scan request')))
+    response=client.post('/settings',data=edit_form(case,HOLDING_DAYS='13'),headers={'Origin':'http://localhost'})
+    assert response.status_code==302 and 'applied=1' in response.location
+    assert json.loads(case.saved.read_bytes())['HOLDING_DAYS']=='13'
+    assert json.loads(case.saved.read_bytes())['private_extension']=={'clock':'keep-this'}
+    assert not case.pending.exists() and not case.marker.exists()
+    assert 'I UNDERSTAND' not in client.get('/settings').text
+    wake.assert_called_once();case.unchanged_tracking()
+
+
+def test_one_apply_busy_retains_exact_request_and_active_settings(page):
+    import json
+    client,case,_=page
+    with state_writer_lock(case.source):
+        response=client.post('/settings',data=edit_form(case,HOLDING_DAYS='13'),headers={'Origin':'http://localhost'})
+    assert 'apply_busy=1' in response.location
+    assert json.loads(case.pending.read_bytes())['requested_config']['HOLDING_DAYS']=='13'
+    assert case.saved.read_bytes()==case.original and not case.marker.exists()
+    case.unchanged_tracking()
+
+
+def test_unchanged_form_can_apply_only_the_explicit_reviewed_request_digest(page):
+    import json
+    client,case,_=page
+    response=client.post('/settings',data=edit_form(case),headers={'Origin':'http://localhost'})
+    assert 'unchanged=1' in response.location and case.saved.read_bytes()==case.original
+    response=client.post('/settings',data=edit_form(case,request_sha256=case.digest),headers={'Origin':'http://localhost'})
+    assert 'applied=1' in response.location
+    assert json.loads(case.saved.read_bytes())['HOLDING_DAYS']=='10'
+    case.unchanged_tracking()
+
+
+def test_concurrent_request_replacement_is_not_adopted_by_one_apply(page,monkeypatch):
+    import json
+    from app import sqlite_preview_settings as requests
+    client,case,_=page
+    original=requests.request_settings
+    def replace_after_staging(**kwargs):
+        result=original(**kwargs)
+        newer=json.loads(case.saved.read_bytes());newer['HOLDING_DAYS']='19'
+        original(config_path=case.saved,updated=newer,environment=case.values)
+        return result
+    monkeypatch.setattr(requests,'request_settings',replace_after_staging)
+    response=client.post('/settings',data=edit_form(case,HOLDING_DAYS='13'),headers={'Origin':'http://localhost'})
+    assert 'apply_error=1' in response.location
+    assert json.loads(case.pending.read_bytes())['requested_config']['HOLDING_DAYS']=='19'
+    assert case.saved.read_bytes()==case.original and not case.marker.exists()
+    case.unchanged_tracking()
+
+
+def test_interrupted_single_apply_still_requires_explicit_restore(page):
+    client,case,_=page
+    def stop(phase):
+        if phase=='after_config':raise RuntimeError('private-never-expose')
+    with patch.object(apply,'_boundary',stop):
+        response=client.post('/settings',data=edit_form(case,HOLDING_DAYS='13'),headers={'Origin':'http://localhost'})
+    assert 'apply_error=1' in response.location
+    body=client.get('/settings').text
+    assert 'Restore Previous Settings' in body and 'private-never-expose' not in body
+    assert 'id="apply-settings-button"' not in body
+    digest=apply.application_status(settings=case.values)['request_sha256']
+    response=client.post('/settings/restore',data={'request_sha256':digest},headers={'Origin':'http://localhost'})
+    assert 'restored=1' in response.location and case.saved.read_bytes()==case.original
+    case.unchanged_tracking()
+
+
+@pytest.mark.parametrize('key',['DRY_RUN','ALLOW_PERMANENT_DELETE','ALLOW_FILESYSTEM_DELETE','ALLOW_CROSS_FILESYSTEM_MOVES','ENABLE_SEASON_PRUNING'])
+def test_single_apply_still_rejects_media_actions_without_typed_confirmation(page,key):
+    client,case,_=page
+    before=case.pending.read_bytes()
+    value='false' if key=='DRY_RUN' else 'true'
+    response=client.post('/settings',data=edit_form(case,**{key:value}),headers={'Origin':'http://localhost'})
+    assert response.status_code==200 and 'cannot enable media actions' in response.text
+    assert case.saved.read_bytes()==case.original and case.pending.read_bytes()==before
+    case.unchanged_tracking()

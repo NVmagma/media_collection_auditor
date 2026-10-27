@@ -136,3 +136,13 @@ def test_settings_page_reports_pending_labels_but_never_pending_values(preview,m
     assert 'Settings request pending' in response.text
     assert 'Manage TV Shows' in response.text
     assert 'private-token' not in response.text
+
+
+def test_staged_digest_identifies_exact_persisted_bytes_without_changing_legacy_result(tmp_path):
+    import hashlib
+    active,values=configured(tmp_path)
+    result=request_settings(config_path=active,updated={**values,'HOLDING_DAYS':'11'},environment={},include_digest=True)
+    staged=(tmp_path/PENDING).read_bytes()
+    assert result['request_sha256']==hashlib.sha256(staged).hexdigest()
+    request_settings(config_path=active,updated={**values,'HOLDING_DAYS':'12'},environment={})
+    assert result['request_sha256']!=hashlib.sha256((tmp_path/PENDING).read_bytes()).hexdigest()
