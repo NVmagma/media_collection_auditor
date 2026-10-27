@@ -37,13 +37,13 @@ else:
 '''
 
 
-def run_launcher(tmp_path, mounts):
+def run_launcher(tmp_path, mounts, mode=None):
     binary = tmp_path / 'docker'; binary.write_text(DOCKER.replace('PYTHON', sys.executable, 1)); binary.chmod(0o755)
     log = tmp_path / 'calls'
-    result = subprocess.run(['bash', str(SCRIPT), IMAGE], text=True, capture_output=True,
+    result = subprocess.run(['bash', str(SCRIPT), IMAGE] + ([] if mode is None else [mode]), text=True, capture_output=True,
         env={**os.environ, 'PATH': str(tmp_path)+os.pathsep+os.environ['PATH'], 'CALL_LOG': str(log),
              'FIXTURE_IMAGE': IMAGE, 'MOUNT_OUTPUT': mounts})
-    return result, [json.loads(line) for line in log.read_text().splitlines()]
+    return result, [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
 
 
 def test_docker_extra_newline_does_not_reject_correct_mounts(tmp_path):
@@ -63,3 +63,14 @@ def test_unknown_missing_volume_or_duplicate_mount_stops_before_helper(tmp_path,
     result, calls = run_launcher(tmp_path, mounts)
     assert result.returncode == 2
     assert not any(call[0] == 'run' for call in calls)
+
+
+def test_current_diagnostic_selects_only_fixed_read_only_module(tmp_path):
+    result, calls = run_launcher(tmp_path, 'bind /media\nbind /sqlite-control\nbind /app/logs\n\n', 'diagnose-current')
+    assert result.returncode == 0
+    assert next(call for call in calls if call[0] == 'run')[-1] == 'scripts.unraid_current_binding_diagnostic'
+
+
+def test_unknown_mode_is_refused_before_docker_calls(tmp_path):
+    result, calls = run_launcher(tmp_path, '', 'start')
+    assert result.returncode == 2 and calls == []

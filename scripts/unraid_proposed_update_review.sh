@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 # Observe only: no pulls, production exec, service/template changes or rebinding.
 set -euo pipefail
-[ "$#" = 1 ] || { echo 'Usage: bash SCRIPT FULL_CACHED_CANDIDATE_IMAGE_ID' >&2; exit 2; }
+{ [ "$#" = 1 ] || [ "$#" = 2 ]; } || { echo 'Usage: bash SCRIPT FULL_CACHED_CANDIDATE_IMAGE_ID' >&2; exit 2; }
 image=$1
+case "${2:-review}" in
+  review) module=scripts.unraid_proposed_update_review;;
+  diagnose-current) module=scripts.unraid_current_binding_diagnostic;;
+  *) echo 'Known read-only review mode required.' >&2; exit 2;;
+esac
 [[ "$image" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo 'Exact cached image ID required.' >&2; exit 2; }
 [ "$(docker image inspect --format '{{.Id}}' "$image")" = "$image" ] || exit 2
 volumes=$(docker image inspect --format '{{json .Config.Volumes}}' "$image")
@@ -25,4 +30,4 @@ mounts=$(docker inspect --format '{{range .Mounts}}{{printf "%s %s\n" .Type .Des
   --volumes-from media_collection_auditor:ro \
   --mount "type=bind,src=$checkout,dst=/review-source,readonly" \
   --workdir /app --env PYTHONPATH=/app:/app/app:/review-source --env PYTHONDONTWRITEBYTECODE=1 \
-  --entrypoint python "$image" -B -m scripts.unraid_proposed_update_review
+  --entrypoint python "$image" -B -m "$module"
