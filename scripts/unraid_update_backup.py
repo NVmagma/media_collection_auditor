@@ -27,7 +27,9 @@ def _boundary(phase):
 
 
 def capture_backup(*, directory, expected_identity, container, template, source_revision,
-                   validate_current, read_snapshot, read_inputs):
+                   validate_current, read_snapshot, read_inputs, reviewed_settings_change=None):
+    if reviewed_settings_change not in (None, 'enable_tv_preview'):
+        raise ValueError('Known explicitly reviewed settings change required')
     if not re.fullmatch('[0-9a-f]{40}', source_revision or ''):
         raise ValueError('Current immutable source required')
     if (container.get('Name') != '/media_collection_auditor'
@@ -55,7 +57,8 @@ def capture_backup(*, directory, expected_identity, container, template, source_
                 raise RuntimeError('New empty backup directory required; no retry or overwrite')
         _write_private(fd, 'backup-request.json', _encode({'schema_version': 1,
             'source_revision': source_revision, 'container_id': container['Id'],
-            'image_id': container['Image'], 'media_actions_authorized': False}))
+            'image_id': container['Image'], 'media_actions_authorized': False,
+            'reviewed_settings_change': reviewed_settings_change}))
         _boundary('after_request')
         for name in FILES:
             _write_private(fd, name, payloads[name])
@@ -70,6 +73,7 @@ def capture_backup(*, directory, expected_identity, container, template, source_
         request_raw = _local(fd, 'backup-request.json')[0]
         receipt = {'schema_version': 1, 'status': 'preview_update_backup_captured',
             'backup_kind': 'logical_tracking_and_settings', 'source_revision': source_revision,
+            'reviewed_settings_change': reviewed_settings_change,
             'container_id': container['Id'], 'image_id': container['Image'], 'snapshot_revision': revision,
             'request_sha256': hashlib.sha256(request_raw).hexdigest(),
             'sha256': {name: hashlib.sha256(raw).hexdigest() for name, raw in payloads.items()},
@@ -83,7 +87,24 @@ def capture_backup(*, directory, expected_identity, container, template, source_
         os.close(fd)
 
 
-def capture_current(*, directory, expected_identity, container, templates):
+def _local_read_path(path):
+    parent = _open_directory(str(path.parent))
+    try:
+        return _local(parent, path.name)
+    finally:
+        os.close(parent)
+
+
+def require_tv_only_change(prepared, selected, original_enabled='false'):
+    if not isinstance(prepared, dict) or not isinstance(selected, dict):
+        raise ValueError('Configuration objects required')
+    before, after = dict(prepared), dict(selected)
+    old, new = before.pop('ENABLE_TV', original_enabled), after.pop('ENABLE_TV', None)
+    if (str(old).lower() != 'false' or str(new).lower() != 'true' or before != after):
+        raise RuntimeError('Only the explicitly reviewed TV enable change is permitted')
+
+
+def capture_current(*, directory, expected_identity, container, templates, selected_settings=None):
     """Use only the CURRENT image's packaged validator and authoritative snapshot."""
     import runpy
     from app.sqlite_preview_activation import _revision, validate_preview_activation
@@ -108,6 +129,24 @@ def capture_current(*, directory, expected_identity, container, templates):
     if any(Path(directory) == path or Path(directory) in path.parents or path in Path(directory).parents
            for path in (*paths.values(), database.parent)):
         raise ValueError('New disjoint backup directory required')
+    reviewed_change = None
+    if selected_settings is not None:
+        from app.config_store import KEYS, DEFAULTS
+        from app.sqlite_json import parse_unique_json
+        from app.sqlite_preview_activation import _effective, _policy, _roots
+        if container.get('State', {}).get('Running') is not False:
+            raise RuntimeError('Stopped original required for reviewed settings repair')
+        original_settings, _ = _effective(settings)
+        prepared_config = parse_unique_json(_local_read_path(paths['saved-config.json'])[0])
+        selected_config = parse_unique_json(_local_read_path(Path(selected_settings))[0])
+        require_tv_only_change(prepared_config, selected_config, original_settings.get('ENABLE_TV', 'false'))
+        planned = {**{key: DEFAULTS.get(key, '') for key in KEYS}, **original_settings,
+                   **{key: str(value) for key,value in selected_config.items() if key in KEYS}}
+        policy, _, _, _ = _policy(planned)
+        info = database.parent.stat()
+        _roots(policy, (info.st_dev, info.st_ino))
+        paths['saved-config.json'] = Path(selected_settings)
+        reviewed_change = 'enable_tv_preview'
     def read_inputs():
         result = {}
         for key, path in paths.items():
@@ -122,7 +161,8 @@ def capture_current(*, directory, expected_identity, container, templates):
         validate_preview_activation(settings=settings)
     return capture_backup(directory=directory, expected_identity=expected_identity,
         container=container, template=template, source_revision=_revision(), validate_current=validator,
-        read_snapshot=GuardedSQLiteStateStore(database).load_with_revision, read_inputs=read_inputs)
+        read_snapshot=GuardedSQLiteStateStore(database).load_with_revision, read_inputs=read_inputs,
+        reviewed_settings_change=reviewed_change)
 
 
 def inspect_backup(*, directory, expected_identity, expected_fingerprint):
@@ -188,3 +228,43 @@ def load_backup_payloads(*, directory, expected_identity, expected_fingerprint):
         os.close(fd)
     inspect_backup(directory=directory, expected_identity=expected_identity, expected_fingerprint=expected_fingerprint)
     return payloads
+
+
+def main():
+    """Capture current frozen preview into an explicitly new private host packet."""
+    import argparse
+    from app.sqlite_json import parse_unique_json
+    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
+    parser.add_argument('--directory', required=True)
+    parser.add_argument('--identity', required=True)
+    parser.add_argument('--templates', required=True)
+    parser.add_argument('--selected-settings')
+    args = parser.parse_args()
+    try:
+        if not re.fullmatch('[0-9]+:[0-9]+', args.identity):
+            raise ValueError('Expected packet identity required')
+        expected = tuple(map(int, args.identity.split(':')))
+        raw = sys.stdin.buffer.read(16 * 1024 * 1024 + 1)
+        if len(raw) > 16 * 1024 * 1024: raise ValueError('Bounded inspect input required')
+        items = parse_unique_json(raw)
+        if not isinstance(items, list) or len(items) != 1: raise ValueError('Single current container required')
+        folder = _open_directory(args.templates)
+        try:
+            templates = [(name, _local(folder,name)[0]) for name in sorted(os.listdir(folder)) if name.endswith('.xml')]
+        finally:
+            os.close(folder)
+        result = capture_current(directory=args.directory, expected_identity=expected, container=items[0], templates=templates, selected_settings=args.selected_settings)
+        receipt_fd = _private_root(Path(args.directory), expected)
+        try: fingerprint = hashlib.sha256(_local(receipt_fd,'backup-complete.json')[0]).hexdigest()
+        finally: os.close(receipt_fd)
+        result['backup_fingerprint'] = fingerprint
+    except Exception as error:
+        result = {'status': 'preview_update_backup_blocked', 'error_type': type(error).__name__,
+                  'automatic_action': 'none', 'service_changes_performed': False,
+                  'media_actions_authorized': False, 'partial_files_retained': True}
+        print(json.dumps(result, sort_keys=True)); return 2
+    print(json.dumps(result, sort_keys=True)); return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

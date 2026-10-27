@@ -108,3 +108,11 @@ def test_partial_or_different_selected_receipt_is_not_adopted(tmp_path):
     backup.capture_backup(**options)
     with pytest.raises(RuntimeError):
         backup.inspect_backup(directory=root, expected_identity=options['expected_identity'], expected_fingerprint='a'*64)
+
+
+def test_reviewed_tv_repair_admits_only_false_to_true_with_no_other_changes():
+    backup.require_tv_only_change({'ENABLE_TV':'false', 'private':'same'}, {'ENABLE_TV':'true', 'private':'same'})
+    for selected in ({'ENABLE_TV':'true', 'private':'changed'}, {'ENABLE_TV':'false', 'private':'same'},
+                     {'ENABLE_TV':'true', 'DRY_RUN':'false', 'private':'same'}):
+        with pytest.raises(RuntimeError):
+            backup.require_tv_only_change({'ENABLE_TV':'false', 'private':'same'}, selected)
