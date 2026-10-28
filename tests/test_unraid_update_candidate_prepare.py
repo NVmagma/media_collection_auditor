@@ -4,13 +4,14 @@ import pytest
 import sys
 
 pytestmark=pytest.mark.skipif(sys.platform!='linux',reason='Linux private preview preparation')
-from scripts.unraid_update_prepare_fixture import ReplacementPrepareTests as _PreparationCase,identity
+from scripts import unraid_update_prepare_fixture as preparation_fixture
+identity=preparation_fixture.identity
 from scripts.unraid_update_candidate_prepare import prepare_candidate
 
 
 @pytest.fixture
 def candidate_case():
-    case=_PreparationCase();case.setUp()
+    case=preparation_fixture.ReplacementPrepareTests();case.setUp()
     try:yield case
     finally:case.doCleanups()
 

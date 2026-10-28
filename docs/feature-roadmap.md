@@ -294,3 +294,8 @@ until the production switch is separately approved.
   recovery modules; tested against e537ba5 modules using synthetic data. Seventy
   focused Linux preparation/backup/recovery checks passed. Fresh Tower backup
   capture is next; current state and service configuration remain unchanged.
+
+- Candidate preparation preflight correction: ignore Docker formatting-only blank
+  lines before exact bind-layout comparison; retain rejection of extra binds.
+  Added named redacted failure diagnostics and a shell-level reproduction test.
+  No production or private preparation files are changed by this correction.

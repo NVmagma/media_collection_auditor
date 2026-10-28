@@ -321,3 +321,10 @@ ce58bd5 image need not be rebuilt for these controller-only preparation changes;
 its packaged revision is checked when creating the new binding. Do not change
 Unraid Repository or its saved template until an exact image reference and a
 concrete replacement/recovery transaction have been reviewed.
+
+
+Candidate host preflight normalizes blank lines in Docker's formatted mount
+output before sorting and comparing the exact three binds. An extra bind still
+blocks before new roots or helper execution. Every failed check now emits a fixed
+step/reason diagnostic; no command text, private settings or environment contents
+are printed. This fixes a silent exit observed during Tower preparation.
