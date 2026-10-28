@@ -283,3 +283,14 @@ until the production switch is separately approved.
   retry remained blocked before execution by GitHub billing. No merge, registry
   publication or production deployment was performed. Native exact-image Tower
   acceptance remains next; see [release review](interface-api-release-review.md).
+
+- Native Tower combined-image acceptance recorded for ce58bd5, image
+  `sha256:ef3c95d577fd94fbf95d8436588c5d8883811c389c1dd2578a22175273025e75`:
+  16 actual preview/binding cases and all 20 packaged HTTP/delivery cases passed.
+  No registry publication or production handoff occurred.
+- Different-image offline preparation controller: creates only new private
+  binding/log roots from one pinned backup; no service payload, registry reference
+  or deployment authority. Fixed backup-tool compatibility with older packaged
+  recovery modules; tested against e537ba5 modules using synthetic data. Seventy
+  focused Linux preparation/backup/recovery checks passed. Fresh Tower backup
+  capture is next; current state and service configuration remain unchanged.

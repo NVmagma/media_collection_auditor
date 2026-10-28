@@ -116,3 +116,21 @@ def test_reviewed_tv_repair_admits_only_false_to_true_with_no_other_changes():
                      {'ENABLE_TV':'true', 'DRY_RUN':'false', 'private':'same'}):
         with pytest.raises(RuntimeError):
             backup.require_tv_only_change({'ENABLE_TV':'false', 'private':'same'}, selected)
+
+
+def test_older_packaged_runtime_uses_reviewed_inspector_without_adopting_data(tmp_path,monkeypatch):
+    from app import sqlite_release_recovery as packaged
+    root,state,inputs,options=case(tmp_path)
+    monkeypatch.delattr(packaged,'inspect_update_backup')
+    monkeypatch.delattr(packaged,'UPDATE_BACKUP_FILES')
+    backup.capture_backup(**options)
+    before={path.name:path.read_bytes() for path in root.iterdir()}
+    result=backup.inspect_backup(directory=root,expected_identity=options['expected_identity'],
+        expected_fingerprint=hashlib.sha256((root/'backup-complete.json').read_bytes()).hexdigest())
+    assert result['status']=='preview_update_backup_verified'
+    assert before=={path.name:path.read_bytes() for path in root.iterdir()}
+    assert 'private-secret' not in json.dumps(result)
+    (root/'saved-config.json').write_bytes(b'changed')
+    with pytest.raises(RuntimeError):
+        backup.inspect_backup(directory=root,expected_identity=options['expected_identity'],
+            expected_fingerprint=hashlib.sha256((root/'backup-complete.json').read_bytes()).hexdigest())

@@ -282,3 +282,42 @@ and unchanged tracking bytes. Production media, appdata, Unraid templates, Docke
 socket and published host ports are not mounted or changed. Only the fixture
 containers/processes are started or stopped. This does not deploy the workflow or
 claim a published image; GitHub acceptance/publication remain separate.
+
+## Different-image preparation without a service handoff
+
+The same-image recovery launcher must not be reused for a new image. After
+exact-image acceptance, `unraid_update_candidate_prepare_host.sh` can prepare a
+new binding from one explicitly pinned logical backup:
+
+```bash
+bash scripts/unraid_update_candidate_prepare_host.sh \
+  FULL_ACCEPTED_CANDIDATE_IMAGE_ID PRIVATE_BACKUP_PACKET RECEIPT_SHA256 \
+  /mnt/user/appdata
+```
+
+This creates new private logs/control roots, preserves the selected logical state,
+unknown fields, clocks, settings and environment, and validates the candidate's
+packaged profile/revision. It uses a disposable read-only helper with only the
+selected backup read-only, new roots writable, production media read-only for root
+identity checks and the reviewed checkout read-only. The current auditor and old
+appdata are never stopped, started, renamed, removed or written by this tool.
+
+Success is `candidate_files_ready_not_started`. It explicitly reports no service
+payload, no configured registry reference and no deployment authorization. It
+cannot be passed to the same-image recovery start command. Existing/partial
+roots cannot be reused or silently overwritten. Backup freshness at handoff is
+still unverified and must be reviewed separately; continuing to run the old
+preview does not make a previously captured packet current automatically.
+
+First capture a new verified backup using `unraid_update_backup_host.sh` with the
+current image's own packaged validator. Current container metadata is retained
+inside the private packet, not pasted publicly. The controller supports older
+images that lack the newer shared packet inspector by loading the inspector from
+the trusted read-only reviewed checkout, never from backup contents. This path
+was tested with actual e537ba5 application modules and synthetic packet data.
+
+Registry publication and production handoff remain separate. The accepted local
+ce58bd5 image need not be rebuilt for these controller-only preparation changes;
+its packaged revision is checked when creating the new binding. Do not change
+Unraid Repository or its saved template until an exact image reference and a
+concrete replacement/recovery transaction have been reviewed.

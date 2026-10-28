@@ -19,7 +19,8 @@ from app.sqlite_release_recovery import _encode, _local
 from app.sqlite_scheduled_paths import _open_directory, scan_held_directory
 from app.sqlite_state import SECTIONS, validate_snapshot
 
-from app.sqlite_release_recovery import UPDATE_BACKUP_FILES as FILES
+FILES = ('current.inspect.json', 'current-template.xml', 'saved-config.json',
+         'retained-source.json', 'current-binding.json', 'tracking-snapshot.json')
 
 
 def _boundary(phase):
@@ -168,9 +169,18 @@ def capture_current(*, directory, expected_identity, container, templates, selec
 
 def inspect_backup(*, directory, expected_identity, expected_fingerprint):
     """Compatibility entrypoint for the shared read-only packet inspector."""
-    from app.sqlite_release_recovery import inspect_update_backup
-    return inspect_update_backup(directory=directory, expected_identity=expected_identity,
-                                 expected_fingerprint=expected_fingerprint)
+    from app import sqlite_release_recovery
+    inspector = getattr(sqlite_release_recovery, 'inspect_update_backup', None)
+    if inspector is None:
+        # Older deployed images lack this new shared helper. Load only trusted
+        # reviewed checkout code; never select code from a backup or request.
+        import runpy
+        source = Path(__file__).resolve().parents[1] / 'app' / 'sqlite_release_recovery.py'
+        inspector = runpy.run_path(str(source)).get('inspect_update_backup')
+    if not callable(inspector):
+        raise RuntimeError('Reviewed backup inspector unavailable')
+    return inspector(directory=directory, expected_identity=expected_identity,
+                     expected_fingerprint=expected_fingerprint)
 
 
 def load_backup_payloads(*, directory, expected_identity, expected_fingerprint):
