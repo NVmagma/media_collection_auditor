@@ -49,6 +49,8 @@ jobs:
           npm test --prefix tests/dashboard-browser -- "$RUNNER_TEMP/dashboard-workspace.html"
           python -B tests/settings_workspace_case.py "$RUNNER_TEMP/settings-workspace"
           npm run test:settings --prefix tests/dashboard-browser -- "$RUNNER_TEMP/settings-workspace"
+          python -B -c 'import os; from pathlib import Path; from settings_workspace_case import render_integration_workspace; Path(os.environ["RUNNER_TEMP"],"integration-setup.html").write_text(render_integration_workspace())'
+          npm run test:integrations --prefix tests/dashboard-browser -- "$RUNNER_TEMP/integration-setup.html"
       - name: Compile all Python files
         run: python -m compileall -q app tests
       - name: Install pytest

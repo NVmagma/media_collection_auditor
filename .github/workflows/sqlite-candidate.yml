@@ -11,6 +11,9 @@ on:
       - 'docker/sqlite-preview*'
       - 'app/**'
       - 'scripts/dashboard_clock_*'
+      - 'scripts/interface_api_release_lab.sh'
+      - 'scripts/integration_*fixture.py'
+      - 'scripts/operational_notifications_fixture.py'
       - 'tests/test_dashboard_clock*'
       - 'unraid/assets/**'
       - 'scripts/unraid_update*'
@@ -131,11 +134,11 @@ jobs:
           bash scripts/sqlite_release_recovery_lab.sh "$image" "$recovery_parent" | tee "$RUNNER_TEMP/candidate-recovery.log"
       - name: Build separate preview-only release without publishing
         run: bash scripts/sqlite_preview_release_build.sh > "$RUNNER_TEMP/preview-release-image.txt"
-      - name: Exercise actual preview release process and public worker
+      - name: Exercise combined interface API and notification release
         run: |
           image=$(cat "$RUNNER_TEMP/preview-release-image.txt")
-          preview_release_parent=$(mktemp -d "$RUNNER_TEMP/preview-release-parent.XXXXXX")
-          bash scripts/sqlite_preview_release_lab.sh "$image" "$preview_release_parent" | tee "$RUNNER_TEMP/preview-release-acceptance.log"
+          interface_parent=$(mktemp -d "$RUNNER_TEMP/interface-api-parent.XXXXXX")
+          bash scripts/interface_api_release_lab.sh "$image" "$interface_parent" | tee "$RUNNER_TEMP/interface-api-release-acceptance.log"
       - name: Exercise actual private packet bind and renderer
         run: |
           image=$(cat "$RUNNER_TEMP/preview-release-image.txt")
@@ -210,7 +213,7 @@ jobs:
             ${{ runner.temp }}/candidate-preparation.log
             ${{ runner.temp }}/candidate-recovery.log
             ${{ runner.temp }}/preview-release-image.txt
-            ${{ runner.temp }}/preview-release-acceptance.log
+            ${{ runner.temp }}/interface-api-release-acceptance.log
             ${{ runner.temp }}/settings-apply-acceptance.log
             ${{ runner.temp }}/dashboard-clock-acceptance.log
             ${{ runner.temp }}/private-packet-acceptance.log

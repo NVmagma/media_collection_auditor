@@ -273,3 +273,13 @@ until the production switch is separately approved.
   two corrected Settings-hook tests), eight subtests, five actual loopback delivery
   cases and Settings browser checks. Tower delivery acceptance is next; no real
   notification targets or production services were contacted.
+
+- Tower operational notification acceptance recorded for a6fc8c0: all five private
+  delivery cases passed, with no external or production notification delivery.
+- Combined interface/API release review: 3,656 full Linux regressions and 98
+  subtests passed, plus 20 private HTTP/delivery cases and Dashboard/Settings/API
+  setup browser checks. Homarr synthetic render checks passed. CI now includes the
+  combined exact-image harness and integration setup browser acceptance. A build
+  retry remained blocked before execution by GitHub billing. No merge, registry
+  publication or production deployment was performed. Native exact-image Tower
+  acceptance remains next; see [release review](interface-api-release-review.md).
