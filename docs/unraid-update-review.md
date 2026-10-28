@@ -328,3 +328,28 @@ output before sorting and comparing the exact three binds. An extra bind still
 blocks before new roots or helper execution. Every failed check now emits a fixed
 step/reason diagnostic; no command text, private settings or environment contents
 are printed. This fixes a silent exit observed during Tower preparation.
+
+## Review the prepared candidate without changing services
+
+Run `unraid_update_candidate_review_host.sh IMAGE PREPARED_ROOT BACKUP
+RECEIPT_SHA256` after preparation. It creates a new private review directory and
+compares the selected backup with the current container, saved template, retained
+source/settings/binding and SQLite snapshot. It also validates the prepared
+candidate using that image's packaged activation checks. All inputs are mounted
+read-only; only the new review directory is writable. No Docker socket is mounted.
+
+The private proposed container JSON and template XML preserve ports, environment,
+resource options and read-only media. Candidate image labels and the WebUI link
+are updated in the proposal. The image reference remains
+`@APPROVED_PREVIEW_REFERENCE@`: these files cannot be used as an executable
+handoff. The helper never publishes an image, changes templates or controls the
+current auditor. Do not paste private proposal files; share only the redacted
+report and directory path.
+
+`backup_matches_current_observation` describes a comparison at review time, not
+writer quiescence or permission to deploy. Any changed input blocks completion;
+partial output is retained and never overwritten. The completion receipt is
+written only after both database captures verify and close. A later handoff
+still needs a fresh validation, an exact published reference and an explicit
+service transaction with recovery. The stopped same-image recovery guard remains
+unchanged.

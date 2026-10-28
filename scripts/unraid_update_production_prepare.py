@@ -22,13 +22,55 @@ def replacement_metadata(*, current, image, template, environment, reference, ho
             or image.get('Id') != current.get('Image') or not REFERENCE.fullmatch(reference)
             or reference != current['Config'].get('Image') or reference not in (image.get('RepoDigests') or [])):
         raise ValueError('Stopped same-image immutable recovery required')
+    return _metadata(current=current,image=image,template=template,environment=environment,
+        reference=reference,host_logs=host_logs,host_control=host_control,attempt=attempt)
+
+
+def candidate_review_metadata(*,current,image,template,environment,host_logs,host_control,attempt):
+    """Private non-executable plan only; a registry reference is never invented."""
+    from app.sqlite_preview_template import REFERENCE as placeholder
+    labels=image.get('Config',{}).get('Labels') or {}
+    config=image.get('Config',{})
+    if (current.get('Name')!='/media_collection_auditor'
+            or not REFERENCE.fullmatch(current.get('Config',{}).get('Image',''))
+            or not re.fullmatch(r'sha256:[0-9a-f]{64}',image.get('Id',''))
+            or image.get('Id')==current.get('Image')
+            or labels.get('io.media-collection-auditor.sqlite-activation')!='preview-only'
+            or not re.fullmatch(r'[0-9a-f]{40}',labels.get('org.opencontainers.image.revision',''))
+            or config.get('Entrypoint')!=['python','-m','app.main']
+            or config.get('Cmd') not in (None,[]) or config.get('StopSignal')!='SIGINT'
+            or config.get('Volumes') not in (None,{})):
+        raise ValueError('Reviewed different preview image required')
+    payload,xml = _metadata(current=current,image=image,template=template,environment=environment,
+        reference=placeholder,host_logs=host_logs,host_control=host_control,attempt=attempt)
+    custom={key:value for key,value in payload.get('Labels',{}).items()
+            if not key.startswith(('org.opencontainers.image.','io.media-collection-auditor.'))}
+    from scripts.sqlite_preview_service import LABEL
+    webui='http://[IP]:[PORT:'+environment.get('WEB_PORT','8080')+']/'
+    payload['Labels']={**labels,**custom,LABEL:attempt,'net.unraid.docker.webui':webui}
+    root=ET.fromstring(xml)
+    field=root.find('WebUI')
+    if field is None:field=ET.SubElement(root,'WebUI')
+    field.text=webui
+    for item in list(root.findall('Config')):
+        if item.get('Type')=='Label':root.remove(item)
+    for key,value in sorted(payload['Labels'].items()):
+        if not isinstance(value,str) or unescape(value)!=value or '<' in value or '>' in value:
+            raise ValueError('Lossless candidate labels required')
+        item=ET.SubElement(root,'Config',Type='Label',Target=key,Name=key,Mode='',Display='advanced',Required='false',Mask='false',Default=value)
+        item.text=value
+    return payload,ET.tostring(root,encoding='utf-8',xml_declaration=True)+b'\n'
+
+
+def _metadata(*,current,image,template,environment,reference,host_logs,host_control,attempt):
     if b'<!DOCTYPE' in template.upper() or b'<!ENTITY' in template.upper():
         raise ValueError('Plain managed template required')
     root = ET.fromstring(template)
     if root.tag != 'Container' or len(root.findall('Name')) != 1 or root.findtext('Name') != 'media_collection_auditor':
         raise ValueError('Single matching managed template required')
-    if len(root.findall('Repository')) != 1 or root.findtext('Repository') != reference:
+    if len(root.findall('Repository')) != 1 or root.findtext('Repository') != current['Config'].get('Image'):
         raise ValueError('Matching saved image required')
+    root.find('Repository').text=reference
     mounts = {item['Destination']:deepcopy(item) for item in current['Mounts']}
     if set(mounts) != {'/media','/app/logs','/sqlite-control'} or len(current['Mounts']) != 3:
         raise ValueError('Exact three bind roots required')
