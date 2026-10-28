@@ -26,12 +26,11 @@ reviewed Unraid template, preserving its mounts, image, flags and settings.
 After recreation the old token is rejected; widgets must use the new token.
 The page neither displays nor changes secrets, settings, state or services.
 
-## Additional useful APIs to consider
+## Related notification delivery
 
-- Notification delivery: opt-in redacted scan-failure/settings-review events,
-  with destinations and retry policy explicitly configured.
-
-These are future proposals, not new endpoints or authority to control media.
+Opt-in redacted operational alerts are documented in
+[operational notifications](operational-notifications.md). Notifications do not
+add integration-token permission to execute scans, change settings or control media.
 
 ## Disposable visual review
 

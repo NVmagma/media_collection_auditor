@@ -261,3 +261,15 @@ until the production switch is separately approved.
   Verified with 317 Linux integration/backup/update/recovery/security regressions,
   five actual loopback HTTP cases and setup browser checks. Disposable Tower
   backup-status acceptance is next; production remains unchanged.
+
+- Tower backup-status acceptance recorded for revision 32ce7bb: all five packet
+  verification HTTP cases passed; no production services or restore actions used.
+- Operational failure alerts: new default-off setting, existing Discord/ntfy/custom
+  destinations, fixed redacted messages, per-incident process suppression and no
+  automatic delivery retries. Scheduler and Settings hooks preserve transaction
+  outcomes, replay claims and tracking. Preview requires Notify During Dry Runs.
+  Existing JSON digests remain unchanged. See [delivery contract](operational-notifications.md).
+  Verified with 361 Linux regression checks across focused runs (including the
+  two corrected Settings-hook tests), eight subtests, five actual loopback delivery
+  cases and Settings browser checks. Tower delivery acceptance is next; no real
+  notification targets or production services were contacted.

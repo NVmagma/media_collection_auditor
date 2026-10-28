@@ -1020,6 +1020,7 @@ def _change_preview_settings(*, restore, request_sha256=None):
     from config_store import initial_environment
     from app.sqlite_lock import StateLockBusy
     from app.sqlite_preview_settings_apply import apply_requested_settings, restore_previous_settings
+    notification_settings = {**initial_environment(), **load_config()}
     try:
         action = restore_previous_settings if restore else apply_requested_settings
         digest = request.form.get('request_sha256','') if request_sha256 is None else request_sha256
@@ -1029,7 +1030,14 @@ def _change_preview_settings(*, restore, request_sha256=None):
     except Exception:
         # Pending files and journals retain details privately; no raw errors or
         # connection credentials are returned through the settings page.
+        try:
+            from app.operational_notifications import NOTIFICATIONS
+            NOTIFICATIONS.emit(notification_settings, 'settings_review_required')
+        except Exception:
+            pass  # Alerts cannot change the settings transaction's outcome.
         return redirect(url_for('settings',apply_error='1'))
+    from app.operational_notifications import NOTIFICATIONS
+    NOTIFICATIONS.clear('settings_review_required')
     from run_control import wake_worker
     wake_worker()  # Reload effective settings; this does not queue a scan.
     return redirect(url_for('settings',**{('restored' if restore else 'applied'):'1'}))
