@@ -290,7 +290,11 @@ def actual_image_acceptance():
         assert restored.status_code==302 and 'restored=1' in restored.headers['Location']
         assert saved.read_bytes()==active;tracking_unchanged()
         assert session.get(base+'/api/v1/summary',headers={'Authorization':'Bearer '+token},timeout=5).status_code==200
-        assert 'resubmit' in session.get(base+'/settings',timeout=5).text.lower() or 'save a new request' in session.get(base+'/settings',timeout=5).text
+        page=session.get(base+'/settings',timeout=5)
+        assert page.status_code==200
+        assert 'A retained attempt needs new edits before another request can be applied.' in page.text
+        assert 'Apply Requested Settings' in page.text
+        assert 'action="/settings/restore"' not in page.text
         stop();session.close()
         print(json.dumps({'status':'actual_settings_application_verified','source_revision':build.SOURCE_REVISION,
             'authenticated_apply_verified':True,'controller_sigkill_verified':True,'restart_ui_available':True,
