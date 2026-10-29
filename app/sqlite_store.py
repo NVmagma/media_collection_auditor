@@ -95,6 +95,11 @@ class SQLiteStateStore:
                 if (expected_revision is not None
                         and expected_revision != current_revision):
                     raise RuntimeError("Stale SQLite state revision; refusing overwrite")
+                from app.sqlite_live_integrity import KEY,verify,record
+                integrity=connection.execute('SELECT value FROM metadata WHERE key=?',(KEY,)).fetchone()
+                if integrity is not None:
+                    # Recheck under the held writer transaction before changing rows.
+                    verify(integrity[0],read_snapshot(self.database),current_revision)
                 connection.execute("DELETE FROM state_entries")
                 connection.execute("DELETE FROM extra_state")
                 for section in SECTIONS:
@@ -115,6 +120,9 @@ class SQLiteStateStore:
                     "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                     (str(current_revision + 1),),
                 )
+                if integrity is not None:
+                    connection.execute('UPDATE metadata SET value=? WHERE key=?',
+                        (record(state,current_revision+1),KEY))
                 connection.commit()
             except BaseException:
                 connection.rollback()

@@ -73,6 +73,7 @@ def read_snapshot(database_path: str | Path) -> dict[str, dict[str, Any]]:
     try:
         connection = sqlite3.connect(f"file:{path.resolve().as_posix()}?mode=ro", uri=True)
         try:
+            connection.execute("BEGIN")  # One coherent read, including optional live integrity.
             version_row = connection.execute(
                 "SELECT value FROM metadata WHERE key = 'schema_version'"
             ).fetchone()
@@ -106,6 +107,14 @@ def read_snapshot(database_path: str | Path) -> dict[str, dict[str, Any]]:
                     raise RuntimeError("SQLite snapshot contains an invalid extra state key")
                 result[key] = json.loads(value_json)
             validate_snapshot(result)
+            from app.sqlite_live_integrity import KEY,verify
+            integrity=connection.execute('SELECT value FROM metadata WHERE key=?',(KEY,)).fetchone()
+            if integrity is not None:
+                row=connection.execute("SELECT value FROM metadata WHERE key='state_revision'").fetchone()
+                revision=0 if row is None else int(row[0])
+                if revision<0 or (row is not None and str(revision)!=row[0]):
+                    raise RuntimeError('Invalid live state revision')
+                verify(integrity[0],result,revision)
             return result
         finally:
             connection.close()

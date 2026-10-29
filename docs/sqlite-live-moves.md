@@ -114,3 +114,40 @@ secondary and mover placement policy. Keep application-visible `/media` paths
 and Arr/Jellyfin path mapping stable if a complete native bind is selected.
 Do not exclude content on another backing device or treat the snapshot as a
 permanent promise that mover will not relocate future content.
+
+## Tower native acceptance and mutable-binding implementation
+
+Tower's `9335352` review matched all relative directory/file names and sizes in
+all stages: Movies 6,641 entries/514 titles, Holding 58/4, Keep 170/13, Removal
+empty; TV 10,278/70 with the other TV stages empty. Native stages were observed
+on one mount/device. Share settings were `shareUseCache="only"`,
+`shareCachePool="media"`, `shareCachePool2=""`, with empty include/exclude lists.
+The single move-only case passed on `/mnt/media/sql_test/live-policy.Yut5u6`.
+No production bind, settings or media were changed. Routine tests continue in CI;
+this resolves the identified native-path capability acceptance, not live release
+activation.
+
+The offline `sqlite_live_binding` implementation requires a distinct immutable
+`scheduled-live-moves-v1` profile; default and preview profiles refuse it. It
+requires new prepared state, exact source/settings/root identities, one observed
+stage mount/device and an initial one-title global cap. Existing preview bindings
+cannot be rebound in place. A durable request precedes integrity initialization;
+completion follows verification. Partial preparation is retained without replay.
+The public production activation gate is still unchanged.
+
+Live integrity is explicit opt-in metadata. Guarded commits update the state
+revision and digest in the same transaction; readers use a coherent read
+transaction and validate the record when present. Legacy/preview databases do
+not acquire this metadata during normal reads/writes. The live binding requires
+its presence, allows valid later revisions and rejects pending intent for
+execution while permitting read-only binding observation. Replacement roots or
+databases, changed source/settings, missing integrity and partial settings
+application are refused. These digests catch inconsistent state/metadata, not
+malicious privileged rewriting of both. They do not provide an independent
+rollback-proof history; live recovery must use the latest verified state.
+
+Focused acceptance covers ordinary revision advances, raw state/revision changes,
+transaction rollback, actual capped rename with its clock/integrity checkpoints,
+and an uncertain actual rename retaining its intent and blocking further
+execution. Still required: public live recipe/entrypoint, status/settings behavior,
+actual-image crash/restart acceptance and the separate controlled live cutover.
