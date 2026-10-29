@@ -46,7 +46,7 @@ def run_disposable_routed_slot(*, root, config, scheduled_at, now, fetch_signals
 def _run_routed_slot_locked(*, database, config, scheduled_at, fetch_signals,
         fetch_protection, arr_sync_requests, clock, timer, maximum_titles,
         maximum_run_seconds, maximum_protection_seconds, verify_claim, started_tick=None,
-        resolve_arr_requests=None, complete_arr_requests=None):
+        resolve_arr_requests=None, complete_arr_requests=None, record_details=None):
     """Shared attempt body after a caller has durably claimed its bound control slot."""
     _validate_routed_limits(fetch_protection, maximum_titles, maximum_protection_seconds)
     if resolve_arr_requests is not None and (not callable(resolve_arr_requests) or arr_sync_requests is not None):
@@ -91,7 +91,7 @@ def _run_routed_slot_locked(*, database, config, scheduled_at, fetch_signals,
         arr_sync_requests={key: value for key, value in requests.items() if key in keys},
         clock=clock, timer=timer, maximum_protection_seconds=maximum_protection_seconds,
         verify_binding=verify_claim,
-        complete_arr_requests=complete if complete_arr_requests is not None else None)
+        complete_arr_requests=complete if complete_arr_requests is not None else None, record_details=record_details)
     verify_claim(); remaining()
     return {**result, 'status': ('disposable_scheduled_routed_slot_complete'
         if result['status'] == 'disposable_routed_batch_complete' else result['status']),

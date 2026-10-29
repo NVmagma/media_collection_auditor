@@ -91,7 +91,7 @@ def test_scan_and_history_distinguish_preview_completed_work_and_unrecorded_reas
     assert 'Timer estimates · not scan results' in page
     assert 'Preview completed' in page and 'Blocked / uncertain' in page
     assert 'Live (recorded)' in page
-    assert 'Per-title proposals, skipped-title counts and blocked-title reasons are not retained' in page
+    assert 'Per-title decisions are shown when recorded by this worker' in page
     assert 'id="history-filter"' in page and page.count('data-history-result=') == 7
     assert 'Completed moves' in page and 'Proposed moves' in page
 

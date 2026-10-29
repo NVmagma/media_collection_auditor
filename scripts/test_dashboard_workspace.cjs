@@ -54,6 +54,10 @@ if (!file) throw Error('Pass the synthetic page rendered by tests/dashboard_work
     await page.locator('[data-open-workspace="History"]').first().click();
     await section('History');
     assert.equal(await page.locator('.history-entry:visible').count(), 5);
+    const decisions=page.locator('.history-entry:visible').first().locator('.scan-title-details');
+    await decisions.locator('summary').click();
+    assert.match(await decisions.innerText(), /Still inside the Waiting period/);
+    assert.match(await decisions.innerText(), /Proposed; not completed/);
     assert.match(await page.locator('#history-page-status').textContent(), /Showing 1–5 of 7/);
     await page.locator('#history-next').click();
     assert.equal(await page.locator('.history-entry:visible').count(), 2);
@@ -68,7 +72,7 @@ if (!file) throw Error('Pass the synthetic page rendered by tests/dashboard_work
     assert.equal(await page.locator('.history-entry:visible details').first().getAttribute('open'), '');
     await page.locator('[data-workspace="Audit Preview"]').click();
     assert.match(await page.locator('[data-panel="Audit Preview"]').textContent(), /Timer estimates · not scan results/);
-    assert.match(await page.locator('[data-panel="Audit Preview"]').textContent(), /Per-title proposals, skipped-title counts/);
+    assert.match(await page.locator('[data-panel="Audit Preview"]').textContent(), /Per-title decisions are shown when recorded/);
     await page.locator('[data-workspace="Overview"]').click();
     await page.locator('[data-open-library="Movies"]').click();
     await page.locator('[data-stage-tab="Movies:Waiting"]').click();

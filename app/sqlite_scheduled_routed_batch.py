@@ -65,7 +65,7 @@ def _execute_routed_batch_locked(*, root, config, preparation, fetch_protection,
 
 
 def _execute_configured_batch_locked(*, database, config, preparation, fetch_protection,
-        arr_sync_requests, clock, timer, maximum_protection_seconds, verify_binding, complete_arr_requests=None):
+        arr_sync_requests, clock, timer, maximum_protection_seconds, verify_binding, complete_arr_requests=None, record_details=None):
     """Shared routed ordering; caller pins control/database independently of media."""
     if (not isinstance(config, ScheduledWorkerConfig) or not isinstance(preparation, ScheduledWorkerPreparation)
             or preparation.configuration != config
@@ -100,9 +100,15 @@ def _execute_configured_batch_locked(*, database, config, preparation, fetch_pro
     base = {'fixture_only': True, 'production_authorized': False, 'production_activation': 'disabled',
             'replay_allowed': False}
     completed = []
+    from app.sqlite_scan_details import plan_details
+    def publish(index=None):
+        details=plan_details(preparation,completed=tuple(completed),stopped_index=index)
+        if record_details is not None:record_details(details)
+        return details
+    publish()
     def stopped(reason, index):
         return {**base, 'status': 'stopped', 'reason': reason,
-                'completed': tuple(completed), 'stopped_index': index}
+                'completed': tuple(completed), 'stopped_index': index,'title_details':publish(index)}
     store = GuardedSQLiteStateStore(database)
     expected, revision = store.load_with_revision()
     if (plan.process_id != os.getpid() or revision != plan.revision or INTENTS_KEY in expected
@@ -140,6 +146,7 @@ def _execute_configured_batch_locked(*, database, config, preparation, fetch_pro
             return stopped('move_failed_or_uncertain', index)
         completed.append({'media_key': move.media_key, 'library': move.library,
                           'operation_id': operation_id, 'revision': after_revision})
+        publish()
         expected, revision = after, after_revision
         chained = replace(chained, revision=revision)
     delivery = {}
@@ -147,7 +154,7 @@ def _execute_configured_batch_locked(*, database, config, preparation, fetch_pro
         delivery = complete_arr_requests(preparation=preparation, completed=tuple(completed),
             requests=deepcopy(requests), expected_tracking=(deepcopy(expected), revision))
     return {**base, 'status': 'disposable_routed_batch_complete', 'completed': tuple(completed),
-            'final_revision': revision, 'capped_moves': plan.capped_moves, **delivery}
+            'final_revision': revision, 'capped_moves': plan.capped_moves, 'title_details':publish(), **delivery}
 
 
 def _move(*, store, library, roots, captured_roots, title_identity, folder, plan, move,

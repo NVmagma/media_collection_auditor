@@ -45,6 +45,12 @@ def render_workspace(*, admin=False, tracking_available=True, run_updates=None, 
             if index == 2:
                 record.update(dry_run=False, trigger='scheduled', moves_proposed=None,
                               discovery_changes=None, moves_completed=2, arr_completed=2)
+            if index in (0,2):
+                record['title_details']={'schema_version':1,'total_records':2,'items':[
+                    {'library':'Movies','title':'Summer Frontier (2026)','stage':'Holding','destination':'Removal',
+                     'reason_code':'holding_expired','outcome':'completed' if index==2 else 'planned'},
+                    {'library':'TV','title':'Lantern House (2026)','stage':'Waiting','destination':None,
+                     'reason_code':'waiting_period','outcome':'skipped'}]}
             history_records.append(record)
     with ExitStack() as stack:
         for name, value in {'current_user': {'name': 'Fixture reviewer', 'admin': admin},

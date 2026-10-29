@@ -40,7 +40,8 @@ def prepare_scheduled_preview(*, database, config, fetch_signals, scheduled_at,
     # Includes raw same-revision changes and independent checkpoint races.
     session.read_verified_snapshot()
     remaining()
-    return {'status': 'scheduled_preview_complete', 'dry_run': True,
+    from app.sqlite_scan_details import plan_details
+    return {'title_details':plan_details(prepared), 'status': 'scheduled_preview_complete', 'dry_run': True,
         'scheduled_at': scheduled_at.astimezone(timezone.utc).isoformat(),
         'scanned_titles': prepared.plan.scanned_titles,
         'proposed_moves': prepared.plan.moves,

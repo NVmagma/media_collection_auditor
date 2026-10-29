@@ -263,8 +263,9 @@ def _scan_time(value):
         return None
 
 
-def _scan_entry(record, zone):
+def _scan_entry(record, zone, *, title_details=True):
     """Project only known scalar fields; never pass free-text errors/payloads through."""
+    from app.sqlite_scan_details import project_details
     start, finish = _scan_time(record.get('started_at')), _scan_time(record.get('finished_at'))
     duration = None
     if start is not None and finish is not None:
@@ -303,10 +304,11 @@ def _scan_entry(record, zone):
         'moves_proposed': _scan_counter(record.get('moves_proposed')),
         'discovery_changes': _scan_counter(record.get('discovery_changes')),
         'moves_completed': _scan_counter(record.get('moves_completed')),
-        'arr_completed': _scan_counter(record.get('arr_completed'))}
+        'arr_completed': _scan_counter(record.get('arr_completed')),
+        'title_details': project_details(record.get('title_details')) if title_details else None}
 
 
-def build_scan_view(run, history, *, timezone_name=None):
+def build_scan_view(run, history, *, timezone_name=None, title_details=True):
     """Render passed-in observations only; no filesystem/network/history fallback."""
     run = run if isinstance(run, dict) else {}
     if run.get('status') == 'unavailable':
@@ -324,7 +326,7 @@ def build_scan_view(run, history, *, timezone_name=None):
     else:
         state, detail = 'Unavailable', 'Current running and queued state was not reported.'
     valid_history = isinstance(history, list)
-    rows = [_scan_entry(record, timezone_name) for record in history[:100] if isinstance(record, dict)] if valid_history else []
+    rows = [_scan_entry(record, timezone_name, title_details=title_details) for record in history[:100] if isinstance(record, dict)] if valid_history else []
     available = valid_history and run.get('history_scope') == 'current_process' and (not history or bool(rows))
     return {'current_state': state, 'current_detail': detail, 'history_available': available,
         'history_partial': valid_history and any(not isinstance(record, dict) for record in history[:100]),

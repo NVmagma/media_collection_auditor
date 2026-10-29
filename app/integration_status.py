@@ -443,7 +443,7 @@ def project_scan_capture(capture):
     if not isinstance(capture, dict) or not isinstance(capture.get('run'), dict):
         return {**base, 'status':'unavailable', 'current':None, 'rows':None}
     run = capture['run']
-    view = build_scan_view(run, capture.get('history'))
+    view = build_scan_view(run, capture.get('history'), title_details=False)
     if run.get('status') != 'advisory_only' or not view['history_available']:
         return {**base, 'status':'unavailable', 'current':None, 'rows':None}
     return {**base, 'status':'advisory_only', 'history_partial':view['history_partial'],

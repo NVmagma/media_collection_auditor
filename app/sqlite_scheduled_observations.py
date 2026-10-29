@@ -110,6 +110,9 @@ class ScheduledRunObservations:
                 arr = result.get('arr_completed')
                 if isinstance(arr, tuple) and len(arr) <= 100000:
                     record['arr_completed'] = len(arr)
+                from app.sqlite_scan_details import project_details
+                if 'title_details' in result:
+                    record['title_details']=project_details(result['title_details'])
                 revision = result.get('final_revision')
                 if type(revision) is int and revision >= 0:
                     record['state_revision'] = revision
@@ -129,6 +132,13 @@ class ScheduledRunObservations:
                 self._running = False; self._active = None
                 self._history.append(deepcopy(record))
                 self._history = self._history[-100:]
+
+    def record_title_details(self, details):
+        from app.sqlite_scan_details import project_details
+        safe=project_details(details)
+        with self._lock:
+            if self._running and self._active is not None:
+                self._active['title_details']=deepcopy(safe)
 
     def history(self, limit=100):
         if type(limit) is not int or not 0 <= limit <= 100:

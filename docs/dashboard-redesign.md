@@ -196,3 +196,18 @@ behavior, no horizontal overflow, and desktop overview fit at 1280/1440x1000.
 Synthetic screenshots were visually inspected. No production service, tracking,
 schedule or live policy was changed; rollout and user visual acceptance remain
 separate from this source update.
+
+## Recorded title decisions (2026-10-29)
+
+Scans and History can display up to 100 title decisions per attempt, with selected
+moves prioritized over unchanged titles. Fixed policy reasons explain elapsed
+Waiting/Holding periods, Jellyfin keep/favorite/protection/dislike signals,
+missing/conflicting dates, disabled deletion and the shared action cap. A
+proposal remains distinct from a verified completed move and an uncertain stop.
+Verified move observations are published before Arr delivery so a later delivery
+failure does not erase that observation. Titles are validated bound folder names;
+paths, credentials, raw exceptions and unrecognized payload fields are dropped.
+
+Records remain bounded and process-local, reset after restart and do not grant
+replay or recovery authority. Earlier records without details remain unknown.
+The existing integration scan/proposal APIs remain counts-only and omit titles.

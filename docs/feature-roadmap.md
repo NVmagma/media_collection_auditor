@@ -1,19 +1,28 @@
 # Feature roadmap
 
-**Last reviewed:** 2026-10-28
+**Last reviewed:** 2026-10-29
 **Official/default branch:** `feature/unraid`
 **Active development branch:** `feature/interface-api`
-**Tracking authority:** SQLite scheduled preview
-**Live media moves/deletion:** Disabled; separate reviewed activation required.
+**Tracking authority:** SQLite
+**Tower deployment:** Scheduled live canary, one global title action per daily run.
+**Permanent deletion / cross-filesystem moves / season pruning:** Disabled.
 
 ## Current next work
 
-- Prioritize a separately tested SQLite live move release; permanent deletion
-  remains disabled. See [live move scope and acceptance](sqlite-live-moves.md).
-- Then align all pages with Settings: left navigation, right content, shared
-  styling and retained clickable Dashboard sections.
-- The interface/API preview update has completed on Tower with user confirmation;
-  current tracking authority remains SQLite preview.
+- Live canary cutover and authenticated readiness completed on Tower on October
+  29. Its first scheduled run is awaiting October 30 observation. Keep the
+  one-action cap until that result is reviewed; deployment is not evidence of a
+  successful production media move.
+- Shared left navigation is implemented, browser/CI tested and visually accepted.
+  Those newer UI sources are not yet deployed to Tower.
+- Per-title scan explanations are implemented with bounded process-local records:
+  fixed policy reasons, separate proposed/completed/uncertain outcomes and
+  retained verified move observations when later Arr delivery fails. Counts-only
+  integration APIs continue omitting title details. Acceptance is in progress.
+- Next: reviewed live settings application/recovery, then an explicit manual live
+  run sharing the same durable local-date claim and daily action cap.
+- Finish exact-image acceptance, publication and release notes. Preserve current
+  live tracking and the saved Unraid template; no automatic Tower update.
 
 ## Completed SQLite preview milestone
 

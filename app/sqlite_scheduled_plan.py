@@ -60,6 +60,7 @@ class ScheduledPlan:
     deadline_tick: float
     process_id: int
     authorization: str = 'not_authorized'
+    title_observations: tuple = ()
 
 
 _DESTINATIONS = {('Waiting', 'hold'): 'Holding', ('Waiting', 'keep'): 'Keep',
@@ -128,12 +129,24 @@ def collect_scheduled_plan(*, snapshot, revision, libraries, scan_library, now,
             collected.append((library, deepcopy(title)))
     check_time()
     # No decision is calculated until every collector and iterator has completed.
+    from app.sqlite_scan_details import LIMIT, reason_code
     moves, skipped, capped = [], [], 0
+    observations=[]
     for library, title in collected:
         check_time()
         decision = review_decision(detached, title.media_key, title.stage, now,
                                    title.threshold_days, title.signals, favorites_trigger_keep)
         destination = _DESTINATIONS.get((title.stage, decision['action']))
+        outcome='skipped' if destination is None else 'capped' if len(moves)>=maximum_actions else 'planned'
+        observation=(library,title.media_key,title.stage,destination,
+            'action_cap' if outcome=='capped' else reason_code(decision),outcome)
+        if len(observations)<LIMIT:
+            observations.append(observation)
+        elif outcome=='planned':
+            # Keep selected moves visible even when many earlier titles stay put.
+            replace_index=next((index for index in range(len(observations)-1,-1,-1)
+                if observations[index][-1]!='planned'),None)
+            if replace_index is not None:observations[replace_index]=observation
         if destination is None:
             skipped.append((library, title.media_key, tuple(decision['blockers']), decision['action']))
         elif len(moves) >= maximum_actions:
@@ -143,4 +156,4 @@ def collect_scheduled_plan(*, snapshot, revision, libraries, scan_library, now,
                 decision['action'], detached[CLOCKS[title.stage]][title.media_key], title.threshold_days))
     check_time()
     return ScheduledPlan(revision, now, libraries, len(collected), tuple(moves), tuple(skipped), capped,
-                         favorites_trigger_keep, started, started + maximum_scan_seconds, os.getpid())
+                         favorites_trigger_keep, started, started + maximum_scan_seconds, os.getpid(), title_observations=tuple(observations))

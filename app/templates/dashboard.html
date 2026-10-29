@@ -204,10 +204,10 @@
         <p><span class="scan-outcome outcome-{{ attempt.group }}">{{ attempt.label }}</span> <span class="muted">{{ attempt.trigger }} · {{ attempt.mode }}</span></p>
         <p class="muted">Finished: {{ attempt.finished }}</p>
         <dl class="scan-metrics"><div><dt>Proposed moves</dt><dd>{{ attempt.moves_proposed if attempt.moves_proposed is not none else '—' }}</dd></div><div><dt>Discovery changes</dt><dd>{{ attempt.discovery_changes if attempt.discovery_changes is not none else '—' }}</dd></div></dl>
-        <p>{{ attempt.reason }}</p><button type="button" class="scan-secondary" data-open-workspace="History">Open attempt history</button>
+        <p>{{ attempt.reason }}</p>{% include '_scan_details.html' %}<button type="button" class="scan-secondary" data-open-workspace="History">Open attempt history</button>
         {% else %}<p class="empty">No finished attempts recorded in this scheduler process.</p>{% endif %}
         </section>
-        <section class="scan-summary"><h3>What is recorded</h3><p>Preview counts describe proposals. Completed moves and Arr updates are separate observations.</p><p class="muted">Per-title proposals, skipped-title counts and blocked-title reasons are not retained in these scheduler records. — means not reported, not zero.</p><p class="muted">History covers this process and resets after restart. It does not establish live inventory freshness.</p></section>
+        <section class="scan-summary"><h3>What is recorded</h3><p>Preview counts describe proposals. Completed moves and Arr updates are separate observations.</p><p class="muted">Per-title decisions are shown when recorded by this worker. Earlier attempts may have counts only. — means not reported, not zero.</p><p class="muted">History covers this process and resets after restart. It does not establish live inventory freshness.</p></section>
       </div>
       {% endif %}
       <div class="deadline-estimates">
@@ -243,7 +243,7 @@
       <article class="history-entry" data-history-result="{{ attempt.group }}">
         <div class="history-entry-heading"><span class="scan-outcome outcome-{{ attempt.group }}">{{ attempt.label }}</span><strong>{{ attempt.trigger }}</strong><span class="muted">{{ attempt.mode }}</span><span class="muted history-entry-time">{{ attempt.started }} · {{ attempt.duration_display }}</span></div>
         <dl class="scan-metrics"><div><dt>Proposed moves</dt><dd>{{ attempt.moves_proposed if attempt.moves_proposed is not none else '—' }}</dd></div><div><dt>Discovery changes</dt><dd>{{ attempt.discovery_changes if attempt.discovery_changes is not none else '—' }}</dd></div><div><dt>Completed moves</dt><dd>{{ attempt.moves_completed if attempt.moves_completed is not none else '—' }}</dd></div><div><dt>Arr updates</dt><dd>{{ attempt.arr_completed if attempt.arr_completed is not none else '—' }}</dd></div></dl>
-        <details><summary>Recorded outcome details</summary><p>{{ attempt.reason }}</p><p>Started: {{ attempt.started }}<br>Finished: {{ attempt.finished }}</p><p>Per-title proposals and skipped/blocked title counts were not recorded. Missing values are unknown.</p></details>
+        <details><summary>Recorded outcome details</summary><p>{{ attempt.reason }}</p><p>Started: {{ attempt.started }}<br>Finished: {{ attempt.finished }}</p></details>{% include '_scan_details.html' %}
       </article>
       {% endfor %}
       </div><p id="history-no-results" class="empty" hidden>No attempts match this result filter.</p>

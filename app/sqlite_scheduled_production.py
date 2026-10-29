@@ -46,7 +46,8 @@ def _configured_cycle_step(*, cycle, settings, now, clock, observer=None):
         if observer is not None:
             observer.observe_cycle(next_run=cycle.next_run, status='attempted')
         def execute():
-            result = _run_bound_production_slot(settings=values, scheduled_at=slot, now=current, clock=clock)
+            result = _run_bound_production_slot(settings=values, scheduled_at=slot, now=current, clock=clock,
+                record_details=observer.record_title_details if observer is not None else None)
             from app.sqlite_backend_gate import scheduled_release_enabled
             if scheduled_release_enabled():
                 # A changed binding/configuration must fail inside the observer's
@@ -89,7 +90,7 @@ def run_requested_preview(*, settings, now, observer, clock=datetime.now):
         observer.release_manual_preview()
 
 
-def _run_bound_production_slot(*, settings, scheduled_at, now, clock, timer=monotonic, manual_preview=False):
+def _run_bound_production_slot(*, settings, scheduled_at, now, clock, timer=monotonic, manual_preview=False, record_details=None):
     """Private candidate implementation; the public entry above remains sealed."""
     config, scan, protect = _configured_run_inputs(settings=settings, clock=clock, allow_dry_run=True)
     dry_run = settings.get('DRY_RUN', 'true').strip().lower() == 'true'
@@ -139,7 +140,7 @@ def _run_bound_production_slot(*, settings, scheduled_at, now, clock, timer=mono
                     arr_sync_requests=None, clock=clock, timer=timer, maximum_titles=100000,
                     maximum_run_seconds=3600, maximum_protection_seconds=30,
                     verify_claim=verify_claim, started_tick=started, resolve_arr_requests=resolve_arr,
-                    complete_arr_requests=configured_arr_delivery(settings=settings, config=config))
+                    complete_arr_requests=configured_arr_delivery(settings=settings, config=config), record_details=record_details)
                 # The common body reports fixture-only until release validation.
                 # Do not relabel its evidence as production authorization.
                 return result
