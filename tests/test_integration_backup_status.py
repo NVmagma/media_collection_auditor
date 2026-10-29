@@ -94,6 +94,7 @@ def test_paused_preview_can_check_backup_without_tracking_or_activation(packet_a
     client,*_=packet_api
     class Gate:
         def preview_release_enabled(self):return True
+        def live_release_enabled(self):return False
         def require_sqlite_production_activation(self):pytest.fail('Backup metadata does not authorize a worker')
     monkeypatch.setattr(web,'_preview_backend_gate',lambda:Gate())
     monkeypatch.setattr(web,'read_tracking_status',lambda *a:pytest.fail('No tracking reads'))
