@@ -115,3 +115,37 @@ def test_changed_inputs_block_review_before_completion(case,change):
     else:args['reference']=case.reference+'bad'
     with pytest.raises((RuntimeError,ValueError)):run(case,**args)
     assert not (case.output/'review-complete.json').exists()
+
+
+def test_diagnostics_use_fixed_stages_without_private_values(case):
+    stages=[]
+    run(case,diagnostic=stages.append)
+    assert stages[0]=='published_image' and stages[-1]=='review_completion'
+    assert 'native_view_comparison' in stages
+    assert 'fixture-private-secret' not in json.dumps(stages)
+
+
+def test_failure_stage_is_known_before_any_private_proposal(case):
+    stages=[];(case.logs/'auditor_config.json').write_bytes(b'{}')
+    with pytest.raises(RuntimeError):run(case,diagnostic=stages.append)
+    assert stages[-1]=='prepared_configuration'
+    assert not list(case.output.iterdir())
+
+
+def test_cli_diagnostic_never_prints_exception_text(monkeypatch,capsys):
+    import io,sys
+    from scripts import unraid_live_review as review
+    args=['review','--backup-identity','1:2','--fingerprint','a'*64,'--output-identity','3:4',
+          '--host-logs','/private/logs','--host-control','/private/control','--host-media','/native/media',
+          '--reference','ghcr.io/nvmagma/media_collection_auditor@sha256:'+'b'*64]
+    monkeypatch.setattr(sys,'argv',args)
+    monkeypatch.setattr(sys,'stdin',io.TextIOWrapper(io.BytesIO(b'{"containers":[{}],"images":[{}]}')))
+    def fail(**kwargs):
+        kwargs['diagnostic']('live_binding')
+        raise RuntimeError('private-path-secret-token')
+    monkeypatch.setattr(review,'review_live_candidate',fail)
+    assert review.main()==2
+    raw=capsys.readouterr().out;report=json.loads(raw)
+    assert report['diagnostic_stage']=='live_binding' and report['error_type']=='RuntimeError'
+    assert 'private-path-secret-token' not in raw and '/private/' not in raw
+    assert report['service_changes_performed'] is False
