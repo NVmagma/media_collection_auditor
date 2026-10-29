@@ -381,3 +381,43 @@ Run `sqlite_preview_service_lab.sh ACCEPTED_IMAGE_ID fresh` on Tower for the
 actual handoff/recovery rehearsal. No production execution launcher is supplied
 by this increment; host input verification and explicit recovery wiring must be
 completed before using the transaction against the current auditor.
+
+## Production host adapter: check, deploy and explicit recover
+
+The tested transaction is now wired through
+`unraid_update_candidate_execute_host.sh`. Its arguments are:
+
+```
+ACTION PUBLISHED_REFERENCE PREPARED_ROOT REVIEW_DIRECTORY BACKUP_DIRECTORY BACKUP_SHA256 [REVIEW_SHA256] [REVIEWED_REPLACEMENT_ID]
+```
+
+Start with `check`. It mounts all input/template/review files read-only, uses no
+network and makes only Docker metadata reads through the fixed adapter. A new
+memory-backed temporary directory holds a fresh validation; private inputs and
+services are unchanged. Its redacted output includes the review fingerprint.
+
+`deploy` requires that explicit fingerprint. It holds a single update/recovery
+lock, pins the review and backup bytes, reconstructs both proposed artifacts,
+validates the cached published image and packaged binding, and compares both
+SQLite states/settings/source to the backup. It stops only the captured auditor,
+rechecks offline, archives it as `media_collection_auditor_before_update_IDPREFIX`,
+starts the replacement, checks authenticated APIs and then atomically installs
+the reviewed managed template. Media remains read-only. The helper itself mounts
+all media, old appdata and prepared appdata read-only; only its journal directory
+and saved-template directory are writable. The replacement gets its separately
+reviewed logs/control writable binds. No image publication, daemon changes or
+unrelated service controls are performed.
+
+On any error, keep all artifacts and containers. Do not rerun deploy or manually
+change templates. `recover` with the same selection and fingerprint validates the
+durable journal and rechecks both states before stopping a replacement, restoring
+the original template/name and starting the original. It retains the replacement
+as `media_collection_auditor_update_retained_IDPREFIX`. If creation was requested
+but its acknowledgement was lost, recovery requires the exact explicitly reviewed
+replacement ID as the final argument; it never discovers/adopts one by name.
+Changed state/settings or a corrupt journal blocks recovery for review. Recovery
+is a separate single attempt, never an automatic response to failure.
+
+Before production deployment, run check on the real host and verify Actions for
+the controller commit. The image's application revision remains the accepted
+published revision; controller-only changes do not require an image rebuild.
