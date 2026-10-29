@@ -92,3 +92,25 @@ unsafe rename fallback remain excluded. No kernel/module/NFS changes are needed
 for this inventory. Only a small disposable same-filesystem capability test will
 be needed on Tower after selecting a valid native-root layout; routine testing
 continues in CI.
+
+## Native media view candidate
+
+Tower's read-only stage inventory found `/mnt/media/media_storage` on Btrfs
+(`/dev/sdb1`), with counts matching the user share in all eight stages: Movies
+514/4/13/0 and TV 70/0/0/0. These observations identify a candidate, not a complete
+mount migration or future placement guarantee.
+
+`sqlite_media_view_review_host.sh IMAGE SHARED NATIVE` mounts both views read-only
+and reports only per-stage counts and whether relative directory/file names and
+file sizes match. It does not read media contents or print titles. It refuses
+symlinks/special entries, missing stages, unstable repeated observations and
+resource exhaustion. Matching metadata is not proof of byte equality or writer
+exclusion. The actual wrapper runs in CI with synthetic views; unit tests cover
+mismatched names with equal counts, missing nested media and concurrent changes.
+
+Before changing the production bind, require matching view metadata, native
+same-filesystem disposable rename acceptance and review of the share's primary,
+secondary and mover placement policy. Keep application-visible `/media` paths
+and Arr/Jellyfin path mapping stable if a complete native bind is selected.
+Do not exclude content on another backing device or treat the snapshot as a
+permanent promise that mover will not relocate future content.

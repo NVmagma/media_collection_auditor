@@ -11,6 +11,8 @@ on:
       - 'docker/sqlite-preview*'
       - 'scripts/sqlite_live_policy*'
       - 'tests/test_sqlite_live_policy*'
+      - 'scripts/sqlite_media_view_review*'
+      - 'tests/test_sqlite_media_view_review*'
       - 'app/**'
       - 'scripts/dashboard_clock_*'
       - 'scripts/interface_api_release_lab.sh'
@@ -114,6 +116,18 @@ jobs:
         run: |
           image=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate-build.json")
           bash scripts/sqlite_candidate_image_lab.sh "$image" | tee "$RUNNER_TEMP/candidate-tower-wrapper.log"
+      - name: Verify read-only shared/native media-view review wrapper
+        run: |
+          image=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate-build.json")
+          view_parent=$(mktemp -d "$RUNNER_TEMP/media-view-parent.XXXXXX")
+          for view in shared native; do
+            for stage in Movies Movies_hold Movies_keep Movies_removal TV TV_hold TV_keep TV_removal; do
+              mkdir -p "$view_parent/$view/$stage"
+            done
+            mkdir "$view_parent/$view/Movies/fixture-title"
+            printf fixture > "$view_parent/$view/Movies/fixture-title/media.mkv"
+          done
+          bash scripts/sqlite_media_view_review_host.sh "$image" "$view_parent/shared" "$view_parent/native"
       - name: Exercise initial live move policy on disposable CI storage
         run: |
           image=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate-build.json")
