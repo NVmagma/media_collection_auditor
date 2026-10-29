@@ -128,3 +128,27 @@ def test_uncertain_actual_rename_retains_integrity_and_blocks_execution(prepared
     calls=len(case.server.calls)
     with pytest.raises(RuntimeError):live.validate_live_binding(settings=values,for_execution=True)
     assert len(case.server.calls)==calls
+
+
+def test_public_read_gate_observes_pending_intent_without_execution_authority(prepared):
+    from app.sqlite_backend_gate import require_sqlite_read_authority, require_sqlite_production_activation
+    _,_,control,_,values=prepared
+    live.create_live_binding(settings=values)
+    store=GuardedSQLiteStateStore(control/'state.db')
+    state,revision=store.load_with_revision()
+    state[INTENTS_KEY]={'fixture':'unresolved'}
+    store.save_if_revision(state,revision)
+    before=store.load_with_revision()
+    assert require_sqlite_read_authority(settings=values)['DRY_RUN']=='false'
+    with pytest.raises(RuntimeError,match='SQLite live release binding unavailable'):
+        require_sqlite_production_activation(settings=values)
+    assert store.load_with_revision()==before
+
+
+def test_public_live_gate_redacts_binding_failure(prepared,monkeypatch):
+    from app.sqlite_backend_gate import require_sqlite_read_authority, require_sqlite_production_activation
+    def fail(**kwargs):raise ValueError('private path and token')
+    monkeypatch.setattr(live,'validate_live_binding',fail)
+    for gate in (require_sqlite_read_authority,require_sqlite_production_activation):
+        with pytest.raises(RuntimeError) as error:gate(settings=prepared[-1])
+        assert str(error.value)=='SQLite live release binding unavailable'

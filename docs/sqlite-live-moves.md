@@ -151,3 +151,12 @@ transaction rollback, actual capped rename with its clock/integrity checkpoints,
 and an uncertain actual rename retaining its intent and blocking further
 execution. Still required: public live recipe/entrypoint, status/settings behavior,
 actual-image crash/restart acceptance and the separate controlled live cutover.
+
+### Read authority and execution authority
+
+The compiled live profile now selects a separate binding gate. Read-only tracking
+access accepts a valid database with a retained move intent so recovery information
+can remain observable; execution rejects that same intent. Both paths redact
+validation failures and revalidate bound tracking projections after capture.
+Sealed and preview images retain their existing restrictions. No live image or
+production cutover is provided by this gate change alone.

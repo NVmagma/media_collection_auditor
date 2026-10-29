@@ -258,6 +258,11 @@ def _unavailable():
     raise RuntimeError('Selected tracking source unavailable')
 
 
+def _bound_sqlite_release():
+    from app.sqlite_backend_gate import preview_release_enabled, live_release_enabled
+    return preview_release_enabled() or live_release_enabled()
+
+
 def _preview_metadata():
     try:
         from app.sqlite_backend_gate import preview_release_enabled
@@ -282,7 +287,7 @@ def _selected_report(path, view, holding_days, library=None):
         report = capture_candidate_tracking_view(os.environ.get('SQLITE_STATE_FILE',
             '/app/logs/sqlite_worker/state.db'), holding_days=holding_days, **options)[
                 {'summary': 'summary', 'oldest-waiting': 'oldest_waiting', 'leaving-soon': 'leaving_soon'}[view]]
-        if _preview_metadata():
+        if _bound_sqlite_release():
             _require_sqlite_authority()  # Do not project an intervening unbound snapshot.
         return {**report, 'storage_authority': 'sqlite', **_preview_metadata()}
     except RuntimeError:
@@ -316,17 +321,17 @@ def read_selected_dashboard_state(path):
     from app.sqlite_tracking_view import capture_candidate_dashboard_state
     state = capture_candidate_dashboard_state(os.environ.get('SQLITE_STATE_FILE',
         '/app/logs/sqlite_worker/state.db'))
-    if _preview_metadata():
+    if _bound_sqlite_release():
         _require_sqlite_authority()
     return state
 
 
 def _require_sqlite_authority():
     if __package__:
-        from .sqlite_backend_gate import require_sqlite_production_activation
+        from .sqlite_backend_gate import require_sqlite_read_authority
     else:
-        from sqlite_backend_gate import require_sqlite_production_activation
-    require_sqlite_production_activation()
+        from sqlite_backend_gate import require_sqlite_read_authority
+    require_sqlite_read_authority()
 
 
 def selected_run_snapshot(legacy_snapshot):
