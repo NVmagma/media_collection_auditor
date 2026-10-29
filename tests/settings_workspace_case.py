@@ -3,17 +3,19 @@ import os
 os.environ.setdefault('WEB_SESSION_SECRET', 'synthetic-settings-secret')
 from flask import g, render_template
 import web
+from app.sqlite_live_settings import LOCKED
 from config_store import FIELDS, KEYS, SECRETS, BOOLS, DEFAULTS
 
 
 def render_settings_workspace(scenario='ready'):
-    if scenario not in ('ready', 'recovery', 'stale', 'clean', 'review', 'resubmit'):
+    if scenario not in ('ready', 'recovery', 'stale', 'clean', 'review', 'resubmit', 'live'):
         raise ValueError('Unknown synthetic Settings scenario')
     values = {key: DEFAULTS.get(key, '') for key in KEYS}
     values.update(JELLYFIN_HOST_URL='https://jellyfin.example.invalid', HOLDING_DAYS='7',
                   SQLITE_DAILY_RUN_TIME='02:00', SQLITE_DAILY_RUN_TIMEZONE='America/Los_Angeles')
     for key in SECRETS:
         values[key] = ''
+    if scenario=='live':values.update(DRY_RUN='false',MAX_ACTIONS_PER_RUN='1')
     pending = {'status':'requested', 'changed_keys':['ENABLE_TV','HOLDING_DAYS','JELLYFIN_API_TOKEN']}
     application = {'status':'ready', 'request_sha256':'a'*64}
     if scenario == 'recovery':
@@ -32,7 +34,8 @@ def render_settings_workspace(scenario='ready'):
     with web.app.test_request_context('/settings'):
         g.user = {'name':'Synthetic administrator', 'admin':True}
         return render_template('settings.html', groups=FIELDS, values=values, sources={key:'Default' for key in KEYS},
-            secrets=SECRETS, bools=BOOLS, help_text=web.FIELD_HELP, preview_mode=True,
+            secrets=SECRETS, bools=BOOLS, help_text=web.FIELD_HELP, preview_mode=True,live_mode=scenario=='live',
+            locked_settings=LOCKED if scenario=='live' else (),
             pending_settings=pending, settings_application=application,
             error=None, requested=False, unchanged=False, success=False,
             settings_applied=False, settings_restored=False, settings_apply_busy=False, settings_apply_error=False)
@@ -51,5 +54,5 @@ def render_integration_workspace():
 if __name__ == '__main__':
     import sys
     from pathlib import Path
-    for scenario in ('ready','recovery','stale','clean','review','resubmit'):
+    for scenario in ('ready','recovery','stale','clean','review','resubmit','live'):
         Path(sys.argv[1]+'.'+scenario+'.html').write_text(render_settings_workspace(scenario))

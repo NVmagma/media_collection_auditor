@@ -1078,6 +1078,24 @@ def run_now():
         return {"ok": False, "message": "Invalid request origin."}, 403
     backend = os.environ.get('AUDITOR_STATE_BACKEND', 'json')
     gate = _preview_backend_gate()
+    if gate.live_release_enabled():
+        data=request.get_json(silent=True)
+        if not isinstance(data,dict) or set(data)!={'consume_daily_slot'} or data['consume_daily_slot'] is not True:
+            return {'ok':False,'message':'Explicitly confirm using today’s live scan and action budget.'},409
+        try:
+            from datetime import timezone
+            from app.sqlite_scheduled_production import _daily_claim_exists
+            values=gate.require_sqlite_production_activation()
+            if _daily_claim_exists(values,datetime.now(timezone.utc)):
+                return {'ok':False,'message':'Today’s daily attempt is already claimed. No extra scan or move was queued.'},409
+        except Exception:
+            return {'ok':False,'message':'Live configuration needs review; no scan was queued.'},409
+        from app.sqlite_scheduled_observations import COORDINATOR
+        if COORDINATOR.request_manual_live():
+            from run_control import wake_worker
+            wake_worker()
+            return {'ok':True,'message':'Live daily scan queued. It uses today’s one-action budget; no additional scheduled attempt is allowed today.'},202
+        return {'ok':False,'message':'A scan is already running or queued.'},409
     if gate.preview_release_enabled() or backend == 'sqlite':
         if not gate.preview_release_enabled():
             return {'ok': False, 'message': 'This backend runs only at its configured daily time.'}, 409

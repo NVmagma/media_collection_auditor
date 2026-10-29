@@ -28,9 +28,11 @@ def claim_disposable_scheduled_slot(*, root, schedule, scheduled_at, now, maximu
 
 @contextmanager
 def _claim_scheduled_slot_locked(*, root, schedule, scheduled_at, now,
-        maximum_lateness_seconds=60, verify_binding):
+        maximum_lateness_seconds=60, verify_binding, manual=False):
     """Private claim primitive; caller retains the bound control lock throughout."""
-    slot, date, key = _slot_identity(schedule, scheduled_at, now, maximum_lateness_seconds)
+    if type(manual) is not bool:raise ValueError('Explicit claim trigger required')
+    slot, date, key = (_manual_slot_identity(schedule,now) if manual else
+        _slot_identity(schedule, scheduled_at, now, maximum_lateness_seconds))
     root = Path(root)
     root_fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     directory_fd = record_fd = None
@@ -50,6 +52,7 @@ def _claim_scheduled_slot_locked(*, root, schedule, scheduled_at, now,
                             0o600, dir_fd=directory_fd)
         payload = json.dumps({'schema_version': 1, 'phase': 'slot_claimed',
             'scheduled_at': slot.isoformat(), 'timezone': schedule.timezone_name,
+            'trigger':'manual' if manual else 'scheduled',
             'local_date': date, 'automatic_replay': False,
             'production_authorized': False}, sort_keys=True).encode()
         offset = 0
@@ -95,3 +98,13 @@ def _slot_identity(schedule, scheduled_at, now, maximum_lateness_seconds):
     date = slot.astimezone(ZoneInfo(schedule.timezone_name)).date().isoformat()
     key = hashlib.sha256((schedule.timezone_name + '\0' + date).encode()).hexdigest() + '.json'
     return slot, date, key
+
+
+def _manual_slot_identity(schedule,now):
+    """Explicit operator attempt for today's date, using the scheduled claim key."""
+    if not isinstance(schedule,DailyRunSchedule) or not isinstance(now,datetime) or now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError('Bound daily schedule and aware manual time required')
+    current=now.astimezone(timezone.utc)
+    date=current.astimezone(ZoneInfo(schedule.timezone_name)).date().isoformat()
+    key=hashlib.sha256((schedule.timezone_name+'\0'+date).encode()).hexdigest()+'.json'
+    return current,date,key

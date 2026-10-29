@@ -65,6 +65,42 @@ class LiveReleaseTests(unittest.TestCase):
         self.values['SONARR_APP_HOLDING_PATH']='/arr-view/TV_hold'
         return server
 
+    def test_manual_live_then_timer_uses_only_one_daily_attempt(self):
+        from app.sqlite_scheduled_production import run_requested_live
+        arr=self.arr();self.bind();now=self.case.fixture.slot-timedelta(hours=1)
+        self.step(now-timedelta(minutes=1));self.assertTrue(self.observer.request_manual_live())
+        result=run_requested_live(settings=self.values,now=now,observer=self.observer,clock=lambda:NOW)
+        self.assertEqual(len(result['completed']),1);self.assertEqual(arr.puts,1)
+        calls=list(self.case.server.calls)
+        self.assertEqual(self.step(self.case.fixture.slot).outcome['status'],'daily_slot_already_claimed')
+        self.assertEqual(self.case.server.calls,calls)
+        restarted=ScheduledRunObservations();self.assertTrue(restarted.request_manual_live())
+        self.assertEqual(run_requested_live(settings=self.values,now=now+timedelta(minutes=1),
+            observer=restarted,clock=lambda:NOW)['status'],'daily_slot_already_claimed')
+        self.assertEqual(arr.puts,1);self.assertEqual(self.source.read_bytes(),self.original)
+
+    def test_timer_then_manual_live_never_collects_twice(self):
+        from app.sqlite_scheduled_production import run_requested_live
+        arr=self.arr();self.bind();self.due();calls=list(self.case.server.calls)
+        self.assertTrue(self.observer.request_manual_live())
+        self.assertEqual(run_requested_live(settings=self.values,now=self.case.fixture.slot+timedelta(hours=1),
+            observer=self.observer,clock=lambda:NOW)['status'],'daily_slot_already_claimed')
+        self.assertEqual(self.case.server.calls,calls);self.assertEqual(arr.puts,1)
+
+    def test_live_settings_apply_preserves_latest_move_clocks_and_claim(self):
+        from app.sqlite_live_settings import request_settings,apply_requested_settings
+        arr=self.arr();self.bind();self.due()
+        before=self.store.load_with_revision();raw=self.source.read_bytes()
+        claims={path.name:path.read_bytes() for path in (self.control/'.sqlite_scheduled_slots').iterdir()}
+        proposed=json.loads(self.saved.read_bytes());proposed['HOLDING_DAYS']='13'
+        request=request_settings(config_path=self.saved,updated=proposed,environment=self.values,include_digest=True)
+        report=apply_requested_settings(settings=self.values,request_sha256=request['request_sha256'])
+        self.assertTrue(report['tracking_unchanged'])
+        self.assertEqual(require_sqlite_production_activation(settings=self.values)['HOLDING_DAYS'],'13')
+        self.assertEqual(self.store.load_with_revision(),before);self.assertEqual(self.source.read_bytes(),raw)
+        self.assertEqual({path.name:path.read_bytes() for path in (self.control/'.sqlite_scheduled_slots').iterdir()},claims)
+        self.assertEqual(arr.puts,1)
+
     def test_public_due_worker_moves_one_and_delivers_only_its_arr_record(self):
         arr=self.arr();self.bind();result=self.due()
         self.assertEqual(len(result.outcome['completed']),1)
@@ -105,6 +141,12 @@ class LiveReleaseTests(unittest.TestCase):
         self.assertEqual(self.observer.report()['last_result'],'failed')
 
     def test_actual_sigkill_after_rename_retains_intent_and_refuses_restart_dispatch(self):
+        self._kill_after_rename()
+
+    def test_actual_manual_sigkill_retains_daily_claim_and_blocks_replay(self):
+        self._kill_after_rename(manual=True)
+
+    def _kill_after_rename(self,manual=False):
         self.bind()
         code='''
 import json,os,signal,sys
@@ -112,22 +154,29 @@ from datetime import datetime,timedelta
 from app import sqlite_scheduled_routed_batch as batch
 from app.sqlite_scheduled_production import production_cycle_step
 from app.sqlite_scheduled_worker_cycle import ScheduledWorkerCycle
-values=json.load(sys.stdin);slot=datetime.fromisoformat(values.pop('_fixture_slot'))
+values=json.load(sys.stdin);manual=values.pop('_fixture_manual');slot=datetime.fromisoformat(values.pop('_fixture_slot'))
 clock=datetime.fromisoformat(values.pop('_fixture_clock'))
 original=batch.rename_directory_noreplace_at
 def stop(*args):
     original(*args)
     os.kill(os.getpid(),signal.SIGKILL)
 batch.rename_directory_noreplace_at=stop
-cycle=ScheduledWorkerCycle()
-for now in (slot-timedelta(hours=1),slot):
-    production_cycle_step(cycle=cycle,settings=values,now=now,clock=lambda:clock)
+if manual:
+    from app.sqlite_scheduled_production import run_requested_live
+    from app.sqlite_scheduled_observations import ScheduledRunObservations
+    observer=ScheduledRunObservations();observer.request_manual_live()
+    run_requested_live(settings=values,now=slot-timedelta(hours=1),observer=observer,clock=lambda:clock)
+else:
+    cycle=ScheduledWorkerCycle()
+    for now in (slot-timedelta(hours=1),slot):
+        production_cycle_step(cycle=cycle,settings=values,now=now,clock=lambda:clock)
 '''
-        values=dict(self.values,_fixture_slot=self.case.fixture.slot.isoformat(),_fixture_clock=NOW.isoformat())
+        values=dict(self.values,_fixture_manual=manual,_fixture_slot=self.case.fixture.slot.isoformat(),_fixture_clock=NOW.isoformat())
         child=subprocess.run([sys.executable,'-B','-c',code],input=json.dumps(values),text=True,capture_output=True,timeout=30)
         self.assertEqual(child.returncode,-signal.SIGKILL)
         state,_=self.store.load_with_revision();self.assertIn(INTENTS_KEY,state)
         self.assertTrue(self.case.fixture.fixture.path(0,'holding').is_dir())
+        self.assertEqual(len(list((self.control/'.sqlite_scheduled_slots').iterdir())),1)
         require_sqlite_read_authority(settings=self.values)
         calls=len(self.case.server.calls)
         with self.assertRaises(RuntimeError):self.step(self.case.fixture.slot+timedelta(days=1))
@@ -177,7 +226,7 @@ def main():
             or build.SOURCE_REVISION!=os.environ['EXPECTED_RELEASE_REVISION']):
         raise RuntimeError('Actual immutable packaged live release required')
     result=unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(LiveReleaseTests))
-    if not result.wasSuccessful() or result.testsRun!=5 or result.skipped:raise SystemExit(1)
+    if not result.wasSuccessful() or result.testsRun!=9 or result.skipped:raise SystemExit(1)
     print(json.dumps({'status':'actual_live_release_fixture_verified','tests':result.testsRun,
                      'source_revision':build.SOURCE_REVISION,'fixture_only':True,'production_services_changed':False,
                      'permanent_deletion_authorized':False,'initial_maximum_actions':1}))

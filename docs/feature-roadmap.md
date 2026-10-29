@@ -19,8 +19,10 @@
   fixed policy reasons, separate proposed/completed/uncertain outcomes and
   retained verified move observations when later Arr delivery fails. Counts-only
   integration APIs continue omitting title details. Acceptance is in progress.
-- Next: reviewed live settings application/recovery, then an explicit manual live
-  run sharing the same durable local-date claim and daily action cap.
+- Reviewed live settings application/recovery and an explicit manual live run
+  now have source support and focused acceptance. Settings preserve advanced
+  tracking and daily claims; manual runs share the timer’s durable local-date
+  claim and one-action cap. Full exact-image acceptance/publication is next.
 - Finish exact-image acceptance, publication and release notes. Preserve current
   live tracking and the saved Unraid template; no automatic Tower update.
 

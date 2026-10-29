@@ -26,7 +26,7 @@ if (!prefix) throw Error('Pass the synthetic output prefix from tests/settings_w
       if(url.hostname!=='fixture.invalid') return route.abort();
       if(url.pathname==='/settings') {
         const scenario=url.searchParams.get('scenario') || 'ready';
-        if(!['ready','recovery','stale','clean','review','resubmit'].includes(scenario)) return route.fulfill({status:400});
+        if(!['ready','recovery','stale','clean','review','resubmit','live'].includes(scenario)) return route.fulfill({status:400});
         return route.fulfill({contentType:'text/html',body:fs.readFileSync(prefix+'.'+scenario+'.html')});
       }
       const asset=assets[url.pathname];
@@ -93,6 +93,14 @@ if (!prefix) throw Error('Pass the synthetic output prefix from tests/settings_w
     assert.equal(submitted.get('HOLDING_DAYS'),'11');
     assert.equal(submitted.get('request_sha256'),'a'.repeat(64));
     assert.equal(submitted.has('safety_confirmation'),false);
+    await page.goto('http://fixture.invalid/settings?scenario=live');
+    assert.match(await page.locator('body').innerText(),/one-action cap/);
+    assert.equal(await page.locator('#field-MAX_ACTIONS_PER_RUN').count(),0);
+    assert.equal(await page.locator('input[name=MAX_ACTIONS_PER_RUN]').inputValue(),'1');
+    await page.locator('[data-tab=Lifecycle]').click();
+    assert.equal(await page.locator('#field-HOLDING_DAYS').isEnabled(),true);
+    assert.equal(await page.locator('#field-SQLITE_DAILY_RUN_TIMEZONE').count(),0);
+    assert.equal(await page.locator('#apply-settings-button').isEnabled(),true);
     assert.deepEqual(errors,[]);
     if(process.env.DASHBOARD_SCREENSHOT_DIRECTORY) {
       await page.setViewportSize({width:1440,height:1000});

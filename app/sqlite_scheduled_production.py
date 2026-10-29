@@ -43,6 +43,9 @@ def _configured_cycle_step(*, cycle, settings, now, clock, observer=None):
     if not isinstance(cycle, ScheduledWorkerCycle):
         raise ValueError('Daily worker cycle required')
     def due(slot, current):
+        from app.sqlite_backend_gate import live_release_enabled
+        if live_release_enabled() and _daily_claim_exists(values,slot):
+            return {'status':'daily_slot_already_claimed','automatic_replay':False}
         if observer is not None:
             observer.observe_cycle(next_run=cycle.next_run, status='attempted')
         def execute():
@@ -90,11 +93,44 @@ def run_requested_preview(*, settings, now, observer, clock=datetime.now):
         observer.release_manual_preview()
 
 
-def _run_bound_production_slot(*, settings, scheduled_at, now, clock, timer=monotonic, manual_preview=False, record_details=None):
+def _daily_claim_exists(settings,now):
+    from app.sqlite_scheduled_settings import scheduled_worker_from_settings
+    from app.sqlite_scheduled_slot import _manual_slot_identity
+    schedule=scheduled_worker_from_settings(settings).schedule
+    _,_,key=_manual_slot_identity(schedule,now)
+    control=Path(_canonical(settings['SQLITE_STATE_FILE'])).parent
+    return os.path.lexists(control/'.sqlite_scheduled_slots'/key)
+
+
+def run_requested_live(*,settings,now,observer,clock=datetime.now):
+    """Consume one operator request through the same durable daily claim as timers."""
+    from app.sqlite_scheduled_observations import ScheduledRunObservations
+    if not isinstance(observer,ScheduledRunObservations):raise ValueError('Bound observer required')
+    if not isinstance(now,datetime) or now.tzinfo is None:raise ValueError('Aware manual time required')
+    if not observer.claim_manual_live():return None
+    try:
+        from app.sqlite_backend_gate import live_release_enabled
+        if not live_release_enabled():raise RuntimeError('Separate live image required')
+        values=require_sqlite_production_activation(settings=settings)
+        if _daily_claim_exists(values,now):
+            return {'status':'daily_slot_already_claimed','automatic_replay':False}
+        def execute():
+            result=_run_bound_production_slot(settings=values,scheduled_at=now,now=now,clock=clock,
+                manual_live=True,record_details=observer.record_title_details)
+            require_sqlite_production_activation(settings=values)
+            return result
+        return observer.run_attempt(scheduled_at=now,execute=execute,dry_run=False,trigger='manual')
+    finally:observer.release_manual_preview()
+
+
+def _run_bound_production_slot(*, settings, scheduled_at, now, clock, timer=monotonic, manual_preview=False, manual_live=False, record_details=None):
     """Private candidate implementation; the public entry above remains sealed."""
     config, scan, protect = _configured_run_inputs(settings=settings, clock=clock, allow_dry_run=True)
     dry_run = settings.get('DRY_RUN', 'true').strip().lower() == 'true'
     if manual_preview and not dry_run: raise RuntimeError('Manual media actions are not authorized')
+    if manual_live:
+        from app.sqlite_backend_gate import live_release_enabled
+        if manual_preview or dry_run or not live_release_enabled():raise RuntimeError('Bound live request required')
     resolve_arr = None if dry_run else configured_arr_queue_resolver(settings=settings, config=config)
     source = Path(_canonical(settings.get('STATE_FILE', '/app/logs/auditor_state.json')))
     database = Path(_canonical(settings.get('SQLITE_STATE_FILE', '/app/logs/sqlite_worker/state.db')))
@@ -128,7 +164,7 @@ def _run_bound_production_slot(*, settings, scheduled_at, now, clock, timer=mono
                 verify_json(); verify_control()
             claim = (nullcontext(verify_binding) if manual_preview else
                 _claim_scheduled_slot_locked(root=control, schedule=config.schedule,
-                    scheduled_at=scheduled_at, now=now, verify_binding=verify_binding))
+                    scheduled_at=scheduled_at, now=now, verify_binding=verify_binding, manual=manual_live))
             with claim as verify_claim:
                 if dry_run:
                     from app.sqlite_scheduled_preview import prepare_scheduled_preview

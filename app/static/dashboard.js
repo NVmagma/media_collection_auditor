@@ -164,12 +164,15 @@ document.querySelectorAll('.rescue-choice').forEach(choice => choice.addEventLis
 }));
 const button = document.getElementById('run-now');
 button?.addEventListener('click', async () => {
-  if (button.dataset.preview !== 'true' && !confirm('Start an audit using your saved configuration? In Live Mode this may move or delete media.')) return;
+  const live=button.dataset.live === 'true';
+  const message=live ? 'Run today’s live scan now? This can move one title and uses today’s daily action budget. Permanent deletion is disabled.' : 'Start an audit using your saved configuration? In Live Mode this may move or delete media.';
+  if (button.dataset.preview !== 'true' && !confirm(message)) return;
   button.disabled = true;
   const output = document.getElementById('run-result');
   output.textContent = 'Requesting audit…';
   try {
-    const response = await fetch('/api/run-now', {method:'POST', credentials:'same-origin'});
+    const response = await fetch('/api/run-now', {method:'POST', credentials:'same-origin',
+      ...(live ? {headers:{'Content-Type':'application/json'},body:JSON.stringify({consume_daily_slot:true})} : {})});
     const data = await response.json();
     output.textContent = data.message || 'Request failed.';
     if (response.status === 401) output.textContent = 'Please open Settings to sign in, then try again.';

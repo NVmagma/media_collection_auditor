@@ -72,3 +72,5 @@ if __name__ == '__main__':
     Path(sys.argv[1]).write_bytes(response.data)
     Path(sys.argv[1] + '.review.html').write_bytes(render_workspace(workspace='Review').data)
     Path(sys.argv[1] + '.admin.html').write_bytes(render_workspace(admin=True).data)
+    Path(sys.argv[1] + '.live.html').write_bytes(render_workspace(admin=True,run_updates={
+        'execution_mode':'scheduled_live_moves','production_activation':'scheduled_moves','dry_run':False}).data)

@@ -280,3 +280,23 @@ root and schedule time zone remain fixed. Time-zone changes require separate
 claim-migration review. Ordinary connection, lifecycle, notification and library
 settings use validated effective values and fresh media root checks; applying
 settings does not request a scan. Source support is not a Tower update.
+
+### Explicit manual live daily attempt
+
+Run Live Scan Now uses the same full all-library collection, guarded clock
+checkpoint, fresh protection reads, one-action cap, no-replace rename and Arr
+completion as the timer. The administrator confirms using today's budget; the
+same-origin POST requires exactly `{"consume_daily_slot": true}`. Read-only API
+tokens cannot request it. This is a live run, not a preview, and permanent
+deletion stays disabled.
+
+Manual and scheduled attempts use the same retained zone/local-date claim. A
+manual attempt before the daily time consumes that date; the timer does not run
+again. A timer attempt prevents a later manual attempt. Failure, process death
+and restart retain the claim, with no automatic replay. Pending operations still
+block execution. A new daily time does not create a second claim on the same
+date; the canary time zone stays fixed. Read-only previews retain their existing
+separate behavior and do not spend live claims.
+
+The public service reloads approved settings on wake; a wake alone does not grant
+manual authority. Only a queued explicit live request reaches the manual path.

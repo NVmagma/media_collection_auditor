@@ -14,8 +14,14 @@ if (!file) throw Error('Pass the synthetic page rendered by tests/dashboard_work
     page.on('pageerror', error => errors.push(error.message));
     await page.route('**/*', route => {
       const request = route.request(), url = new URL(request.url());
-      if (request.method() !== 'GET') posts.push(request.method());
-      const assets = {'/': [url.searchParams.get('role') === 'admin' ? file + '.admin.html' : file, 'text/html'], '/review': [file + '.review.html', 'text/html'],
+      if (request.method() !== 'GET') {
+        posts.push(request.method());
+        if (url.hostname==='fixture.invalid' && url.pathname==='/api/run-now') {
+          assert.deepEqual(JSON.parse(request.postData()),{consume_daily_slot:true});
+          return route.fulfill({status:202,contentType:'application/json',body:JSON.stringify({ok:true,message:'Synthetic live request queued; no worker connected.'})});
+        }
+      }
+      const assets = {'/': [url.searchParams.get('role') === 'live' ? file + '.live.html' : url.searchParams.get('role') === 'admin' ? file + '.admin.html' : file, 'text/html'], '/review': [file + '.review.html', 'text/html'],
         '/static/style.css': [path.join(root, 'app/static/style.css'), 'text/css'],
         '/static/dashboard.js': [path.join(root, 'app/static/dashboard.js'), 'text/javascript'],
         '/static/auditor-badge.png': [path.join(root, 'unraid/assets/Media_Collection_Auditor_Badge.png'), 'image/png']};
@@ -165,6 +171,16 @@ if (!file) throw Error('Pass the synthetic page rendered by tests/dashboard_work
     }
     await page.goto('http://fixture.invalid/');
     assert.deepEqual(posts, []);
+    await page.goto('http://fixture.invalid/?role=live#Overview');
+    assert.equal(await page.locator('#run-now').textContent(),'Run Live Scan Now');
+    const dialog=page.waitForEvent('dialog');
+    const click=page.locator('#run-now').click();
+    const confirmation=await dialog;
+    assert.match(confirmation.message(),/today’s daily action budget/);
+    await confirmation.accept();await click;
+    await page.getByText('Synthetic live request queued; no worker connected.',{exact:true}).waitFor();
+    assert.deepEqual(posts,['POST']);
+    await page.goto('http://fixture.invalid/');
     assert.deepEqual(errors, []);
     if (process.env.DASHBOARD_SCREENSHOT_DIRECTORY) {
       await page.setViewportSize({width: 1280, height: 1000});
