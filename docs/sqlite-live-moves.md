@@ -203,3 +203,21 @@ unchanged. No service payload is installed and no worker starts. Changed inputs
 or interrupted preparations retain partial files and cannot replay. A fresh
 backup is still an observation; cutover must check that it matches the stopped
 original before starting the live worker.
+
+### Read-only live cutover review
+
+The live review builds a separate private proposed container/template from the
+accepted registry digest. It preserves ports, credentials, UI metadata, restart
+policy and the read-only container root. Only the explicitly reviewed native
+media bind becomes writable in the proposal. The current template and container
+are never changed by review.
+
+Review verifies both current and prepared revision-zero tracking, retained source
+and settings, preparation receipts, the new live binding and a fresh bounded
+shared/native relative metadata comparison. It refuses stale inputs, duplicate
+templates, unsafe policy, unexpected capabilities, changed private files and
+nonstandard initial stage layout. Existing data mounts are read-only; only a new
+private review directory is writable. Matching metadata does not claim byte
+equality or exclusion of external writers. A reviewed proposal still requires a
+separate tested service transaction and stopped-original freshness check before
+activation.

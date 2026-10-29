@@ -1,0 +1,61 @@
+"""The live plan changes the explicit media bind, preserving ports and credentials."""
+from copy import deepcopy
+from xml.etree import ElementTree as ET
+import pytest
+from app.config_store import DEFAULTS
+from app.sqlite_live_policy import DISABLED
+from test_unraid_update_production_prepare import inputs
+from scripts.unraid_live_plan import live_metadata
+
+
+def values():
+    args=inputs();args['current']['State']['Running']=True
+    args['current']['HostConfig']['CapDrop']=['ALL']
+    args['image'].update(Id='sha256:'+'c'*64,RepoDigests=[args['reference']])
+    args['image']['Config'].update(Entrypoint=['python','-m','app.main'],StopSignal='SIGINT',
+        Labels={'io.media-collection-auditor.sqlite-activation':'scheduled-moves','org.opencontainers.image.revision':'d'*40})
+    args['environment']={**DEFAULTS,**args['environment'],'DRY_RUN':'false','MAX_ACTIONS_PER_RUN':'1',
+                         'SQLITE_DAILY_RUN_TIME':'02:00','SQLITE_DAILY_RUN_TIMEZONE':'America/Los_Angeles',
+                         'READ_ONLY_API_SERVICE':'false',**{key:'false' for key in DISABLED}}
+    args['host_media']='/native-pool/media_storage'
+    return args
+
+
+def test_native_rw_proposal_keeps_sqlite_clocks_paths_ports_credentials_and_original_template():
+    args=values();before=deepcopy(args)
+    payload,raw=live_metadata(**args);root=ET.fromstring(raw)
+    assert args==before
+    media=next(item for item in payload['HostConfig']['Mounts'] if item['Target']=='/media')
+    assert media['Source']==args['host_media'] and media['ReadOnly'] is False
+    assert payload['HostConfig']['ReadonlyRootfs'] is True
+    assert payload['HostConfig']['RestartPolicy']['Name']=='no'
+    assert payload['HostConfig']['PortBindings']==args['current']['HostConfig']['PortBindings']
+    assert root.find("Config[@Target='/media']").get('Mode')=='rw'
+    assert root.find("Config[@Target='/media']").text==args['host_media']
+    assert root.findtext('Repository')==args['reference']
+    env=dict(item.split('=',1) for item in payload['Env'])
+    assert env['MAX_ACTIONS_PER_RUN']=='1' and env['DRY_RUN']=='false'
+    assert env['INTEGRATION_API_TOKEN']==args['environment']['INTEGRATION_API_TOKEN']
+    assert payload['Labels']['io.media-collection-auditor.sqlite-activation']=='scheduled-moves'
+    assert root.findtext('WebUI')=='http://[IP]:[PORT:8080]/'
+
+
+@pytest.mark.parametrize('change',['profile','digest','image','attempt','native-alias','native-private','native-traversal',
+                                   'unsafe-policy','capabilities','root-rw','stale-template','stopped'])
+def test_unreviewed_live_proposals_rejected_without_mutating_inputs(change):
+    args=values()
+    if change=='profile':args['image']['Config']['Labels']['io.media-collection-auditor.sqlite-activation']='preview-only'
+    elif change=='digest':args['image']['RepoDigests']=[]
+    elif change=='image':args['image']['Id']=args['current']['Image']
+    elif change=='attempt':args['attempt']='bad'
+    elif change=='native-alias':args['host_media']=args['current']['Mounts'][0]['Source']
+    elif change=='native-private':args['host_media']=args['host_logs']+'/media'
+    elif change=='native-traversal':args['host_media']='/native/../media'
+    elif change=='unsafe-policy':args['environment']['ALLOW_FILESYSTEM_DELETE']='true'
+    elif change=='capabilities':args['current']['HostConfig']['CapAdd']=['SYS_ADMIN']
+    elif change=='root-rw':args['current']['HostConfig']['ReadonlyRootfs']=False
+    elif change=='stale-template':args['template']=args['template'].replace(b'8089',b'8090')
+    else:args['current']['State']['Running']=False
+    before=deepcopy(args)
+    with pytest.raises(ValueError):live_metadata(**args)
+    assert args==before
