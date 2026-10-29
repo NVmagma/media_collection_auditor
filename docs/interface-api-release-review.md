@@ -25,6 +25,20 @@ change only Unraid Repository, or automatically start the retained old preview
 after live tracking has advanced. First-run verification and any increase beyond
 the canary limit remain separate decisions.
 
+## Accepted published candidate — 2026-10-29
+
+- Application revision: `53f7a05603373afd0540a3cc5f6b0a0f2fbd5b08`.
+- Immutable reference: `ghcr.io/nvmagma/media_collection_auditor@sha256:006be65b3aa3382038dab6f4eef69328955459dd9363ccf8754b9a78753d728b`.
+- Image ID: `sha256:ae5e79e8285ed6cb15f6d98be61666145ed421894142716940c563d8ca4c2f5b`.
+- [Acceptance-gated publication](https://github.com/NVmagma/media_collection_auditor/actions/runs/40924534015) passed **3,877 tests and 98 subtests**, nine actual packaged live cases, minimal-capability ownership checks and preview/service recovery acceptance.
+- [Python safety and browser checks](https://github.com/NVmagma/media_collection_auditor/actions/runs/40923864505) passed, including flat web import compatibility and real Dashboard/Settings/API browser acceptance.
+- The exact accepted image was published without rebuilding. Floating default,
+  official and preview references were not changed by this live publication.
+- Tower has **not** been updated to this candidate. Wait for the current canary's
+  first scheduled result, then prepare a separately reviewed live-to-live update
+  preserving the latest state and daily claims. No new template is installed by
+  source publication; keep the working pinned live template unchanged.
+
 ## Historical preview-only release review — 2026-10-28
 
 Scope: `feature/interface-api` into a new versioned **preview-only** image.

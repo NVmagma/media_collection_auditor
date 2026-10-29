@@ -18,13 +18,15 @@
 - Per-title scan explanations are implemented with bounded process-local records:
   fixed policy reasons, separate proposed/completed/uncertain outcomes and
   retained verified move observations when later Arr delivery fails. Counts-only
-  integration APIs continue omitting title details. Acceptance is in progress.
+  integration APIs continue omitting title details. Exact-image acceptance passed.
 - Reviewed live settings application/recovery and an explicit manual live run
-  now have source support and focused acceptance. Settings preserve advanced
+  passed exact-image acceptance and publication. Settings preserve advanced
   tracking and daily claims; manual runs share the timer’s durable local-date
-  claim and one-action cap. Full exact-image acceptance/publication is next.
-- Finish exact-image acceptance, publication and release notes. Preserve current
-  live tracking and the saved Unraid template; no automatic Tower update.
+  claim and one-action cap. These newer controls are not yet installed on Tower.
+- Release notes and immutable publication are recorded in the
+  [current release record](interface-api-release-review.md). Next deployment must
+  use a reviewed live-to-live update preserving latest tracking and daily claims;
+  leave the working pinned Unraid template unchanged while awaiting first-run review.
 
 ## Completed SQLite preview milestone
 
