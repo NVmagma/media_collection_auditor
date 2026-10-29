@@ -104,3 +104,24 @@ def test_completed_review_is_not_overwritten_or_replayed(ready):
     with pytest.raises(RuntimeError):review.review_candidate(**options)
     assert before=={p.name:p.read_bytes() for p in options['output'].iterdir()}
     case.unchanged()
+
+
+def test_published_digest_is_bound_to_both_private_proposals(ready):
+    case,options=ready
+    reference='ghcr.io/nvmagma/media_collection_auditor@sha256:'+'d'*64
+    options['image']['RepoDigests']=[reference]
+    report=review.review_candidate(**options,reference=reference)
+    assert report['image_reference_status']=='verified_cached_digest'
+    assert report['reference']==reference and not report['deployment_authorized']
+    assert json.loads((options['output']/'proposed-container.json').read_bytes())['Image']==reference
+    assert ET.fromstring((options['output']/'proposed-template.xml').read_bytes()).findtext('Repository')==reference
+    case.unchanged()
+
+
+@pytest.mark.parametrize('reference',[
+    'ghcr.io/nvmagma/media_collection_auditor:latest',
+    'ghcr.io/nvmagma/media_collection_auditor@sha256:'+'e'*64])
+def test_unverified_reference_never_creates_a_proposal(ready,reference):
+    case,options=ready
+    with pytest.raises(ValueError):review.review_candidate(**options,reference=reference)
+    assert not list(options['output'].iterdir())

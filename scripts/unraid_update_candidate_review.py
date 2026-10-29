@@ -33,12 +33,16 @@ def _environment(raw):
 
 
 def review_candidate(*,backup,backup_identity,fingerprint,logs,control,old_logs,old_control,
-                     output,output_identity,live,image,host_logs,host_control,templates):
+                     output,output_identity,live,image,host_logs,host_control,templates,reference=None):
     from app.sqlite_tracking_view import _candidate_capture
     from app.sqlite_preview_activation import validate_preview_activation,_revision,BINDING
     from app.sqlite_preview_template import RUNTIME_DEFAULTS
     from app.sqlite_state import SECTIONS
     from app.unraid_update_review import matching_templates
+    if reference is not None:
+        from scripts.unraid_update_production_prepare import REFERENCE
+        if not REFERENCE.fullmatch(reference) or reference not in (image.get('RepoDigests') or []):
+            raise ValueError('Published reference must resolve to the selected cached image')
     selected=dict(directory=backup,expected_identity=backup_identity,expected_fingerprint=fingerprint)
     data=load_backup_payloads(**selected)
     original=parse_unique_json(data['current.inspect.json'])
@@ -85,6 +89,11 @@ def review_candidate(*,backup,backup_identity,fingerprint,logs,control,old_logs,
         validate_preview_activation(settings=env)
         payload,xml=candidate_review_metadata(current=live,image=image,template=data['current-template.xml'],
             environment=env,host_logs=host_logs,host_control=host_control,attempt=os.urandom(32).hex())
+        if reference is not None:
+            from xml.etree import ElementTree as ET
+            payload['Image']=reference
+            root=ET.fromstring(xml);root.find('Repository').text=reference
+            xml=ET.tostring(root,encoding='utf-8',xml_declaration=True)+b'\n'
         def unchanged():
             if (_capture(old_logs,tuple(old_before))!=old_before
                     or _capture(old_control/'release',tuple(old_binding))!=old_binding
@@ -106,7 +115,8 @@ def review_candidate(*,backup,backup_identity,fingerprint,logs,control,old_logs,
             'media_read_only':True,'root_filesystem_read_only':True,'network_mode':payload['HostConfig']['NetworkMode'],
             'environment_entries':len(payload['Env']),'published_ports':payload['HostConfig'].get('PortBindings',{}),
             'template_matches_current':True,'template_installed':False,
-            'image_reference_status':'publication_required','executable_payload_prepared':False,
+            'image_reference_status':'verified_cached_digest' if reference else 'publication_required',
+            'reference':reference,'executable_payload_prepared':False,
             'deployment_authorized':False,'service_changes_performed':False,'automatic_restoration':False,
             'sha256':{'proposed-container.json':hashlib.sha256(_encode(payload)).hexdigest(),
                       'proposed-template.xml':hashlib.sha256(xml).hexdigest()}}
@@ -122,6 +132,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__,allow_abbrev=False)
     for key in ('backup-identity','fingerprint','output-identity','host-logs','host-control'):
         parser.add_argument('--'+key,required=True)
+    parser.add_argument('--reference')
     args=parser.parse_args()
     def identity(raw):
         if not re.fullmatch(r'[0-9]{1,20}:[0-9]{1,20}',raw):raise ValueError('Directory identity required')
@@ -141,7 +152,7 @@ def main():
         report=review_candidate(backup=Path('/backup'),backup_identity=identity(args.backup_identity),fingerprint=args.fingerprint,
             logs=Path('/app/logs'),control=Path('/sqlite-control'),old_logs=Path('/old-logs'),old_control=Path('/old-control'),
             output=Path('/review'),output_identity=identity(args.output_identity),live=metadata['containers'][0],
-            image=metadata['images'][0],host_logs=args.host_logs,host_control=args.host_control,templates=templates)
+            image=metadata['images'][0],host_logs=args.host_logs,host_control=args.host_control,templates=templates,reference=args.reference)
     except Exception:
         print(json.dumps({'status':'candidate_review_blocked','deployment_authorized':False,
             'service_changes_performed':False,'partial_review_retained':True}));return 2

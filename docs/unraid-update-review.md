@@ -353,3 +353,11 @@ written only after both database captures verify and close. A later handoff
 still needs a fresh validation, an exact published reference and an explicit
 service transaction with recovery. The stopped same-image recovery guard remains
 unchanged.
+
+After publication, an optional fifth argument to the review host helper selects
+an immutable GHCR digest. Docker must resolve that reference to the exact cached
+candidate ID, and image inspection must list it in RepoDigests. The newly created
+private proposals then contain that digest in both Image and Repository. Tags or
+unverified digests are rejected before proposal writes. The report says
+`verified_cached_digest`; deployment authorization remains false. This is still
+a review, not a container execution or template installation command.

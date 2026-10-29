@@ -4,8 +4,14 @@ umask 077
 step=preflight
 fail() { printf 'status=candidate_review_blocked step=%s reason=%s service_changes_performed=false\n' "$step" "$1" >&2; exit 2; }
 trap 'result=$?; printf "status=candidate_review_blocked step=%s reason=command_failed exit_code=%s service_changes_performed=false\n" "$step" "$result" >&2; exit "$result"' ERR
-[ "$(uname -s)" = Linux ] && [ "$(id -u)" = 0 ] && [ "$#" = 4 ] || fail usage_IMAGE_PREPARED_ROOT_BACKUP_RECEIPT_SHA256
+[ "$(uname -s)" = Linux ] && [ "$(id -u)" = 0 ] && { [ "$#" = 4 ] || [ "$#" = 5 ]; } || fail usage_IMAGE_PREPARED_ROOT_BACKUP_RECEIPT_SHA256
 image=$1 root=$2 packet=$3 fingerprint=$4
+reference_args=()
+if [ "$#" = 5 ]; then
+  [[ "$5" =~ ^ghcr\.io/nvmagma/media_collection_auditor@sha256:[0-9a-f]{64}$ ]] || fail invalid_registry_reference
+  [ "$(docker image inspect --format '{{.Id}}' "$5")" = "$image" ] || fail registry_image_mismatch
+  reference_args=(--reference "$5")
+fi
 [[ "$image" =~ ^sha256:[0-9a-f]{64}$ && "$fingerprint" =~ ^[0-9a-f]{64}$ ]] || fail invalid_selection
 [ -z "${DOCKER_HOST:-}" ] && [ -z "${DOCKER_CONTEXT:-}" ] || fail docker_context_override
 [ "$(docker context inspect --format '{{.Endpoints.docker.Host}}')" = unix:///var/run/docker.sock ] || fail local_docker_endpoint_required
@@ -52,7 +58,7 @@ step=private_review
   --workdir /app --env PYTHONPATH=/app:/app/app:/review-source --env PYTHONDONTWRITEBYTECODE=1 \
   --entrypoint python "$image" -B -m scripts.unraid_update_candidate_review \
   --backup-identity "$packet_id" --fingerprint "$fingerprint" --output-identity "$review_id" \
-  --host-logs "$root/logs" --host-control "$root/control"
+  --host-logs "$root/logs" --host-control "$root/control" "${reference_args[@]}"
 step=current_container_recheck
 [ "$(docker inspect --format '{{.Id}}' media_collection_auditor)" = "$old_id" ] && [ "$(signature)" = "$before" ] || fail current_container_changed
 printf '%s\n' 'status=candidate_review_capture_complete' 'service_changes_performed=false' 'template_installed=false' 'deployment_authorized=false'
