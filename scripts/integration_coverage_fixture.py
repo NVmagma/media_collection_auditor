@@ -31,7 +31,7 @@ class CoverageFixtureTests(unittest.TestCase):
         env.start();self.addCleanup(env.stop)
         # These tests exercise HTTP projection with synthetic JSON, not release
         # activation. The combined image lab verifies real binding separately.
-        gate=patch.object(web,'_preview_backend_gate',lambda:SimpleNamespace(preview_release_enabled=lambda:False))
+        gate=patch.object(web,'_preview_backend_gate',lambda:SimpleNamespace(preview_release_enabled=lambda:False,live_release_enabled=lambda:False))
         gate.start();self.addCleanup(gate.stop)
         for target,value in (('STATE_FILE',str(self.state)),('load_config',lambda:{'MEDIA_PATH':str(self.media),'ENABLE_MOVIES':'true','ENABLE_TV':'true'})):
             item=patch.object(web,target,value);item.start();self.addCleanup(item.stop)
