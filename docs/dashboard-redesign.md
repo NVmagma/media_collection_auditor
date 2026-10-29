@@ -164,3 +164,13 @@ cover local draft counts, credential masking, all six status states, category
 switching, the single Apply form submission and 1440/900/390/320px widths. A private HTTP fixture check verified the
 page and script while refusing application. Existing Dashboard browser checks
 still pass. User visual acceptance is pending; no production service changed.
+
+## Shared application shell follow-up (2026-10-28)
+
+User requests consistent navigation and visual treatment across Dashboard,
+Settings and other application pages. Use Settings as the reference: main
+sections in a left sidebar and the selected content on the right. Preserve
+clickable dashboard sections and the separate Review page, compact desktop
+layout and accessible/mobile navigation. Unify typography, spacing, cards,
+active/visited states and page headers rather than restyling one page alone.
+Live move readiness takes priority; this shell work follows it.

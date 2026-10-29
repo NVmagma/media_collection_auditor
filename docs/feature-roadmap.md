@@ -1,10 +1,19 @@
 # Feature roadmap
 
-**Last reviewed:** 2026-10-26
+**Last reviewed:** 2026-10-28
 **Official/default branch:** `feature/unraid`
 **Active development branch:** `feature/interface-api`
 **Tracking authority:** SQLite scheduled preview
 **Live media moves/deletion:** Disabled; separate reviewed activation required.
+
+## Current next work
+
+- Prioritize a separately tested SQLite live move release; permanent deletion
+  remains disabled. See [live move scope and acceptance](sqlite-live-moves.md).
+- Then align all pages with Settings: left navigation, right content, shared
+  styling and retained clickable Dashboard sections.
+- The interface/API preview update has completed on Tower with user confirmation;
+  current tracking authority remains SQLite preview.
 
 ## Completed SQLite preview milestone
 
