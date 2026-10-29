@@ -24,6 +24,8 @@ on:
       - 'tests/test_dashboard_clock*'
       - 'unraid/assets/**'
       - 'scripts/unraid_update*'
+      - 'scripts/unraid_live*'
+      - 'tests/test_unraid_live*'
       - 'scripts/unraid_preview_recovery*'
       - 'tests/test_sqlite_preview_settings.py'
       - 'tests/test_unraid_preview_recovery_start.py'

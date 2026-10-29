@@ -182,3 +182,24 @@ not update `latest`, the preview tag, Unraid templates, or production services.
 The published image still needs a newly prepared native-media binding before it
 can run. Never replace the working preview image reference with the live digest
 alone.
+
+### Tower native acceptance — completed
+
+Tower passed all five actual live-image scenarios at revision
+`8b2d7198c00a6f8b672a379bf46fc4806165be07`: one capped move plus Arr delivery,
+changed protection, lost Arr acknowledgement, SIGKILL after rename, and web/API
+availability after restart with a retained intent. Only disposable native files
+and a new container were used; production remains on preview.
+
+### Backup-based live preparation
+
+`scripts/unraid_live_prepare_host.sh` uses the already accepted live image and a
+new verified logical preview backup. It mounts the explicitly selected native
+media view read-only, creates fresh private logs/control directories, preserves
+tracking and unknown fields, and retains the original preview configuration. The
+only changed settings are DRY_RUN=false, the one-action global cap and the disabled
+deletion/copy/pruning controls. Schedule, library selection and credentials remain
+unchanged. No service payload is installed and no worker starts. Changed inputs
+or interrupted preparations retain partial files and cannot replay. A fresh
+backup is still an observation; cutover must check that it matches the stopped
+original before starting the live worker.
