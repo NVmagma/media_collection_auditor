@@ -64,3 +64,11 @@ unsupported-rename regression verifies retained intent, unchanged source and no
 fallback. The same host-backed Docker lab is now an explicit candidate CI step.
 No production activation or safeguard relaxation is implied by this diagnostic
 change. A host-specific failure must be resolved before production live moves.
+
+The failed `5d5605f` run was at `/mnt/user/sql_test/live-policy.ob6E1c`.
+Its unittest temporary media/state are cleaned after failure, so a retrospective
+filesystem/state diagnosis cannot be reconstructed from that directory. For a
+host-specific reproduction, the optional `move-only` lab argument runs just the
+single capped-move case and omits other policy and transport cases. Failure output
+includes a fixed allowlisted guard code, errno, disposable source/destination
+presence and unresolved-intent presence. Routine complete acceptance stays in CI.

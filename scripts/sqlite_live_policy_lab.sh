@@ -3,8 +3,10 @@
 set -euo pipefail
 umask 077
 [ "$(uname -s)" = Linux ] || { echo 'Run this acceptance lab on the Linux Docker host.' >&2; exit 2; }
-[ "$#" = 1 ] || { echo 'Usage: bash SCRIPT EXISTING_DISPOSABLE_LAB_PARENT' >&2; exit 2; }
+{ [ "$#" = 1 ] || [ "$#" = 2 ]; } || { echo 'Usage: bash SCRIPT EXISTING_DISPOSABLE_LAB_PARENT' >&2; exit 2; }
 base=$1
+mode=${2:-all}
+[[ "$mode" = all || "$mode" = move-only ]] || exit 2
 [[ "$base" = /* && ! "$base" =~ [[:cntrl:],] && -d "$base" ]] || { echo 'Explicit existing lab parent required.' >&2; exit 2; }
 [ "$(cd -P -- "$base" && pwd -P)" = "$base" ] || { echo 'Canonical lab parent required.' >&2; exit 2; }
 image=${SQLITE_LAB_IMAGE:-python@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1}
@@ -35,9 +37,9 @@ printf '%s\n' 'production_activation=disabled' 'production_authorized=false'
 container=$(docker create --pull=never --network none --user 0:0 --read-only \
   --cap-drop ALL --security-opt no-new-privileges --pids-limit 64 --memory 256m \
   --tmpfs /fixture:rw,noexec,nosuid,nodev,size=64m \
-  --mount "type=bind,src=$lab,dst=/lab" --env TMPDIR=/lab \
+  --mount "type=bind,src=$lab,dst=/lab" --env TMPDIR=/lab --env "LIVE_POLICY_MODE=$mode" \
   --interactive --workdir /fixture --entrypoint /usr/local/bin/python3 "$image_id" \
-  -I -S -B -c 'import sys,tarfile,io,os,subprocess; tarfile.open(fileobj=io.BytesIO(sys.stdin.buffer.read()),mode="r:").extractall("/fixture/code",filter="data"); os.chdir("/fixture/code"); subprocess.run([sys.executable,"-S","-B","-m","scripts.sqlite_live_policy_fixture"],check=True,timeout=180); subprocess.run([sys.executable,"-S","-B","-m","scripts.sqlite_scheduled_transport_fixture"],check=True,timeout=30)')
+  -I -S -B -c 'import sys,tarfile,io,os,subprocess; tarfile.open(fileobj=io.BytesIO(sys.stdin.buffer.read()),mode="r:").extractall("/fixture/code",filter="data"); os.chdir("/fixture/code"); subprocess.run([sys.executable,"-S","-B","-m","scripts.sqlite_live_policy_fixture"]+(["--move-only"] if os.environ["LIVE_POLICY_MODE"]=="move-only" else []),check=True,timeout=180); (subprocess.run([sys.executable,"-S","-B","-m","scripts.sqlite_scheduled_transport_fixture"],check=True,timeout=30) if os.environ["LIVE_POLICY_MODE"]=="all" else None)')
 [[ "$container" =~ ^[0-9a-f]{64}$ ]] || { echo 'New fixture container identity unavailable.' >&2; exit 2; }
 cleanup() { docker rm --force "$container" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
