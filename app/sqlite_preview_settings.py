@@ -55,7 +55,7 @@ def pending_request_summary(*, config_path, environment=None):
         return {'status':'review_required', 'changed_keys':[]}
 
 
-def request_settings(*, config_path, updated, environment=None, include_digest=False):
+def request_settings(*, config_path, updated, environment=None, include_digest=False, _validate_change=None):
     if type(include_digest) is not bool:
         raise ValueError("Explicit digest selection required")
     environment = dict(os.environ if environment is None else environment)
@@ -73,7 +73,9 @@ def request_settings(*, config_path, updated, environment=None, include_digest=F
     proposed = {key:value for key,value in current.items() if key not in KEYS}
     proposed.update({key:value for key,value in updated.items() if key in KEYS})
     before, after = _effective(current, environment), _effective(proposed, environment)
-    if (after['DRY_RUN'].lower() != 'true' or any(after[key].lower() != 'false' for key in (
+    if _validate_change is not None:
+        _validate_change(before,after)
+    elif (after['DRY_RUN'].lower() != 'true' or any(after[key].lower() != 'false' for key in (
             'ALLOW_FILESYSTEM_DELETE','ALLOW_PERMANENT_DELETE','ALLOW_CROSS_FILESYSTEM_MOVES','ENABLE_SEASON_PRUNING'))):
         raise ValueError('This preview cannot enable media actions or season pruning. Active settings were not changed.')
     changed = sorted(key for key in KEYS if before[key] != after[key])

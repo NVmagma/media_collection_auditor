@@ -126,13 +126,17 @@ def create_live_binding(*,settings=None):
 
 
 def validate_live_binding(*,settings=None,for_execution=False):
+    return _validate_bound_live(settings=settings,for_execution=for_execution)
+
+
+def _validate_bound_live(*,settings=None,for_execution=False,allow_settings_marker=False):
     revision=_revision()
     if type(for_execution) is not bool:raise ValueError('Known validation purpose required')
     values,config_sha=_effective(settings);config,source,database,policy_sha=_policy(values);control=database.parent
     info=os.stat(control,follow_symlinks=False);identity=(info.st_dev,info.st_ino)
     with ExitStack() as stack:
         parent=_private_root(control,identity);stack.callback(os.close,parent)
-        if os.path.lexists(control/SETTINGS_MARKER):raise RuntimeError('Settings recovery required')
+        if not allow_settings_marker and os.path.lexists(control/SETTINGS_MARKER):raise RuntimeError('Settings recovery required')
         captured={name:_local(parent,name) for name in (BINDING,PREPARE,REQUEST,COMPLETE,BACKUP)}
         binding=parse_unique_json(captured[BINDING][0]);request=parse_unique_json(captured[PREPARE][0])
         preparation=parse_unique_json(captured[REQUEST][0]);receipt=parse_unique_json(captured[COMPLETE][0])
@@ -140,7 +144,8 @@ def validate_live_binding(*,settings=None,for_execution=False):
         source_parent_info=os.fstat(source_parent)
         original,original_info=_local(source_parent,source.name)
         db=os.stat('state.db',dir_fd=parent,follow_symlinks=False)
-        if (not stat.S_ISREG(db.st_mode) or db.st_nlink!=1 or binding!={**request,'request_sha256':hashlib.sha256(captured[PREPARE][0]).hexdigest()}
+        if (not stat.S_ISREG(db.st_mode) or db.st_nlink!=1 or binding!={**request,'request_sha256':hashlib.sha256(captured[PREPARE][0]).hexdigest(),
+                    'saved_config_sha256':config_sha,'policy_sha256':policy_sha,'media_roots':_media(config,identity)}
                 or type(binding.get('schema_version')) is not int or binding['schema_version']!=1 or binding.get('profile')!=PROFILE or binding.get('source_revision')!=revision
                 or binding.get('policy_sha256')!=policy_sha or binding.get('saved_config_sha256')!=config_sha
                 or binding.get('control_identity')!=list(identity) or binding.get('database_identity')!=[db.st_dev,db.st_ino]
@@ -172,7 +177,7 @@ def validate_live_binding(*,settings=None,for_execution=False):
                 if (check.st_dev,check.st_ino)!=(source_parent_info.st_dev,source_parent_info.st_ino):
                     raise RuntimeError('Retained source parent replaced')
             finally:os.close(reopened)
-            if os.path.lexists(control/SETTINGS_MARKER):raise RuntimeError('Settings application began')
+            if not allow_settings_marker and os.path.lexists(control/SETTINGS_MARKER):raise RuntimeError('Settings application began')
             current_source,current_source_info=_local(source_parent,source.name)
             if (_identity(os.stat('state.db',dir_fd=parent,follow_symlinks=False))[:2]!=(db.st_dev,db.st_ino)
                     or current_source!=original or _identity(current_source_info)!=_identity(original_info)):

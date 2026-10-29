@@ -54,8 +54,21 @@ def _replace(parent,name,old_raw,old_inode,staged,new_raw,new_inode):
         raise RuntimeError('Settings replacement acknowledgement uncertain')
 
 
-def _paths(settings):
-    _revision()  # Immutable preview profile; environment cannot enable this code.
+def _preview_protocol():
+    from types import SimpleNamespace
+    def check_revision(value):
+        if value!=0:raise RuntimeError('Frozen preview tracking required')
+    def validate_values(values,settings,previous):
+        if (values.get('DRY_RUN','').lower()!='true' or any(values.get(key,'false').lower()!='false' for key in (
+                'ALLOW_FILESYSTEM_DELETE','ALLOW_PERMANENT_DELETE','ALLOW_CROSS_FILESYSTEM_MOVES','ENABLE_SEASON_PRUNING'))):
+            raise RuntimeError('Settings application cannot enable media actions')
+    return SimpleNamespace(binding=BINDING,revision=_revision,policy=_policy,roots=_roots,
+        validate=validate_preview_activation,validate_bound=_validate_bound_preview,
+        check_revision=check_revision,validate_values=validate_values)
+
+
+def _paths(settings,protocol):
+    protocol.revision()  # Immutable preview profile; environment cannot enable this code.
     if settings.get('AUDITOR_STATE_BACKEND')!='sqlite':
         raise RuntimeError('SQLite preview runtime required')
     source=Path(_canonical(settings.get('STATE_FILE','/app/logs/auditor_state.json')))
@@ -66,13 +79,16 @@ def _paths(settings):
     return source,database,config
 
 
-def apply_requested_settings(*, settings, request_sha256):
+def apply_requested_settings(*, settings, request_sha256, _protocol=None):
+    protocol=_preview_protocol() if _protocol is None else _protocol
+    BINDING,_revision,_policy,_roots=protocol.binding,protocol.revision,protocol.policy,protocol.roots
+    validate_preview_activation,_validate_bound_preview=protocol.validate,protocol.validate_bound
     request_sha256=_digest(request_sha256)
     settings=dict(settings)
-    source,database,config=_paths(settings)
+    source,database,config=_paths(settings,protocol)
     control=database.parent
     with _prepared_snapshot(source,control) as (parent,state,revision,_,verify):
-        if revision!=0:raise RuntimeError('Frozen preview tracking required')
+        protocol.check_revision(revision)
         validate_preview_activation(settings=settings)
         with ExitStack() as stack:
             config_fd=_open_directory(str(config.parent));stack.callback(os.close,config_fd)
@@ -97,9 +113,7 @@ def apply_requested_settings(*, settings, request_sha256):
             values=dict(settings)
             for key in KEYS:values.setdefault(key,DEFAULTS.get(key,''))
             values.update({key:value for key,value in proposed.items() if key in KEYS})
-            if (values.get('DRY_RUN','').lower()!='true' or any(values.get(key,'false').lower()!='false' for key in (
-                    'ALLOW_FILESYSTEM_DELETE','ALLOW_PERMANENT_DELETE','ALLOW_CROSS_FILESYSTEM_MOVES','ENABLE_SEASON_PRUNING'))):
-                raise RuntimeError('Settings application cannot enable media actions')
+            protocol.validate_values(values,settings,previous)
             policy,_,_,policy_sha=_policy(values)
             new_config=_encode(proposed)
             old_binding,binding_info=_local(parent,BINDING)
@@ -155,12 +169,15 @@ def apply_requested_settings(*, settings, request_sha256):
                 'restart_required':False,'automatic_restoration':False}
 
 
-def restore_previous_settings(*,settings,request_sha256):
+def restore_previous_settings(*,settings,request_sha256, _protocol=None):
     """Explicit, single recovery attempt; never adopt an unknown file version."""
+    protocol=_preview_protocol() if _protocol is None else _protocol
+    BINDING,_revision=protocol.binding,protocol.revision
+    validate_preview_activation,_validate_bound_preview=protocol.validate,protocol.validate_bound
     request_sha256=_digest(request_sha256)
-    source,database,config=_paths(settings);control=database.parent
+    source,database,config=_paths(settings,protocol);control=database.parent
     with _prepared_snapshot(source,control) as (parent,state,revision,_,verify):
-        if revision!=0:raise RuntimeError('Frozen preview tracking required')
+        protocol.check_revision(revision)
         with ExitStack() as stack:
             config_fd=_open_directory(str(config.parent));stack.callback(os.close,config_fd)
             root_fd=_open_directory(str(control.parent));stack.callback(os.close,root_fd)

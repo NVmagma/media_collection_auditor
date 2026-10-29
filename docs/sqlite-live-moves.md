@@ -264,3 +264,19 @@ intent. It rechecks before and after stopping the replacement. Any advanced
 revision, changed snapshot or uncertain operation blocks stale-preview recovery;
 latest-state recovery then needs separate review. Never start the retained old
 preview over newer live tracking. All containers and journals are retained.
+
+### Reviewed live settings application
+
+The newer live source supports Apply Requested Settings using the same locked,
+journaled configuration/binding transaction as preview. Live application accepts
+advanced guarded SQLite revisions and preserves database bytes, clocks, Arr queue,
+retained JSON, unknown settings and daily claims. An interrupted application keeps
+scans paused and exposes explicit previous-settings restoration; it never retries
+or restores automatically. Restoration refuses changed tracking or unknown file
+identities. The web interface remains available for review and recovery.
+
+The canary's DRY_RUN, maximum action count, deletion/copy/pruning controls, media
+root and schedule time zone remain fixed. Time-zone changes require separate
+claim-migration review. Ordinary connection, lifecycle, notification and library
+settings use validated effective values and fresh media root checks; applying
+settings does not request a scan. Source support is not a Tower update.

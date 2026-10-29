@@ -927,12 +927,15 @@ def settings():
                         401, {"WWW-Authenticate": 'Basic realm="Auditor settings"'})
     preview_mode = _preview_backend_gate().preview_release_enabled()
     live_mode = _preview_backend_gate().live_release_enabled()
-    if live_mode and request.method == 'POST':
-        return Response('Live canary settings are fixed. Prepare reviewed settings before changing this release.', 409)
+    bound_mode=preview_mode or live_mode
+    locked_settings=()
+    if live_mode:
+        from app.sqlite_live_settings import LOCKED
+        locked_settings=LOCKED
     saved = load_config()
     pending_settings = {'status':'none','changed_keys':[]}
     settings_application = {'status':'none'}
-    if preview_mode:
+    if bound_mode:
         from app.sqlite_preview_settings import pending_request_summary
         from config_store import CONFIG_FILE, initial_environment
         from app.sqlite_preview_settings_apply import application_status
@@ -948,7 +951,7 @@ def settings():
         origin = request.headers.get("Origin") or request.headers.get("Referer")
         if not origin or urlsplit(origin).netloc != request.host:
             return Response("Invalid request origin", 403)
-        if preview_mode and settings_application['status']=='recovery_required':
+        if bound_mode and settings_application['status']=='recovery_required':
             return redirect(url_for('settings',apply_error='1'))
         updated = dict(saved)
         try:
@@ -960,15 +963,18 @@ def settings():
                     updated.pop(key, None)  # Fall back to Unraid environment.
                 else:
                     updated[key] = validate(key, raw)
-            if not preview_mode and (updated.get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "false"
+            if not bound_mode and (updated.get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "false"
                     or updated.get("ALLOW_PERMANENT_DELETE", "false") == "true"
                     or updated.get("ALLOW_FILESYSTEM_DELETE", "false") == "true"
                     or updated.get("ALLOW_CROSS_FILESYSTEM_MOVES", "false") == "true"
                     or updated.get("ENABLE_SEASON_PRUNING", "false") == "true"):
                 if request.form.get("safety_confirmation") != "I UNDERSTAND":
                     raise ValueError("Type I UNDERSTAND to confirm potentially destructive settings.")
-            if preview_mode:
-                from app.sqlite_preview_settings import request_settings
+            if bound_mode:
+                if live_mode:
+                    from app.sqlite_live_settings import request_settings
+                else:
+                    from app.sqlite_preview_settings import request_settings
                 from config_store import CONFIG_FILE
                 apply_now = request.form.get('settings_action') == 'apply'
                 result = request_settings(config_path=CONFIG_FILE, updated=updated, environment=baseline,
@@ -994,8 +1000,9 @@ def settings():
         values[key] = ""  # Never send stored tokens to the browser.
     return render_template("settings.html", groups=FIELDS, values=values,
                            secrets=SECRETS, bools=BOOLS, sources=sources, help_text=FIELD_HELP, error=error,
-                           success=success, preview_mode=preview_mode, live_mode=live_mode, requested=requested, unchanged=unchanged,
+                           success=success, preview_mode=bound_mode, live_mode=live_mode, requested=requested, unchanged=unchanged,
                            pending_settings=pending_settings, settings_application=settings_application,
+                           locked_settings=locked_settings,
                            settings_applied=request.args.get('applied')=='1',
                            settings_restored=request.args.get('restored')=='1',
                            settings_apply_error=request.args.get('apply_error')=='1',
@@ -1020,11 +1027,15 @@ def _change_preview_settings(*, restore, request_sha256=None):
     origin = request.headers.get('Origin') or request.headers.get('Referer')
     if not origin or urlsplit(origin).netloc != request.host:
         return Response('Invalid request origin.',403)
-    if not _preview_backend_gate().preview_release_enabled():
-        return Response('Preview settings application unavailable.',409)
+    gate=_preview_backend_gate()
+    if not (gate.preview_release_enabled() or gate.live_release_enabled()):
+        return Response('Bound settings application unavailable.',409)
     from config_store import initial_environment
     from app.sqlite_lock import StateLockBusy
-    from app.sqlite_preview_settings_apply import apply_requested_settings, restore_previous_settings
+    if gate.live_release_enabled():
+        from app.sqlite_live_settings import apply_requested_settings,restore_previous_settings
+    else:
+        from app.sqlite_preview_settings_apply import apply_requested_settings, restore_previous_settings
     notification_settings = {**initial_environment(), **load_config()}
     try:
         action = restore_previous_settings if restore else apply_requested_settings

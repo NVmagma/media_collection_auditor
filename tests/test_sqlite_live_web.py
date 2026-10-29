@@ -24,17 +24,18 @@ def test_live_settings_render_without_legacy_save_or_typing_confirmation(live_cl
     response=client.get('/settings')
     assert response.status_code==200
     text=response.get_data(as_text=True)
-    assert 'Live canary settings are fixed' in text
+    assert 'Live settings use reviewed application' in text
+    assert 'Apply Requested Settings' in text
     assert 'Save Changes' not in text and 'I UNDERSTAND' not in text
-    assert 'disabled' in text
+    assert 'Fixed for this canary' in text
     save.assert_not_called()
 
 
 def test_live_settings_submission_does_not_invalidate_binding(live_client):
     client,_,save=live_client
-    assert client.post('/settings',data={'DRY_RUN':'true','ENABLE_TV':'false'},headers={'Origin':'http://localhost'}).status_code==409
-    assert client.post('/settings/apply',headers={'Origin':'http://localhost'}).status_code==409
-    assert client.post('/settings/restore',headers={'Origin':'http://localhost'}).status_code==409
+    assert client.post('/settings',data={'DRY_RUN':'true','ENABLE_TV':'false'},headers={'Origin':'http://localhost'}).status_code==200
+    assert 'apply_error=1' in client.post('/settings/apply',headers={'Origin':'http://localhost'}).location
+    assert 'apply_error=1' in client.post('/settings/restore',headers={'Origin':'http://localhost'}).location
     save.assert_not_called()
 
 
