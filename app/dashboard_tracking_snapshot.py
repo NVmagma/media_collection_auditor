@@ -265,7 +265,10 @@ def _scan_time(value):
 
 def _scan_entry(record, zone, *, title_details=True):
     """Project fixed scalar fields and bounded title decisions; never raw errors/payloads."""
-    from app.sqlite_scan_details import project_details
+    if __package__:
+        from .sqlite_scan_details import project_details
+    else:
+        from sqlite_scan_details import project_details
     start, finish = _scan_time(record.get('started_at')), _scan_time(record.get('finished_at'))
     duration = None
     if start is not None and finish is not None:

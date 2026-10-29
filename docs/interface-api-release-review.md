@@ -1,4 +1,31 @@
-# Combined interface/API preview release review
+# Interface/API release record
+
+## Current status — 2026-10-29
+
+Tower is running the explicitly reviewed scheduled-live canary from application
+revision `8b2d7198c00a6f8b672a379bf46fc4806165be07`, image digest
+`sha256:a929f867ff8d6fcdbca57917d9c7009394a9aa6e21662d5a8025cf129e5cd3d8`.
+The service cutover and authenticated readiness passed; the first scheduled
+production run is awaiting October 30 review. One global action per daily attempt
+remains the limit. Permanent deletion, cross-filesystem moves and season pruning
+are disabled. The prior preview container and state are retained.
+
+The newer source adds the shared left sidebar (visually accepted), bounded
+per-title scan explanations, journaled live settings application/restoration and
+an explicit manual live scan that shares the retained daily claim with the timer.
+Focused Linux tests and real browser checks have passed. The expanded packaged
+live fixture includes actual manual/timer exclusion, advanced-state settings
+application and controller SIGKILL after a manual rename. Full release CI and
+publication are tracked separately; none of these source changes updates Tower.
+
+Before installing another image, capture and preserve the **latest live** state,
+clocks, Arr queue, daily claims and settings. A new compiled revision requires a
+matching reviewed binding. Do not use a stale preview packet, discard claims,
+change only Unraid Repository, or automatically start the retained old preview
+after live tracking has advanced. First-run verification and any increase beyond
+the canary limit remain separate decisions.
+
+## Historical preview-only release review — 2026-10-28
 
 Scope: `feature/interface-api` into a new versioned **preview-only** image.
 This review does not merge branches, publish a registry tag, change Tower,

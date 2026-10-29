@@ -211,3 +211,12 @@ paths, credentials, raw exceptions and unrecognized payload fields are dropped.
 Records remain bounded and process-local, reset after restart and do not grant
 replay or recovery authority. Earlier records without details remain unknown.
 The existing integration scan/proposal APIs remain counts-only and omit titles.
+
+## Operator controls follow-up (2026-10-29)
+
+The shared Settings shell supports reviewed live application and recovery while
+showing fixed canary controls as labeled values. Run Live Scan Now is explicit,
+administrator-only and confirms that it uses today's daily action budget. It
+cannot add a second scheduled/manual attempt on that local date. Browser checks
+exercise its confirmation and exact JSON request only against synthetic routes.
+No production worker is connected to those UI fixtures.

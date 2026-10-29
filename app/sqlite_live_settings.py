@@ -1,7 +1,7 @@
 """Reviewed live settings use the shared journal without changing tracking or caps."""
 from types import SimpleNamespace
 import os
-from app.config_store import KEYS,DEFAULTS
+from app.config_store import KEYS,DEFAULTS,LIVE_CANARY_LOCKED_KEYS
 from app.sqlite_live_policy import validate_initial_live_policy
 from app.sqlite_live_binding import (BINDING,_revision,_policy,_media,
     validate_live_binding,_validate_bound_live)
@@ -9,8 +9,7 @@ from app.sqlite_preview_settings import request_settings as stage_request
 from app.sqlite_preview_settings_apply import apply_requested_settings as shared_apply
 from app.sqlite_preview_settings_apply import restore_previous_settings as shared_restore
 
-LOCKED = frozenset(('DRY_RUN','MAX_ACTIONS_PER_RUN','MEDIA_PATH','SQLITE_DAILY_RUN_TIMEZONE',
-    'ALLOW_PERMANENT_DELETE','ALLOW_FILESYSTEM_DELETE','ALLOW_CROSS_FILESYSTEM_MOVES','ENABLE_SEASON_PRUNING'))
+LOCKED = LIVE_CANARY_LOCKED_KEYS
 
 
 def _values(saved,environment):

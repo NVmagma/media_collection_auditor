@@ -1,5 +1,8 @@
 """Bounded, redacted title observations. Never grant execution or replay authority."""
-from app.sqlite_title_identity import validate_title_folder
+if __package__:
+    from .sqlite_title_identity import validate_title_folder
+else:
+    from sqlite_title_identity import validate_title_folder
 
 LIMIT = 100
 REASONS = {

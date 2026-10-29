@@ -3,7 +3,7 @@ import os
 os.environ.setdefault('WEB_SESSION_SECRET', 'synthetic-settings-secret')
 from flask import g, render_template
 import web
-from app.sqlite_live_settings import LOCKED
+from config_store import LIVE_CANARY_LOCKED_KEYS as LOCKED
 from config_store import FIELDS, KEYS, SECRETS, BOOLS, DEFAULTS
 
 

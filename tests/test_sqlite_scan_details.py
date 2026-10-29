@@ -60,3 +60,21 @@ def test_verified_move_survives_later_arr_failure_without_raw_error_or_replay():
 def test_missing_details_remain_unknown():
     assert project_details(None) is None
     assert project_details({'schema_version':1,'total_records':0,'items':[]})['items']==[]
+
+
+
+def test_flat_web_import_layout_renders_details_and_live_settings_without_app_package(tmp_path):
+    import os,subprocess,sys
+    from pathlib import Path
+    root=Path(__file__).resolve().parents[1]
+    environment={**os.environ,'PYTHONPATH':os.pathsep.join((str(root/'app'),str(root/'tests'))),
+        'WEB_SESSION_SECRET':'synthetic-flat-layout'}
+    code="""
+import dashboard_workspace_case,settings_workspace_case
+assert dashboard_workspace_case.render_workspace().status_code==200
+assert 'Title decisions' in dashboard_workspace_case.render_workspace().text
+assert 'Fixed for this canary' in settings_workspace_case.render_settings_workspace('live')
+"""
+    result=subprocess.run([sys.executable,'-B','-c',code],env=environment,cwd=tmp_path,
+        text=True,capture_output=True,timeout=20)
+    assert result.returncode==0,result.stderr
