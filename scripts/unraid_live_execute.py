@@ -18,7 +18,7 @@ def validate_live_container(live, **kwargs):
     validate_preview(live, **kwargs)
     host=live.get('HostConfig', {})
     security=host.get('SecurityOpt') or []
-    if (host.get('CapDrop') != ['ALL'] or host.get('CapAdd') != ['DAC_OVERRIDE']
+    if (host.get('CapDrop') != ['ALL'] or host.get('CapAdd') not in (['DAC_OVERRIDE'], ['CAP_DAC_OVERRIDE'])
             or host.get('Devices') not in (None, []) or host.get('DeviceRequests') not in (None, [])
             or not any(value in ('no-new-privileges', 'no-new-privileges:true') for value in security)
             or any(value not in ('no-new-privileges', 'no-new-privileges:true', 'label=disable') for value in security)):

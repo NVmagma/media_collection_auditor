@@ -19,7 +19,7 @@ def selected(case):
     engine.selected_image=deepcopy(case.image)
     def created(item):
         item['Image']=case.image['Id']
-        item['HostConfig'].update(CapDrop=['ALL'],CapAdd=['DAC_OVERRIDE'],SecurityOpt=['no-new-privileges'])
+        item['HostConfig'].update(CapDrop=['ALL'],CapAdd=['CAP_DAC_OVERRIDE'],SecurityOpt=['no-new-privileges'])
     engine.on_create=created
     args=dict(engine=engine,review=case.output,review_identity=identity(case.output),
         review_fingerprint=hashlib.sha256((case.output/'review-complete.json').read_bytes()).hexdigest(),
