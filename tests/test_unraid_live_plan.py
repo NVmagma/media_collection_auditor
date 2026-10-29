@@ -59,3 +59,19 @@ def test_unreviewed_live_proposals_rejected_without_mutating_inputs(change):
     before=deepcopy(args)
     with pytest.raises(ValueError):live_metadata(**args)
     assert args==before
+
+
+def test_effective_saved_schedule_is_validated_without_rewriting_runtime_defaults():
+    args=values();effective=deepcopy(args['environment'])
+    args['environment']['SQLITE_DAILY_RUN_TIME']=''
+    args['environment']['SQLITE_DAILY_RUN_TIMEZONE']=''
+    payload,_=live_metadata(**args,effective_settings=effective)
+    runtime=dict(item.split('=',1) for item in payload['Env'])
+    assert runtime['SQLITE_DAILY_RUN_TIME']==''
+    assert runtime['SQLITE_DAILY_RUN_TIMEZONE']==''
+
+
+def test_proposal_failure_identifies_capability_guard_without_private_text():
+    args=values();args['current']['HostConfig']['CapAdd']=['SYS_ADMIN'];stages=[]
+    with pytest.raises(ValueError):live_metadata(**args,diagnostic=stages.append)
+    assert stages[-1]=='proposal_capability_policy'

@@ -121,7 +121,7 @@ def review_live_candidate(*,backup,backup_identity,fingerprint,logs,control,old_
         stage('container_template_proposal')
         payload,xml=live_metadata(current=live,image=image,template=data['current-template.xml'],
             environment=env,reference=reference,host_logs=host_logs,host_control=host_control,
-            host_media=host_media,attempt=os.urandom(32).hex())
+            host_media=host_media,attempt=os.urandom(32).hex(),effective_settings=effective,diagnostic=stage)
         def unchanged():
             if (_capture(old_logs,tuple(old_before))!=old_before
                     or _capture(old_control/'release',tuple(old_binding))!=old_binding

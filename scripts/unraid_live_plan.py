@@ -9,7 +9,10 @@ from scripts.unraid_update_production_prepare import _metadata,REFERENCE
 from scripts.sqlite_preview_service import LABEL
 
 
-def live_metadata(*,current,image,template,environment,reference,host_logs,host_control,host_media,attempt):
+def live_metadata(*,current,image,template,environment,reference,host_logs,host_control,host_media,attempt,effective_settings=None,diagnostic=None):
+    def stage(name):
+        if diagnostic is not None:diagnostic('proposal_'+name)
+    stage('image_contract')
     labels=(image.get('Config') or {}).get('Labels') or {}
     config=image.get('Config') or {}
     if (not REFERENCE.fullmatch(reference or '') or reference not in (image.get('RepoDigests') or [])
@@ -20,10 +23,13 @@ def live_metadata(*,current,image,template,environment,reference,host_logs,host_
             or config.get('StopSignal')!='SIGINT' or config.get('Volumes') not in (None,{})
             or not re.fullmatch(r'[0-9a-f]{64}',attempt or '')):
         raise ValueError('Exact published live canary and attempt required')
+    stage('current_template')
     review=review_update(templates=[('current.xml',template)],container=current)
     if review['blockers'] or current.get('State',{}).get('Running') is not True:
         raise ValueError('Matching running preview required')
-    validate_initial_live_policy(environment)
+    stage('effective_policy')
+    validate_initial_live_policy(environment if effective_settings is None else effective_settings)
+    stage('native_path')
     media=PurePosixPath(host_media)
     if (not media.is_absolute() or str(media)!=host_media or '..' in media.parts
             or any(ord(c)<=32 or ord(c)==127 for c in host_media) or ',' in host_media
@@ -33,9 +39,11 @@ def live_metadata(*,current,image,template,environment,reference,host_logs,host_
     paths.extend(PurePosixPath(item['Source']) for item in current['Mounts'])
     if any(media==path or media in path.parents or path in media.parents for path in paths):
         raise ValueError('Native view must be distinct from old binds and private controls')
+    stage('preserved_metadata')
     payload,xml=_metadata(current=current,image=image,template=template,environment=environment,
         reference=reference,host_logs=host_logs,host_control=host_control,attempt=attempt)
     host=payload['HostConfig']
+    stage('capability_policy')
     if (host.get('CapAdd') not in (None,[]) or 'ALL' not in (host.get('CapDrop') or [])
             or host.get('Devices') not in (None,[]) or host.get('DeviceRequests') not in (None,[]) ):
         raise ValueError('Unprivileged capability-dropped canary required')
@@ -45,6 +53,7 @@ def live_metadata(*,current,image,template,environment,reference,host_logs,host_
             if not key.startswith(('org.opencontainers.image.','io.media-collection-auditor.'))}
     webui='http://[IP]:[PORT:'+environment.get('WEB_PORT','8080')+']/'
     payload['Labels']={**labels,**custom,LABEL:attempt,'net.unraid.docker.webui':webui}
+    stage('labels')
     root=ET.fromstring(xml)
     item=root.find("Config[@Type='Path'][@Target='/media']")
     item.text=host_media;item.set('Default',host_media);item.set('Mode','rw')
