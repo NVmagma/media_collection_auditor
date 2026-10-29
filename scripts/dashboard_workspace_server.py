@@ -16,12 +16,12 @@ def create_preview_app():
     @app.get('/review')
     def dashboard():
         page = render_workspace(workspace='Review' if request.path == '/review' else 'Overview').get_data(as_text=True)
-        page = page.replace('<main>', '<main><p class="notice" role="status">Disposable design preview · synthetic titles only · no production services connected.</p>', 1)
+        page = page.replace('<main id="main-content">', '<main id="main-content"><p class="notice" role="status">Disposable design preview · synthetic titles only · no production services connected.</p>', 1)
         return Response(page, mimetype='text/html')
 
     @app.get('/integrations')
     def integrations():
-        page = render_integration_workspace().replace('<main class="settings-main">', '<main class="settings-main"><p role="status">Synthetic integration setup. No production state or credentials are connected.</p>', 1)
+        page = render_integration_workspace().replace('<main class="settings-main" id="main-content">', '<main class="settings-main" id="main-content"><p role="status">Synthetic integration setup. No production state or credentials are connected.</p>', 1)
         return Response(page, mimetype='text/html')
 
     @app.get('/settings')
@@ -31,7 +31,7 @@ def create_preview_app():
             page = render_settings_workspace(scenario)
         except ValueError:
             return {'status':'unknown_fixture_scenario'}, 400
-        page = page.replace('<main class="settings-main">', '<main class="settings-main"><p role="status">Synthetic Settings demo. Form submissions are blocked; no production configuration is connected.</p>', 1)
+        page = page.replace('<main class="settings-main" id="main-content">', '<main class="settings-main" id="main-content"><p role="status">Synthetic Settings demo. Form submissions are blocked; no production configuration is connected.</p>', 1)
         return Response(page, mimetype='text/html')
 
     @app.get('/static/auditor-badge.png')

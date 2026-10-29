@@ -6,23 +6,11 @@
   <title>Media Collection Auditor</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
-<body class="dashboard-app" data-initial-workspace="{{ initial_workspace }}">
-  <header class="topbar">
-    <div>
-      <h1><img class="brand-icon" src="/static/auditor-badge.png" alt="Auditor logo"> Media Collection Auditor</h1>
-      <p>Library tracking &amp; lifecycle review</p>
-    </div>
-    <nav><a href="/">Dashboard</a><a href="/logs">Logs</a>{% if viewer.admin %}<a href="/settings">Settings</a><a href="/integrations">API setup</a>{% if experimental_sqlite_recovery_enabled %}<a href="/experimental/sqlite/recovery">SQLite recovery (experimental)</a>{% endif %}{% endif %} <span class="viewer-indicator" title="Signed in as {{ viewer.name }}">{{ viewer.name }} <span class="viewer-role">{{ "Administrator" if viewer.admin else "Read only" }}</span></span> <form method="post" action="/logout" style="display:inline"><button type="submit">Sign out</button></form></nav>
-  </header>
-  <nav class="workspace-nav" aria-label="Dashboard workspace">
-    <a href="/#Overview" data-workspace="Overview">Overview</a>
-    <a href="/#Library" data-workspace="Library">Library</a>
-    <a href="/review" data-workspace="Review">Review</a>
-    <a href="/#Audit%20Preview" data-workspace="Audit Preview">Scans</a>
-    <a href="/#Activity" data-workspace="Activity">Activity</a>
-    <a href="/#History" data-workspace="History">History</a>
-  </nav>
-  <main>
+<body class="app-shell dashboard-app" data-initial-workspace="{{ initial_workspace }}">
+  {% set sidebar_page = 'dashboard' %}{% include '_sidebar.html' %}
+  <div class="app-content">
+  <header class="settings-header"><div><h1>Collection workspace</h1><p>Library tracking &amp; lifecycle review</p></div></header>
+  <main id="main-content">
     <div class="workspace-heading"><div><p class="workspace-eyebrow">COLLECTION WORKSPACE</p><h2 id="workspace-title">{{ 'Review' if initial_workspace == 'Review' else 'Overview' }}</h2><p id="workspace-description" class="muted">Review library coverage, tracking gaps and scheduler observations.</p></div></div>
     {% if state_error %}<section role="alert" class="notice warning"><strong>Tracking state unavailable:</strong> {{ state_error }}. Dashboard lifecycle ages and predictions may be inaccurate. Do not rely on this display for media removal decisions.</section>{% endif %}
     <div class="dashboard-status">
@@ -281,6 +269,6 @@
       {% else %}<p class="empty">No recorded audits yet. New runs will appear here after completion.</p>{% endif %}
       {% endif %}
     </section>
-  </main>
+  </main></div>
 <script src="{{ url_for('static', filename='dashboard.js') }}" defer></script></body>
 </html>

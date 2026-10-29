@@ -96,6 +96,6 @@ def test_navigation_is_only_visible_to_admin_when_enabled(tmp_path):
 
 
 def test_dashboard_template_has_conditional_recovery_link():
-    template = (APP / "templates" / "dashboard.html").read_text()
+    template = (APP / "templates" / "_sidebar.html").read_text()
     assert "{% if experimental_sqlite_recovery_enabled %}" in template
     assert 'href="/experimental/sqlite/recovery"' in template

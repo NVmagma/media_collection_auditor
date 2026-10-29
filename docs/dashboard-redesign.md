@@ -174,3 +174,25 @@ clickable dashboard sections and the separate Review page, compact desktop
 layout and accessible/mobile navigation. Unify typography, spacing, cards,
 active/visited states and page headers rather than restyling one page alone.
 Live move readiness takes priority; this shell work follows it.
+
+## Shared left navigation implementation (2026-10-29)
+
+Dashboard, separate Review, Settings, API setup, Activity Logs and paused-state
+screens now include one shared sidebar template. Workspace destinations stay in
+the same order across pages; Settings categories appear beneath the application
+links on the left. Dashboard cards, library/stage controls and section deep links
+retain their existing behavior. Administrator-only settings/API/recovery links
+remain conditional, and every authenticated page provides sign-out.
+
+Headers, content margins, active states and sidebar spacing use the same shell.
+On narrow screens the sidebar becomes a compact icon rail with accessible names;
+its navigation scrolls independently on short screens. A skip-to-content link
+supports keyboard use. The standalone sign-in screen remains outside the
+signed-in shell.
+
+Verification: 56 focused Python tests passed. Chromium verified Dashboard,
+Settings and API setup through 320px widths, existing navigation and form
+behavior, no horizontal overflow, and desktop overview fit at 1280/1440x1000.
+Synthetic screenshots were visually inspected. No production service, tracking,
+schedule or live policy was changed; rollout and user visual acceptance remain
+separate from this source update.

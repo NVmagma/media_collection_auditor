@@ -18,7 +18,8 @@ const {chromium} = require('../tests/dashboard-browser/node_modules/playwright')
     await page.goto('http://fixture.invalid/integrations');
     assert.equal(await page.locator('#integration-base').inputValue(), 'http://fixture.invalid');
     assert.equal(await page.locator('input[type=password]').count(),0);
-    assert.equal(await page.locator('form').count(),0);
+    assert.equal(await page.locator('form:not([action="/logout"])').count(),0);
+    assert.equal(await page.locator('.sidebar form[action="/logout"]').count(),1);
     assert.equal(await page.locator('[data-copy]').count(),5);
     await page.evaluate(() => { Object.defineProperty(navigator,'clipboard',{value:{writeText:async value => { window.copied=value; }}, configurable:true}); });
     await page.locator('[data-copy="path-leaving-soon-TV"]').click();

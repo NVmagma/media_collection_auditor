@@ -23,6 +23,9 @@ if (!file) throw Error('Pass the synthetic page rendered by tests/dashboard_work
       return asset ? route.fulfill({body: fs.readFileSync(asset[0]), contentType: asset[1]}) : route.fulfill({status: 404, body: ''});
     });
     await page.goto('http://fixture.invalid/');
+    assert.equal(await page.locator('.sidebar [data-workspace]').count(), 6);
+    assert.equal(await page.locator('.topbar').count(), 0);
+    assert.equal(await page.locator('.sidebar').evaluate(el => el.getBoundingClientRect().left), 0);
     async function section(name) {
       const visible = await page.locator('[data-panel]').evaluateAll(elements =>
         elements.filter(el => getComputedStyle(el).display !== 'none').map(el => el.dataset.panel));

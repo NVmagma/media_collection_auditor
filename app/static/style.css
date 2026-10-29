@@ -278,3 +278,40 @@
 
 /* Keep desktop overview panels within one screen across system fonts. */
 @media(min-width:801px){.dashboard-app.viewing-overview .overview-workspace .panel{padding-top:10px;padding-bottom:10px}}
+
+/* One persistent left navigation across every signed-in workspace. */
+.app-shell .sidebar{flex-basis:224px;flex-shrink:0;overflow:hidden;padding:18px 12px}
+.app-shell .sidebar-brand{padding-bottom:16px;font-size:21px}
+.sidebar-scroll{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;flex:1}
+.app-shell .side-nav{margin-top:0;gap:4px}
+.app-shell .side-nav a,.app-shell .sidebar-workspaces a,.app-shell .sidebar-categories button{display:flex;align-items:center;gap:10px;min-height:40px;padding:9px 12px;font-size:13px;line-height:1.35;border-radius:8px;text-decoration:none;color:#aebed2;border:1px solid transparent;overflow-wrap:anywhere}
+.app-shell .nav-icon{display:inline-flex!important;justify-content:center;align-items:center;flex:0 0 22px;font-size:17px}
+.app-shell .sidebar-workspaces{display:flex;flex-direction:column;gap:3px;flex-wrap:nowrap;padding:8px 0 12px;margin:0;border:0;background:transparent}
+.app-shell .sidebar-workspaces a{padding-left:23px}
+.app-shell .sidebar-tools{border-top:1px solid #27364a;padding-top:12px}
+.app-shell .side-nav a.active,.app-shell .sidebar-workspaces a[aria-current=page],.app-shell .sidebar-categories button.selected{background:#203450;color:#dceaff;border-color:#3c5676}
+.app-shell .side-nav a:hover,.app-shell .sidebar-workspaces a:hover,.app-shell .sidebar-categories button:hover{background:#1a2a40;color:#e7edf7}
+.app-shell .sidebar-categories{display:flex;flex-direction:column;gap:3px;border:0;border-top:1px solid #27364a;padding-top:12px;margin:12px 0 0;overflow:visible}
+.app-shell .sidebar-categories button{text-align:left;white-space:normal;background:transparent;width:100%}
+.app-shell .sidebar-footer{display:block;border-top:1px solid #27364a;margin-top:12px;padding:12px 8px 0}
+.app-shell .sidebar-footer button{padding:8px 12px;background:#203450;width:100%;text-align:left}
+.app-shell .settings-header{padding:22px 28px}
+.app-shell .settings-header h1{font-size:23px}
+.app-shell main{width:auto;max-width:1400px;margin:22px 28px 28px;min-width:0}
+.app-shell .settings-main{max-width:1150px;padding:0}
+.app-shell .sidebar a:focus-visible,.app-shell .sidebar button:focus-visible{outline:2px solid #97c4ff;outline-offset:-2px}
+.skip-navigation{position:fixed;left:12px;top:-100px;z-index:1000;background:#203450;color:#fff;padding:12px}
+.skip-navigation:focus{top:12px}
+@media(max-width:850px){
+ .app-shell .sidebar{flex-basis:64px;padding:14px 6px}
+ .app-shell .sidebar-brand{padding:0 2px 16px}
+ .app-shell .sidebar .nav-label,.app-shell .sidebar-brand>span,.app-shell .sidebar-footer .viewer-indicator{display:none}
+ .app-shell .side-nav a,.app-shell .sidebar-workspaces a,.app-shell .sidebar-categories button{padding:10px 8px;justify-content:center;gap:0}
+ .app-shell .sidebar-footer{padding:10px 0 0}
+ .app-shell .sidebar-footer button{text-align:center;padding:10px 0}
+ .app-shell .settings-header{padding:18px 16px}
+ .app-shell main,.app-shell.viewing-overview main{margin:16px;min-width:0}
+ .app-shell .settings-header h1{font-size:21px}
+ .app-shell .settings-header p{font-size:13px;overflow-wrap:anywhere}
+}
+@media(max-width:520px){.app-shell .sidebar{flex-basis:52px}.app-shell .sidebar-brand .brand-icon{margin-right:0}.app-shell main,.app-shell.viewing-overview main{margin:12px}.app-shell .settings-header{padding:16px 12px}}
