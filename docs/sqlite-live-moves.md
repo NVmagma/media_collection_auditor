@@ -72,3 +72,23 @@ host-specific reproduction, the optional `move-only` lab argument runs just the
 single capped-move case and omits other policy and transport cases. Failure output
 includes a fixed allowlisted guard code, errno, disposable source/destination
 presence and unresolved-intent presence. Routine complete acceptance stays in CI.
+
+## Confirmed Tower user-share blocker
+
+The targeted `cec665a` run at `/mnt/user/sql_test/live-policy.TsDS5F`
+reported `atomic_rename_unsupported`, errno 22 (`EINVAL`), from the atomic rename
+call. The disposable source remained present, the destination was absent, and
+the pending intent was retained. This is a failed filesystem-capability check,
+not a reason to relax no-overwrite semantics or clear an uncertain intent.
+The production container and media were not touched.
+
+Initial live activation cannot use the tested user-share path with this move
+primitive. Next inspect the native disk/pool locations behind `media_storage`.
+A native-root deployment may be possible if complete stage contents are on one
+verified filesystem. Do not replace the container mount based solely on finding
+one native directory: a user share can span multiple devices, and a partial view
+must never be mistaken for complete inventory. Cross-filesystem copy/delete and
+unsafe rename fallback remain excluded. No kernel/module/NFS changes are needed
+for this inventory. Only a small disposable same-filesystem capability test will
+be needed on Tower after selecting a valid native-root layout; routine testing
+continues in CI.
