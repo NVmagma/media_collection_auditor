@@ -8,9 +8,15 @@ import pytest
 
 LAUNCHER = Path(__file__).parents[1] / "scripts/sqlite_restart_policy_lab.sh"
 FAKE = '''#!/usr/bin/env python3
-import json, os, pathlib, sys
+import fcntl, json, os, pathlib, sys
 args = sys.argv[1:]
 state_path = pathlib.Path(os.environ['FAKE_STATE'])
+lock = open(str(state_path)+'.lock', 'a')
+fcntl.flock(lock, fcntl.LOCK_EX)
+def save_state(s):
+    temporary = state_path.with_name(state_path.name+'.'+str(os.getpid())+'.tmp')
+    temporary.write_text(json.dumps(s))
+    os.replace(temporary, state_path)
 s = json.loads(state_path.read_text()) if state_path.exists() else {'policy':'on-failure','running':True,'restarts':0,'exit':0}
 mode = os.environ.get('FAIL_MODE', '')
 if args[:2] == ['image','inspect']:
@@ -19,7 +25,7 @@ if args[0] == 'create':
     s['label'] = args[args.index('--label')+1].split('=',1)[1]
     mount = next(a for a in args if a.startswith('type=bind,src=') and a.endswith(',dst=/fixture'))
     s['lab'] = mount.split('src=',1)[1].split(',dst=',1)[0]
-    state_path.write_text(json.dumps(s))
+    save_state(s)
     print('a'*64)
     sys.exit(0)
 assert args[-1] == 'a'*64, 'Only new ID allowed'
@@ -52,7 +58,7 @@ elif args[0] == 'inspect':
         print(s['restarts'])
     else: raise AssertionError(fmt)
 else: raise AssertionError(args)
-state_path.write_text(json.dumps(s))
+save_state(s)
 '''
 
 
