@@ -174,3 +174,11 @@ The actual-image lab exercises one capped move with private Arr delivery, change
 protection, lost Arr acknowledgement, SIGKILL after rename, and the real web/API
 entrypoint with a retained intent. All files and HTTP services are disposable.
 Passing this lab is not a production cutover or authorization to change Tower.
+
+The candidate workflow can explicitly publish the accepted live image using
+`publish_live=true`. It publishes only a separate versioned `sqlite-live-canary-`
+tag and reports its digest after the complete acceptance job succeeds. It does
+not update `latest`, the preview tag, Unraid templates, or production services.
+The published image still needs a newly prepared native-media binding before it
+can run. Never replace the working preview image reference with the live digest
+alone.
