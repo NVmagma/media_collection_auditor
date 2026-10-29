@@ -9,6 +9,8 @@ on:
       - '.github/workflows/python-safety.yml'
       - 'docker/sqlite-candidate*'
       - 'docker/sqlite-preview*'
+      - 'scripts/sqlite_live_policy*'
+      - 'tests/test_sqlite_live_policy*'
       - 'app/**'
       - 'scripts/dashboard_clock_*'
       - 'scripts/interface_api_release_lab.sh'
@@ -112,6 +114,11 @@ jobs:
         run: |
           image=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate-build.json")
           bash scripts/sqlite_candidate_image_lab.sh "$image" | tee "$RUNNER_TEMP/candidate-tower-wrapper.log"
+      - name: Exercise initial live move policy on disposable CI storage
+        run: |
+          image=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate-build.json")
+          live_parent=$(mktemp -d "$RUNNER_TEMP/live-policy-parent.XXXXXX")
+          SQLITE_LAB_IMAGE="$image" bash scripts/sqlite_live_policy_lab.sh "$live_parent" | tee "$RUNNER_TEMP/live-policy-acceptance.log"
       - name: Exercise restore on a new host-backed disposable directory
         run: |
           image=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate-build.json")
@@ -210,6 +217,7 @@ jobs:
             ${{ runner.temp }}/candidate-tower-wrapper.log
             ${{ runner.temp }}/candidate-restore.log
             ${{ runner.temp }}/candidate-preview.log
+            ${{ runner.temp }}/live-policy-acceptance.log
             ${{ runner.temp }}/candidate-preparation.log
             ${{ runner.temp }}/candidate-recovery.log
             ${{ runner.temp }}/preview-release-image.txt

@@ -12,4 +12,4 @@ def test_initial_live_policy_actual_disposable_worker():
     suite=unittest.defaultTestLoader.loadTestsFromTestCase(fixture.InitialLivePolicyTests)
     result=unittest.TextTestRunner(stream=output,verbosity=2).run(suite)
     assert result.wasSuccessful(),output.getvalue()
-    assert result.testsRun==3 and not result.skipped
+    assert result.testsRun==4 and not result.skipped

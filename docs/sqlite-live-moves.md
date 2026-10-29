@@ -47,3 +47,20 @@ actual disposable renamed directories, private synthetic HTTP responses, existin
 SQLite state and the common scheduled worker internals. Production release gates
 remain closed to live execution. The lab mounts no production media, appdata,
 Docker socket or host port and uses no external API requests.
+
+## Test placement and host-specific diagnostics
+
+Routine policy, complete worker, failure and Docker wrapper acceptance runs in
+GitHub Actions. The user upgraded Actions capacity; Tower should be used only
+for host-specific capability/deployment checks that CI cannot establish.
+
+The first user-share Tower run returned zero completed moves; the original
+assertion did not include the worker's stop reason, so the cause remains unknown.
+Zero completed moves does not prove no rename occurred: an uncertain post-rename
+outcome must also remain blocked. The fixture now includes only fixed worker
+status/reason, error type, operation category and numeric errno in failure output;
+it never prints exception text, titles, source paths or HTTP credentials. An
+unsupported-rename regression verifies retained intent, unchanged source and no
+fallback. The same host-backed Docker lab is now an explicit candidate CI step.
+No production activation or safeguard relaxation is implied by this diagnostic
+change. A host-specific failure must be resolved before production live moves.
