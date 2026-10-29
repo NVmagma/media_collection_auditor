@@ -27,6 +27,7 @@ def sha(raw):return hashlib.sha256(raw).hexdigest()
 
 
 class SelectedUpdate:
+    REVIEW_STATUS = "candidate_review_prepared"
     def __init__(self,*,engine,review,review_identity,review_fingerprint,backup,backup_identity,
                  backup_fingerprint,logs,control,old_logs,old_control,templates):
         self.engine,self.review,self.templates=engine,Path(review),Path(templates)
@@ -40,7 +41,7 @@ class SelectedUpdate:
         self.selected=dict(directory=Path(backup),expected_identity=backup_identity,expected_fingerprint=backup_fingerprint)
         self.data=load_backup_payloads(**self.selected);self.captured=parse_unique_json(self.data['current.inspect.json'])
         self.image=engine.image(r['reference'])
-        if (r.get('status')!='candidate_review_prepared' or r.get('image_reference_status')!='verified_cached_digest'
+        if (r.get('status')!=self.REVIEW_STATUS or r.get('image_reference_status')!='verified_cached_digest'
                 or r.get('backup_fingerprint')!=backup_fingerprint or r.get('candidate_image_id')!=self.image['Id']
                 or r.get('original_container_id')!=self.captured['Id'] or self.payload['Image']!=r['reference']):
             raise RuntimeError('Exact published review required')

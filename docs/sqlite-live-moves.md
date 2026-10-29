@@ -238,3 +238,29 @@ reappear on Unraid recreation. Policy validation uses effective saved settings,
 while preserving runtime defaults and credentials. A disposable named-volume CI
 case proves denial without DAC_OVERRIDE and atomic no-replace rename success
 with that sole retained capability, preserving synthetic 99:100 ownership.
+
+### Explicit live service handoff
+
+`scripts/unraid_live_execute_host.sh` accepts `check`, `deploy`, or `recover`,
+followed by the immutable reference, prepared root, private review directory,
+backup packet, backup fingerprint, and native media root. Deploy/recover also
+require the exact SHA256 of `review-complete.json`; an uncertain container create
+requires its explicitly reviewed replacement ID for recovery.
+
+Check revalidates the private review, backup, both database snapshots, binding,
+source/settings identities, native/shared media metadata and managed template.
+It mounts data and templates read-only and makes no service changes. Its Docker
+socket permits engine access; a read-only bind is not an API authorization fence.
+
+Deploy repeats the review after stopping the original, retains that container,
+creates the exact reviewed payload, verifies the approved capability policy,
+starts the daily canary and checks authenticated SQLite live API readiness before
+installing the matching template. It never retries or automatically restores.
+The first live release remains limited to one global action per daily run with
+permanent deletion disabled.
+
+Recovery is deliberately limited to unchanged initial tracking with no retained
+intent. It rechecks before and after stopping the replacement. Any advanced
+revision, changed snapshot or uncertain operation blocks stale-preview recovery;
+latest-state recovery then needs separate review. Never start the retained old
+preview over newer live tracking. All containers and journals are retained.

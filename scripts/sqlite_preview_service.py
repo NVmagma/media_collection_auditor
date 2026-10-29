@@ -367,7 +367,7 @@ def recover_service(*, engine, journal, captured, report, env, reference, reques
         'media_actions_authorized': False}
 
 
-def verify_http_health(*, engine, identity, env):
+def verify_http_health(*, engine, identity, env, live_canary=False):
     """Bounded read-only readiness probes. Never follow redirects or use proxies."""
     port = int(env.get('WEB_PORT', '8080')); token = env.get('INTEGRATION_API_TOKEN')
     if not token: raise RuntimeError('Existing integration token required')
@@ -395,12 +395,16 @@ def verify_http_health(*, engine, identity, env):
             code, summary = get('/api/v1/summary', True)
             status, audit = get('/api/v1/audit-status', True)
             if (code != 200 or status != 200 or summary.get('storage_authority') != 'sqlite'
-                    or any(value.get('production_activation') != 'preview_only'
+                    or any(value.get('production_activation') != ('scheduled_moves' if live_canary else 'preview_only')
                            or value.get('freshness_verified') is not False or value.get('read_only') is not True
                            or value.get('media_actions_authorized') is not False
-                           or value.get('execution_mode') != 'scheduled_preview' for value in (summary, audit))
+                           or value.get('execution_mode') != ('scheduled_live_moves' if live_canary else 'scheduled_preview') for value in (summary, audit))
                     or not audit.get('next_run')):
                 raise RuntimeError('Preview API/coordinator not ready')
+            if live_canary and (summary.get('pending_operation_present') is not False
+                    or any(value.get('worker_mode') != 'daily_moves_one_action'
+                           or value.get('permanent_deletion_authorized') is not False for value in (summary, audit))):
+                raise RuntimeError('Live canary policy or tracking requires review')
             return
         except (OSError, ValueError, RuntimeError):
             sleep(.25)
