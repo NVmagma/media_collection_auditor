@@ -55,6 +55,7 @@ def test_paused_preview_readiness_and_setup_still_available(api, monkeypatch):
     client, _ = api
     class Gate:
         def preview_release_enabled(self): return True
+        def live_release_enabled(self): return False
         def require_sqlite_production_activation(self): raise RuntimeError('private path secret')
     monkeypatch.setattr(web, '_preview_backend_gate', lambda:Gate())
     monkeypatch.setattr(web, 'read_tracking_status', lambda *_:pytest.fail('No unbound reads'))

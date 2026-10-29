@@ -9,6 +9,9 @@ on:
       - '.github/workflows/python-safety.yml'
       - 'docker/sqlite-candidate*'
       - 'docker/sqlite-preview*'
+      - 'docker/sqlite-live*'
+      - 'scripts/sqlite_live_release*'
+      - 'tests/test_sqlite_live*'
       - 'scripts/sqlite_live_policy*'
       - 'tests/test_sqlite_live_policy*'
       - 'scripts/sqlite_media_view_review*'
@@ -153,6 +156,13 @@ jobs:
           image=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate-build.json")
           recovery_parent=$(mktemp -d "$RUNNER_TEMP/recovery-parent.XXXXXX")
           bash scripts/sqlite_release_recovery_lab.sh "$image" "$recovery_parent" | tee "$RUNNER_TEMP/candidate-recovery.log"
+      - name: Build separate scheduled live image without publishing
+        run: bash scripts/sqlite_live_release_build.sh > "$RUNNER_TEMP/live-release-image.txt"
+      - name: Verify actual live entrypoint and disposable moves with Arr recovery
+        run: |
+          image=$(cat "$RUNNER_TEMP/live-release-image.txt")
+          live_parent=$(mktemp -d "$RUNNER_TEMP/live-release-parent.XXXXXX")
+          bash scripts/sqlite_live_release_lab.sh "$image" "$live_parent" | tee "$RUNNER_TEMP/live-release-acceptance.log"
       - name: Build separate preview-only release without publishing
         run: bash scripts/sqlite_preview_release_build.sh > "$RUNNER_TEMP/preview-release-image.txt"
       - name: Exercise combined interface API and notification release

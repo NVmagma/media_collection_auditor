@@ -121,8 +121,8 @@ def test_uncertain_actual_rename_retains_integrity_and_blocks_execution(prepared
     monkeypatch.setattr(batch,'rename_directory_noreplace_at',uncertain)
     cycle=ScheduledWorkerCycle();slot=case.fixture.slot
     _configured_cycle_step(cycle=cycle,settings=values,now=slot-timedelta(hours=1),clock=lambda:NOW)
-    result=_configured_cycle_step(cycle=cycle,settings=values,now=slot,clock=lambda:NOW)
-    assert result.outcome['status']=='stopped' and not result.outcome['completed']
+    with pytest.raises(RuntimeError,match='SQLite live release binding unavailable'):
+        _configured_cycle_step(cycle=cycle,settings=values,now=slot,clock=lambda:NOW)
     assert INTENTS_KEY in GuardedSQLiteStateStore(control/'state.db').load_with_revision()[0]
     assert live.validate_live_binding(settings=values)['AUDITOR_STATE_BACKEND']=='sqlite'
     calls=len(case.server.calls)
@@ -152,3 +152,43 @@ def test_public_live_gate_redacts_binding_failure(prepared,monkeypatch):
     for gate in (require_sqlite_read_authority,require_sqlite_production_activation):
         with pytest.raises(RuntimeError) as error:gate(settings=prepared[-1])
         assert str(error.value)=='SQLite live release binding unavailable'
+
+
+def test_public_live_worker_records_one_move_and_revalidates_advanced_state(prepared):
+    from datetime import timedelta
+    from app.sqlite_scheduled_production import production_cycle_step
+    from app.sqlite_scheduled_worker_cycle import ScheduledWorkerCycle
+    from app.sqlite_scheduled_observations import ScheduledRunObservations
+    from scripts.sqlite_scheduled_configured_slot_fixture import NOW
+    case,source,control,_,values=prepared
+    live.create_live_binding(settings=values)
+    before=source.read_bytes();cycle=ScheduledWorkerCycle();observer=ScheduledRunObservations()
+    def step(now):return production_cycle_step(cycle=cycle,settings=values,now=now,clock=lambda:NOW,observer=observer)
+    assert step(case.fixture.slot-timedelta(hours=1)).status=='waiting'
+    assert len(step(case.fixture.slot).outcome['completed'])==1
+    assert observer.report()['last_result']=='completed'
+    assert observer.history()[0]['dry_run'] is False
+    calls=len(case.server.calls)
+    assert step(case.fixture.slot+timedelta(seconds=1)).status=='waiting'
+    assert len(case.server.calls)==calls and source.read_bytes()==before
+
+
+def test_public_live_worker_uncertainty_is_failed_and_cannot_replay(prepared,monkeypatch):
+    from datetime import timedelta
+    from app.sqlite_scheduled_production import production_cycle_step
+    from app.sqlite_scheduled_worker_cycle import ScheduledWorkerCycle
+    from app.sqlite_scheduled_observations import ScheduledRunObservations
+    from scripts.sqlite_scheduled_configured_slot_fixture import NOW
+    from app import sqlite_scheduled_routed_batch as batch
+    case,_,control,_,values=prepared;live.create_live_binding(settings=values)
+    original=batch.rename_directory_noreplace_at
+    def uncertain(*args):original(*args);raise RuntimeError('fixture lost acknowledgement')
+    monkeypatch.setattr(batch,'rename_directory_noreplace_at',uncertain)
+    cycle=ScheduledWorkerCycle();observer=ScheduledRunObservations()
+    def step(now):return production_cycle_step(cycle=cycle,settings=values,now=now,clock=lambda:NOW,observer=observer)
+    step(case.fixture.slot-timedelta(hours=1))
+    with pytest.raises(RuntimeError):step(case.fixture.slot)
+    assert observer.report()['last_result']=='failed'
+    calls=len(case.server.calls)
+    with pytest.raises(RuntimeError):step(case.fixture.slot+timedelta(days=1))
+    assert len(case.server.calls)==calls

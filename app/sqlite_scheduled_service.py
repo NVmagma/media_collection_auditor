@@ -15,8 +15,8 @@ def run_daily_service(*, apply_settings):
     never runs in deployed JSON mode and cannot be entered through environment
     selection while the release gate is closed.
     """
-    from app.sqlite_backend_gate import preview_release_enabled
-    if not preview_release_enabled():
+    from app.sqlite_backend_gate import preview_release_enabled, scheduled_release_enabled
+    if not scheduled_release_enabled():
         require_sqlite_production_activation()
     from run_control import wait_for_run
     from app.sqlite_scheduled_observations import COORDINATOR
@@ -34,7 +34,8 @@ def run_daily_service(*, apply_settings):
             NOTIFICATIONS.clear('settings_review_required')
             phase = 'scan_blocked_or_uncertain'
             result = production_cycle_step(cycle=cycle, settings=dict(os.environ), now=now, observer=COORDINATOR)
-            manual_result = run_requested_preview(settings=dict(os.environ), now=datetime.now(timezone.utc), observer=COORDINATOR)
+            manual_result = (run_requested_preview(settings=dict(os.environ), now=datetime.now(timezone.utc), observer=COORDINATOR)
+                             if preview_release_enabled() else None)
             if getattr(result, 'status', None) == 'attempted' or manual_result is not None:
                 if COORDINATOR.report().get('last_result') == 'completed':
                     NOTIFICATIONS.clear('scan_blocked_or_uncertain')

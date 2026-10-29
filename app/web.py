@@ -50,6 +50,7 @@ def _preview_backend_gate():
 def require_login():
     gate = _preview_backend_gate()
     preview = gate.preview_release_enabled()
+    live = gate.live_release_enabled()
     if read_only_service_enabled() and not preview and request.endpoint not in (
             "integration_summary", "integration_audit_status", "integration_titles", "integration_readiness", "integration_coverage", "integration_scan_history", "integration_proposals", "integration_backup_status", "health"):
         return {"status": "read_only_service"}, 404
@@ -62,11 +63,11 @@ def require_login():
     if request.endpoint in ("integration_readiness", "integration_backup_status"):
         return None
     if request.endpoint in ("integration_summary", "integration_audit_status", "integration_titles", "integration_coverage", "integration_scan_history", "integration_proposals"):
-        if preview:
-            try: gate.require_sqlite_production_activation()
+        if preview or live:
+            try: (gate.require_sqlite_read_authority if live else gate.require_sqlite_production_activation)()
             except RuntimeError:
-                return {"status":"preview_paused", "read_only":True, "media_actions_authorized":False,
-                        "message":"Preview scans are paused; settings or tracking need review."}, 503
+                return {"status":"live_paused" if live else "preview_paused", "read_only":True, "media_actions_authorized":False,
+                        "message":"Scheduled scans are paused; settings or tracking need review."}, 503
         return None
     if request.endpoint in ("login", "login_background", "health", "static"):
         return None
@@ -75,12 +76,12 @@ def require_login():
         if request.path.startswith("/api/"):
             return {"ok": False, "message": "Please sign in."}, 401
         return redirect(url_for("login"))
-    if preview and request.endpoint not in ('settings','logout','run_now','apply_preview_settings','restore_preview_settings','integration_setup'):
-        try: gate.require_sqlite_production_activation()
+    if (preview or live) and request.endpoint not in ('settings','logout','run_now','apply_preview_settings','restore_preview_settings','integration_setup'):
+        try: (gate.require_sqlite_read_authority if live else gate.require_sqlite_production_activation)()
         except RuntimeError:
             if request.path.startswith('/api/'):
-                return {'status':'preview_paused','media_actions_authorized':False}, 503
-            return render_template('preview-paused.html'), 503
+                return {'status':'live_paused' if live else 'preview_paused','media_actions_authorized':False}, 503
+            return render_template('preview-paused.html', live_mode=live), 503
     if request.endpoint in ("settings", "test_connection", "run_now", "rescue", "apply_preview_settings", "restore_preview_settings", "integration_setup") and not g.user["admin"]:
         if request.path.startswith("/api/"):
             return {"ok": False, "message": "Administrator access required."}, 403
@@ -158,10 +159,11 @@ def _integration_readiness():
     """Selected tracking readiness; no remote collection or credential projection."""
     gate = _preview_backend_gate()
     preview = gate.preview_release_enabled()
+    live = gate.live_release_enabled()
     binding = 'not_required'
-    if preview:
+    if preview or live:
         try:
-            gate.require_sqlite_production_activation()
+            (gate.require_sqlite_read_authority if live else gate.require_sqlite_production_activation)()
             binding = 'verified'
         except RuntimeError:
             binding = 'review_required'
@@ -174,7 +176,7 @@ def _integration_readiness():
         'storage_authority': os.environ.get('AUDITOR_STATE_BACKEND', 'json') if os.environ.get('AUDITOR_STATE_BACKEND', 'json') in ('json', 'sqlite') else 'unavailable',
         'freshness_verified': False, 'read_only': True,
         'media_actions_authorized': False,
-        'execution_mode': 'scheduled_preview' if preview else 'read_only_integration',
+        'execution_mode': 'scheduled_live_moves' if live else ('scheduled_preview' if preview else 'read_only_integration'),
         'title_details_enabled': os.environ.get('INTEGRATION_API_TITLE_DETAILS', 'false').lower() == 'true',
         'poster_lookup_enabled': os.environ.get('INTEGRATION_API_MEDIA', 'false').lower() == 'true',
         'coordinator_scope': 'unavailable' if read_only_service_enabled() else 'current_process',
@@ -924,6 +926,9 @@ def settings():
         return Response("Settings require WEB_ADMIN_PASSWORD (and HTTP Basic authentication).",
                         401, {"WWW-Authenticate": 'Basic realm="Auditor settings"'})
     preview_mode = _preview_backend_gate().preview_release_enabled()
+    live_mode = _preview_backend_gate().live_release_enabled()
+    if live_mode and request.method == 'POST':
+        return Response('Live canary settings are fixed. Prepare reviewed settings before changing this release.', 409)
     saved = load_config()
     pending_settings = {'status':'none','changed_keys':[]}
     settings_application = {'status':'none'}
@@ -989,7 +994,7 @@ def settings():
         values[key] = ""  # Never send stored tokens to the browser.
     return render_template("settings.html", groups=FIELDS, values=values,
                            secrets=SECRETS, bools=BOOLS, sources=sources, help_text=FIELD_HELP, error=error,
-                           success=success, preview_mode=preview_mode, requested=requested, unchanged=unchanged,
+                           success=success, preview_mode=preview_mode, live_mode=live_mode, requested=requested, unchanged=unchanged,
                            pending_settings=pending_settings, settings_application=settings_application,
                            settings_applied=request.args.get('applied')=='1',
                            settings_restored=request.args.get('restored')=='1',

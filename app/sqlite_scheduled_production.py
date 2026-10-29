@@ -47,8 +47,8 @@ def _configured_cycle_step(*, cycle, settings, now, clock, observer=None):
             observer.observe_cycle(next_run=cycle.next_run, status='attempted')
         def execute():
             result = _run_bound_production_slot(settings=values, scheduled_at=slot, now=current, clock=clock)
-            from app.sqlite_backend_gate import preview_release_enabled
-            if preview_release_enabled():
+            from app.sqlite_backend_gate import scheduled_release_enabled
+            if scheduled_release_enabled():
                 # A changed binding/configuration must fail inside the observer's
                 # attempt, rather than leave a misleading completed history row.
                 require_sqlite_production_activation(settings=values)
@@ -116,6 +116,13 @@ def _run_bound_production_slot(*, settings, scheduled_at, now, clock, timer=mono
                 fresh = require_sqlite_production_activation(settings=settings)
                 if _policy(fresh)[3] != _policy(settings)[3]:
                     raise RuntimeError('Preview settings changed before scan lock')
+            from app.sqlite_backend_gate import live_release_enabled
+            if live_release_enabled():
+                from app.sqlite_live_binding import _policy as live_policy
+                fresh = require_sqlite_production_activation(settings=settings)
+                if live_policy(fresh)[3] != live_policy(settings)[3]:
+                    raise RuntimeError('Live settings changed before scan lock')
+
             def verify_binding():
                 verify_json(); verify_control()
             claim = (nullcontext(verify_binding) if manual_preview else

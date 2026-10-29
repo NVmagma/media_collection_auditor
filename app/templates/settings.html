@@ -8,8 +8,9 @@
 <div class="sidebar-footer"><span class="viewer-indicator" title="Signed in as {{ viewer.name }}">{{ viewer.name }} <span class="viewer-role">{{ "Administrator" if viewer.admin else "Read only" }}</span></span> <form method="post" action="/logout" style="display:inline"><button type="submit">Sign out</button></form></div>
 </aside>
 <div class="app-content">
-<header class="settings-header"><div><h1>Settings</h1><p>Manage your auditor without editing Docker environment variables.</p></div><span class="header-note">{{ 'Apply requests after review' if preview_mode else 'Changes apply next audit' }}</span></header>
+<header class="settings-header"><div><h1>Settings</h1><p>Manage your auditor without editing Docker environment variables.</p></div><span class="header-note">{{ 'Live canary: settings fixed' if live_mode else ('Apply requests after review' if preview_mode else 'Changes apply next audit') }}</span></header>
 <main class="settings-main">
+{% if live_mode %}<div class="alert" role="status">Live canary settings are fixed for this release. Changes require reviewed preparation; submitting this form cannot change active settings or tracking.</div>{% endif %}
 {% if preview_mode %}
 <section class="settings-status-grid" aria-label="Configuration status">
   <article class="settings-status-card"><span class="settings-step">1 · ACTIVE CONFIGURATION</span><h2>{{ 'Recovery required' if settings_application.status == 'recovery_required' else 'Active values loaded' }}</h2>
@@ -49,7 +50,7 @@
 </nav>
 <form method="post" action="/settings" id="settings-form" data-preview="{{ 'true' if preview_mode else 'false' }}">
 {% if preview_mode %}<input type="hidden" name="settings_action" value="apply">{% if settings_application.status == 'ready' %}<input type="hidden" name="request_sha256" value="{{ settings_application.request_sha256 }}">{% endif %}{% endif %}
-<fieldset style="border:0;padding:0;margin:0;min-width:0" {% if settings_application.status == 'recovery_required' %}disabled{% endif %}>
+<fieldset style="border:0;padding:0;margin:0;min-width:0" {% if live_mode or settings_application.status == 'recovery_required' %}disabled{% endif %}>
 {% for group, keys in groups.items() %}
 <section class="settings-section{% if not loop.first %} hidden-section{% endif %}" data-panel="{{ group }}">
 <h2>{{ group }} Settings</h2>
@@ -75,7 +76,7 @@
 {% endif %}
 </section>
 {% endfor %}
-{% if not preview_mode %}
+{% if not preview_mode and not live_mode %}
 <div class="save-panel"><div><strong>Save configuration</strong><p>Settings are stored in persistent appdata. Potentially destructive options require confirmation.</p>
 <label class="confirm-label" for="safety_confirmation">Safety confirmation (when required)</label>
 <input id="safety_confirmation" name="safety_confirmation" autocomplete="off" placeholder="Type I UNDERSTAND"></div>

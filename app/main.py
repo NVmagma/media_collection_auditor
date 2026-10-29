@@ -47,8 +47,8 @@ def audit_counts(path, offset):
 
 
 if __name__ == "__main__":
-    from sqlite_backend_gate import preview_release_enabled, require_sqlite_production_activation
-    if preview_release_enabled():
+    from sqlite_backend_gate import scheduled_release_enabled, require_sqlite_production_activation
+    if scheduled_release_enabled():
         # UI availability is separate from scan readiness. A changed binding
         # pauses the preview worker; it never selects the legacy JSON worker.
         from app.sqlite_scheduled_service import run_daily_service

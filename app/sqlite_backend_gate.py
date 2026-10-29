@@ -27,6 +27,10 @@ def live_release_enabled() -> bool:
     return PROFILE == 'scheduled-live-moves-v1'
 
 
+def scheduled_release_enabled() -> bool:
+    return preview_release_enabled() or live_release_enabled()
+
+
 def require_sqlite_read_authority(*, settings=None):
     """Validate tracking access without granting permission to resume a move.
 

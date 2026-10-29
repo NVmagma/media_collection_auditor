@@ -160,3 +160,17 @@ can remain observable; execution rejects that same intent. Both paths redact
 validation failures and revalidate bound tracking projections after capture.
 Sealed and preview images retain their existing restrictions. No live image or
 production cutover is provided by this gate change alone.
+
+### Packaged live runtime acceptance
+
+A separate `docker/sqlite-live-release.Dockerfile` now selects the immutable live
+profile. Its daily worker revalidates policy after acquiring the shared locks and
+validates advanced tracking before recording completion. Manual moves remain
+unavailable. During the initial one-action canary, settings are displayed but
+cannot be saved through the legacy configuration route; reviewed preparation is
+required. The deployed preview retains Apply Requested Settings.
+
+The actual-image lab exercises one capped move with private Arr delivery, changed
+protection, lost Arr acknowledgement, SIGKILL after rename, and the real web/API
+entrypoint with a retained intent. All files and HTTP services are disposable.
+Passing this lab is not a production cutover or authorization to change Tower.
