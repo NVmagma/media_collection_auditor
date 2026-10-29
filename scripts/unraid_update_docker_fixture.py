@@ -107,6 +107,50 @@ def options(context, engine):
         image_id=context['image_id'], attempt=context['attempt'], validate_data=lambda: validate_data(context))
 
 
+def candidate_handoff_rehearsal(raw,context,destination):
+    """Exercise the shared handoff using only already-scoped disposable roles."""
+    from scripts.unraid_update_candidate_handoff import handoff,recover
+    from scripts.sqlite_preview_service import Journal,NAME
+    scoped=FixtureEngine(raw,context);scoped.assert_fixture()
+    old=context['captured']['Id'];fixture=scoped.name
+    mapping={NAME:fixture,NAME+'_before_update_'+old[:12]:fixture+'-candidate-rollback-'+old[:12]}
+    scoped.roles.update(mapping.values())
+    class Adapter:
+        def inspect(self,value,optional=False):
+            result=scoped.inspect(mapping.get(value,value),optional=optional)
+            if result is not None:
+                result=deepcopy(result)
+                inverse={value:key for key,value in mapping.items()}
+                result['Name']='/'+inverse.get(result['Name'][1:],result['Name'][1:])
+            return result
+        def stop(self,value):scoped.stop(value)
+        def start(self,value):scoped.start(value)
+        def create(self,name,payload):
+            identity=scoped.create(mapping[name],payload)
+            mapping[NAME+'_update_retained_'+identity[:12]]=fixture+'-candidate-retained-'+identity[:12]
+            scoped.roles.add(mapping[NAME+'_update_retained_'+identity[:12]])
+            return identity
+        def rename(self,value,name):
+            if name.startswith(NAME+'_update_retained_') and value==scoped.new:
+                mapping[name]=fixture+'-candidate-retained-'+value[:12];scoped.roles.add(mapping[name])
+            scoped.rename(value,mapping[name])
+    engine=Adapter();captured=deepcopy(context['captured']);captured['Name']='/'+NAME
+    folder=destination/'candidate-handoff-journal';folder.mkdir(mode=0o700);parent=_open_directory(str(folder))
+    common=dict(engine=engine,captured=captured,payload=context['payload'],image_id=context['image_id'],
+        precheck=lambda:validate_data(context))
+    try:
+        result=handoff(**common,journal=Journal(parent),
+            health=lambda identity:verify_http_health(engine=scoped,identity=identity,env=context['new_env']),
+            install=lambda:template(context,'new_template'))
+        recover(**common,journal=Journal(parent,'recovery'),new_id=result['container_id'],
+            health=lambda identity:verify_http_health(engine=scoped,identity=identity,env=context['old_env']),
+            restore_template=lambda:template(context,'old_template'))
+        if not scoped.inspect(old)['State']['Running']:raise RuntimeError('Original fixture not recovered')
+        validate_data(context)
+    finally:
+        os.close(parent);scoped.cleanup_new()
+
+
 def run_rehearsal(*, raw, captured, image, old_env, new_env, destination):
     if _revision() != image['Config']['Labels']['org.opencontainers.image.revision']:
         raise RuntimeError('Matching actual fixture image required')
@@ -147,6 +191,7 @@ def run_rehearsal(*, raw, captured, image, old_env, new_env, destination):
             raise RuntimeError('Private fixture template was not restored')
     finally:
         os.close(parent); engine.cleanup_new()
+    candidate_handoff_rehearsal(raw,context,destination)
     # A new attempt/journal tests actual controller death after stopping the old
     # worker. The parent observes it stopped before explicitly requesting recovery.
     crash_path = destination/'crash-journal'; crash_path.mkdir(mode=0o700)
@@ -167,7 +212,7 @@ def run_rehearsal(*, raw, captured, image, old_env, new_env, destination):
     validate_data(context)
     return {'status':'actual_fixture_swap_recovery_and_controller_death_verified', 'fixture_only':True,
             'automatic_restoration':False, 'production_authorized':False, 'host_ports_published':False,
-            'actual_sigkill_verified':True, 'explicit_recovery_verified':True, 'controller_kill_boundary':'old_stopped'}
+            'actual_sigkill_verified':True, 'candidate_handoff_recovery_verified':True, 'explicit_recovery_verified':True, 'controller_kill_boundary':'old_stopped'}
 
 
 def child(path):

@@ -361,3 +361,23 @@ private proposals then contain that digest in both Image and Repository. Tags or
 unverified digests are rejected before proposal writes. The report says
 `verified_cached_digest`; deployment authorization remains false. This is still
 a review, not a container execution or template installation command.
+
+## Candidate handoff and explicit recovery rehearsal
+
+`unraid_update_candidate_handoff.py` now provides the single-attempt service
+transaction separately from the stopped same-image recovery launcher. It verifies
+the original, records durable intent, stops it, revalidates data offline, retains
+it under a reserved archive name, creates/starts the replacement and verifies
+health before installing the managed template. Exceptions never trigger retries,
+container removal or automatic restoration. Explicit recovery requires the exact
+replacement ID and unchanged data, retains the replacement, restores the original
+template and name, and starts the original only after those checks.
+
+The existing fresh service fixture now exercises these shared functions through
+a scoped adapter. All real Docker names, IDs, labels and mounts are restricted to
+the newly created fixture volume; the production service name is only a normalized
+in-memory validation role. The adapter cannot access production containers.
+Run `sqlite_preview_service_lab.sh ACCEPTED_IMAGE_ID fresh` on Tower for the
+actual handoff/recovery rehearsal. No production execution launcher is supplied
+by this increment; host input verification and explicit recovery wiring must be
+completed before using the transaction against the current auditor.
