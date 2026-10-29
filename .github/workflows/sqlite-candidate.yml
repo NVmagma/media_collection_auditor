@@ -11,6 +11,7 @@ on:
       - 'docker/sqlite-preview*'
       - 'docker/sqlite-live*'
       - 'scripts/sqlite_live_release*'
+      - 'scripts/sqlite_live_ownership*'
       - 'tests/test_sqlite_live*'
       - 'scripts/sqlite_live_policy*'
       - 'tests/test_sqlite_live_policy*'
@@ -167,6 +168,10 @@ jobs:
           bash scripts/sqlite_release_recovery_lab.sh "$image" "$recovery_parent" | tee "$RUNNER_TEMP/candidate-recovery.log"
       - name: Build separate scheduled live image without publishing
         run: bash scripts/sqlite_live_release_build.sh > "$RUNNER_TEMP/live-release-image.txt"
+      - name: Verify minimal live capability with Unraid-style fixture ownership
+        run: |
+          image=$(cat "$RUNNER_TEMP/live-release-image.txt")
+          bash scripts/sqlite_live_ownership_lab.sh "$image" | tee "$RUNNER_TEMP/live-ownership-acceptance.log"
       - name: Verify actual live entrypoint and disposable moves with Arr recovery
         run: |
           image=$(cat "$RUNNER_TEMP/live-release-image.txt")
@@ -267,6 +272,7 @@ jobs:
             ${{ runner.temp }}/live-policy-acceptance.log
             ${{ runner.temp }}/live-release-image.txt
             ${{ runner.temp }}/live-release-acceptance.log
+            ${{ runner.temp }}/live-ownership-acceptance.log
             ${{ runner.temp }}/live-publication.json
             ${{ runner.temp }}/candidate-preparation.log
             ${{ runner.temp }}/candidate-recovery.log

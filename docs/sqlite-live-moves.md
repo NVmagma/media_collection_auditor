@@ -221,3 +221,20 @@ private review directory is writable. Matching metadata does not claim byte
 equality or exclusion of external writers. A reviewed proposal still requires a
 separate tested service transaction and stopped-original freshness check before
 activation.
+
+### Approved minimal live filesystem capability
+
+On 2026-10-29 the user explicitly approved preparation and testing of a root
+canary with all capabilities dropped except DAC_OVERRIDE. Private SQLite controls
+remain root-owned; Unraid media directories can remain 99:100-owned and 0755. No
+production chmod/chown is required. Container root remains read-only, the global
+action cap remains one, and permanent deletion/copy/pruning stay disabled. This
+approval did not authorize starting the live service.
+
+The proposal now enforces its own minimal capability rather than requiring an
+older preview to already have the new policy. Template security, user and restart
+flags are rebuilt to match the proposed Docker payload, so stale flags cannot
+reappear on Unraid recreation. Policy validation uses effective saved settings,
+while preserving runtime defaults and credentials. A disposable named-volume CI
+case proves denial without DAC_OVERRIDE and atomic no-replace rename success
+with that sole retained capability, preserving synthetic 99:100 ownership.

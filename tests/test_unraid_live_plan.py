@@ -75,3 +75,37 @@ def test_proposal_failure_identifies_capability_guard_without_private_text():
     args=values();args['current']['HostConfig']['CapAdd']=['SYS_ADMIN'];stages=[]
     with pytest.raises(ValueError):live_metadata(**args,diagnostic=stages.append)
     assert stages[-1]=='proposal_capability_policy'
+
+
+@pytest.mark.parametrize('original_drop',[None,[],['CHOWN']])
+def test_new_canary_has_approved_minimal_capability_independent_of_old_preview(original_drop):
+    import shlex
+    args=values();args['current']['HostConfig']['CapDrop']=original_drop
+    root=ET.fromstring(args['template']);root.find('ExtraParams').text='--read-only --cap-drop=CHOWN'
+    args['template']=ET.tostring(root);before=deepcopy(args)
+    payload,raw=live_metadata(**args)
+    assert args==before
+    assert payload['HostConfig']['CapDrop']==['ALL']
+    assert payload['HostConfig']['CapAdd']==['DAC_OVERRIDE']
+    extra=shlex.split(ET.fromstring(raw).findtext('ExtraParams'))
+    assert '--cap-drop=ALL' in extra and '--cap-drop=CHOWN' not in extra
+    assert '--cap-add=DAC_OVERRIDE' in extra and '--security-opt=no-new-privileges' in extra
+
+
+def test_stale_template_flags_cannot_reintroduce_unreviewed_capabilities_or_restart():
+    import shlex
+    args=values();root=ET.fromstring(args['template'])
+    root.find('ExtraParams').text='--read-only --user=123:456 --restart=always --cap-add=SYS_ADMIN --security-opt=seccomp=unconfined'
+    args['template']=ET.tostring(root)
+    payload,raw=live_metadata(**args)
+    extra=shlex.split(ET.fromstring(raw).findtext('ExtraParams'))
+    assert '--user=0:0' in extra and '--restart=no' in extra
+    assert [value for value in extra if value.startswith('--cap-add=')]==['--cap-add=DAC_OVERRIDE']
+    assert not any('seccomp=unconfined' in value or 'SYS_ADMIN' in value for value in extra)
+    assert payload['HostConfig']['CapAdd']==['DAC_OVERRIDE']
+
+
+def test_unrepresented_privileged_template_flags_are_refused():
+    args=values();root=ET.fromstring(args['template'])
+    root.find('ExtraParams').text='--read-only --privileged';args['template']=ET.tostring(root)
+    with pytest.raises(ValueError,match='Unsupported template runtime argument'):live_metadata(**args)

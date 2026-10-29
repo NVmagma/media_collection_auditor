@@ -2,6 +2,7 @@
 from html import unescape
 from pathlib import PurePosixPath
 import re
+import shlex
 from xml.etree import ElementTree as ET
 from app.unraid_update_review import review_update
 from app.sqlite_live_policy import validate_initial_live_policy
@@ -44,9 +45,17 @@ def live_metadata(*,current,image,template,environment,reference,host_logs,host_
         reference=reference,host_logs=host_logs,host_control=host_control,attempt=attempt)
     host=payload['HostConfig']
     stage('capability_policy')
-    if (host.get('CapAdd') not in (None,[]) or 'ALL' not in (host.get('CapDrop') or [])
+    if (host.get('CapAdd') not in (None,[])
             or host.get('Devices') not in (None,[]) or host.get('DeviceRequests') not in (None,[]) ):
         raise ValueError('Unprivileged capability-dropped canary required')
+    # Explicitly approved live policy: private controls remain root-owned,
+    # while Unraid media may be 99:100 and 0755. No chown/chmod is performed.
+    host['CapDrop']=['ALL'];host['CapAdd']=['DAC_OVERRIDE']
+    host['SecurityOpt']=list(host.get('SecurityOpt') or [])
+    if any(value not in ('no-new-privileges','no-new-privileges:true','label=disable') for value in host['SecurityOpt']):
+        raise ValueError('Reviewed container security options required')
+    if not any(value.startswith('no-new-privileges') for value in host['SecurityOpt']):
+        host['SecurityOpt'].append('no-new-privileges')
     mount=next(item for item in host['Mounts'] if item['Target']=='/media')
     mount.update(Source=host_media,ReadOnly=False,BindOptions={'Propagation':'rprivate'})
     custom={key:value for key,value in payload.get('Labels',{}).items()
@@ -55,6 +64,27 @@ def live_metadata(*,current,image,template,environment,reference,host_logs,host_
     payload['Labels']={**labels,**custom,LABEL:attempt,'net.unraid.docker.webui':webui}
     stage('labels')
     root=ET.fromstring(xml)
+    field=root.find('ExtraParams')
+    if field is None:field=ET.SubElement(root,'ExtraParams')
+    args=shlex.split(field.text or '')
+    normalized=[];index=0
+    replaced=('--cap-drop','--cap-add','--security-opt','--user','--restart')
+    allowed=('--pull=','--tmpfs=','--hostname=','--domainname=','--memory=','--memory-swap=',
+             '--memory-reservation=','--pids-limit=','--cpu-shares=','--cpu-period=','--cpu-quota=',
+             '--cpus=','--cpuset-cpus=','--memory-swappiness=','--cgroupns=','--dns=','--dns-option=',
+             '--dns-search=','--add-host=','--log-driver=','--log-opt=')
+    while index<len(args):
+        value=args[index]
+        if value in replaced:
+            if index+1>=len(args):raise ValueError('Complete reviewed runtime argument required')
+            index+=2;continue
+        if any(value.startswith(flag+'=') for flag in replaced) or value=='--read-only':
+            index+=1;continue
+        if not value.startswith(allowed):raise ValueError('Unsupported template runtime argument')
+        normalized.append(value);index+=1
+    normalized.extend(('--read-only','--user=0:0','--restart=no','--cap-drop=ALL','--cap-add=DAC_OVERRIDE'))
+    normalized.extend('--security-opt='+value for value in host['SecurityOpt'])
+    field.text=shlex.join(normalized)
     item=root.find("Config[@Type='Path'][@Target='/media']")
     item.text=host_media;item.set('Default',host_media);item.set('Mode','rw')
     field=root.find('WebUI')
