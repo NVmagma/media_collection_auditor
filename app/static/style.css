@@ -275,3 +275,6 @@
   .integrations-app thead { display: none; }
   .integrations-app tr { border-bottom: 1px solid var(--border, #334155); padding: 8px 0; }
 }
+
+/* Keep desktop overview panels within one screen across system fonts. */
+@media(min-width:801px){.dashboard-app.viewing-overview .overview-workspace .panel{padding-top:10px;padding-bottom:10px}}
