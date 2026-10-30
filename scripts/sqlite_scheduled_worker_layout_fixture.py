@@ -32,6 +32,26 @@ class WorkerLayoutFixtureTests(unittest.TestCase):
     def claims(self):
         return list((self.control / '.sqlite_scheduled_slots').glob('*.json'))
 
+    def test_future_tv_content_keeps_show_and_clock_while_movie_really_moves(self):
+        import os
+        from datetime import datetime
+        tv = self.case.fixture.fixture.path(1, 'transient')
+        episode = tv / 'future.mkv'
+        episode.write_bytes(b'disposable future episode')
+        future = datetime(2098, 1, 1).timestamp()
+        os.utime(episode, (future, future))
+        settings = dict(self.case.values, TV_NEW_EPISODES_RESET_CLOCK='true')
+        result = self.run_slot(settings=settings)
+        self.assertEqual([entry['media_key'] for entry in result['completed']], ['Same (2020)'])
+        state, revision = self.store.load_with_revision()
+        self.assertEqual(state['first_seen']['TV/Same (2020)'], self.before[0]['first_seen']['TV/Same (2020)'])
+        self.assertNotIn('TV/Same (2020)', state['queued'])
+        self.assertNotIn(INTENTS_KEY, state)
+        self.assertTrue(self.case.fixture.fixture.path(0, 'holding').is_dir())
+        self.assertTrue(tv.is_dir())
+        self.assertEqual(episode.read_bytes(), b'disposable future episode')
+        self.assertEqual(episode.stat().st_mtime, future)
+
     def test_separate_database_routes_both_libraries_without_outer_state(self):
         result = self.run_slot()
         self.assertEqual(result['layout'], 'separate_control_and_media')

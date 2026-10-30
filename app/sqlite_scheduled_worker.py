@@ -210,6 +210,7 @@ def prepare_scheduled_worker(*, config, snapshot, revision, fetch_signals,
             begin_scan()
         by_name = {library.name: library for library in config.libraries}
         available_keys, content_times = set(), {}
+        future_content_keys = set()
         def scan(name):
             library = by_name[name]
             def titles():
@@ -225,11 +226,21 @@ def prepare_scheduled_worker(*, config, snapshot, revision, fetch_signals,
                             else:
                                 available_keys.add(binding.media_key)
                                 if library.new_content_resets_clock and binding.stage == 'Waiting':
-                                    from app.sqlite_scheduled_content import observe_scheduled_content
-                                    content_times[binding.media_key] = observe_scheduled_content(
-                                        title_path=dict(library.roots)[binding.stage] + '/' + binding.folder,
-                                        now=now, maximum_seconds=min(30, maximum_scan_seconds - (timer() - start)),
-                                        timer=timer)
+                                    from app.sqlite_scheduled_content import (observe_scheduled_content,
+                                        ScheduledContentBlocked)
+                                    try:
+                                        content_times[binding.media_key] = observe_scheduled_content(
+                                            title_path=dict(library.roots)[binding.stage] + '/' + binding.folder,
+                                            now=now, maximum_seconds=min(30, maximum_scan_seconds - (timer() - start)),
+                                            timer=timer)
+                                    except ScheduledContentBlocked as error:
+                                        if str(error) != 'future_content_timestamp':
+                                            raise
+                                        # Never reuse this title's old clock or protection to
+                                        # authorize a move after an invalid content observation.
+                                        future_content_keys.add(binding.media_key)
+                                        available_keys.discard(binding.media_key)
+                                        signals = None
                         check_time()
                         yield ScannedTitle(binding.media_key, binding.stage,
                             library.wait_days if binding.stage == 'Waiting' else library.holding_days,
@@ -243,6 +254,16 @@ def prepare_scheduled_worker(*, config, snapshot, revision, fetch_signals,
             maximum_actions=config.maximum_actions, maximum_titles=maximum_titles,
             maximum_scan_seconds=remaining, favorites_trigger_keep=config.favorites_trigger_keep,
             timer=timer)
+        if future_content_keys:
+            if any(move.media_key in future_content_keys for move in plan.moves):
+                raise ScheduledScanBlocked('invalid_content_candidate')
+            plan = replace(plan,
+                skipped=tuple((library, key, ('future_content_timestamp',), 'none')
+                    if key in future_content_keys else (library, key, blockers, action)
+                    for library, key, blockers, action in plan.skipped),
+                title_observations=tuple((library, key, stage, None, 'future_content_timestamp', 'skipped')
+                    if key in future_content_keys else (library, key, stage, destination, reason, outcome)
+                    for library, key, stage, destination, reason, outcome in plan.title_observations))
         proposal = None
         if discover_clocks:
             from app.sqlite_scheduled_discovery import propose_discovery_clocks

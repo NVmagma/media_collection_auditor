@@ -277,3 +277,47 @@ def test_other_regular_stage_files_still_block(tmp_path, name):
     with pytest.raises(ScheduledScanBlocked, match='non_directory_or_symlink_in_stage'):
         prepare(configure(libraries), snapshot,
             fetch_signals=lambda binding: pytest.fail('collection before inventory validation'))
+
+
+@pytest.mark.parametrize('has_clock', [True, False])
+def test_future_tv_timestamp_skips_only_affected_show_and_preserves_clock(tmp_path, has_clock):
+    import os
+    from app.sqlite_scan_details import plan_details
+    libraries, snapshot = setup(tmp_path)
+    libraries[1]['new_content_resets_clock'] = True
+    bad = Path(libraries[1]['transient']) / 'Same (2020)' / 'episode.mkv'
+    bad.write_bytes(b'disposable episode')
+    future = datetime(2098, 1, 1).timestamp()
+    os.utime(bad, (future, future))
+    good = Path(libraries[1]['transient']) / 'Unaffected'
+    good.mkdir()
+    snapshot['first_seen']['TV/Unaffected'] = '2026-01-01'
+    if not has_clock:
+        snapshot['first_seen'].pop('TV/Same (2020)')
+    before = deepcopy(snapshot)
+    def signals(binding):
+        return {key: key == 'disliked' for key in ('played','favorite','disliked','keep','keep_all','protected')}
+    result = prepare(configure(libraries), snapshot, fetch_signals=signals, discover_clocks=True)
+    assert {move.media_key for move in result.plan.moves} == {'Same (2020)', 'TV/Unaffected'}
+    assert result.clock_proposal.proposed_snapshot == before
+    assert result.clock_proposal.changes == ()
+    assert snapshot == before
+    assert bad.read_bytes() == b'disposable episode'
+    assert bad.stat().st_mtime == future
+    row = next(row for row in plan_details(result)['items'] if row['title'] == 'Same (2020)' and row['library'] == 'TV')
+    assert row['reason_code'] == 'future_content_timestamp'
+    assert row['outcome'] == 'skipped' and row['destination'] is None
+
+
+@pytest.mark.parametrize('reason', ['content_changed_during_observation', 'unsupported_content_entry',
+                                  'content_deadline_exceeded'])
+def test_other_content_failures_still_abort_whole_scan(tmp_path, monkeypatch, reason):
+    from app.sqlite_scheduled_content import ScheduledContentBlocked
+    libraries, snapshot = setup(tmp_path)
+    libraries[1]['new_content_resets_clock'] = True
+    def fail(**kwargs):
+        raise ScheduledContentBlocked(reason)
+    monkeypatch.setattr('app.sqlite_scheduled_content.observe_scheduled_content', fail)
+    with pytest.raises(ScheduledContentBlocked, match=reason):
+        prepare(configure(libraries), snapshot, discover_clocks=True,
+            fetch_signals=lambda binding: {key: False for key in ('played','favorite','disliked','keep','keep_all','protected')})

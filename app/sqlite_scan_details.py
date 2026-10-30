@@ -17,6 +17,7 @@ REASONS = {
     'no_transition': 'No move is proposed for this stage.',
     'action_cap': 'Excluded by the shared action limit for this run.',
     'missing_or_conflicting_clock': 'The saved lifecycle date is missing or conflicts with another stage.',
+    'future_content_timestamp': 'TV content has a future modification date; this show was skipped and its clock was preserved.',
     'future_observation': 'The saved lifecycle date is in the future.',
     'jellyfin_unavailable': 'Jellyfin protection information is unavailable.',
     'deletion_not_authorized': 'Permanent deletion is disabled.',

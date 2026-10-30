@@ -341,3 +341,12 @@ failure invalidates the pass catalog without automatic retry. Pre-move protectio
 reads always use the original uncached transport; scan-time signals never
 authorize a move. This reduces redundant catalog requests without increasing
 the one-action cap or enabling deletion.
+
+### Future-dated TV content
+
+A TV Waiting title with a descendant modification time later than the scan
+observation is skipped with `future_content_timestamp`. Its lifecycle clock is
+neither initialized nor reset, and no move is authorized for it. Other titles
+may continue after the complete inventory barrier. Unreadable content, symlinks,
+changed entries, and content scan limits still abort the attempt. Tests include
+a real disposable movie rename alongside a retained future-dated TV episode.
