@@ -46,11 +46,11 @@ class ScheduledRuntimeFixtureTests(unittest.TestCase):
         result = self.step(self.slot + timedelta(seconds=1))
         self.assertEqual(result.status, 'attempted')
         self.assertEqual(len(result.outcome['completed']), 2)
-        self.assertEqual(len(self.layout.case.server.calls), 8)
+        self.assertEqual(len(self.layout.case.server.calls), 7)
         self.assertEqual(self.source.read_bytes(), self.original_json)
         self.assertEqual(len(self.layout.claims()), 1)
         self.assertEqual(self.step(self.slot + timedelta(seconds=2)).status, 'waiting')
-        self.assertEqual(len(self.layout.case.server.calls), 8)
+        self.assertEqual(len(self.layout.case.server.calls), 7)
 
     def test_missed_daily_slot_and_restart_never_catch_up(self):
         self.assertEqual(self.step(self.slot + timedelta(seconds=60)).status, 'missed_slot_skipped')
