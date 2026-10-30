@@ -16,9 +16,12 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.server.observed.append((self.command, self.path, self.headers.get('X-Emby-Token'),
                                      self.headers.get('Cache-Control')))
+        self.server.authorizations.append(self.headers.get('Authorization'))
         mode = self.server.mode
+        if mode == 'modern_auth' and self.headers.get('Authorization') != 'MediaBrowser Token="synthetic-fixture-token"':
+            self.send_response(401); self.end_headers(); return
         if mode == 'redirect':
-            self.send_response(302); self.send_header('Location', 'http://127.0.0.1:9/other')
+            self.send_response(302); self.send_header('Location', self.server.redirect_url)
             self.end_headers(); return
         if mode == 'unauthorized':
             self.send_response(401); self.end_headers(); return
@@ -49,6 +52,7 @@ class ScheduledTransportFixtureTests(unittest.TestCase):
 
     def setUp(self):
         self.server.mode = 'normal'; self.server.observed = []; self.server.tags = []
+        self.server.authorizations = []; self.server.redirect_url = 'http://127.0.0.1:9/other'
 
     def transport(self, **kwargs):
         return ScheduledJellyfinGET(base_url=self.base_url, token='synthetic-fixture-token', **kwargs)
@@ -57,6 +61,41 @@ class ScheduledTransportFixtureTests(unittest.TestCase):
         with patch.dict(os.environ, {'http_proxy': 'http://127.0.0.1:9', 'HTTP_PROXY': 'http://127.0.0.1:9'}):
             self.assertEqual(self.transport()('/Users', None), [{'Id': 'fixture-user'}])
         self.assertEqual(self.server.observed[0], ('GET', '/Users', 'synthetic-fixture-token', 'no-cache'))
+
+    def test_modern_auth_required_server_supports_fresh_protection_reads(self):
+        self.server.mode = 'modern_auth'
+        move = PlannedMove('Movies', 'Movie', 'Waiting', 'Holding', 'hold', '2024-01-01', 7)
+        provider = scheduled_protection_provider(fetch=self.transport(), bindings={'Movie': ('Movie', 'Movie')})
+        self.assertTrue(provider(move).available)
+        self.server.tags = ['keep-forever']
+        self.assertTrue(provider(move).signals['protected'])
+        self.assertEqual(len(self.server.authorizations), 4)
+        self.assertTrue(all(value == 'MediaBrowser Token="synthetic-fixture-token"'
+                            for value in self.server.authorizations))
+        self.assertTrue(all(row[2] == 'synthetic-fixture-token' for row in self.server.observed))
+
+    def test_redirect_never_forwards_either_credential_header(self):
+        target = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        target.mode = 'normal'; target.observed = []; target.authorizations = []; target.tags = []
+        thread = Thread(target=lambda: target.serve_forever(poll_interval=0.01), daemon=True)
+        thread.start()
+        try:
+            self.server.mode = 'redirect'
+            self.server.redirect_url = 'http://127.0.0.1:' + str(target.server_port) + '/Users'
+            with self.assertRaisesRegex(ScheduledTransportError, 'redirect_rejected'):
+                self.transport()('/Users', None)
+            self.assertEqual(target.observed, [])
+            self.assertEqual(target.authorizations, [])
+            self.assertEqual(len(self.server.observed), 1)
+        finally:
+            target.shutdown(); target.server_close(); thread.join(timeout=2)
+
+    def test_quoted_or_escaped_auth_tokens_are_rejected_before_http(self):
+        for token in ('bad"token', 'bad' + chr(92) + 'token', 'bad\nheader'):
+            with self.subTest(token=token):
+                with self.assertRaises(ValueError):
+                    ScheduledJellyfinGET(base_url=self.base_url, token=token)
+        self.assertEqual(self.server.observed, [])
 
     def test_redirect_is_not_followed_or_retried(self):
         self.server.mode = 'redirect'

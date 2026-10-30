@@ -44,7 +44,8 @@ class ScheduledJellyfinGET:
         except (ValueError, TypeError):
             valid = False
         if (not valid or not isinstance(base_url, str) or any(ord(c) <= 32 for c in base_url)
-                or not isinstance(token, str) or not token or any(ord(c) < 33 or ord(c) == 127 for c in token)):
+                or not isinstance(token, str) or not token
+                or any(ord(c) < 33 or ord(c) == 127 or c in ('"', chr(92)) for c in token)):
             raise ValueError('Valid Jellyfin base URL and token required')
         if (type(timeout_seconds) not in (int, float) or not math.isfinite(timeout_seconds)
                 or not 0 < timeout_seconds <= 60 or type(maximum_bytes) is not int
@@ -74,6 +75,7 @@ class ScheduledJellyfinGET:
         self._requests += 1
         url = self._base + path + ('?' + urlencode(params) if params else '')
         request = Request(url, method='GET', headers={'X-Emby-Token': self._token,
+            'Authorization': 'MediaBrowser Token="' + self._token + '"',
             'Accept': 'application/json', 'Cache-Control': 'no-cache', 'Pragma': 'no-cache'})
         started = monotonic()
         try:

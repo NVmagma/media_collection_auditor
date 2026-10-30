@@ -383,3 +383,16 @@ cooldown. The live updater already copies all claim bytes, including the new
 manual records, so container restart or replacement cannot reset the limit.
 This behavior requires a newly accepted immutable image and matching binding;
 it does not change the currently running daily-budget image.
+
+### Jellyfin authentication compatibility (2026-10-30)
+
+Tower's read-only probe confirmed `/Users` returns 401 with only X-Emby-Token,
+while the same credential succeeds when Authorization: MediaBrowser Token is
+also supplied. The scheduled GET transport now sends both headers, matching the
+existing dashboard client. Tokens containing quote, escape or control characters
+are refused before HTTP. Authentication remains header-only: no query-string
+credential, redirect following, automatic retry or protection bypass is added.
+Private-loopback tests require the modern header on users and per-user items,
+verify fresh keep-forever protection, and prove a redirect target receives no
+request or credentials. A complete real-server protection probe is still needed
+before the deployment update.
