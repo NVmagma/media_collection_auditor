@@ -128,3 +128,22 @@ def test_single_backslash_in_path_blocks():
                                 "u2": [item()]}))
     assert result["status"] == "blocked"
     assert result["signals"] is None
+
+
+def test_collection_grouping_disabled_for_every_user_and_page():
+    pages = {"u1": [item("other", "/media/Movies/Other/file.mkv"),
+                    item(tags=["not-at-all"])],
+             "u2": [item(tags=["not-at-all"])]}
+    underlying = transport(pages)
+    observed = []
+    def fetch(path, params):
+        if path != "/Users":
+            observed.append(dict(params))
+            if params.get("CollapseBoxSetItems") != "false":
+                return {"TotalRecordCount": 0, "Items": []}
+        return underlying(path, params)
+    result = collect(fetch)
+    assert result["status"] == "shape_valid_untrusted"
+    assert result["signals"]["disliked"] is True
+    assert len(observed) == 3
+    assert all(query["CollapseBoxSetItems"] == "false" for query in observed)

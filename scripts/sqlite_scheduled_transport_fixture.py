@@ -4,6 +4,7 @@ import json
 import os
 from threading import Thread
 import unittest
+from urllib.parse import urlsplit, parse_qs
 from unittest.mock import patch
 
 from app.sqlite_scheduled_jellyfin import scheduled_protection_provider
@@ -31,6 +32,9 @@ class Handler(BaseHTTPRequestHandler):
         elif mode == 'large': data = b' ' * 1000
         elif self.path == '/Users': data = json.dumps([{'Id': 'fixture-user'}]).encode()
         else:
+            if mode == 'grouped' and parse_qs(urlsplit(self.path).query).get('CollapseBoxSetItems') != ['false']:
+                self.send_response(200); self.end_headers()
+                self.wfile.write(b'{"TotalRecordCount":0,"Items":[]}'); return
             data = json.dumps({'TotalRecordCount': 1, 'Items': [{'Id': 'fixture-movie', 'Type': 'Movie',
                 'Path': '/media/Movies/Movie/file.mkv', 'Tags': self.server.tags,
                 'UserData': {'IsFavorite': False, 'Played': False, 'PlayCount': 0}}]}).encode()
@@ -73,6 +77,18 @@ class ScheduledTransportFixtureTests(unittest.TestCase):
         self.assertTrue(all(value == 'MediaBrowser Token="synthetic-fixture-token"'
                             for value in self.server.authorizations))
         self.assertTrue(all(row[2] == 'synthetic-fixture-token' for row in self.server.observed))
+
+    def test_grouped_server_exposes_individual_tags_on_each_fresh_read(self):
+        self.server.mode = 'grouped'
+        move = PlannedMove('Movies', 'Movie', 'Waiting', 'Holding', 'hold', '2024-01-01', 7)
+        provider = scheduled_protection_provider(fetch=self.transport(), bindings={'Movie': ('Movie', 'Movie')})
+        self.server.tags = ['not-at-all']
+        self.assertTrue(provider(move).signals['disliked'])
+        self.server.tags = ['keep-forever']
+        self.assertTrue(provider(move).signals['protected'])
+        queries = [parse_qs(urlsplit(row[1]).query) for row in self.server.observed if row[1] != '/Users']
+        self.assertEqual(len(queries), 2)
+        self.assertTrue(all(query['CollapseBoxSetItems'] == ['false'] for query in queries))
 
     def test_redirect_never_forwards_either_credential_header(self):
         target = ThreadingHTTPServer(('127.0.0.1', 0), Handler)

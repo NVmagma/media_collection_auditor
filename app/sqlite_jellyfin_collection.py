@@ -58,6 +58,7 @@ def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
                 data = fetch(f"/Users/{uid}/Items", {
                     "Recursive": "true", "IncludeItemTypes": jellyfin_type,
                     "ExcludeItemTypes": "BoxSet",
+                    "CollapseBoxSetItems": "false",
                     "Fields": "Path,Tags", "StartIndex": start, "Limit": page_size,
                 })
                 if not isinstance(data, dict) or type(data.get("TotalRecordCount")) is not int:

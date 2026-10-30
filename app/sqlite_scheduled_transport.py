@@ -66,7 +66,7 @@ class ScheduledJellyfinGET:
     def __call__(self, path, params):
         if not isinstance(path, str) or not (path == '/Users' or re.fullmatch(r'/Users/[A-Za-z0-9_-]+/Items', path)):
             raise ScheduledTransportError('route_rejected')
-        allowed = {'Recursive', 'IncludeItemTypes', 'ExcludeItemTypes', 'Fields', 'StartIndex', 'Limit'}
+        allowed = {'Recursive', 'IncludeItemTypes', 'ExcludeItemTypes', 'CollapseBoxSetItems', 'Fields', 'StartIndex', 'Limit'}
         if params is not None and (not isinstance(params, dict) or not set(params).issubset(allowed)
                 or any(type(v) not in (str, int) for v in params.values())):
             raise ScheduledTransportError('query_rejected')
