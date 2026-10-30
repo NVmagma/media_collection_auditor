@@ -300,3 +300,27 @@ separate behavior and do not spend live claims.
 
 The public service reloads approved settings on wake; a wake alone does not grant
 manual authority. Only a queued explicit live request reaches the manual path.
+
+### Live-to-live backup preparation (2026-10-30)
+
+`scripts/unraid_live_update_backup_host.sh EXISTING_PARENT` observes the running
+live image through read-only inherited mounts and its own packaged live validator.
+Only a new private `auditor-live-update-backup.*` packet is writable; no Docker
+socket, host port or external network is exposed to the helper. The launcher
+checks the selected image/profile, container identity and exact three bind mounts.
+
+The separate live packet supports advanced SQLite revisions and retains all
+logical tracking, extensions, Arr queue entries, saved settings and retained
+source bytes. Every existing daily claim is captured as byte-exact base64,
+including empty or interrupted claims. Unknown, linked or unsafe claim entries
+block capture rather than being dropped. State/input/claim changes and identical
+identity replacements prevent completion. Partial packets are retained without
+replay or overwrite. The original SQLite database and claim directory are never
+modified.
+
+This is an observational backup, **not an update authorization**. A later live
+candidate preparation must preserve these claims, and cutover must recheck the
+latest state and claims after stopping the old worker. Do not use the frozen
+preview backup/installer or change only the Docker image reference to update a
+running live worker. Template capture records the unique managed XML; the later
+proposal still needs to validate the complete recreation recipe.
