@@ -165,16 +165,17 @@ document.querySelectorAll('.rescue-choice').forEach(choice => choice.addEventLis
 const button = document.getElementById('run-now');
 button?.addEventListener('click', async () => {
   const live=button.dataset.live === 'true';
-  const message=live ? 'Run today’s live scan now? This can move one title and uses today’s daily action budget. Permanent deletion is disabled.' : 'Start an audit using your saved configuration? In Live Mode this may move or delete media.';
+  const message=live ? 'Run a live scan now? This can move one title. Live scans must start at least 60 minutes apart, and another scan cannot run concurrently. Permanent deletion is disabled.' : 'Start an audit using your saved configuration? In Live Mode this may move or delete media.';
   if (button.dataset.preview !== 'true' && !confirm(message)) return;
   button.disabled = true;
   const output = document.getElementById('run-result');
   output.textContent = 'Requesting audit…';
   try {
     const response = await fetch('/api/run-now', {method:'POST', credentials:'same-origin',
-      ...(live ? {headers:{'Content-Type':'application/json'},body:JSON.stringify({consume_daily_slot:true})} : {})});
+      ...(live ? {headers:{'Content-Type':'application/json'},body:JSON.stringify({run_live_scan:true})} : {})});
     const data = await response.json();
     output.textContent = data.message || 'Request failed.';
+    if (data.next_allowed_at) output.textContent += ' Next eligible: ' + new Date(data.next_allowed_at).toLocaleString();
     if (response.status === 401) output.textContent = 'Please open Settings to sign in, then try again.';
   } catch (error) { output.textContent = 'Unable to request an audit.'; }
   finally { button.disabled = false; }

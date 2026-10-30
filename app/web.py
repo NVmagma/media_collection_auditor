@@ -1080,21 +1080,23 @@ def run_now():
     gate = _preview_backend_gate()
     if gate.live_release_enabled():
         data=request.get_json(silent=True)
-        if not isinstance(data,dict) or set(data)!={'consume_daily_slot'} or data['consume_daily_slot'] is not True:
-            return {'ok':False,'message':'Explicitly confirm using today’s live scan and action budget.'},409
+        if not isinstance(data,dict) or set(data)!={'run_live_scan'} or data['run_live_scan'] is not True:
+            return {'ok':False,'message':'Explicitly confirm this live scan. It can move one title.'},409
         try:
             from datetime import timezone
-            from app.sqlite_scheduled_production import _daily_claim_exists
+            from app.sqlite_scheduled_production import _live_scan_status
             values=gate.require_sqlite_production_activation()
-            if _daily_claim_exists(values,datetime.now(timezone.utc)):
-                return {'ok':False,'message':'Today’s daily attempt is already claimed. No extra scan or move was queued.'},409
+            cooldown = _live_scan_status(values,datetime.now(timezone.utc))
+            if cooldown['status'] != 'ready':
+                return {'ok':False,'message':'Live scans must start at least 60 minutes apart. No scan was queued.',
+                    'next_allowed_at':cooldown['next_allowed_at']},429,{'Retry-After':str(cooldown['retry_after_seconds'])}
         except Exception:
             return {'ok':False,'message':'Live configuration needs review; no scan was queued.'},409
         from app.sqlite_scheduled_observations import COORDINATOR
         if COORDINATOR.request_manual_live():
             from run_control import wake_worker
             wake_worker()
-            return {'ok':True,'message':'Live daily scan queued. It uses today’s one-action budget; no additional scheduled attempt is allowed today.'},202
+            return {'ok':True,'message':'Live scan queued. It can move one title; the next live scan must wait at least 60 minutes.'},202
         return {'ok':False,'message':'A scan is already running or queued.'},409
     if gate.preview_release_enabled() or backend == 'sqlite':
         if not gate.preview_release_enabled():

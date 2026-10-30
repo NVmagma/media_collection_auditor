@@ -46,6 +46,10 @@ def _configured_cycle_step(*, cycle, settings, now, clock, observer=None):
         from app.sqlite_backend_gate import live_release_enabled
         if live_release_enabled() and _daily_claim_exists(values,slot):
             return {'status':'daily_slot_already_claimed','automatic_replay':False}
+        if live_release_enabled():
+            cooldown = _live_scan_status(values, current)
+            if cooldown['status'] != 'ready':
+                return {**cooldown, 'status':'live_scan_cooldown', 'automatic_replay':False}
         if observer is not None:
             observer.observe_cycle(next_run=cycle.next_run, status='attempted')
         def execute():
@@ -102,8 +106,16 @@ def _daily_claim_exists(settings,now):
     return os.path.lexists(control/'.sqlite_scheduled_slots'/key)
 
 
+def _live_scan_status(settings, now):
+    from app.sqlite_live_cooldown import live_scan_status
+    from app.sqlite_scheduled_settings import scheduled_worker_from_settings
+    schedule = scheduled_worker_from_settings(settings).schedule
+    return live_scan_status(control=Path(_canonical(settings['SQLITE_STATE_FILE'])).parent,
+                            schedule=schedule, now=now)
+
+
 def run_requested_live(*,settings,now,observer,clock=datetime.now):
-    """Consume one operator request through the same durable daily claim as timers."""
+    """Consume one operator request through the shared durable hourly cooldown."""
     from app.sqlite_scheduled_observations import ScheduledRunObservations
     if not isinstance(observer,ScheduledRunObservations):raise ValueError('Bound observer required')
     if not isinstance(now,datetime) or now.tzinfo is None:raise ValueError('Aware manual time required')
@@ -112,8 +124,9 @@ def run_requested_live(*,settings,now,observer,clock=datetime.now):
         from app.sqlite_backend_gate import live_release_enabled
         if not live_release_enabled():raise RuntimeError('Separate live image required')
         values=require_sqlite_production_activation(settings=settings)
-        if _daily_claim_exists(values,now):
-            return {'status':'daily_slot_already_claimed','automatic_replay':False}
+        cooldown = _live_scan_status(values,now)
+        if cooldown['status'] != 'ready':
+            return {**cooldown, 'status':'live_scan_cooldown', 'automatic_replay':False}
         def execute():
             result=_run_bound_production_slot(settings=values,scheduled_at=now,now=now,clock=clock,
                 manual_live=True,record_details=observer.record_title_details)
@@ -164,7 +177,7 @@ def _run_bound_production_slot(*, settings, scheduled_at, now, clock, timer=mono
                 verify_json(); verify_control()
             claim = (nullcontext(verify_binding) if manual_preview else
                 _claim_scheduled_slot_locked(root=control, schedule=config.schedule,
-                    scheduled_at=scheduled_at, now=now, verify_binding=verify_binding, manual=manual_live))
+                    scheduled_at=scheduled_at, now=now, verify_binding=verify_binding, manual=manual_live, live_hourly=live_release_enabled()))
             with claim as verify_claim:
                 if dry_run:
                     from app.sqlite_scheduled_preview import prepare_scheduled_preview

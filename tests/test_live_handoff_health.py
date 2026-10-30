@@ -4,12 +4,16 @@ from types import SimpleNamespace
 import pytest
 from scripts import sqlite_preview_service as service
 
-@pytest.mark.parametrize('change',[None,'preview','pending','deletion','worker','authentication'])
+@pytest.mark.parametrize('change',[None,'hourly','bad_interval','mixed','preview','pending','deletion','worker','authentication'])
 def test_live_health_requires_authenticated_one_action_policy(monkeypatch,change):
     common=dict(storage_authority='sqlite',production_activation='scheduled_moves',freshness_verified=False,
         read_only=True,media_actions_authorized=False,execution_mode='scheduled_live_moves',
         worker_mode='daily_moves_one_action',permanent_deletion_authorized=False)
+    if change in ('hourly','bad_interval','mixed'):
+        common.update(worker_mode='hourly_moves_one_action',minimum_live_scan_interval_seconds=3600)
     summary={**common,'pending_operation_present':False};audit={**common,'next_run':'2026-10-30T09:00:00+00:00'}
+    if change=='bad_interval':audit['minimum_live_scan_interval_seconds']=1
+    if change=='mixed':audit['worker_mode']='daily_moves_one_action'
     if change=='preview':summary['production_activation']='preview_only'
     if change=='pending':summary['pending_operation_present']=True
     if change=='deletion':audit['permanent_deletion_authorized']=True
@@ -29,7 +33,7 @@ def test_live_health_requires_authenticated_one_action_policy(monkeypatch,change
     engine=SimpleNamespace(inspect=lambda identity:{'State':{'Running':True},
         'NetworkSettings':{'Networks':{'bridge':{'IPAddress':'172.17.0.2'}}}})
     args=dict(engine=engine,identity='a'*64,env={'INTEGRATION_API_TOKEN':'synthetic'},live_canary=True)
-    if change is None:service.verify_http_health(**args)
+    if change in (None,'hourly'):service.verify_http_health(**args)
     else:
         with pytest.raises(RuntimeError):service.verify_http_health(**args)
     assert calls

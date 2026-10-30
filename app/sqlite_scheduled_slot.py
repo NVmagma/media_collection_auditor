@@ -28,12 +28,19 @@ def claim_disposable_scheduled_slot(*, root, schedule, scheduled_at, now, maximu
 
 @contextmanager
 def _claim_scheduled_slot_locked(*, root, schedule, scheduled_at, now,
-        maximum_lateness_seconds=60, verify_binding, manual=False):
+        maximum_lateness_seconds=60, verify_binding, manual=False, live_hourly=False):
     """Private claim primitive; caller retains the bound control lock throughout."""
-    if type(manual) is not bool:raise ValueError('Explicit claim trigger required')
+    if type(manual) is not bool or type(live_hourly) is not bool:raise ValueError('Explicit claim trigger required')
     slot, date, key = (_manual_slot_identity(schedule,now) if manual else
         _slot_identity(schedule, scheduled_at, now, maximum_lateness_seconds))
     root = Path(root)
+    if live_hourly:
+        from app.sqlite_live_cooldown import live_scan_status, manual_live_key, LiveScanCooldown
+        status = live_scan_status(control=root, schedule=schedule, now=now)
+        if status['status'] != 'ready':
+            raise LiveScanCooldown('One live attempt per sixty minutes')
+        if manual:
+            key = manual_live_key(schedule, now)
     root_fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     directory_fd = record_fd = None
     try:
@@ -50,11 +57,14 @@ def _claim_scheduled_slot_locked(*, root, schedule, scheduled_at, now,
         # Exclusive creation is the durable at-most-once attempt boundary.
         record_fd = os.open(key, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
                             0o600, dir_fd=directory_fd)
-        payload = json.dumps({'schema_version': 1, 'phase': 'slot_claimed',
+        record = {'schema_version': 2 if live_hourly else 1, 'phase': 'slot_claimed',
             'scheduled_at': slot.isoformat(), 'timezone': schedule.timezone_name,
             'trigger':'manual' if manual else 'scheduled',
             'local_date': date, 'automatic_replay': False,
-            'production_authorized': False}, sort_keys=True).encode()
+            'production_authorized': False}
+        if live_hourly:
+            record['started_at'] = now.astimezone(timezone.utc).isoformat()
+        payload = json.dumps(record, sort_keys=True).encode()
         offset = 0
         while offset < len(payload):
             written = os.write(record_fd, payload[offset:])

@@ -402,7 +402,10 @@ def verify_http_health(*, engine, identity, env, live_canary=False):
                     or not audit.get('next_run')):
                 raise RuntimeError('Preview API/coordinator not ready')
             if live_canary and (summary.get('pending_operation_present') is not False
-                    or any(value.get('worker_mode') != 'daily_moves_one_action'
+                    or summary.get('worker_mode') != audit.get('worker_mode')
+                    or any(value.get('worker_mode') == 'hourly_moves_one_action'
+                           and value.get('minimum_live_scan_interval_seconds') != 3600 for value in (summary,audit))
+                    or any(value.get('worker_mode') not in ('daily_moves_one_action','hourly_moves_one_action')
                            or value.get('permanent_deletion_authorized') is not False for value in (summary, audit))):
                 raise RuntimeError('Live canary policy or tracking requires review')
             return

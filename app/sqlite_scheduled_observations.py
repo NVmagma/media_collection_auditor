@@ -1,7 +1,7 @@
 """Ephemeral scheduled-run observations; no tracking authority or durable history.
 
 No JSON history fallback, credential/free-text capture, network or state writes.
-The durable daily claim and operation intent remain the replay authority.
+Durable attempt claims and operation intents remain the replay authority.
 """
 from copy import deepcopy
 from datetime import datetime, timezone

@@ -17,7 +17,7 @@ if (!file) throw Error('Pass the synthetic page rendered by tests/dashboard_work
       if (request.method() !== 'GET') {
         posts.push(request.method());
         if (url.hostname==='fixture.invalid' && url.pathname==='/api/run-now') {
-          assert.deepEqual(JSON.parse(request.postData()),{consume_daily_slot:true});
+          assert.deepEqual(JSON.parse(request.postData()),{run_live_scan:true});
           return route.fulfill({status:202,contentType:'application/json',body:JSON.stringify({ok:true,message:'Synthetic live request queued; no worker connected.'})});
         }
       }
@@ -176,7 +176,7 @@ if (!file) throw Error('Pass the synthetic page rendered by tests/dashboard_work
     const dialog=page.waitForEvent('dialog');
     const click=page.locator('#run-now').click();
     const confirmation=await dialog;
-    assert.match(confirmation.message(),/today’s daily action budget/);
+    assert.match(confirmation.message(),/60 minutes apart/);
     await confirmation.accept();await click;
     await page.getByText('Synthetic live request queued; no worker connected.',{exact:true}).waitFor();
     assert.deepEqual(posts,['POST']);

@@ -1,3 +1,11 @@
+<!-- Current candidate update: 2026-10-30 -->
+
+Hourly manual live scans are implemented for the next immutable image: one active
+scan, at least sixty minutes between scheduled/manual attempt starts, durable
+claims across restart/update, one title action per scan, deletion disabled.
+The currently deployed image remains on its daily-budget behavior until the
+new image and state-preserving handoff are accepted and deployed.
+
 # Feature roadmap
 
 **Last reviewed:** 2026-10-29

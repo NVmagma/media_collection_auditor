@@ -268,7 +268,7 @@ def _preview_metadata():
         from app.sqlite_backend_gate import preview_release_enabled, live_release_enabled
         if live_release_enabled():
             return {'production_activation': 'scheduled_moves', 'execution_mode': 'scheduled_live_moves',
-                    'media_actions_authorized': False, 'worker_mode': 'daily_moves_one_action',
+                    'media_actions_authorized': False, 'worker_mode': 'hourly_moves_one_action', 'minimum_live_scan_interval_seconds': 3600,
                     'permanent_deletion_authorized': False}
         if preview_release_enabled():
             return {'production_activation': 'preview_only', 'execution_mode': 'scheduled_preview',

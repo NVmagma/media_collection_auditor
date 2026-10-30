@@ -65,27 +65,31 @@ class LiveReleaseTests(unittest.TestCase):
         self.values['SONARR_APP_HOLDING_PATH']='/arr-view/TV_hold'
         return server
 
-    def test_manual_live_then_timer_uses_only_one_daily_attempt(self):
+    def test_manual_live_then_timer_respects_hourly_cooldown(self):
         from app.sqlite_scheduled_production import run_requested_live
-        arr=self.arr();self.bind();now=self.case.fixture.slot-timedelta(hours=1)
+        arr=self.arr();self.bind();now=self.case.fixture.slot-timedelta(minutes=30)
         self.step(now-timedelta(minutes=1));self.assertTrue(self.observer.request_manual_live())
         result=run_requested_live(settings=self.values,now=now,observer=self.observer,clock=lambda:NOW)
         self.assertEqual(len(result['completed']),1);self.assertEqual(arr.puts,1)
         calls=list(self.case.server.calls)
-        self.assertEqual(self.step(self.case.fixture.slot).outcome['status'],'daily_slot_already_claimed')
+        self.assertEqual(self.step(self.case.fixture.slot).outcome['status'],'live_scan_cooldown')
         self.assertEqual(self.case.server.calls,calls)
         restarted=ScheduledRunObservations();self.assertTrue(restarted.request_manual_live())
         self.assertEqual(run_requested_live(settings=self.values,now=now+timedelta(minutes=1),
-            observer=restarted,clock=lambda:NOW)['status'],'daily_slot_already_claimed')
+            observer=restarted,clock=lambda:NOW)['status'],'live_scan_cooldown')
         self.assertEqual(arr.puts,1);self.assertEqual(self.source.read_bytes(),self.original)
 
-    def test_timer_then_manual_live_never_collects_twice(self):
+    def test_timer_then_manual_live_can_run_again_after_cooldown(self):
         from app.sqlite_scheduled_production import run_requested_live
         arr=self.arr();self.bind();self.due();calls=list(self.case.server.calls)
         self.assertTrue(self.observer.request_manual_live())
-        self.assertEqual(run_requested_live(settings=self.values,now=self.case.fixture.slot+timedelta(hours=1),
-            observer=self.observer,clock=lambda:NOW)['status'],'daily_slot_already_claimed')
+        self.assertEqual(run_requested_live(settings=self.values,now=self.case.fixture.slot+timedelta(minutes=59),
+            observer=self.observer,clock=lambda:NOW)['status'],'live_scan_cooldown')
         self.assertEqual(self.case.server.calls,calls);self.assertEqual(arr.puts,1)
+        self.assertTrue(self.observer.request_manual_live())
+        result=run_requested_live(settings=self.values,now=self.case.fixture.slot+timedelta(hours=1),
+            observer=self.observer,clock=lambda:NOW)
+        self.assertEqual(len(result['completed']),1);self.assertEqual(arr.puts,2)
 
     def test_live_settings_apply_preserves_latest_move_clocks_and_claim(self):
         from app.sqlite_live_settings import request_settings,apply_requested_settings

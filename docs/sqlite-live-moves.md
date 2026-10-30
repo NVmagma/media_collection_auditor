@@ -358,3 +358,28 @@ tracking, a retained operation, an added claim or a removed claim blocks stale
 recovery before service actions. A lost Docker acknowledgement is never replayed.
 The separate `unraid_live_update_execute_host.sh check` remains observational;
 `deploy` and `recover` require the exact reviewed fingerprint.
+
+### Hourly manual live scans (2026-10-30, candidate behavior)
+
+The next live image permits more than one operator-requested scan per local day.
+Scheduled and manual live attempts share a durable **rolling 60-minute interval
+between attempt starts**, rather than resetting on clock-hour boundaries. The
+existing cooperating source/control locks and active/queued request checks still
+prevent concurrent scans. The global limit remains one title action per scan;
+permanent deletion, cross-filesystem moves and season pruning remain disabled.
+
+Manual attempts use distinct hashed claim names in the existing retained claim
+directory. Scheduled attempts retain their once-per-local-date key. Both record
+an aware UTC start time before collection or any move intent. A scheduled wake
+within the cooldown is skipped without catch-up; it does not create a second
+attempt. Manual requests during cooldown receive HTTP 429, Retry-After and the
+next eligible UTC time, rendered in browser local time. Requests while running
+or queued are refused. A failed attempt consumes the interval; an unresolved
+operation or incomplete claim still requires review and cannot be bypassed by
+waiting an hour. Clock rewind cannot reopen the interval.
+
+Legacy daily claims are retained and their recorded time participates in the
+cooldown. The live updater already copies all claim bytes, including the new
+manual records, so container restart or replacement cannot reset the limit.
+This behavior requires a newly accepted immutable image and matching binding;
+it does not change the currently running daily-budget image.
