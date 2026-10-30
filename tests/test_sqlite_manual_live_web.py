@@ -84,3 +84,14 @@ def test_active_scan_blocks_new_request_even_after_cooldown(page):
         wake.assert_not_called()
     finally:
         release.set();thread.join(timeout=5)
+
+
+def test_run_button_status_reports_queue_without_starting_or_exposing_payload(page):
+    client, observer, wake, _, check = page
+    assert client.get('/api/run-status').json == {'ok': True, 'running': False, 'queued': False}
+    observer.request_manual_live()
+    response = client.get('/api/run-status')
+    assert response.json == {'ok': True, 'running': False, 'queued': True}
+    assert response.headers['Cache-Control'] == 'no-store'
+    wake.assert_not_called()
+    check.assert_not_called()

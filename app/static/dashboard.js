@@ -163,10 +163,39 @@ document.querySelectorAll('.rescue-choice').forEach(choice => choice.addEventLis
   finally { choice.disabled = false; choice.value = ''; }
 }));
 const button = document.getElementById('run-now');
+let runRequestPending = false;
+let runStatusPending = false;
+const runButtonLabel = button?.textContent;
+const runDefaultHint = document.getElementById('run-result')?.textContent;
+async function refreshRunButton() {
+  if (!button || runButtonLabel === 'Daily schedule only' || runStatusPending || runRequestPending) return;
+  runStatusPending = true;
+  try {
+    const response = await fetch('/api/run-status', {credentials:'same-origin', cache:'no-store',
+      signal:AbortSignal.timeout(8000)});
+    if (!response.ok) throw Error('Status unavailable');
+    const state = await response.json();
+    if (state.ok !== true || typeof state.running !== 'boolean' || typeof state.queued !== 'boolean') throw Error('Invalid status');
+    if (runRequestPending) return;
+    button.disabled = state.running || state.queued;
+    button.textContent = state.running ? 'Scan running…' : state.queued ? 'Scan queued…' : runButtonLabel;
+    if (state.running || state.queued) document.getElementById('run-result').textContent =
+      state.running ? 'A scan is in progress. Another scan cannot start yet.' : 'A scan is queued.';
+    else if (button.dataset.wasBusy === 'true') document.getElementById('run-result').textContent = runDefaultHint;
+    button.dataset.wasBusy = String(state.running || state.queued);
+  } catch (error) {
+    // Preserve the existing disabled state until a successful observation.
+  } finally { runStatusPending = false; }
+}
+if (button) {
+  refreshRunButton();
+  setInterval(refreshRunButton, 5000);
+}
 button?.addEventListener('click', async () => {
   const live=button.dataset.live === 'true';
   const message=live ? 'Run a live scan now? This can move one title. Live scans must start at least 60 minutes apart, and another scan cannot run concurrently. Permanent deletion is disabled.' : 'Start an audit using your saved configuration? In Live Mode this may move or delete media.';
   if (button.dataset.preview !== 'true' && !confirm(message)) return;
+  runRequestPending = true;
   button.disabled = true;
   const output = document.getElementById('run-result');
   output.textContent = 'Requesting audit…';
@@ -178,7 +207,7 @@ button?.addEventListener('click', async () => {
     if (data.next_allowed_at) output.textContent += ' Next eligible: ' + new Date(data.next_allowed_at).toLocaleString();
     if (response.status === 401) output.textContent = 'Please open Settings to sign in, then try again.';
   } catch (error) { output.textContent = 'Unable to request an audit.'; }
-  finally { button.disabled = false; }
+  finally { runRequestPending = false; await refreshRunButton(); }
 });
 
 // Overview navigation reuses the Library's existing stage and Details controls.

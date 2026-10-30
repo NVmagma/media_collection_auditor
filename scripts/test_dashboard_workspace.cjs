@@ -11,13 +11,16 @@ if (!file) throw Error('Pass the synthetic page rendered by tests/dashboard_work
   try {
     const page = await browser.newPage({viewport: {width: 1280, height: 1000}});
     const errors = [], posts = [];
+    let scanRunning = false;
     page.on('pageerror', error => errors.push(error.message));
     await page.route('**/*', route => {
       const request = route.request(), url = new URL(request.url());
+      if (url.pathname === '/api/run-status') return route.fulfill({contentType:'application/json',body:JSON.stringify({ok:true,running:scanRunning,queued:false})});
       if (request.method() !== 'GET') {
         posts.push(request.method());
         if (url.hostname==='fixture.invalid' && url.pathname==='/api/run-now') {
           assert.deepEqual(JSON.parse(request.postData()),{run_live_scan:true});
+          scanRunning = true;
           return route.fulfill({status:202,contentType:'application/json',body:JSON.stringify({ok:true,message:'Synthetic live request queued; no worker connected.'})});
         }
       }
@@ -185,7 +188,10 @@ if (!file) throw Error('Pass the synthetic page rendered by tests/dashboard_work
     const confirmation=await dialog;
     assert.match(confirmation.message(),/60 minutes apart/);
     await confirmation.accept();await click;
-    await page.getByText('Synthetic live request queued; no worker connected.',{exact:true}).waitFor();
+    await page.waitForFunction(() => document.getElementById('run-now').textContent === 'Scan running…');
+    assert.equal(await page.locator('#run-now').isDisabled(),true);
+    scanRunning = false;
+    await page.waitForFunction(() => !document.getElementById('run-now').disabled,{},{timeout:10000});
     assert.deepEqual(posts,['POST']);
     await page.goto('http://fixture.invalid/');
     assert.deepEqual(errors, []);

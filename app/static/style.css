@@ -315,3 +315,5 @@
  .app-shell .settings-header p{font-size:13px;overflow-wrap:anywhere}
 }
 @media(max-width:520px){.app-shell .sidebar{flex-basis:52px}.app-shell .sidebar-brand .brand-icon{margin-right:0}.app-shell main,.app-shell.viewing-overview main{margin:12px}.app-shell .settings-header{padding:16px 12px}}
+
+.run-controls button:disabled{background:#435064;color:#aeb8c5;opacity:.65;cursor:not-allowed;box-shadow:none}

@@ -76,7 +76,7 @@ def require_login():
         if request.path.startswith("/api/"):
             return {"ok": False, "message": "Please sign in."}, 401
         return redirect(url_for("login"))
-    if (preview or live) and request.endpoint not in ('settings','logout','run_now','apply_preview_settings','restore_preview_settings','integration_setup'):
+    if (preview or live) and request.endpoint not in ('settings','logout','run_now','run_button_status','apply_preview_settings','restore_preview_settings','integration_setup'):
         try: (gate.require_sqlite_read_authority if live else gate.require_sqlite_production_activation)()
         except RuntimeError:
             if request.path.startswith('/api/'):
@@ -1067,6 +1067,20 @@ def apply_preview_settings():
 @app.post('/settings/restore')
 def restore_preview_settings():
     return _change_preview_settings(restore=True)
+
+
+@app.get("/api/run-status")
+def run_button_status():
+    """Session-only process observation; never starts or resumes a scan."""
+    if not admin_authorized():
+        return {"ok": False}, 401
+    if os.environ.get('AUDITOR_STATE_BACKEND', 'json') == 'sqlite':
+        from app.sqlite_scheduled_observations import COORDINATOR
+        report = COORDINATOR.report()
+    else:
+        report = snapshot()
+    return {"ok": True, "running": report.get("running") is True,
+            "queued": report.get("queued") is True}, 200, {"Cache-Control": "no-store"}
 
 
 @app.post("/api/run-now")
