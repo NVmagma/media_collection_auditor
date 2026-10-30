@@ -239,7 +239,6 @@ def capture_current(*, directory, expected_identity, container, templates):
     from app.sqlite_live_binding import validate_live_binding, _revision, BINDING
     from app.sqlite_tracking_view import _candidate_capture
     from app.unraid_update_review import matching_templates
-    from scripts.unraid_update_backup import _local_read_path
     matches = matching_templates(templates)
     if len(matches) != 1:
         raise RuntimeError('One unambiguous current managed template required')
@@ -258,9 +257,15 @@ def capture_current(*, directory, expected_identity, container, templates):
     for path in (*paths.values(), database.parent):
         if packet == path or packet in path.parents or path in packet.parents:
             raise ValueError('Disjoint new private backup required')
+    def read_path(path):
+        parent = _open_directory(str(path.parent))
+        try:
+            return _local(parent, path.name)
+        finally:
+            os.close(parent)
     def read_inputs():
         return {name: (raw, _identity(info)) for name, path in paths.items()
-                for raw, info in [_local_read_path(path)]}
+                for raw, info in [read_path(path)]}
     def read_snapshot():
         with _candidate_capture(database) as capture:
             return capture.state, capture.revision
@@ -305,7 +310,10 @@ def main():
         finally:
             os.close(fd)
     except Exception as error:
+        import traceback
         print(json.dumps({'status': 'live_update_backup_blocked',
+            'failure_sites': [{'file': frame.filename.rsplit('/', 1)[-1], 'line': frame.lineno}
+                for frame in traceback.extract_tb(error.__traceback__)[-4:]],
             'error_type': type(error).__name__, 'automatic_action': 'none',
             'service_changes_performed': False, 'media_actions_authorized': False,
             'partial_files_retained': True}))

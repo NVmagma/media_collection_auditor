@@ -112,7 +112,7 @@ def test_packet_corruption_refuses_inspection_without_repair(tmp_path, name):
     assert (root/name).read_bytes() == b'changed-private'
 
 
-def test_actual_live_validator_captures_advanced_state_without_mutating_inputs(prepared, tmp_path):
+def test_actual_live_validator_captures_advanced_state_without_mutating_inputs(prepared, tmp_path, monkeypatch):
     from app.sqlite_live_binding import create_live_binding
     from app.state_store import GuardedSQLiteStateStore
     _, source, control, config, settings = prepared
@@ -125,6 +125,14 @@ def test_actual_live_validator_captures_advanced_state_without_mutating_inputs(p
     claim = slots/('f'*64+'.json'); claim.write_bytes(b'partial'); claim.chmod(0o600)
     before = {path: path.read_bytes() for path in (source, config, control/'state.db', claim)}
     root = tmp_path/'actual-packet'; root.mkdir(mode=0o700)
+    # Published live images package app/ only, not the checkout's scripts/.
+    import builtins
+    original_import = builtins.__import__
+    def packaged_import(name, *args, **kwargs):
+        if name == 'scripts' or name.startswith('scripts.'):
+            raise ModuleNotFoundError('scripts are not packaged')
+        return original_import(name, *args, **kwargs)
+    monkeypatch.setattr(builtins, '__import__', packaged_import)
     result = backup.capture_current(directory=root,
         expected_identity=(root.stat().st_dev, root.stat().st_ino),
         container={'Name': '/media_collection_auditor', 'Id': 'a'*64,
