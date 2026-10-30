@@ -33,6 +33,13 @@ if (!file) throw Error('Pass the synthetic page rendered by tests/dashboard_work
     assert.equal(await page.locator('.topbar').count(), 0);
     assert.equal(await page.locator('.sidebar').evaluate(el => el.getBoundingClientRect().left), 0);
     async function section(name) {
+      // Review links navigate to a fresh document; wait for its deferred
+      // workspace initialization rather than inspecting the uninitialized DOM.
+      await page.waitForFunction(expected => {
+        const visible=Array.from(document.querySelectorAll('[data-panel]'))
+          .filter(el => getComputedStyle(el).display !== 'none').map(el => el.dataset.panel);
+        return visible.length===1 && visible[0]===expected;
+      },name,{timeout:5000});
       const visible = await page.locator('[data-panel]').evaluateAll(elements =>
         elements.filter(el => getComputedStyle(el).display !== 'none').map(el => el.dataset.panel));
       assert.deepEqual(visible, [name]);
