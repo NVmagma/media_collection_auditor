@@ -33,10 +33,12 @@ def _environment(raw):
 
 
 def review_live_candidate(*,backup,backup_identity,fingerprint,logs,control,old_logs,old_control,
-                     output,output_identity,live,image,host_logs,host_control,templates,reference,host_media,shared_media,native_media,diagnostic=None):
+                     output,output_identity,live,image,host_logs,host_control,templates,reference,host_media,shared_media,native_media,diagnostic=None,_live_update=False):
     from app.sqlite_tracking_view import _candidate_capture
     from app.sqlite_live_binding import validate_live_binding,_revision
     from app.sqlite_preview_activation import BINDING
+    if _live_update:
+        from app.sqlite_live_binding import BINDING
     from app.sqlite_live_policy import DISABLED,validate_initial_live_policy
     from app.sqlite_media_view_review import compare_media_views
     from app.sqlite_preview_template import RUNTIME_DEFAULTS
@@ -51,7 +53,14 @@ def review_live_candidate(*,backup,backup_identity,fingerprint,logs,control,old_
             raise ValueError('Published reference must resolve to the selected cached image')
     selected=dict(directory=backup,expected_identity=backup_identity,expected_fingerprint=fingerprint)
     stage('backup_packet')
-    data=load_backup_payloads(**selected)
+    source_receipt = None
+    if _live_update:
+        from scripts.unraid_live_update_backup import load_backup_payloads as load_live, read_daily_claims
+        data, source_receipt = load_live(**selected)
+        def load_selected(): return load_live(**selected)[0]
+    else:
+        def load_selected(): return load_backup_payloads(**selected)
+        data=load_selected()
     original=parse_unique_json(data['current.inspect.json'])
     stage('current_container')
     validate_original(live,original,name='media_collection_auditor',running=original['State']['Running'])
@@ -68,7 +77,13 @@ def review_live_candidate(*,backup,backup_identity,fingerprint,logs,control,old_
     stage('current_retained_inputs')
     old_before=_capture(old_logs,(source_path.name,config_path.name))
     from app.sqlite_release_preparation import REQUEST
-    old_binding=_capture(old_control/'release',(BINDING,REQUEST))
+    old_names = (BINDING, REQUEST)
+    if _live_update:
+        from app.sqlite_live_binding import PREPARE, COMPLETE, BACKUP, SETTINGS_MARKER
+        old_names = (BINDING, PREPARE, REQUEST, COMPLETE, BACKUP)
+        if os.path.lexists(old_control/'release'/SETTINGS_MARKER):
+            raise RuntimeError('Current settings recovery required')
+    old_binding=_capture(old_control/'release',old_names)
     binding=parse_unique_json(old_binding[BINDING][0]);source_request=parse_unique_json(old_binding[REQUEST][0])
     if (hashlib.sha256(old_binding[REQUEST][0]).hexdigest()!=binding.get('prepared_inputs',{}).get(REQUEST)
             or source_request.get('source_identity')!=list(old_before[source_path.name][1])):
@@ -77,22 +92,37 @@ def review_live_candidate(*,backup,backup_identity,fingerprint,logs,control,old_
             or old_before[config_path.name][0]!=data['saved-config.json']
             or old_binding[BINDING][0]!=data['current-binding.json']):
         raise RuntimeError('Current source/settings/binding changed since capture')
+    old_claims = None
+    if _live_update:
+        old_claims = read_daily_claims(old_control/'release')
+        if (old_claims[0] != parse_unique_json(data['daily-claims.json'])
+                or binding.get('source_revision') != source_receipt['source_revision']
+                or binding.get('profile') != 'scheduled-live-moves-v1'
+                or binding.get('control_identity') != list(_identity((old_control/'release').stat())[:2])
+                or binding.get('database_identity') != list(_identity((old_control/'release/state.db').stat())[:2])
+                or binding.get('prepared_inputs') != {name:hashlib.sha256(old_binding[name][0]).hexdigest()
+                    for name in (REQUEST, COMPLETE, BACKUP)}
+                or binding.get('request_sha256') != hashlib.sha256(old_binding[PREPARE][0]).hexdigest()):
+            raise RuntimeError('Current live provenance or claims changed')
     stage('prepared_files')
-    new_before=_capture(logs,('runtime.env','auditor_state.json','auditor_config.json',
-        'retained-preview-config.json','live-preparation-request.json','live-preparation-complete.json'))
+    retained_config = 'retained-live-config.json' if _live_update else 'retained-preview-config.json'
+    names = ('runtime.env','auditor_state.json','auditor_config.json', retained_config,
+             'live-preparation-request.json','live-preparation-complete.json')
+    if _live_update: names += ('retained-live-source.json',)
+    new_before=_capture(logs,names)
     prepared=parse_unique_json(new_before['live-preparation-complete.json'][0])
     if (prepared.get('candidate_image_id')!=image['Id'] or prepared.get('source_revision')!=_revision()
-            or prepared.get('backup_fingerprint')!=fingerprint or prepared.get('status')!='live_candidate_binding_prepared_not_started'):
+            or prepared.get('backup_fingerprint')!=fingerprint or prepared.get('status')!=('live_update_binding_prepared_not_started' if _live_update else 'live_candidate_binding_prepared_not_started')):
         raise RuntimeError('Prepared candidate selection changed')
     stage('prepared_configuration')
     env=_environment(new_before['runtime.env'][0])
     expected={key:value for key,value in (item.split('=',1) for item in original['Config']['Env']) if key not in RUNTIME_DEFAULTS}
     expected.update(STATE_FILE=str(logs/'auditor_state.json'),WEB_CONFIG_FILE=str(logs/'auditor_config.json'),SQLITE_STATE_FILE=str(control/'release'/'state.db'))
-    changes={'DRY_RUN':'false','MAX_ACTIONS_PER_RUN':'1',**{key:'false' for key in DISABLED}}
+    changes={} if _live_update else {'DRY_RUN':'false','MAX_ACTIONS_PER_RUN':'1',**{key:'false' for key in DISABLED}}
     expected.update(changes,AUDITOR_STATE_BACKEND='sqlite',READ_ONLY_API_SERVICE='false')
     saved=parse_unique_json(data['saved-config.json'])
     if (env!=expected or parse_unique_json(new_before['auditor_config.json'][0])!={**saved,**changes}
-            or new_before['retained-preview-config.json'][0]!=data['saved-config.json']):
+            or new_before[retained_config][0]!=data['saved-config.json']):
         raise RuntimeError('Prepared settings/environment changed')
     state=parse_unique_json(data['tracking-snapshot.json'])
     if parse_unique_json(new_before['auditor_state.json'][0])!=state:
@@ -101,8 +131,22 @@ def review_live_candidate(*,backup,backup_identity,fingerprint,logs,control,old_
     with ExitStack() as stack:
         old=stack.enter_context(_candidate_capture(old_control/'release'/'state.db'))
         new=stack.enter_context(_candidate_capture(control/'release'/'state.db'))
-        if old.state!=state or old.revision!=0 or new.state!=state or new.revision!=0:
+        if old.state!=state or old.revision!=(source_receipt['snapshot_revision'] if _live_update else 0) or new.state!=state or new.revision!=0:
             raise RuntimeError('Current or prepared tracking changed')
+        if _live_update:
+            from app.sqlite_live_integrity import KEY, verify as verify_integrity
+            from contextlib import closing
+            import sqlite3
+            with closing(sqlite3.connect((old_control/'release/state.db').resolve().as_uri()+'?mode=ro',uri=True)) as connection:
+                row=connection.execute('SELECT value FROM metadata WHERE key=?',(KEY,)).fetchone()
+            if row is None: raise RuntimeError('Current live integrity missing')
+            verify_integrity(row[0],old.state,old.revision)
+            if (new_before['retained-live-source.json'][0] != data['retained-source.json']
+                    or new_before['auditor_config.json'][0] != data['saved-config.json']
+                    or read_daily_claims(control/'release')[0] != old_claims[0]
+                    or prepared.get('source_snapshot_revision') != old.revision
+                    or prepared.get('daily_claim_count') != source_receipt['daily_claim_count']):
+                raise RuntimeError('Prepared live state/settings/claim parity changed')
         stage('live_binding')
         validate_live_binding(settings=env,for_execution=True)
         effective=validate_live_binding(settings=env,for_execution=True)
@@ -115,19 +159,28 @@ def review_live_candidate(*,backup,backup_identity,fingerprint,logs,control,old_
                for library in policy.libraries for stage,path in library.roots):
             raise RuntimeError('Initial native review requires standard stage layout')
         stage('native_view_comparison')
-        view=compare_media_views(shared=shared_media,native=native_media)
-        if not view.get('all_stage_metadata_matches') or not view.get('native_stages_one_mount_and_device'):
-            raise RuntimeError('Shared/native media views require review')
+        if _live_update:
+            new_binding=parse_unique_json(_capture(control/'release',(BINDING,))[BINDING][0])
+            if binding.get('media_roots') != new_binding.get('media_roots'):
+                raise RuntimeError('Existing native stage identities must be preserved')
+        else:
+            view=compare_media_views(shared=shared_media,native=native_media)
+            if not view.get('all_stage_metadata_matches') or not view.get('native_stages_one_mount_and_device'):
+                raise RuntimeError('Shared/native media views require review')
         stage('container_template_proposal')
         payload,xml=live_metadata(current=live,image=image,template=data['current-template.xml'],
             environment=env,reference=reference,host_logs=host_logs,host_control=host_control,
-            host_media=host_media,attempt=os.urandom(32).hex(),effective_settings=effective,diagnostic=stage)
+            host_media=host_media,attempt=os.urandom(32).hex(),effective_settings=effective,diagnostic=stage,_live_update=_live_update)
         def unchanged():
             if (_capture(old_logs,tuple(old_before))!=old_before
                     or _capture(old_control/'release',tuple(old_binding))!=old_binding
                     or _capture(logs,tuple(new_before))!=new_before or templates()!=before_templates
-                    or load_backup_payloads(**selected)!=data):
+                    or load_selected()!=data):
                 raise RuntimeError('Review inputs changed during capture')
+            if _live_update and (read_daily_claims(old_control/'release') != old_claims
+                    or read_daily_claims(control/'release')[0] != old_claims[0]
+                    or os.path.lexists(old_control/'release'/SETTINGS_MARKER)):
+                raise RuntimeError('Daily claims or settings changed during review')
             old.verify_current();new.verify_current();validate_live_binding(settings=env,for_execution=True)
         stage('final_input_recheck')
         unchanged()
@@ -137,12 +190,12 @@ def review_live_candidate(*,backup,backup_identity,fingerprint,logs,control,old_
         _write_private(fd,'proposed-container.json',_encode(payload))
         _write_private(fd,'proposed-template.xml',xml)
         unchanged()
-        report={'schema_version':1,'status':'live_cutover_review_prepared','source_revision':_revision(),
+        report={'schema_version':1,'status':('live_update_cutover_review_prepared' if _live_update else 'live_cutover_review_prepared'),'source_revision':_revision(),
             'candidate_image_id':image['Id'],'original_container_id':live['Id'],'original_running':live['State']['Running'],
             'backup_fingerprint':fingerprint,'backup_matches_current_observation':True,
             'writer_quiescence_verified':False,'tracking_preserved':True,'settings_preserved_except_canary_controls':True,
             'tracking_counts':{key:len(state.get(key,{})) for key in SECTIONS},
-            'media_read_only':False,'native_media_host_path':host_media,'native_view_metadata_matches':True,
+            'media_read_only':False,'native_media_host_path':host_media,'native_view_metadata_matches':None if _live_update else True,
             'byte_equality_verified':False,'container_user':'0:0','capabilities_dropped':'ALL',
             'capabilities_added':['DAC_OVERRIDE'],'initial_maximum_actions':1,'permanent_deletion_authorized':False,'root_filesystem_read_only':True,'network_mode':payload['HostConfig']['NetworkMode'],
             'environment_entries':len(payload['Env']),'published_ports':payload['HostConfig'].get('PortBindings',{}),
@@ -152,6 +205,9 @@ def review_live_candidate(*,backup,backup_identity,fingerprint,logs,control,old_
             'deployment_authorized':False,'service_changes_performed':False,'automatic_restoration':False,
             'sha256':{'proposed-container.json':hashlib.sha256(_encode(payload)).hexdigest(),
                       'proposed-template.xml':hashlib.sha256(xml).hexdigest()}}
+    if _live_update:
+        report.update(daily_claims_preserved=True, daily_claim_count=source_receipt['daily_claim_count'],
+            source_snapshot_revision=source_receipt['snapshot_revision'], settings_preserved=True, media_binding_preserved=True)
     # Complete only after both database context managers verify and close.
     stage('review_completion')
     fd=_private_root(Path(output),output_identity)
@@ -166,6 +222,7 @@ def main():
     for key in ('backup-identity','fingerprint','output-identity','host-logs','host-control','host-media'):
         parser.add_argument('--'+key,required=True)
     parser.add_argument('--reference',required=True)
+    parser.add_argument('--live-update',action='store_true')
     args=parser.parse_args()
     def identity(raw):
         if not re.fullmatch(r'[0-9]{1,20}:[0-9]{1,20}',raw):raise ValueError('Directory identity required')
@@ -188,7 +245,7 @@ def main():
             output=Path('/review'),output_identity=identity(args.output_identity),live=metadata['containers'][0],
             image=metadata['images'][0],host_logs=args.host_logs,host_control=args.host_control,templates=templates,reference=args.reference,
             host_media=args.host_media,shared_media=Path('/shared-media'),native_media=Path('/media'),
-            diagnostic=lambda value:diagnostic_stage.__setitem__(0,value))
+            diagnostic=lambda value:diagnostic_stage.__setitem__(0,value),_live_update=args.live_update)
     except Exception as error:
         kind=type(error).__name__
         if kind not in ('RuntimeError','ValueError','FileNotFoundError','PermissionError','OSError','KeyError','TypeError'):kind='validation_error'

@@ -340,3 +340,21 @@ partial roots cannot be retried or overwritten. Final validation rechecks the
 selected backup, state, settings and complete claim inventory. The retained
 original JSON is also copied separately for provenance. No candidate is started,
 no template is installed and no service update is authorized by this step.
+
+Live upgrade review uses `unraid_live_update_review_host.sh`. It compares the old
+live binding/provenance, verified current revision, retained inputs, complete
+claim inventory, prepared state and unchanged configuration against the selected
+backup. It requires the same native host media path and stage identities, root
+filesystem read-only, one-action policy and the existing single DAC_OVERRIDE
+capability. No shared/native comparison is claimed when preserving that existing
+native bind. The review writes only a private proposal and never installs it.
+
+The explicit live-update handoff adapter shares the existing durable service
+transaction. Its precheck repeats the complete review before and after stopping
+the original. A claim/state change at that boundary prevents archive/create.
+The original container remains retained. Explicit recovery is allowed only while
+the replacement's initial state and entire claim inventory are unchanged; later
+tracking, a retained operation, an added claim or a removed claim blocks stale
+recovery before service actions. A lost Docker acknowledgement is never replayed.
+The separate `unraid_live_update_execute_host.sh check` remains observational;
+`deploy` and `recover` require the exact reviewed fingerprint.

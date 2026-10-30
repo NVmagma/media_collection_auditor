@@ -27,13 +27,14 @@ def validate_live_container(live, **kwargs):
 
 class SelectedLive(SelectedUpdate):
     REVIEW_STATUS='live_cutover_review_prepared'
+    LIVE_UPDATE=False
 
     def __init__(self, *, shared_media=Path('/shared-media'), native_media=Path('/media'), **kwargs):
         super().__init__(**kwargs)
         self.shared_media,self.native_media=shared_media,native_media
 
     def validate(self, *, recovery=False):
-        if _capture(self.review, REVIEW_FILES)!=self.files or load_backup_payloads(**self.selected)!=self.data:
+        if _capture(self.review, REVIEW_FILES)!=self.files or self.load_backup(**self.selected)!=self.data:
             raise RuntimeError('Pinned review or backup changed')
         if self.engine.image(self.report['reference'])!=self.image:
             raise RuntimeError('Cached image changed')
@@ -53,18 +54,28 @@ class SelectedLive(SelectedUpdate):
             output=Path(temporary);output.chmod(0o700);info=output.stat()
             fresh=review_live_candidate(**self.review_args,live=normalized,templates=lambda:inventory,
                 output=output,output_identity=(info.st_dev,info.st_ino),host_media=host_media,
-                shared_media=self.shared_media,native_media=self.native_media)
+                shared_media=self.shared_media,native_media=self.native_media,_live_update=self.LIVE_UPDATE)
         if fresh['tracking_counts']!=self.report['tracking_counts']:
             raise RuntimeError('Tracking changed')
         effective=validate_live_binding(settings=self.env,for_execution=True)
         payload,xml=live_metadata(current=normalized,image=self.image,template=self.data['current-template.xml'],
             environment=self.env,reference=self.report['reference'],host_logs=self.host_logs,
             host_control=self.host_control,host_media=host_media,attempt=self.payload['Labels'][LABEL],
-            effective_settings=effective)
+            effective_settings=effective,_live_update=self.LIVE_UPDATE)
         if payload!=self.payload or xml!=self.xml:
             raise RuntimeError('Proposal reconstruction changed')
         if _capture(self.review, REVIEW_FILES)!=self.files or self.inventory()!=self.original_templates:
             raise RuntimeError('Inputs changed during validation')
+
+
+class SelectedLiveUpdate(SelectedLive):
+    REVIEW_STATUS='live_update_cutover_review_prepared'
+    LIVE_UPDATE=True
+
+    @staticmethod
+    def load_backup(**selected):
+        from scripts.unraid_live_update_backup import load_backup_payloads as load_live
+        return load_live(**selected)[0]
 
 
 def run_selected(update, *, action, parent, reviewed_new_id=None):
@@ -88,8 +99,8 @@ def run_selected(update, *, action, parent, reviewed_new_id=None):
         old_env=dict(item.split('=',1) for item in update.captured['Config']['Env'])
         result=recover(**common,journal=Journal(parent,'recovery'),new_id=update.recovery_id(reviewed_new_id),
             precheck=lambda:update.validate(recovery=True),restore_template=lambda:update.install(restore=True),
-            health=lambda identity:verify_http_health(engine=update.engine,identity=identity,env=old_env))
-        result['status']='unchanged_live_canary_preview_recovered'
+            health=lambda identity:verify_http_health(engine=update.engine,identity=identity,env=old_env,live_canary=update.LIVE_UPDATE))
+        result['status']='unchanged_live_previous_recovered' if update.LIVE_UPDATE else 'unchanged_live_canary_preview_recovered'
         return result
 
 
@@ -100,12 +111,14 @@ def main():
     for key in ('review-identity','review-fingerprint','backup-identity','backup-fingerprint','daemon-id'):
         parser.add_argument('--'+key,required=True)
     parser.add_argument('--reviewed-new-id')
+    parser.add_argument('--live-update',action='store_true')
     args=parser.parse_args()
     def identity(raw):
         if not re.fullmatch(r'[0-9]+:[0-9]+',raw):raise ValueError('Directory identity required')
         return tuple(map(int,raw.split(':')))
     try:
-        update=SelectedLive(engine=Docker(endpoint='/var/run/docker.sock',expected_daemon=args.daemon_id),
+        selected_class=SelectedLiveUpdate if args.live_update else SelectedLive
+        update=selected_class(engine=Docker(endpoint='/var/run/docker.sock',expected_daemon=args.daemon_id),
             review=Path('/review'),review_identity=identity(args.review_identity),review_fingerprint=args.review_fingerprint,
             backup=Path('/backup'),backup_identity=identity(args.backup_identity),backup_fingerprint=args.backup_fingerprint,
             logs=Path('/app/logs'),control=Path('/sqlite-control'),old_logs=Path('/old-logs'),

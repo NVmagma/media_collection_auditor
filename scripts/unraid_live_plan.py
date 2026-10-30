@@ -10,7 +10,7 @@ from scripts.unraid_update_production_prepare import _metadata,REFERENCE
 from scripts.sqlite_preview_service import LABEL
 
 
-def live_metadata(*,current,image,template,environment,reference,host_logs,host_control,host_media,attempt,effective_settings=None,diagnostic=None):
+def live_metadata(*,current,image,template,environment,reference,host_logs,host_control,host_media,attempt,effective_settings=None,diagnostic=None,_live_update=False):
     def stage(name):
         if diagnostic is not None:diagnostic('proposal_'+name)
     stage('image_contract')
@@ -25,7 +25,15 @@ def live_metadata(*,current,image,template,environment,reference,host_logs,host_
             or not re.fullmatch(r'[0-9a-f]{64}',attempt or '')):
         raise ValueError('Exact published live canary and attempt required')
     stage('current_template')
-    review=review_update(templates=[('current.xml',template)],container=current)
+    if _live_update:
+        # Use the reviewed checkout's pure template checker while keeping all
+        # runtime/profile validation in the selected packaged image.
+        import runpy
+        from pathlib import Path
+        checker=runpy.run_path(str(Path(__file__).resolve().parents[1]/'app/unraid_update_review.py'))['review_update']
+        review=checker(templates=[('current.xml',template)],container=current,_live_canary=True)
+    else:
+        review=review_update(templates=[('current.xml',template)],container=current)
     if review['blockers'] or current.get('State',{}).get('Running') is not True:
         raise ValueError('Matching running preview required')
     stage('effective_policy')
@@ -37,15 +45,19 @@ def live_metadata(*,current,image,template,environment,reference,host_logs,host_
             or unescape(host_media)!=host_media or '<' in host_media or '>' in host_media):
         raise ValueError('Canonical explicitly reviewed native media root required')
     paths=[PurePosixPath(host_logs),PurePosixPath(host_control)]
-    paths.extend(PurePosixPath(item['Source']) for item in current['Mounts'])
+    if _live_update and not any(item['Destination']=='/media' and item['Source']==host_media for item in current['Mounts']):
+        raise ValueError('Existing native media root must be preserved')
+    paths.extend(PurePosixPath(item['Source']) for item in current['Mounts']
+                 if not (_live_update and item['Destination']=='/media'))
     if any(media==path or media in path.parents or path in media.parents for path in paths):
         raise ValueError('Native view must be distinct from old binds and private controls')
     stage('preserved_metadata')
     payload,xml=_metadata(current=current,image=image,template=template,environment=environment,
-        reference=reference,host_logs=host_logs,host_control=host_control,attempt=attempt)
+        reference=reference,host_logs=host_logs,host_control=host_control,attempt=attempt,_live_update=_live_update)
     host=payload['HostConfig']
     stage('capability_policy')
-    if (host.get('CapAdd') not in (None,[])
+    allowed_caps = (['DAC_OVERRIDE'], ['CAP_DAC_OVERRIDE']) if _live_update else (None, [])
+    if (host.get('CapAdd') not in allowed_caps
             or host.get('Devices') not in (None,[]) or host.get('DeviceRequests') not in (None,[]) ):
         raise ValueError('Unprivileged capability-dropped canary required')
     # Explicitly approved live policy: private controls remain root-owned,

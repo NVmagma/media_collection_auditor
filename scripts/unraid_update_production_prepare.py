@@ -62,7 +62,7 @@ def candidate_review_metadata(*,current,image,template,environment,host_logs,hos
     return payload,ET.tostring(root,encoding='utf-8',xml_declaration=True)+b'\n'
 
 
-def _metadata(*,current,image,template,environment,reference,host_logs,host_control,attempt):
+def _metadata(*,current,image,template,environment,reference,host_logs,host_control,attempt,_live_update=False):
     if b'<!DOCTYPE' in template.upper() or b'<!ENTITY' in template.upper():
         raise ValueError('Plain managed template required')
     root = ET.fromstring(template)
@@ -74,7 +74,7 @@ def _metadata(*,current,image,template,environment,reference,host_logs,host_cont
     mounts = {item['Destination']:deepcopy(item) for item in current['Mounts']}
     if set(mounts) != {'/media','/app/logs','/sqlite-control'} or len(current['Mounts']) != 3:
         raise ValueError('Exact three bind roots required')
-    if any(item.get('Type') != 'bind' for item in mounts.values()) or mounts['/media'].get('RW') is not False:
+    if any(item.get('Type') != 'bind' for item in mounts.values()) or mounts['/media'].get('RW') is not _live_update:
         raise ValueError('Read-only media bind required')
     destinations = {'/app/logs':host_logs, '/sqlite-control':host_control}
     for value in destinations.values():
@@ -122,7 +122,7 @@ def _metadata(*,current,image,template,environment,reference,host_logs,host_cont
     from scripts.sqlite_preview_service import LABEL
     payload['Labels']={**payload.get('Labels',{}),LABEL:attempt}
     host['Binds']=None
-    host['Mounts']=[{'Type':'bind','Source':item['Source'],'Target':target,'ReadOnly':target=='/media',
+    host['Mounts']=[{'Type':'bind','Source':item['Source'],'Target':target,'ReadOnly':target=='/media' and not _live_update,
                      'BindOptions':{'Propagation':item.get('Propagation','rprivate')}} for target,item in sorted(mounts.items())]
     payload['HostConfig']=host
     return payload, ET.tostring(root,encoding='utf-8',xml_declaration=True)+b'\n'

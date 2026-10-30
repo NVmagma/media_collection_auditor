@@ -63,7 +63,9 @@ def matching_templates(templates):
     return matches
 
 
-def review_update(*, templates, container):
+def review_update(*, templates, container, _live_canary=False):
+    if type(_live_canary) is not bool:
+        raise ValueError("Explicit review profile required")
     blockers, warnings = [], []
     report = {'read_only': True, 'automatic_action': 'none', 'update_authorized': False,
               'binding_verified': False, 'status': 'review_required'}
@@ -130,10 +132,19 @@ def review_update(*, templates, container):
             live_env = dict(value.split('=', 1) for value in config.get('Env', []))
             if any(live_env.get(key[1]) != value for key, (value, _) in expected.items() if key[0] == 'Variable'):
                 blockers.append('environment_mismatch')
-            required = {'AUDITOR_STATE_BACKEND': 'sqlite', 'DRY_RUN': 'true',
+            required = {'AUDITOR_STATE_BACKEND': 'sqlite', 'DRY_RUN': 'false' if _live_canary else 'true',
                         'SQLITE_STATE_FILE': '/sqlite-control/release/state.db',
                         'ALLOW_FILESYSTEM_DELETE': 'false', 'ALLOW_PERMANENT_DELETE': 'false',
                         'ALLOW_CROSS_FILESYSTEM_MOVES': 'false'}
+            if _live_canary:
+                required.update(MAX_ACTIONS_PER_RUN='1', ENABLE_SEASON_PRUNING='false')
+                if (config.get('User') != '0:0' or host.get('CapDrop') != ['ALL']
+                        or host.get('CapAdd') not in (['DAC_OVERRIDE'], ['CAP_DAC_OVERRIDE'])
+                        or host.get('Devices') not in (None, []) or host.get('DeviceRequests') not in (None, [])
+                        or '--cap-drop=ALL' not in args or '--cap-add=DAC_OVERRIDE' not in args
+                        or '--user=0:0' not in args or '--restart=no' not in args
+                        or '--security-opt=no-new-privileges' not in args):
+                    blockers.append('live_canary_security_mismatch')
             if any(live_env.get(key, '').lower() != value or expected.get(('Variable', key), (None,))[0] != value
                    for key, value in required.items()):
                 blockers.append('preview_settings_missing_or_unsafe')
@@ -152,7 +163,7 @@ def review_update(*, templates, container):
                         or observed.get('RW') is not (parts[0] == 'rw')
                         or observed.get('Propagation', 'rprivate') != ('rslave' if 'slave' in parts else 'rprivate')):
                     blockers.append('mount_binding_mismatch')
-            if (paths.get('/media', ('', ''))[1].split(',')[0] != 'ro'
+            if (paths.get('/media', ('', ''))[1].split(',')[0] != ('rw' if _live_canary else 'ro')
                     or any(paths.get(target, ('', ''))[1].split(',')[0] != 'rw' for target in ('/sqlite-control', '/app/logs'))):
                 blockers.append('preview_mount_layout_missing')
             stage = 'container_ports'

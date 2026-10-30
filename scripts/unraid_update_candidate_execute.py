@@ -28,6 +28,10 @@ def sha(raw):return hashlib.sha256(raw).hexdigest()
 
 class SelectedUpdate:
     REVIEW_STATUS = "candidate_review_prepared"
+
+    @staticmethod
+    def load_backup(**selected):
+        return load_backup_payloads(**selected)
     def __init__(self,*,engine,review,review_identity,review_fingerprint,backup,backup_identity,
                  backup_fingerprint,logs,control,old_logs,old_control,templates):
         self.engine,self.review,self.templates=engine,Path(review),Path(templates)
@@ -39,7 +43,7 @@ class SelectedUpdate:
             if sha(self.files[name][0])!=r['sha256'][name]:raise RuntimeError('Proposal changed')
         self.payload=parse_unique_json(self.files['proposed-container.json'][0]);self.xml=self.files['proposed-template.xml'][0]
         self.selected=dict(directory=Path(backup),expected_identity=backup_identity,expected_fingerprint=backup_fingerprint)
-        self.data=load_backup_payloads(**self.selected);self.captured=parse_unique_json(self.data['current.inspect.json'])
+        self.data=self.load_backup(**self.selected);self.captured=parse_unique_json(self.data['current.inspect.json'])
         self.image=engine.image(r['reference'])
         if (r.get('status')!=self.REVIEW_STATUS or r.get('image_reference_status')!='verified_cached_digest'
                 or r.get('backup_fingerprint')!=backup_fingerprint or r.get('candidate_image_id')!=self.image['Id']
@@ -73,7 +77,7 @@ class SelectedUpdate:
         return [(name,self.data['current-template.xml'] if name==self.template_name else value) for name,value in current]
 
     def validate(self,*,recovery=False):
-        if _capture(self.review,REVIEW_FILES)!=self.files or load_backup_payloads(**self.selected)!=self.data:
+        if _capture(self.review,REVIEW_FILES)!=self.files or self.load_backup(**self.selected)!=self.data:
             raise RuntimeError('Pinned review or backup changed')
         image=self.engine.image(self.report['reference'])
         if image!=self.image:raise RuntimeError('Cached image selection changed')
