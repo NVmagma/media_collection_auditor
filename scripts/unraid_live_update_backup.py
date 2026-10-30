@@ -322,5 +322,25 @@ def main():
     return 0
 
 
+def load_backup_payloads(*, directory, expected_identity, expected_fingerprint):
+    """Private verified bytes for offline preparation; never print payloads."""
+    selected = dict(directory=directory, expected_identity=expected_identity,
+                    expected_fingerprint=expected_fingerprint)
+    inspect_backup(**selected)
+    fd = _private_root(Path(directory), expected_identity)
+    try:
+        receipt_raw = _local(fd, 'backup-complete.json')[0]
+        if hashlib.sha256(receipt_raw).hexdigest() != expected_fingerprint:
+            raise RuntimeError('Selected live backup changed')
+        receipt = parse_unique_json(receipt_raw)
+        payloads = {name: _local(fd, name)[0] for name in FILES}
+        if any(hashlib.sha256(raw).hexdigest() != receipt['sha256'][name] for name, raw in payloads.items()):
+            raise RuntimeError('Live backup changed before preparation')
+    finally:
+        os.close(fd)
+    inspect_backup(**selected)
+    return payloads, receipt
+
+
 if __name__ == '__main__':
     raise SystemExit(main())

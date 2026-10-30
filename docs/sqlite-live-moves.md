@@ -324,3 +324,19 @@ latest state and claims after stopping the old worker. Do not use the frozen
 preview backup/installer or change only the Docker image reference to update a
 running live worker. Template capture records the unique managed XML; the later
 proposal still needs to validate the complete recreation recipe.
+
+The separate `unraid_live_update_prepare_host.sh` prepares new offline roots from
+an explicitly fingerprinted live packet. It requires the current writable native
+media binding to match exactly; the preparation helper itself mounts media
+read-only and has no Docker socket or network. Saved configuration bytes and
+unknown fields remain unchanged. The latest logical state becomes the new
+binding's revision-zero starting snapshot, with the captured source revision in
+the preparation receipt. This is a new revision chain, not a reset of lifecycle
+clocks.
+
+Every daily claim is copied before the live binding is created. Failure or an
+actual controller kill during claim transfer leaves no completed preparation;
+partial roots cannot be retried or overwritten. Final validation rechecks the
+selected backup, state, settings and complete claim inventory. The retained
+original JSON is also copied separately for provenance. No candidate is started,
+no template is installed and no service update is authorized by this step.
