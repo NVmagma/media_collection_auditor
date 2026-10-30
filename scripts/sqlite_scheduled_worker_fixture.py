@@ -135,13 +135,19 @@ class ScheduledWorkerFixtureTests(unittest.TestCase):
             self.discovery()
         self.assertEqual(self.snapshot, self.before)
 
-    def test_future_tv_content_blocks_discovery(self):
+    def test_future_tv_content_blocks_only_affected_show(self):
         self.libraries[1]['new_content_resets_clock'] = True
         episode = Path(self.libraries[1]['transient']) / 'Same (2020)' / 'episode'
         episode.write_bytes(b'fixture')
         at = datetime(2030, 1, 1).timestamp(); os.utime(episode, (at, at))
-        with self.assertRaises(ScheduledContentBlocked):
-            self.discovery()
+        result = self.discovery()
+        self.assertEqual([move.media_key for move in result.plan.moves], ['Same (2020)'])
+        self.assertEqual(result.clock_proposal.changes, ())
+        self.assertEqual(result.clock_proposal.proposed_snapshot, self.before)
+        self.assertEqual(episode.read_bytes(), b'fixture')
+        self.assertEqual(episode.stat().st_mtime, at)
+        self.assertTrue(any(key == 'TV/Same (2020)' and blockers == ('future_content_timestamp',)
+            for _, key, blockers, _ in result.plan.skipped))
         self.assertEqual(self.snapshot, self.before)
 
     def test_empty_tv_title_does_not_rewind_existing_clock(self):
