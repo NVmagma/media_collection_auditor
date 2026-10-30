@@ -68,7 +68,8 @@ class ArrQueueFixtureTests(unittest.TestCase):
         self.assertEqual([call[:2] for call in self.server.calls],
                          [('GET', '/api/v3/movie'), ('GET', '/api/v3/series')])
         self.assertTrue(all(call[2].startswith('synthetic-') and call[3] == 'no-cache' for call in self.server.calls))
-        self.assertEqual([call[4] for call in self.server.calls], [4, 4])
+        # One shared user list plus Movie and Series catalogs precede Arr lookup.
+        self.assertEqual([call[4] for call in self.server.calls], [3, 3])
         self.assertNotIn('must-not-persist', json.dumps(state))
         self.assertEqual(self.case.source.read_bytes(), self.case.original_json)
 
