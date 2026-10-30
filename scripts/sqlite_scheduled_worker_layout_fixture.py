@@ -41,7 +41,7 @@ class WorkerLayoutFixtureTests(unittest.TestCase):
         self.assertEqual(len(self.claims()), 1)
         with self.assertRaises(FileExistsError):
             self.run_slot()
-        self.assertEqual(len(self.case.server.calls), 8)
+        self.assertEqual(len(self.case.server.calls), 7)
 
     def test_pending_operation_blocks_collection_in_separate_database(self):
         state, revision = self.before
@@ -77,7 +77,7 @@ class WorkerLayoutFixtureTests(unittest.TestCase):
             observed.append(True)
         self.case.server.on_request = competing_runner
         self.assertEqual(len(self.run_slot()['completed']), 2)
-        self.assertEqual(len(observed), 8)
+        self.assertEqual(len(observed), 7)
 
     def test_missing_outer_marker_rejects_before_any_claim_or_http(self):
         (self.root / '.sqlite_disposable_rehearsal').unlink()

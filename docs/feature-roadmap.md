@@ -329,3 +329,15 @@ until the production switch is separately approved.
   lines before exact bind-layout comparison; retain rejection of extra binds.
   Added named redacted failure diagnostics and a shell-level reproduction test.
   No production or private preparation files are changed by this correction.
+
+### Scheduled catalog request budget
+
+Inventory titles share detached Jellyfin GET pages within one scan pass. The
+pass has a 64 MiB response budget and retains the existing transport request and
+run deadline limits. Every inventory rebuild clears these pages, including the
+rebuild after discovery clock checkpointing. User coverage, pagination, item
+identity and protection field validation still run for each title. A transport
+failure invalidates the pass catalog without automatic retry. Pre-move protection
+reads always use the original uncached transport; scan-time signals never
+authorize a move. This reduces redundant catalog requests without increasing
+the one-action cap or enabling deletion.

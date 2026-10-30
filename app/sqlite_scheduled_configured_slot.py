@@ -50,7 +50,7 @@ def _configured_run_inputs(*, settings, clock, allow_dry_run=False):
         ('keep_all', 'KEEP_ALL_SEASONS_TAG', 'keep-all-seasons'))})
     fetch = ScheduledJellyfinGET(base_url=values.get('JELLYFIN_HOST_URL'),
                                token=values.get('JELLYFIN_API_TOKEN'))
-    reader = scheduled_inventory_signal_reader(fetch=fetch, clock=clock, tag_names=tags)
+    reader = scheduled_inventory_signal_reader(fetch=fetch, clock=clock, tag_names=tags, share_catalog=True)
     bindings = {}
 
     def scan(binding):
@@ -66,4 +66,5 @@ def _configured_run_inputs(*, settings, clock, allow_dry_run=False):
         return scheduled_protection_provider(fetch=fetch, bindings=bindings,
             clock=clock, tag_names=tags)(move)
 
+    scan.begin_scan = reader.begin_scan
     return config, scan, protect

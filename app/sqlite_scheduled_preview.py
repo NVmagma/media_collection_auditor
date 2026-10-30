@@ -33,6 +33,8 @@ def prepare_scheduled_preview(*, database, config, fetch_signals, scheduled_at,
         if not isinstance(signals, dict) or not all(type(signals.get(key)) is bool for key in fields):
             raise RuntimeError('Scheduled preview protection unavailable')
         return signals
+    if callable(getattr(fetch_signals, 'begin_scan', None)):
+        read.begin_scan = fetch_signals.begin_scan
     prepared = prepare_scheduled_worker(config=config, snapshot=snapshot,
         revision=revision, fetch_signals=read, now=clock(), timer=timer,
         maximum_scan_seconds=remaining(), discover_clocks=True)

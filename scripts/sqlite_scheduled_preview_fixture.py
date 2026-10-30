@@ -52,7 +52,7 @@ class ScheduledPreviewFixtureTests(unittest.TestCase):
         self.assertEqual(report['status'], 'scheduled_preview_complete')
         self.assertEqual(len(report['proposed_moves']), 2)
         self.assertEqual(report['completed'], ())
-        self.assertEqual(len(self.layout.case.server.calls), 4)
+        self.assertEqual(len(self.layout.case.server.calls), 3)
         self.assert_unchanged()
         history = self.observer.history()[0]
         self.assertTrue(history['dry_run'])

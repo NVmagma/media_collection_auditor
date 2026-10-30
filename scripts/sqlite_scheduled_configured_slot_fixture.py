@@ -68,13 +68,13 @@ class ConfiguredSlotFixtureTests(unittest.TestCase):
         result = run()
         assert result['status'] == 'disposable_scheduled_routed_slot_complete'
         assert len(result['completed']) == 2
-        assert len(server.calls) == 8
+        assert len(server.calls) == 7
         assert all(token == 'synthetic-token' for _, token in server.calls)
         assert fixture.fixture.path(0, 'holding').is_dir()
         assert fixture.fixture.path(1, 'holding').is_dir()
         with self.assertRaises(Exception):
             run()
-        assert len(server.calls) == 8
+        assert len(server.calls) == 7
 
 
     def test_changed_configured_protection_blocks_before_intent(self):

@@ -93,7 +93,7 @@ class PreviewReleaseFixtureTests(unittest.TestCase):
         self.assertEqual(result.outcome['status'], 'scheduled_preview_complete')
         self.assertEqual(len(result.outcome['proposed_moves']), 2)
         self.assertEqual(result.outcome['completed'], ())
-        self.assertEqual(len(self.case.server.calls), 4)
+        self.assertEqual(len(self.case.server.calls), 3)
         self.assertEqual(step(slot + timedelta(seconds=1)).status, 'waiting')
         self.assertTrue(observer.history()[0]['dry_run'])
         self.assertEqual(observer.history()[0]['moves_completed'], 0)
@@ -226,7 +226,7 @@ def actual_image_acceptance():
         production_cycle_step(cycle=cycle, settings=values, now=slot - timedelta(hours=1), clock=lambda: configured_fixture.NOW)
         outcome = production_cycle_step(cycle=cycle, settings=values, now=slot, clock=lambda: configured_fixture.NOW)
         assert outcome.outcome['status'] == 'scheduled_preview_complete'
-        assert outcome.outcome['completed'] == () and len(case.server.calls) == 4
+        assert outcome.outcome['completed'] == () and len(case.server.calls) == 3
         case.server.calls.clear()
         with socket.socket() as reservation:
             reservation.bind(('127.0.0.1', 0)); port = reservation.getsockname()[1]

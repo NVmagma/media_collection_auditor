@@ -205,6 +205,9 @@ def prepare_scheduled_worker(*, config, snapshot, revision, fetch_signals,
                     raise ScheduledScanBlocked('title_inventory_changed')
                 if metadata(os.fstat(fd)) != stage_metadata[identity_key]:
                     raise ScheduledScanBlocked('configured_stage_contents_changed')
+        begin_scan = getattr(fetch_signals, 'begin_scan', None)
+        if callable(begin_scan):
+            begin_scan()
         by_name = {library.name: library for library in config.libraries}
         available_keys, content_times = set(), {}
         def scan(name):

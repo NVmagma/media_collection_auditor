@@ -73,7 +73,7 @@ class ScheduledArrFixtureTests(unittest.TestCase):
         self.assertEqual(set(state['queued']), {'Same (2020)', 'TV/Same (2020)'})
         self.assertEqual([c[0] for c in self.server.calls], ['GET', 'GET'] + ['GET','PUT','GET','GET'] * 2)
         self.assertTrue(all(self.server.intent_checks))
-        self.assertTrue(all(c[4] >= 8 for c in self.server.calls[2:]))
+        self.assertTrue(all(c[4] >= 7 for c in self.server.calls[2:]))
         self.assertEqual(self.server.records['radarr'][0]['path'], '/arr-view/Movies_hold/Same (2020)')
         self.assertEqual(self.server.records['sonarr'][0]['path'], '/arr-view/TV_hold/Same (2020)')
         self.assertEqual(self.case.case.source.read_bytes(), self.case.case.original_json)

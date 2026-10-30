@@ -164,7 +164,8 @@ def test_unsupported_policy_rejected_before_collection(tmp_path, field, value):
         configure(libraries)
 
 
-def test_real_collector_uses_configured_tags_for_movie_and_series(tmp_path):
+@pytest.mark.parametrize('share_catalog', [False, True])
+def test_real_collector_uses_configured_tags_for_movie_and_series(tmp_path, share_catalog):
     from app.sqlite_scheduled_jellyfin import scheduled_inventory_signal_reader
     libraries, snapshot = setup(tmp_path)
     calls = []
@@ -177,11 +178,15 @@ def test_real_collector_uses_configured_tags_for_movie_and_series(tmp_path):
             'Path': '/media/' + kind + '/Same (2020)' + ('/movie.mkv' if kind == 'Movie' else ''),
             'Tags': ['save'], 'UserData': {'IsFavorite': False, 'Played': False, 'PlayCount': 0}}]}
     tags = {'keep': 'save', 'protected': 'protect-all', 'disliked': 'leave', 'keep_all': 'seasons'}
-    reader = scheduled_inventory_signal_reader(fetch=fetch, tag_names=tags, clock=lambda: NOW)
+    reader = scheduled_inventory_signal_reader(fetch=fetch, tag_names=tags, clock=lambda: NOW, share_catalog=share_catalog)
     tags['keep'] = 'changed'
     result = prepare(configure(libraries), snapshot, fetch_signals=reader)
     assert [move.destination_stage for move in result.plan.moves] == ['Keep', 'Keep']
-    assert calls == ['/Users', '/Users/viewer/Items'] * 2
+    expected = ['/Users', '/Users/viewer/Items', '/Users/viewer/Items'] if share_catalog else ['/Users', '/Users/viewer/Items'] * 2
+    assert calls == expected
+    # A second worker pass cannot reuse the first pass's catalog.
+    prepare(configure(libraries), snapshot, fetch_signals=reader)
+    assert calls == expected * 2
 
 
 def test_real_collector_incomplete_coverage_produces_no_candidate(tmp_path):
