@@ -236,3 +236,39 @@ def test_stage_metadata_change_is_not_hidden_by_same_inventory(tmp_path):
         return {}
     with pytest.raises(ScheduledScanBlocked, match='stage_contents_changed'):
         prepare(configure(libraries), snapshot, fetch_signals=fetch)
+
+
+@pytest.mark.parametrize("field", FIELDS)
+def test_regular_finder_metadata_is_ignored_without_modification(tmp_path, field):
+    libraries, snapshot = setup(tmp_path)
+    metadata = Path(libraries[1][field]) / '.DS_Store'
+    metadata.write_bytes(b'finder metadata')
+    before = deepcopy(snapshot)
+    observed = []
+    result = prepare(configure(libraries), snapshot,
+        fetch_signals=lambda binding: observed.append(binding.media_key) or {})
+    assert result.plan.scanned_titles == 2
+    assert observed == ['Same (2020)', 'TV/Same (2020)']
+    assert metadata.read_bytes() == b'finder metadata'
+    assert snapshot == before
+
+
+@pytest.mark.parametrize("name", ['.DS_Store', '.hidden', 'unexpected.txt'])
+def test_metadata_exception_never_allows_symlinks(tmp_path, name):
+    libraries, snapshot = setup(tmp_path)
+    target = tmp_path / 'private'
+    target.write_bytes(b'untouched')
+    (Path(libraries[1]['transient']) / name).symlink_to(target)
+    with pytest.raises(ScheduledScanBlocked, match='non_directory_or_symlink_in_stage'):
+        prepare(configure(libraries), snapshot,
+            fetch_signals=lambda binding: pytest.fail('collection before inventory validation'))
+    assert target.read_bytes() == b'untouched'
+
+
+@pytest.mark.parametrize("name", ['.hidden', 'unexpected.txt'])
+def test_other_regular_stage_files_still_block(tmp_path, name):
+    libraries, snapshot = setup(tmp_path)
+    (Path(libraries[1]['transient']) / name).write_bytes(b'untouched')
+    with pytest.raises(ScheduledScanBlocked, match='non_directory_or_symlink_in_stage'):
+        prepare(configure(libraries), snapshot,
+            fetch_signals=lambda binding: pytest.fail('collection before inventory validation'))

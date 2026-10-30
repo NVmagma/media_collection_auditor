@@ -166,6 +166,10 @@ def prepare_scheduled_worker(*, config, snapshot, revision, fetch_signals,
                     check_time()
                     validate_title_folder(entry.name)
                     info = entry.stat(follow_symlinks=False)
+                    # Finder metadata is not a title. Never follow a symlink
+                    # or extend this exception to arbitrary hidden entries.
+                    if entry.name == ".DS_Store" and stat.S_ISREG(info.st_mode):
+                        continue
                     if not stat.S_ISDIR(info.st_mode):
                         raise ScheduledScanBlocked('non_directory_or_symlink_in_stage')
                     if len(rows) >= maximum_titles:
