@@ -72,3 +72,19 @@ def test_releasing_finished_request_does_not_drop_a_new_queued_request():
     assert observer.request_manual_live()
     observer.release_manual_preview()
     assert observer.claim_manual_live()
+
+
+def test_refresh_hook_runs_once_after_move_and_arr_commit(case):
+    arr = case.arr(); case.bind()
+    before = case.store.load_with_revision()
+    def refresh(**kwargs):
+        from app.sqlite_operation_coordinator import INTENTS_KEY
+        assert len(kwargs['result']['completed']) == 1
+        assert arr.puts == 1
+        state, revision = case.store.load_with_revision()
+        assert revision > before[1] and INTENTS_KEY not in state
+        return {'status': 'requested', 'scan_completion_verified': False}
+    with patch('app.sqlite_jellyfin_refresh.refresh_after_completed_live_run', side_effect=refresh) as hook:
+        result = manual(case, case.case.fixture.slot)
+    hook.assert_called_once()
+    assert result['jellyfin_refresh']['status'] == 'requested'

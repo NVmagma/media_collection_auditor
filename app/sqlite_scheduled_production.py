@@ -190,9 +190,14 @@ def _run_bound_production_slot(*, settings, scheduled_at, now, clock, timer=mono
                     maximum_run_seconds=3600, maximum_protection_seconds=30,
                     verify_claim=verify_claim, started_tick=started, resolve_arr_requests=resolve_arr,
                     complete_arr_requests=configured_arr_delivery(settings=settings, config=config), record_details=record_details)
+                # Refresh is advisory after durable move/Arr completion. Never
+                # turn its network failure into a replayable media operation.
+                from app.sqlite_jellyfin_refresh import refresh_after_completed_live_run
+                refresh = refresh_after_completed_live_run(settings=settings, result=result,
+                    maximum_seconds=max(0, 3600 - (timer() - started)))
                 # The common body reports fixture-only until release validation.
                 # Do not relabel its evidence as production authorization.
-                return result
+                return {**result, 'jellyfin_refresh': refresh}
 
 
 @contextmanager

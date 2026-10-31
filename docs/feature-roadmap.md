@@ -360,3 +360,16 @@ remain strict; duplicate separators, dot/traversal segments, roots, relative pat
 and backslashes are not repaired. Normalized duplicate folder matches still
 block. Both independent update readbacks must match the expected title ID,
 monitoring state and complete destination path.
+
+### Jellyfin refresh after scheduled live moves
+
+The SQLite live worker honors `JELLYFIN_REFRESH_AFTER_AUDIT` (default false).
+After a fully completed batch and its Arr updates, it sends at most one
+`POST /Library/Refresh` with modern and legacy authentication headers. Preview,
+no-move, stopped and uncertain outcomes do not request refresh. Requests use the
+remaining run budget, a maximum ten-second timeout, no proxy inheritance, no
+redirects and no retries. A failure is logged with fixed redacted text and never
+changes completed tracking or replays media actions. An accepted response only
+means a library scan was requested, not that Jellyfin has finished indexing.
+The Holding/Keep/Removal paths must already be included in Jellyfin libraries
+if moved titles should remain available for playback.
