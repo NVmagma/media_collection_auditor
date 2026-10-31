@@ -14,6 +14,7 @@ from urllib.request import Request
 from app.sqlite_arr_catalog import ArrCatalogGET
 from app.sqlite_arr_reconciliation import inspect_arr_sync, validate_arr_sync_details
 from app.sqlite_scheduled_paths import _canonical
+from app.sqlite_arr_catalog import canonical_arr_record_path
 from app.sqlite_scheduled_transport import _object
 from app.sqlite_title_identity import validate_title_folder
 
@@ -99,6 +100,11 @@ class ArrTitleUpdate:
         if self._deadline is not None:
             deadline = min(deadline, self._deadline)
         record = self._request('GET', url, deadline)
+        try:
+            record = deepcopy(record)
+            record['path'] = canonical_arr_record_path(record.get('path'))
+        except (ValueError, TypeError):
+            raise ArrTitleTransportError('Arr source path invalid; update refused') from None
         if (type(record.get('id')) is not int or record['id'] != request['title_id']
                 or record.get('path') != self._source or type(record.get('monitored')) is not bool):
             raise ArrTitleTransportError('Arr source identity changed; update refused')
@@ -111,6 +117,11 @@ class ArrTitleUpdate:
         self._request('PUT', url + '?moveFiles=false', deadline, raw)
         for _ in range(2):
             observed = self._request('GET', url, deadline)
+            try:
+                observed = deepcopy(observed)
+                observed['path'] = canonical_arr_record_path(observed.get('path'))
+            except (ValueError, TypeError):
+                raise ArrTitleTransportError('Arr readback path invalid; outcome unresolved') from None
             if (inspect_arr_sync(request, observed) != 'matching_record_unverified'
                     or observed.get('path') != destination):
                 raise ArrTitleTransportError('Arr readback mismatch; outcome unresolved')

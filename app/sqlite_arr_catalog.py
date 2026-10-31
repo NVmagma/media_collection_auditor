@@ -17,6 +17,17 @@ from app.sqlite_scheduled_transport import _NoRedirect, _object
 from app.sqlite_title_identity import validate_title_folder
 
 
+def canonical_arr_record_path(value):
+    """Accept one optional trailing slash on an otherwise canonical remote path.
+
+    Do not normalize dot segments, duplicate separators, roots or aliases.
+    Filesystem stage configuration continues to use the strict validator.
+    """
+    if isinstance(value, str) and value.endswith('/'):
+        value = value[:-1]
+    return _canonical(value)
+
+
 class ArrCatalogError(RuntimeError):
     pass
 
@@ -130,7 +141,7 @@ def configured_arr_queue_resolver(*, settings, config):
                     if (not isinstance(item, dict) or type(item.get('id')) is not int or item['id'] <= 0
                             or item['id'] in ids or type(item.get('monitored')) is not bool):
                         raise ArrCatalogError('Invalid or duplicate Arr stable identity')
-                    path = _canonical(item.get('path'))
+                    path = canonical_arr_record_path(item.get('path'))
                     folder = validate_title_folder(PurePosixPath(path).name)
                     ids.add(item['id'])
                     if folder in by_folder:

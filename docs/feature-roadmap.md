@@ -350,3 +350,13 @@ neither initialized nor reset, and no move is authorized for it. Other titles
 may continue after the complete inventory barrier. Unreadable content, symlinks,
 changed entries, and content scan limits still abort the attempt. Tests include
 a real disposable movie rename alongside a retained future-dated TV episode.
+
+### Arr remote directory path compatibility
+
+Radarr/Sonarr catalog and per-title responses may use one trailing slash on
+an otherwise canonical absolute POSIX directory path. The Arr boundary removes
+that optional slash for identity comparisons. Configuration and filesystem paths
+remain strict; duplicate separators, dot/traversal segments, roots, relative paths
+and backslashes are not repaired. Normalized duplicate folder matches still
+block. Both independent update readbacks must match the expected title ID,
+monitoring state and complete destination path.

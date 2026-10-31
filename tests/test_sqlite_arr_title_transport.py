@@ -76,3 +76,26 @@ def test_outer_run_deadline_prevents_new_http_without_reset():
     with patch.object(transport._opener, 'open') as opened:
         with pytest.raises(ArrTitleTransportError): transport(DETAILS)
         opened.assert_not_called()
+
+
+def test_remote_source_and_readback_trailing_slashes_are_equivalent():
+    transport = client()
+    methods = []
+    def request(method, url, deadline, body=None):
+        methods.append(method)
+        if method == 'PUT':
+            import json
+            assert json.loads(body)['path'] == '/arr/keep/Title'
+        return {'id': 42, 'path': ('/arr/holding/Title/' if len(methods) == 1 else '/arr/keep/Title/'),
+                'monitored': False}
+    with patch.object(transport, '_request', side_effect=request):
+        assert transport(DETAILS) is True
+    assert methods == ['GET', 'PUT', 'GET', 'GET']
+
+
+@pytest.mark.parametrize('path', ['/arr/holding/Title//', '/arr//holding/Title/', '/arr/holding/../Title/'])
+def test_unsafe_remote_source_path_never_puts(path):
+    transport = client()
+    with patch.object(transport, '_request', return_value={'id':42,'path':path,'monitored':False}) as request:
+        with pytest.raises(ArrTitleTransportError): transport(DETAILS)
+        assert request.call_count == 1

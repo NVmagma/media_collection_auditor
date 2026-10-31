@@ -143,3 +143,31 @@ def test_total_response_deadline_closes_body_and_does_not_retry():
         with pytest.raises(ArrCatalogError, match='no retry'):
             client()
         assert opened.call_count == 1
+
+
+def test_remote_trailing_slashes_accept_matching_and_unrelated_catalog_entries():
+    settings, config, prepared = inputs()
+    data, calls = catalogs(), []
+    for records in data.values():
+        records[0]['path'] += '/'
+        records.append({'id': 99, 'path': '/other/Unrelated/', 'monitored': False})
+    before = deepcopy(data)
+    requests = resolver(settings, config, data, calls)(prepared)
+    assert requests['Same']['title_id'] == 10
+    assert requests['TV/Same']['title_id'] == 20
+    assert data == before
+
+
+@pytest.mark.parametrize('path', ['/media/Movies/Same//', '/media//Movies/Same/',
+    '/media/Movies/../Same/', '/media/./Movies/Same/', '/', '//', 'relative/', None])
+def test_remote_path_normalization_never_repairs_unsafe_paths(path):
+    from app.sqlite_arr_catalog import canonical_arr_record_path
+    with pytest.raises(ValueError): canonical_arr_record_path(path)
+
+
+def test_normalized_duplicate_title_folder_still_blocks():
+    settings, config, prepared = inputs()
+    data, calls = catalogs(), []
+    data['radarr'].append({'id': 11, 'path': '/another/Same/', 'monitored': False})
+    with pytest.raises(ArrCatalogError, match='Ambiguous'):
+        resolver(settings, config, data, calls)(prepared)
