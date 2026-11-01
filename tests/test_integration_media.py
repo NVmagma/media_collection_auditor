@@ -225,3 +225,14 @@ def test_windows_paths_are_supported_without_exposing_them():
                                index_for([movie(path=r'C:\Media\Fixture (2024)\film.mkv')]), BASE)
     assert result['match_status'] == 'matched'
     assert 'Media' not in json.dumps(result)
+
+
+def test_widget_catalog_requests_individual_movies_in_grouped_libraries():
+    calls = []
+    def fetch(path, params):
+        if path == '/Users': return [{'Id': UID}]
+        calls.append(params)
+        return catalog([movie()] if params.get('CollapseBoxSetItems') == 'false' else [])
+    index = collect_widget_media_index(fetch, 'Movie')
+    assert widget_media_urls({'title':'Fixture (2024)'}, index, BASE)['match_status'] == 'matched'
+    assert calls and all(params['CollapseBoxSetItems'] == 'false' for params in calls)

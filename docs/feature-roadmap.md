@@ -373,3 +373,13 @@ changes completed tracking or replays media actions. An accepted response only
 means a library scan was requested, not that Jellyfin has finished indexing.
 The Holding/Keep/Removal paths must already be included in Jellyfin libraries
 if moved titles should remain available for playback.
+
+### Grouped Jellyfin presentation lookups
+
+Dashboard link/poster and Homarr catalog requests explicitly disable collection
+collapsing, as the scheduled protection collector already does. Otherwise a
+collection can hide its individual movies and cause the Auditor's local
+`Title not found in Jellyfin` response. Presentation caches expire after five
+minutes; a subsequent lookup resolves the current catalog item ID rather than
+persisting a pre-move ID. This does not verify indexing completion or alter
+Jellyfin library paths.

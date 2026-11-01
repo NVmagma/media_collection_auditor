@@ -52,6 +52,36 @@ class WebSecurityTests(unittest.TestCase):
             self.assertEqual(result.data, b"fake-image")
             self.assertIn("/Items/item-id/Images/Primary", get.call_args.args[0])
 
+    def test_grouped_movie_links_resolve_new_id_after_cache_expiry(self):
+        from unittest.mock import Mock
+        title = 'Austin Powers - International Man of Mystery (1997)'
+        current_id = ['before-move']
+        calls = []
+        def get(url, **kwargs):
+            response = Mock(status_code=200)
+            if url.endswith('/Users'):
+                response.json.return_value = [{'Id':'viewer'}]
+            else:
+                calls.append(kwargs['params'])
+                items = ([{'Type':'Movie', 'Id':current_id[0], 'Name':title,
+                    'Path':'/media/Movies_hold/' + title + '/movie.mkv'}]
+                    if kwargs['params'].get('CollapseBoxSetItems') == 'false' else [])
+                response.json.return_value = {'Items':items}
+            return response
+        with patch.object(web, '_POSTER_INDEX', {}), \
+             patch.object(web, 'current_user', return_value={'name':'Viewer','admin':False}), \
+             patch.object(web, 'load_config', return_value={'JELLYFIN_HOST_URL':'http://jellyfin:8096','JELLYFIN_API_TOKEN':'synthetic'}), \
+             patch.object(web.requests, 'get', side_effect=get), \
+             patch.object(web.time, 'monotonic', return_value=0) as clock:
+            first = self.client.get('/api/jellyfin-link', query_string={'library':'Movies','title':title})
+            self.assertTrue(first.headers['Location'].endswith('id=before-move'))
+            current_id[0] = 'after-move'
+            clock.return_value = 301
+            moved = self.client.get('/api/jellyfin-link', query_string={'library':'Movies','title':title})
+            self.assertEqual(moved.status_code, 302)
+            self.assertTrue(moved.headers['Location'].endswith('id=after-move'))
+            self.assertEqual(len(calls), 2)
+
     def test_friendly_dates(self):
         self.assertEqual(web.friendly_date("2026-10-15T20:27:17.166650"), "Oct 15, 2026")
         self.assertEqual(web.friendly_date("legacy"), "legacy")

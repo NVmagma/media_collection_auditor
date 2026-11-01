@@ -161,7 +161,7 @@ def collect_widget_media_index(fetch, media_type):
                 raise ValueError('Widget catalog bound exceeded')
             page = fetch('/Users/' + uid + '/Items', {
                 'Recursive': 'true', 'IncludeItemTypes': media_type,
-                'ExcludeItemTypes': 'BoxSet', 'Fields': 'Path',
+                'ExcludeItemTypes': 'BoxSet', 'CollapseBoxSetItems': 'false', 'Fields': 'Path',
                 'EnableImages': 'true', 'StartIndex': start, 'Limit': 100})
             if not isinstance(page, dict):
                 raise ValueError('Invalid page')

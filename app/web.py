@@ -717,7 +717,8 @@ def _poster_index(base, token, media_type):
             continue
         response = requests.get(base + "/Users/" + user_id + "/Items",
                                 params={"Recursive": "true", "IncludeItemTypes": media_type,
-                                        "Fields": "Path", "EnableImages": "true"},
+                                        "Fields": "Path", "EnableImages": "true",
+                                        "CollapseBoxSetItems": "false"},
                                 headers=headers, timeout=(3, 15), allow_redirects=False)
         response.raise_for_status()
         for item in response.json().get("Items", []):
