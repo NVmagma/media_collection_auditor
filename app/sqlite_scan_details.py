@@ -15,7 +15,7 @@ REASONS = {
     'waiting_period': 'Still inside the Waiting period.',
     'holding_period': 'Still inside the Holding period.',
     'no_transition': 'No move is proposed for this stage.',
-    'action_cap': 'Excluded by the shared action limit for this run.',
+    'action_cap': 'Excluded by the action limits for this run.',
     'missing_or_conflicting_clock': 'The saved lifecycle date is missing or conflicts with another stage.',
     'future_content_timestamp': 'TV content has a future modification date; this show was skipped and its clock was preserved.',
     'future_observation': 'The saved lifecycle date is in the future.',

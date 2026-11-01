@@ -20,7 +20,7 @@ from test_unraid_live_review import case, run as initial_review, identity
 
 
 @pytest.fixture
-def update_case(case, monkeypatch):
+def update_case(case, monkeypatch, request):
     monkeypatch.setattr(build, 'PROFILE', PROFILE)
     initial_review(case)
     payload=json.loads((case.output/'proposed-container.json').read_bytes())
@@ -71,7 +71,7 @@ def update_case(case, monkeypatch):
     fingerprint=hashlib.sha256((packet/'backup-complete.json').read_bytes()).hexdigest()
     prepare_live_candidate(backup=packet,backup_identity=identity(packet),backup_fingerprint=fingerprint,
         logs=logs,logs_identity=identity(logs),control=control,control_identity=identity(control),
-        candidate_image=image,_live_update=True)
+        candidate_image=image,_live_update=True,_library_slots=getattr(request, 'param', False))
     output=case.root/'live-update-review';output.mkdir(mode=0o700)
     case.backup,case.fingerprint,case.image,case.reference=packet,fingerprint,image,reference
     case.logs,case.control,case.output=logs,control,output
@@ -128,3 +128,13 @@ def test_changed_inputs_prevent_completed_update_review(update_case,change):
     else:case.templates.append(('duplicate.xml',case.template))
     with pytest.raises((RuntimeError,ValueError)):run(case,**args)
     assert not (case.output/'review-complete.json').exists()
+
+
+@pytest.mark.parametrize('update_case', [True], indirect=True)
+def test_review_explicit_two_library_slot_upgrade(update_case):
+    report = run(update_case)
+    assert report['initial_maximum_actions'] == 2
+    assert report['per_library_action_limit'] == 1
+    assert report['tracking_preserved'] is True
+    assert report['daily_claims_preserved'] is True
+    assert report['settings_preserved'] is False

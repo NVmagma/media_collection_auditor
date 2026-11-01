@@ -105,6 +105,20 @@ class LiveReleaseTests(unittest.TestCase):
         self.assertEqual({path.name:path.read_bytes() for path in (self.control/'.sqlite_scheduled_slots').iterdir()},claims)
         self.assertEqual(arr.puts,1)
 
+    def test_public_due_worker_independent_movie_tv_slots_commit_both(self):
+        self.values['MAX_ACTIONS_PER_RUN'] = '2'
+        arr = self.arr(); self.bind()
+        before = self.store.load_with_revision()
+        result = self.due().outcome
+        self.assertEqual([row['library'] for row in result['completed']], ['Movies','TV'])
+        self.assertEqual(len(result['arr_completed']), 2)
+        self.assertEqual(arr.puts, 2)
+        state, revision = self.store.load_with_revision()
+        self.assertEqual(revision, before[1] + 12)
+        self.assertNotIn(INTENTS_KEY, state)
+        self.assertEqual(state['arr_sync_pending'], before[0]['arr_sync_pending'])
+        self.assertEqual(self.source.read_bytes(), self.original)
+
     def test_public_due_worker_moves_one_and_delivers_only_its_arr_record(self):
         arr=self.arr();self.bind();result=self.due()
         self.assertEqual(len(result.outcome['completed']),1)
@@ -188,6 +202,13 @@ else:
         self.assertEqual(self.source.read_bytes(),self.original)
 
     def test_actual_entrypoint_keeps_api_available_after_restart_with_pending_intent(self):
+        self._assert_entrypoint_keeps_api_available()
+
+    def test_two_slot_actual_entrypoint_reports_independent_limits_with_pending_intent(self):
+        self.values['MAX_ACTIONS_PER_RUN'] = '2'
+        self._assert_entrypoint_keeps_api_available()
+
+    def _assert_entrypoint_keeps_api_available(self):
         self.bind();self.due()
         state,revision=self.store.load_with_revision();state[INTENTS_KEY]={'fixture':'unresolved'}
         self.store.save_if_revision(state,revision);before=self.store.load_with_revision()
@@ -215,6 +236,10 @@ else:
             code,raw=fetch('/api/v1/summary');report=json.loads(raw)
             self.assertEqual(code,200);self.assertTrue(report['pending_operation_present'])
             self.assertEqual(report['execution_mode'],'scheduled_live_moves')
+            if self.values['MAX_ACTIONS_PER_RUN'] == '2':
+                self.assertEqual(report['worker_mode'],'hourly_moves_library_slots')
+                self.assertEqual(report['maximum_actions'],2)
+                self.assertEqual(report['per_library_action_limit'],1)
             self.assertFalse(report['media_actions_authorized'])
             self.assertFalse(report['permanent_deletion_authorized'])
             self.assertEqual(self.store.load_with_revision(),before)

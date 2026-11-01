@@ -89,3 +89,14 @@ def test_uncertain_service_action_is_never_replayed(selected,monkeypatch,operati
     before=list(engine.calls)
     with pytest.raises((RuntimeError,FileExistsError)):action(selected,monkeypatch,'deploy')
     assert engine.calls==before
+
+
+@pytest.mark.parametrize('update_case', [True], indirect=True)
+def test_explicit_library_slot_upgrade_handoff_reports_two_and_preserves_old_container(selected, monkeypatch):
+    case, _, engine = selected
+    report = action(selected, monkeypatch, 'check')
+    assert report['initial_maximum_actions'] == 2
+    deployed = action(selected, monkeypatch, 'deploy')
+    assert deployed['initial_maximum_actions'] == 2
+    assert engine.inspect(case.current['Id'])['State']['Running'] is False
+    assert (case.old_control/'release/.sqlite_scheduled_slots'/('1'*64+'.json')).exists()

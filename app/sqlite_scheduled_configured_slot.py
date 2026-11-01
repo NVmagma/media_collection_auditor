@@ -40,6 +40,10 @@ def _configured_run_inputs(*, settings, clock, allow_dry_run=False):
     """Shared detached settings and fresh collectors; construction performs no HTTP."""
     values = dict(settings)
     config = scheduled_worker_from_settings(values)
+    from app.sqlite_backend_gate import live_release_enabled
+    if live_release_enabled() and values.get('DRY_RUN', 'true').strip().lower() == 'false':
+        from app.sqlite_live_policy import validate_initial_live_policy
+        config = validate_initial_live_policy(values)
     if type(allow_dry_run) is not bool:
         raise ValueError('Explicit preview selection required')
     if not allow_dry_run and values.get('DRY_RUN', 'true').strip().lower() != 'false':

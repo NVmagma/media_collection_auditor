@@ -6,7 +6,7 @@
 <div class="app-content">
 <header class="settings-header"><div><h1>Settings</h1><p>Manage your auditor without editing Docker environment variables.</p></div><span class="header-note">{{ 'Apply requests after review' if preview_mode else 'Changes apply next audit' }}</span></header>
 <main class="settings-main" id="main-content">
-{% if live_mode %}<div class="alert" role="status">Live settings use reviewed application. The one-action cap, deletion safeguards, media root and time zone remain fixed during the canary. Applying settings does not start a scan.</div>{% endif %}
+{% if live_mode %}<div class="alert" role="status">Live settings use reviewed application. The bound action limits, deletion safeguards, media root and time zone remain fixed during the canary. Applying settings does not start a scan.</div>{% endif %}
 {% if preview_mode %}
 <section class="settings-status-grid" aria-label="Configuration status">
   <article class="settings-status-card"><span class="settings-step">1 · ACTIVE CONFIGURATION</span><h2>{{ 'Recovery required' if settings_application.status == 'recovery_required' else 'Active values loaded' }}</h2>

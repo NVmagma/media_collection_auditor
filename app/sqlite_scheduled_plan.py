@@ -70,7 +70,7 @@ _DESTINATIONS = {('Waiting', 'hold'): 'Holding', ('Waiting', 'keep'): 'Keep',
 def collect_scheduled_plan(*, snapshot, revision, libraries, scan_library, now,
                            maximum_actions=10, maximum_titles=100000,
                            maximum_scan_seconds=3600, favorites_trigger_keep=True,
-                           timer=monotonic):
+                           timer=monotonic, maximum_actions_per_library=None):
     """Fully collect all libraries, then use the existing decision parity bridge.
 
     A returned plan is advisory: execution must refresh protections, validate
@@ -94,6 +94,9 @@ def collect_scheduled_plan(*, snapshot, revision, libraries, scan_library, now,
             or not math.isfinite(maximum_scan_seconds) or maximum_scan_seconds <= 0
             or type(favorites_trigger_keep) is not bool):
         raise ValueError('Invalid scan policy')
+    if maximum_actions_per_library is not None and (type(maximum_actions_per_library) is not int
+            or not 1 <= maximum_actions_per_library <= maximum_actions):
+        raise ValueError('Bounded per-library action limit required')
     detached = deepcopy(snapshot)
     validate_snapshot(detached)
     if detached.get(INTENTS_KEY):
@@ -132,12 +135,15 @@ def collect_scheduled_plan(*, snapshot, revision, libraries, scan_library, now,
     from app.sqlite_scan_details import LIMIT, reason_code
     moves, skipped, capped = [], [], 0
     observations=[]
+    library_counts = {name: 0 for name in libraries}
     for library, title in collected:
         check_time()
         decision = review_decision(detached, title.media_key, title.stage, now,
                                    title.threshold_days, title.signals, favorites_trigger_keep)
         destination = _DESTINATIONS.get((title.stage, decision['action']))
-        outcome='skipped' if destination is None else 'capped' if len(moves)>=maximum_actions else 'planned'
+        at_cap = len(moves) >= maximum_actions or (maximum_actions_per_library is not None
+            and library_counts[library] >= maximum_actions_per_library)
+        outcome='skipped' if destination is None else 'capped' if at_cap else 'planned'
         observation=(library,title.media_key,title.stage,destination,
             'action_cap' if outcome=='capped' else reason_code(decision),outcome)
         if len(observations)<LIMIT:
@@ -149,9 +155,10 @@ def collect_scheduled_plan(*, snapshot, revision, libraries, scan_library, now,
             if replace_index is not None:observations[replace_index]=observation
         if destination is None:
             skipped.append((library, title.media_key, tuple(decision['blockers']), decision['action']))
-        elif len(moves) >= maximum_actions:
+        elif at_cap:
             capped += 1
         else:
+            library_counts[library] += 1
             moves.append(PlannedMove(library, title.media_key, title.stage, destination,
                 decision['action'], detached[CLOCKS[title.stage]][title.media_key], title.threshold_days))
     check_time()

@@ -130,3 +130,18 @@ def test_actual_sigkill_after_claim_copy_never_publishes_live_binding(update_cas
     assert backup.read_daily_claims(args['control']/'release')[0] == claims
     assert all(path.read_bytes() == raw for path, raw in old.items())
     with pytest.raises(RuntimeError): run(update_case)
+
+
+def test_explicit_library_slot_upgrade_preserves_state_and_claims(update_case):
+    args, state, old, claims, key = update_case
+    report = prepare.prepare_live_candidate(**args, _library_slots=True)
+    assert report['initial_maximum_actions'] == 2
+    assert report['per_library_action_limit'] == 1
+    assert report['changed_setting_keys'] == ['MAX_ACTIONS_PER_RUN']
+    assert report['settings_preserved'] is False
+    values = dict(line.split('=',1) for line in (args['logs']/'runtime.env').read_text().splitlines())
+    assert values['MAX_ACTIONS_PER_RUN'] == '2'
+    assert GuardedSQLiteStateStore(args['control']/'release'/'state.db').load_with_revision() == (state,0)
+    assert backup.read_daily_claims(args['control']/'release')[0] == claims
+    for path, raw in old.items(): assert path.read_bytes() == raw
+    live.validate_live_binding(settings=values, for_execution=True)

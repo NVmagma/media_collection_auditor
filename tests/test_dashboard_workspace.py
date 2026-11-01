@@ -101,3 +101,14 @@ def test_history_missing_is_not_reported_as_healthy_empty():
     empty = render_workspace(history_records=[]).get_data(as_text=True)
     assert 'History observations are unavailable; an empty history cannot be confirmed.' in missing
     assert 'No finished attempts recorded in this process.' in empty
+
+
+def test_live_two_slot_dashboard_discloses_independent_limits():
+    response = render_workspace(admin=True, run_updates={
+        'production_activation':'scheduled_moves', 'execution_mode':'scheduled_live_moves',
+        'maximum_actions':2, 'per_library_action_limit':1})
+    page = response.get_data(as_text=True)
+    assert 'one Movie + one TV action per scan' in page
+    assert 'data-action-limit="2"' in page
+    assert 'One Movie and one TV action per scan' in page
+    assert 'Permanent deletion disabled' in page

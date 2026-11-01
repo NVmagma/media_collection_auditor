@@ -33,9 +33,11 @@ def _boundary(phase):
 
 
 def prepare_live_candidate(*, backup, backup_identity, backup_fingerprint, logs, logs_identity,
-                        control, control_identity, candidate_image, _live_update=False):
+                        control, control_identity, candidate_image, _live_update=False, _library_slots=False):
     if type(_live_update) is not bool:
         raise ValueError('Explicit preparation kind required')
+    if type(_library_slots) is not bool or (_library_slots and not _live_update):
+        raise ValueError('Library slots require explicit live update preparation')
     revision = _revision()  # Immutable profile from the candidate interpreter.
     config = candidate_image.get('Config', {})
     labels = config.get('Labels') or {}
@@ -87,6 +89,8 @@ def prepare_live_candidate(*, backup, backup_identity, backup_fingerprint, logs,
     original_effective = {**{key:DEFAULTS.get(key,'') for key in KEYS},**env,
                           **{key:str(value) for key,value in saved.items() if key in KEYS}}
     changes = {} if _live_update else {'DRY_RUN':'false','MAX_ACTIONS_PER_RUN':'1', **{key:'false' for key in DISABLED}}
+    if _library_slots:
+        changes = {'MAX_ACTIONS_PER_RUN':'2'}
     saved = {**saved, **changes}
     env.update(changes, AUDITOR_STATE_BACKEND='sqlite', READ_ONLY_API_SERVICE='false')
     effective = {**{key: DEFAULTS.get(key, '') for key in KEYS}, **env,
@@ -102,14 +106,15 @@ def prepare_live_candidate(*, backup, backup_identity, backup_fingerprint, logs,
                     raise RuntimeError('New empty replacement roots required; partial attempts cannot replay')
         _write_private(log_fd, REQUEST, _encode({'schema_version': 1, 'source_revision': revision,
             'candidate_image_id': image_id, 'backup_fingerprint': backup_fingerprint,
-            'update_authorized': False, 'media_actions_authorized': False}))
+            'update_authorized': False, 'media_actions_authorized': False,
+            'library_slots_requested': _library_slots}))
         retained_config = 'retained-live-config.json' if _live_update else 'retained-preview-config.json'
         _write_private(log_fd, retained_config, payloads['saved-config.json'])
         if _live_update:
             _write_private(log_fd, 'retained-live-source.json', payloads['retained-source.json'])
         _boundary('after_request')
         _write_private(log_fd, 'auditor_state.json', payloads['tracking-snapshot.json'])
-        _write_private(log_fd, 'auditor_config.json', payloads['saved-config.json'] if _live_update else _encode(saved))
+        _write_private(log_fd, 'auditor_config.json', payloads['saved-config.json'] if _live_update and not _library_slots else _encode(saved))
         _boundary('before_binding')
         prepare_release_state(source=logs/'auditor_state.json',control_directory=control/'release',
                               expected_source_sha256=hashlib.sha256(payloads['tracking-snapshot.json']).hexdigest())
@@ -132,12 +137,13 @@ def prepare_live_candidate(*, backup, backup_identity, backup_fingerprint, logs,
             'source_revision': revision, 'candidate_image_id': image_id,
             'backup_fingerprint': backup_fingerprint, 'tracking_preserved': True,
             'settings_preserved_except_canary_controls': True, 'changed_setting_keys': sorted(key for key,value in changes.items() if original_effective.get(key)!=value),
-            'initial_maximum_actions':1, 'permanent_deletion_authorized':False, 'snapshot_revision': 0,
+            'initial_maximum_actions':policy.maximum_actions, 'per_library_action_limit':policy.maximum_actions_per_library,
+            'library_slots_requested':_library_slots, 'permanent_deletion_authorized':False, 'snapshot_revision': 0,
             'service_changes_performed': False, 'media_actions_authorized': False,
             'update_authorized': False, 'automatic_restoration': False,
             'backup_freshness_verified': False}
         if _live_update:
-            report.update(settings_preserved=True, source_snapshot_revision=source_receipt['snapshot_revision'],
+            report.update(settings_preserved=not _library_slots, source_snapshot_revision=source_receipt['snapshot_revision'],
                 daily_claim_count=source_receipt['daily_claim_count'], daily_claims_preserved=True)
         _boundary('before_completion')
         validate_live_binding(settings=env,for_execution=True)
@@ -152,7 +158,7 @@ def prepare_live_candidate(*, backup, backup_identity, backup_fingerprint, logs,
             from scripts.unraid_live_update_backup import read_daily_claims
             if (read_daily_claims(control/'release')[0] != parse_unique_json(payloads['daily-claims.json'])
                     or _local(log_fd,'retained-live-source.json')[0] != payloads['retained-source.json']
-                    or _local(log_fd,'auditor_config.json')[0] != payloads['saved-config.json']):
+                    or (not _library_slots and _local(log_fd,'auditor_config.json')[0] != payloads['saved-config.json'])):
                 raise RuntimeError('Live settings/source/claims changed before completion')
         for path,identity in ((logs,logs_identity),(control,control_identity)):
             reopened=_private_root(path,identity);os.close(reopened)
@@ -190,6 +196,7 @@ def main():
     for key in ('image-id','backup','backup-identity','fingerprint','logs','logs-identity','control','control-identity'):
         parser.add_argument('--'+key,required=True)
     parser.add_argument('--live-update', action='store_true')
+    parser.add_argument('--library-slots', action='store_true')
     args=parser.parse_args()
     def identity(raw):
         if not re.fullmatch(r'[0-9]{1,20}:[0-9]{1,20}',raw):raise ValueError('Known directory identity required')
@@ -203,7 +210,7 @@ def main():
             raise ValueError('One exact selected image required')
         result=prepare_live_candidate(backup=args.backup,backup_identity=identity(args.backup_identity),
             backup_fingerprint=args.fingerprint,logs=args.logs,logs_identity=identity(args.logs_identity),
-            control=args.control,control_identity=identity(args.control_identity),candidate_image=images[0],_live_update=args.live_update)
+            control=args.control,control_identity=identity(args.control_identity),candidate_image=images[0],_live_update=args.live_update,_library_slots=args.library_slots)
     except Exception:
         print(json.dumps({'status':'live_preparation_blocked','partial_files_retained':True,
               'service_changes_performed':False,'media_actions_authorized':False}))

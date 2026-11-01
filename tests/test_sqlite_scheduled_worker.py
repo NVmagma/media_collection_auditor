@@ -321,3 +321,47 @@ def test_other_content_failures_still_abort_whole_scan(tmp_path, monkeypatch, re
     with pytest.raises(ScheduledContentBlocked, match=reason):
         prepare(configure(libraries), snapshot, discover_clocks=True,
             fetch_signals=lambda binding: {key: False for key in ('played','favorite','disliked','keep','keep_all','protected')})
+
+
+def test_independent_library_slots_cannot_be_consumed_by_second_movie(tmp_path):
+    from dataclasses import replace
+    libraries, snapshot = setup(tmp_path)
+    second = Path(libraries[0]['transient']) / 'Second Movie'
+    second.mkdir()
+    snapshot['first_seen']['Second Movie'] = '2026-01-01'
+    config = replace(configure(libraries, maximum_actions=2), maximum_actions_per_library=1)
+    result = prepare(config, snapshot)
+    assert [move.library for move in result.plan.moves] == ['Movies','TV']
+    assert result.plan.capped_moves == 1
+    assert sum(move.library == 'Movies' for move in result.plan.moves) == 1
+
+
+def test_unused_tv_slot_cannot_be_borrowed_by_movies(tmp_path):
+    from dataclasses import replace
+    libraries, snapshot = setup(tmp_path)
+    (Path(libraries[1]['transient']) / 'Same (2020)').rmdir()
+    (Path(libraries[0]['transient']) / 'Second Movie').mkdir()
+    snapshot['first_seen']['Second Movie'] = '2026-01-01'
+    config = replace(configure(libraries, maximum_actions=2), maximum_actions_per_library=1)
+    result = prepare(config, snapshot)
+    assert len(result.plan.moves) == 1
+    assert result.plan.moves[0].library == 'Movies'
+    assert result.plan.capped_moves == 1
+
+
+def test_dispatch_rejects_two_movies_even_if_total_fits_two_slots(tmp_path):
+    from dataclasses import replace
+    from time import monotonic
+    from app.sqlite_scheduled_routed_batch import _execute_configured_batch_locked
+    libraries, snapshot = setup(tmp_path)
+    config = replace(configure(libraries, maximum_actions=2), maximum_actions_per_library=1)
+    result = prepare(config, snapshot, discover_clocks=True,
+        fetch_signals=lambda binding: {key:False for key in ('played','favorite','disliked','keep','keep_all','protected')})
+    movie = result.plan.moves[0]
+    forged = replace(result, plan=replace(result.plan, moves=(movie,movie)))
+    with pytest.raises(ValueError, match='Per-library action-cap'):
+        _execute_configured_batch_locked(database=tmp_path/'must-not-open.db', config=config,
+            preparation=forged, fetch_protection=lambda move:None, arr_sync_requests={},
+            clock=lambda:NOW, timer=monotonic, maximum_protection_seconds=30,
+            verify_binding=lambda:None)
+    assert not (tmp_path/'must-not-open.db').exists()

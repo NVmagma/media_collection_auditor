@@ -383,3 +383,22 @@ collection can hide its individual movies and cause the Auditor's local
 minutes; a subsequent lookup resolves the current catalog item ID rather than
 persisting a pre-move ID. This does not verify indexing completion or alter
 Jellyfin library paths.
+
+### Independent Movie and TV live slots
+
+A reviewed live binding may retain the original `MAX_ACTIONS_PER_RUN=1` global
+cap, or explicitly select `MAX_ACTIONS_PER_RUN=2` for one Movie and one TV action
+per scan. The latter is a two-action ceiling, not two transferable actions: a
+second Movie cannot consume TV's slot, even with TV disabled or no eligible show.
+The executor independently validates library counts before opening operation
+state. Complete collection, discovery checkpoint/rebuild, fresh per-move
+protection, no-replace rename and Arr acknowledgment rules remain unchanged. An
+uncertain operation still stops the batch and prevents replay.
+
+Existing installations keep their bound limit until an explicit offline live
+update uses `unraid_live_update_prepare_host.sh ... --library-slots`. This
+preserves advanced tracking and every durable scan claim, changes only
+`MAX_ACTIONS_PER_RUN`, and requires the usual review/preflight/deploy transaction.
+The maximum stays locked in live settings. Manual and scheduled attempts still
+share the 60-minute cooldown and scan lock. Permanent deletion stays disabled.
+The dashboard, API and cutover health checks report the two-slot contract.

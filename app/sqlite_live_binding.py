@@ -90,7 +90,7 @@ def create_live_binding(*,settings=None):
                 'saved_config_sha256':config_sha,'preparation_id':preparation_id,'prepared_inputs':inputs,
                 'control_identity':list(control_id),'database_identity':list(db_id),'initial_revision':0,
                 'initial_sha256':hashlib.sha256(_encode(state)).hexdigest(),'media_roots':media,
-                'permanent_deletion_authorized':False,'maximum_actions':1}
+                'permanent_deletion_authorized':False,'maximum_actions':config.maximum_actions}
             def stable():
                 verify_source();verify_control()
                 current_root=_private_root(control,control_id);os.close(current_root)
@@ -155,7 +155,7 @@ def _validate_bound_live(*,settings=None,for_execution=False,allow_settings_mark
                 or binding.get('preparation_id')!=preparation.get('request_id')
                 or type(binding.get('initial_revision')) is not int or binding['initial_revision']!=0
                 or not isinstance(binding.get('initial_sha256'),str) or not re.fullmatch('[0-9a-f]{64}',binding['initial_sha256'])
-                or binding.get('permanent_deletion_authorized') is not False or (type(binding.get('maximum_actions')) is not int or binding['maximum_actions']!=1)
+                or binding.get('permanent_deletion_authorized') is not False or (type(binding.get('maximum_actions')) is not int or binding['maximum_actions']!=config.maximum_actions)
                 or binding.get('media_roots')!=_media(config,identity)):
             raise RuntimeError('Live binding mismatch')
         with _candidate_capture(database) as current:

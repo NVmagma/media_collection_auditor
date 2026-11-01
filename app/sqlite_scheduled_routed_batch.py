@@ -76,6 +76,11 @@ def _execute_configured_batch_locked(*, database, config, preparation, fetch_pro
     libraries = {library.name: library for library in config.libraries}
     if tuple(libraries) != plan.libraries or len(plan.moves) > config.maximum_actions:
         raise ValueError('Configured library/action-cap binding mismatch')
+    if config.maximum_actions_per_library is not None:
+        from collections import Counter
+        counts = Counter(move.library for move in plan.moves)
+        if any(count > config.maximum_actions_per_library for count in counts.values()):
+            raise ValueError('Per-library action-cap binding mismatch')
     roots = {(library.name, stage): path for library in config.libraries for stage, path in library.roots}
     captured_roots = {(name, stage): (path, identity) for name, stage, path, identity in preparation.root_bindings}
     if (set(roots) != set(captured_roots) or any(captured_roots[key][0] != path for key, path in roots.items())):

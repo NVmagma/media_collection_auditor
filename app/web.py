@@ -1096,7 +1096,7 @@ def run_now():
     if gate.live_release_enabled():
         data=request.get_json(silent=True)
         if not isinstance(data,dict) or set(data)!={'run_live_scan'} or data['run_live_scan'] is not True:
-            return {'ok':False,'message':'Explicitly confirm this live scan. It can move one title.'},409
+            return {'ok':False,'message':'Explicitly confirm this live scan using its configured action limits.'},409
         try:
             from datetime import timezone
             from app.sqlite_scheduled_production import _live_scan_status
@@ -1111,7 +1111,7 @@ def run_now():
         if COORDINATOR.request_manual_live():
             from run_control import wake_worker
             wake_worker()
-            return {'ok':True,'message':'Live scan queued. It can move one title; the next live scan must wait at least 60 minutes.'},202
+            return {'ok':True,'message':'Live scan queued. It can move ' + ('one Movie and one TV show' if values.get('MAX_ACTIONS_PER_RUN') == '2' else 'one title') + '; the next live scan must wait at least 60 minutes.'},202
         return {'ok':False,'message':'A scan is already running or queued.'},409
     if gate.preview_release_enabled() or backend == 'sqlite':
         if not gate.preview_release_enabled():

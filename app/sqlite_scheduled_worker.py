@@ -47,6 +47,7 @@ class ScheduledWorkerConfig:
     libraries: tuple
     maximum_actions: int
     favorites_trigger_keep: bool
+    maximum_actions_per_library: int | None = None
 
 
 @dataclass(frozen=True)
@@ -252,6 +253,7 @@ def prepare_scheduled_worker(*, config, snapshot, revision, fetch_signals,
         plan = collect_scheduled_plan(snapshot=snapshot, revision=revision,
             libraries=tuple(by_name), scan_library=scan, now=now,
             maximum_actions=config.maximum_actions, maximum_titles=maximum_titles,
+            maximum_actions_per_library=config.maximum_actions_per_library,
             maximum_scan_seconds=remaining, favorites_trigger_keep=config.favorites_trigger_keep,
             timer=timer)
         if future_content_keys:

@@ -8,10 +8,12 @@ fail() {
   exit 2
 }
 trap 'result=$?; printf "status=live_preparation_blocked step=%s reason=command_failed exit_code=%s production_configuration_changed=false\n" "$step" "$result" >&2; exit "$result"' ERR
-[ "$(uname -s)" = Linux ] && [ "$(id -u)" = 0 ] && [ "$#" = 5 ] || { echo 'Usage: bash SCRIPT CANDIDATE_IMAGE_ID BACKUP_PACKET RECEIPT_SHA256 PRIVATE_PARENT NATIVE_MEDIA_ROOT' >&2; exit 2; }
+[ "$(uname -s)" = Linux ] && [ "$(id -u)" = 0 ] && { [ "$#" = 5 ] || { [ "$#" = 6 ] && [ "$6" = --library-slots ]; }; } || { echo 'Usage: bash SCRIPT CANDIDATE_IMAGE_ID BACKUP_PACKET RECEIPT_SHA256 PRIVATE_PARENT NATIVE_MEDIA_ROOT [--library-slots]' >&2; exit 2; }
 [ -z "${DOCKER_HOST:-}" ] && [ -z "${DOCKER_CONTEXT:-}" ] || fail docker_context_override_requires_review
 [ "$(docker context inspect --format '{{.Endpoints.docker.Host}}')" = unix:///var/run/docker.sock ] || fail local_docker_endpoint_required
 image=$1 packet=$2 fingerprint=$3 base=$4 media=$5
+slot_args=()
+if [ "$#" = 6 ]; then slot_args=(--library-slots); fi
 [[ "$image" =~ ^sha256:[0-9a-f]{64}$ && "$fingerprint" =~ ^[0-9a-f]{64}$ ]] || fail selection_format_invalid
 for directory in "$packet" "$base"; do
   [[ "$directory" = /* && ! "$directory" =~ [[:cntrl:],] && -d "$directory" ]] || fail private_path_unavailable
@@ -56,7 +58,7 @@ docker image inspect "$image" | docker run --rm -i --pull=never --network none -
   --env PYTHONPATH=/app:/app/app:/review-source --env PYTHONDONTWRITEBYTECODE=1 --entrypoint python "$image" \
   -B -m scripts.unraid_live_prepare --live-update --image-id "$image" --backup /backup \
   --backup-identity "$packet_id" --fingerprint "$fingerprint" --logs /app/logs --logs-identity "$logs_id" \
-  --control /sqlite-control --control-identity "$control_id"
+  --control /sqlite-control --control-identity "$control_id" "${slot_args[@]}"
 step=verify_original_container
 [ "$(docker inspect --format '{{.Id}}' media_collection_auditor)" = "$old_id" ] || fail current_container_replaced
 printf '%s\n' 'status=live_update_files_ready_not_started' 'production_configuration_changed=false' \

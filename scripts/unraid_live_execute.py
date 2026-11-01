@@ -83,7 +83,8 @@ def run_selected(update, *, action, parent, reviewed_new_id=None):
         update.validate()
         return {'status':'live_handoff_preflight_verified','service_changes_performed':False,
             'media_actions_authorized':False,'permanent_deletion_authorized':False,
-            'initial_maximum_actions':1,'reference':update.report['reference']}
+            'initial_maximum_actions':update.report['initial_maximum_actions'],
+            'per_library_action_limit':update.report.get('per_library_action_limit'),'reference':update.report['reference']}
     from app.sqlite_lock import _exclusive_lock
     with _exclusive_lock(update.review/'.handoff.lock','Handoff already active'):
         common=dict(engine=update.engine,captured=update.captured,payload=update.payload,
@@ -93,7 +94,8 @@ def run_selected(update, *, action, parent, reviewed_new_id=None):
                 live_canary=True,health=lambda identity:verify_http_health(engine=update.engine,
                     identity=identity,env=update.env,live_canary=True))
             result.update(status='live_canary_update_complete',media_actions_authorized=True,
-                initial_maximum_actions=1,permanent_deletion_authorized=False)
+                initial_maximum_actions=update.report['initial_maximum_actions'],
+                per_library_action_limit=update.report.get('per_library_action_limit'),permanent_deletion_authorized=False)
             return result
         if action!='recover':raise ValueError('Known action required')
         old_env=dict(item.split('=',1) for item in update.captured['Config']['Env'])

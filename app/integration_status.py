@@ -267,8 +267,12 @@ def _preview_metadata():
     try:
         from app.sqlite_backend_gate import preview_release_enabled, live_release_enabled
         if live_release_enabled():
+            from app.config_store import load_config
+            limits = load_config()
+            slots = limits.get('MAX_ACTIONS_PER_RUN', os.environ.get('MAX_ACTIONS_PER_RUN', '1')) == '2'
             return {'production_activation': 'scheduled_moves', 'execution_mode': 'scheduled_live_moves',
-                    'media_actions_authorized': False, 'worker_mode': 'hourly_moves_one_action', 'minimum_live_scan_interval_seconds': 3600,
+                    'media_actions_authorized': False, 'worker_mode': 'hourly_moves_library_slots' if slots else 'hourly_moves_one_action',
+                    'maximum_actions':2 if slots else 1, 'per_library_action_limit':1 if slots else None, 'minimum_live_scan_interval_seconds': 3600,
                     'permanent_deletion_authorized': False}
         if preview_release_enabled():
             return {'production_activation': 'preview_only', 'execution_mode': 'scheduled_preview',

@@ -137,7 +137,7 @@ def review_update(*, templates, container, _live_canary=False):
                         'ALLOW_FILESYSTEM_DELETE': 'false', 'ALLOW_PERMANENT_DELETE': 'false',
                         'ALLOW_CROSS_FILESYSTEM_MOVES': 'false'}
             if _live_canary:
-                required.update(MAX_ACTIONS_PER_RUN='1', ENABLE_SEASON_PRUNING='false')
+                required.update(MAX_ACTIONS_PER_RUN=live_env.get('MAX_ACTIONS_PER_RUN') if live_env.get('MAX_ACTIONS_PER_RUN') in ('1','2') else '1', ENABLE_SEASON_PRUNING='false')
                 if (config.get('User') != '0:0' or host.get('CapDrop') != ['ALL']
                         or host.get('CapAdd') not in (['DAC_OVERRIDE'], ['CAP_DAC_OVERRIDE'])
                         or host.get('Devices') not in (None, []) or host.get('DeviceRequests') not in (None, [])

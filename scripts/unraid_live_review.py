@@ -119,6 +119,11 @@ def review_live_candidate(*,backup,backup_identity,fingerprint,logs,control,old_
     expected={key:value for key,value in (item.split('=',1) for item in original['Config']['Env']) if key not in RUNTIME_DEFAULTS}
     expected.update(STATE_FILE=str(logs/'auditor_state.json'),WEB_CONFIG_FILE=str(logs/'auditor_config.json'),SQLITE_STATE_FILE=str(control/'release'/'state.db'))
     changes={} if _live_update else {'DRY_RUN':'false','MAX_ACTIONS_PER_RUN':'1',**{key:'false' for key in DISABLED}}
+    slots_requested = prepared.get('library_slots_requested', False)
+    if type(slots_requested) is not bool or (slots_requested and not _live_update):
+        raise RuntimeError('Invalid library slot preparation')
+    if slots_requested:
+        changes = {'MAX_ACTIONS_PER_RUN':'2'}
     expected.update(changes,AUDITOR_STATE_BACKEND='sqlite',READ_ONLY_API_SERVICE='false')
     saved=parse_unique_json(data['saved-config.json'])
     if (env!=expected or parse_unique_json(new_before['auditor_config.json'][0])!={**saved,**changes}
@@ -142,7 +147,7 @@ def review_live_candidate(*,backup,backup_identity,fingerprint,logs,control,old_
             if row is None: raise RuntimeError('Current live integrity missing')
             verify_integrity(row[0],old.state,old.revision)
             if (new_before['retained-live-source.json'][0] != data['retained-source.json']
-                    or new_before['auditor_config.json'][0] != data['saved-config.json']
+                    or (not slots_requested and new_before['auditor_config.json'][0] != data['saved-config.json'])
                     or read_daily_claims(control/'release')[0] != old_claims[0]
                     or prepared.get('source_snapshot_revision') != old.revision
                     or prepared.get('daily_claim_count') != source_receipt['daily_claim_count']):
@@ -197,7 +202,8 @@ def review_live_candidate(*,backup,backup_identity,fingerprint,logs,control,old_
             'tracking_counts':{key:len(state.get(key,{})) for key in SECTIONS},
             'media_read_only':False,'native_media_host_path':host_media,'native_view_metadata_matches':None if _live_update else True,
             'byte_equality_verified':False,'container_user':'0:0','capabilities_dropped':'ALL',
-            'capabilities_added':['DAC_OVERRIDE'],'initial_maximum_actions':1,'permanent_deletion_authorized':False,'root_filesystem_read_only':True,'network_mode':payload['HostConfig']['NetworkMode'],
+            'capabilities_added':['DAC_OVERRIDE'],'initial_maximum_actions':int(env['MAX_ACTIONS_PER_RUN']),
+            'per_library_action_limit':1 if env['MAX_ACTIONS_PER_RUN']=='2' else None,'permanent_deletion_authorized':False,'root_filesystem_read_only':True,'network_mode':payload['HostConfig']['NetworkMode'],
             'environment_entries':len(payload['Env']),'published_ports':payload['HostConfig'].get('PortBindings',{}),
             'template_matches_current':True,'template_installed':False,
             'image_reference_status':'verified_cached_digest',
@@ -207,7 +213,7 @@ def review_live_candidate(*,backup,backup_identity,fingerprint,logs,control,old_
                       'proposed-template.xml':hashlib.sha256(xml).hexdigest()}}
     if _live_update:
         report.update(daily_claims_preserved=True, daily_claim_count=source_receipt['daily_claim_count'],
-            source_snapshot_revision=source_receipt['snapshot_revision'], settings_preserved=True, media_binding_preserved=True)
+            source_snapshot_revision=source_receipt['snapshot_revision'], settings_preserved=not slots_requested, media_binding_preserved=True)
     # Complete only after both database context managers verify and close.
     stage('review_completion')
     fd=_private_root(Path(output),output_identity)

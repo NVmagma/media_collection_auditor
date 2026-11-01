@@ -401,11 +401,15 @@ def verify_http_health(*, engine, identity, env, live_canary=False):
                            or value.get('execution_mode') != ('scheduled_live_moves' if live_canary else 'scheduled_preview') for value in (summary, audit))
                     or not audit.get('next_run')):
                 raise RuntimeError('Preview API/coordinator not ready')
+            if live_canary and any(value.get('worker_mode') == 'hourly_moves_library_slots'
+                    and (value.get('maximum_actions') != 2 or value.get('per_library_action_limit') != 1)
+                    for value in (summary, audit)):
+                raise RuntimeError('Independent library action limits unavailable')
             if live_canary and (summary.get('pending_operation_present') is not False
                     or summary.get('worker_mode') != audit.get('worker_mode')
-                    or any(value.get('worker_mode') == 'hourly_moves_one_action'
+                    or any(value.get('worker_mode') in ('hourly_moves_one_action','hourly_moves_library_slots')
                            and value.get('minimum_live_scan_interval_seconds') != 3600 for value in (summary,audit))
-                    or any(value.get('worker_mode') not in ('daily_moves_one_action','hourly_moves_one_action')
+                    or any(value.get('worker_mode') not in ('daily_moves_one_action','hourly_moves_one_action','hourly_moves_library_slots')
                            or value.get('permanent_deletion_authorized') is not False for value in (summary, audit))):
                 raise RuntimeError('Live canary policy or tracking requires review')
             return

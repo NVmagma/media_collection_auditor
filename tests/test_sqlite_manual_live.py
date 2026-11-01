@@ -88,3 +88,20 @@ def test_refresh_hook_runs_once_after_move_and_arr_commit(case):
         result = manual(case, case.case.fixture.slot)
     hook.assert_called_once()
     assert result['jellyfin_refresh']['status'] == 'requested'
+
+
+def test_two_library_live_slots_move_one_movie_and_one_show_and_deliver_both_arr(case):
+    arr = case.arr()
+    case.values['MAX_ACTIONS_PER_RUN'] = '2'
+    case.bind()
+    before = case.store.load_with_revision()
+    result = manual(case, case.case.fixture.slot)
+    assert [row['library'] for row in result['completed']] == ['Movies', 'TV']
+    assert len(result['completed']) == 2 and arr.puts == 2
+    state, revision = case.store.load_with_revision()
+    assert revision > before[1]
+    assert set(state['queued']) >= {'Same (2020)', 'TV/Same (2020)'}
+    assert state['arr_sync_pending'] == before[0]['arr_sync_pending']
+    assert case.source.read_bytes() == case.original
+    assert manual(case, case.case.fixture.slot + timedelta(minutes=59))['status'] == 'live_scan_cooldown'
+    assert arr.puts == 2
