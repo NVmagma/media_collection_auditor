@@ -255,7 +255,7 @@ def main():
             or build.SOURCE_REVISION!=os.environ['EXPECTED_RELEASE_REVISION']):
         raise RuntimeError('Actual immutable packaged live release required')
     result=unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(LiveReleaseTests))
-    if not result.wasSuccessful() or result.testsRun!=9 or result.skipped:raise SystemExit(1)
+    if not result.wasSuccessful() or result.testsRun!=11 or result.skipped:raise SystemExit(1)
     print(json.dumps({'status':'actual_live_release_fixture_verified','tests':result.testsRun,
                      'source_revision':build.SOURCE_REVISION,'fixture_only':True,'production_services_changed':False,
                      'permanent_deletion_authorized':False,'initial_maximum_actions':1}))

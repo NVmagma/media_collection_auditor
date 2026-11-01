@@ -94,7 +94,7 @@ if (!prefix) throw Error('Pass the synthetic output prefix from tests/settings_w
     assert.equal(submitted.get('request_sha256'),'a'.repeat(64));
     assert.equal(submitted.has('safety_confirmation'),false);
     await page.goto('http://fixture.invalid/settings?scenario=live');
-    assert.match(await page.locator('body').innerText(),/one-action cap/);
+    assert.match(await page.locator('body').innerText(),/bound action limits/);
     assert.equal(await page.locator('#field-MAX_ACTIONS_PER_RUN').count(),0);
     assert.equal(await page.locator('input[name=MAX_ACTIONS_PER_RUN]').inputValue(),'1');
     await page.locator('[data-tab=Lifecycle]').click();
