@@ -17,7 +17,7 @@ from app.sqlite_recovery_pre_move_evidence import (
 )
 
 INTENTS_KEY = "sqlite_pending_operations"
-ALLOWED_OPERATIONS = frozenset({"move", "arr_sync", "copy_stage"})
+ALLOWED_OPERATIONS = frozenset({"move", "arr_sync", "copy_stage", "arr_import"})
 
 
 class SQLiteOperationCoordinator:
