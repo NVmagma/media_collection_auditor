@@ -273,7 +273,9 @@ read-only observation, not reconstruction of the earlier failed attempt.
 Disposable tests exercise actual folder renames, Movie/TV slots, HTTP 202,
 changing protection, occupied destinations and destination races, lost responses,
 failed post-move saves and SIGKILL immediately after rename or before Arr delivery.
-The native-host lab uses only two newly created writable directories and a new
+The native-host lab also kills a child immediately after a TV rename, records
+the verified destination clock and explicitly finishes its Arr sync without
+repeating the folder move. It uses only two newly created writable directories and a new
 network-isolated container with loopback mock services. No production media,
 appdata, credentials, templates, Docker socket, host ports or host controls are
 mounted/changed. It does not activate a JSON worker or authorize permanent deletion.

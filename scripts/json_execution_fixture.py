@@ -1,11 +1,14 @@
 """Disposable JSON execution acceptance. Only explicit new lab roots are used."""
 from copy import deepcopy
+from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
 from pathlib import Path
 import socket
+import subprocess
+import sys
 import tempfile
 import threading
 from time import monotonic
@@ -13,7 +16,8 @@ import unittest
 from urllib.parse import urlsplit
 
 from app.json_move_execution import MoveRequest, execute_move
-from app.json_operation_recovery import review_pending_sync, acknowledge_pending_sync
+from app.json_operation_recovery import (review_pending_sync, acknowledge_pending_sync,
+    review_pending_move, reconcile_pending_move, finish_pending_sync)
 from app.json_scan_control import KEY, initialize_control, scan_attempt
 from app.json_tracking_store import JsonTrackingStore
 from app.sqlite_arr_title_transport import ArrTitleUpdate, ArrTitleTransportError
@@ -115,6 +119,54 @@ class JSONExecutionFixtureTests(unittest.TestCase):
         self.assertEqual(result['arr_updates_sent'],0)
         self.assertEqual(sum(method == 'PUT' for method,_ in self.server.calls),1)
 
+    def test_sigkill_after_rename_records_move_without_repeating_it(self):
+        request=self.requests['TV']
+        code = """
+import json, os, signal, sys
+from datetime import datetime, timezone
+from app.json_tracking_store import JsonTrackingStore
+from app.json_scan_control import scan_attempt
+from app.json_move_execution import MoveRequest, execute_move
+import app.json_move_execution as module
+request=MoveRequest(**json.loads(sys.argv[2]))
+original=module.rename_directory_noreplace_at
+def killed(*args):
+    original(*args)
+    os.kill(os.getpid(),signal.SIGKILL)
+module.rename_directory_noreplace_at=killed
+with scan_attempt(JsonTrackingStore(sys.argv[1]),now=datetime(2026,1,20,12,tzinfo=timezone.utc),trigger='manual') as attempt:
+    execute_move(attempt,request=request,now=datetime(2026,1,20,12),
+        fetch_protection=lambda _:dict(played=True,favorite=False,disliked=True,keep=False,keep_all=False,protected=False),
+        arr_preflight=lambda _:dict(id=request.title_id,path=request.arr_source_path,monitored=True),
+        arr_complete=lambda _:False)
+"""
+        child=subprocess.run([sys.executable,'-B','-c',code,str(self.store.path),json.dumps(asdict(request))],
+            timeout=20,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        self.assertEqual(child.returncode,-9,'Synthetic child must die at the rename boundary')
+        before=json.loads(self.store.path.read_bytes())
+        self.assertEqual(before[KEY]['journal']['kind'],'move')
+        self.assertIn('TV/Show',before['first_seen'])
+        self.assertFalse((Path(request.source_root)/request.title).exists())
+        self.assertTrue((Path(request.destination_root)/request.title/'video.mkv').is_file())
+        client=self.client(request)
+        def read(req): return client._request('GET',client._url+'/'+str(req.title_id),monotonic()+10)
+        review=review_pending_move(self.store,read_record=read)
+        self.assertEqual(review['physical_location'],'destination')
+        reconcile_pending_move(self.store,read_record=read,expected_fingerprint=review['review_fingerprint'])
+        moved=json.loads(self.store.path.read_bytes())
+        self.assertEqual(moved['queued']['TV/Show'],NOW.isoformat())
+        self.assertNotIn('TV/Show',moved['first_seen'])
+        self.assertEqual(moved[KEY]['last_started_at'],before[KEY]['last_started_at'])
+        self.assertFalse(any(method == 'PUT' for method,_ in self.server.calls))
+        sync=review_pending_sync(self.store,read_record=read)
+        result=finish_pending_sync(self.store,read_record=read,
+            expected_fingerprint=sync['review_fingerprint'],send_update=lambda req:client(dict(
+                service=req.service,title_id=req.title_id,root=req.arr_destination_root,monitored=req.monitored)))
+        self.assertEqual(result['arr_update_attempts'],1)
+        self.assertIsNone(json.loads(self.store.path.read_bytes())[KEY]['journal'])
+        self.assertEqual(sum(method == 'PUT' for method,_ in self.server.calls),1)
+        self.assertEqual((Path(request.destination_root)/request.title/'video.mkv').read_bytes(),b'DISPOSABLE JSON FIXTURE ONLY')
+
     def test_new_favorite_blocks_disliked_move_before_intent(self):
         request=self.requests['Movies']
         with scan_attempt(self.store,now=NOW.replace(tzinfo=timezone.utc),trigger='manual') as attempt:
@@ -143,7 +195,7 @@ def main():
     print(json.dumps({'status':'json_execution_fixture_verified','tests':result.testsRun,
         'fixture_only':True,'production_services_changed':False,'production_media_mounted':False,
         'external_requests_sent':False,'permanent_deletion_performed':False,
-        'lost_ack_get_only_recovery_verified':True,'movie_and_tv_moves_verified':True}))
+        'lost_ack_get_only_recovery_verified':True,'sigkill_move_recovery_verified':True,'movie_and_tv_moves_verified':True}))
     return 0
 
 
