@@ -24,7 +24,26 @@ A matching report is an observation, not clearance. Its fingerprint identifies
 the observed state revision and current destination identity; it does not prove
 the original moved inode, original acknowledgment, full media contents, or
 exclude uncooperative external writers. The intent and queue remain unchanged.
-There is deliberately no apply option yet. A separate tested recovery operation
-must take the source/control locks, repeat independent validation and preserve
-tracking clocks, unknown fields and all daily/hourly claims when acknowledging
-only the selected Arr operation. Ordinary scans must not clear it implicitly.
+The separate explicit reconciliation option is:
+
+```bash
+docker exec -i media_collection_auditor python -B - \
+  --reconcile-reviewed-fingerprint REVIEW_SHA256 < scripts/sqlite_arr_recovery_review.py
+```
+
+Use only the fingerprint from a successful current review. This operation
+requires the packaged live profile, validates the live binding and safe policy,
+takes the source and control locks in worker order, and pins them through a
+fresh review and single guarded SQLite compare-and-swap. A stale fingerprint
+refuses before any HTTP request. The operation removes only the exact verified
+intent and its Arr queue entry. Tracking clocks, other queues, unknown fields
+and daily/hourly claim files are preserved. No PUT, media move, service restart,
+claim reset or historical scan completion is performed.
+
+An interruption before commit retains the original intent; one after commit
+leaves both entries cleared. Repeating the old command after clearance refuses,
+and does not resend anything. A reported `blocked_or_uncertain` result may follow
+a committed write: inspect current state instead of assuming nothing changed or
+retrying automatically. No rollback to an old snapshot is offered. Ordinary
+scans still cannot clear an intent implicitly. The scheduler's real authority
+check determines when execution can resume; review status alone never does.

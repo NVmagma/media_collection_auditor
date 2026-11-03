@@ -1,16 +1,19 @@
-"""Read-only review of a retained Arr intent; never grants clearance or retries.
+"""Review a retained Arr intent, with a separate explicit reconciliation option.
 
 May be streamed to the running image with ``docker exec -i ... python -B -``.
 Only imports modules already present in the live release. Private state and
 credentials are never printed, including on failure.
+The default is read-only. Reconciliation requires a previously reviewed exact
+fingerprint, a bound live image and fresh verification under both worker locks.
 """
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 from copy import deepcopy
 import hashlib
 import json
 import os
 from pathlib import Path
 import stat
+import re
 
 from app.sqlite_arr_catalog import ArrCatalogGET, canonical_arr_record_path
 from app.sqlite_arr_queue_plan import planned_arr_queue_entry
@@ -33,6 +36,14 @@ def review(*, settings):
     This is an observation at review time, not proof of the original HTTP
     acknowledgment or the original moved inode. No SQLite writes are offered.
     """
+    with _verified_review(settings=settings) as (report, session, key, verify):
+        return report
+
+
+@contextmanager
+def _verified_review(*, settings, verify_authority=lambda: None, expected_fingerprint=None):
+    """Keep descriptors and a verified session alive through explicit clearance."""
+    verify_authority()
     values = dict(settings)
     config = scheduled_worker_from_settings(values)
     database = Path(values['SQLITE_STATE_FILE'])
@@ -88,6 +99,7 @@ def review(*, settings):
         held_title = identity(os.fstat(title_fd))
 
         def verify():
+            verify_authority()
             held_db = os.fstat(db_fd)
             current_db = database.stat(follow_symlinks=False)
             if (held_db.st_dev, held_db.st_ino) != (current_db.st_dev, current_db.st_ino):
@@ -111,6 +123,10 @@ def review(*, settings):
             session.read_verified_snapshot()
 
         verify()
+        fingerprint = _digest({'state': state, 'revision': revision,
+            'destination_identity': held_title})
+        if expected_fingerprint is not None and fingerprint != expected_fingerprint:
+            raise RuntimeError('Reviewed state changed')
         prefix = 'RADARR' if request['service'] == 'radarr' else 'SONARR'
         for _ in range(2):
             records = ArrCatalogGET(service=request['service'],
@@ -123,17 +139,69 @@ def review(*, settings):
                     or matches[0]['monitored'] != request['monitored']):
                 raise RuntimeError('Remote readback mismatch')
         verify()
-        return {'status': 'arr_recovery_review_matches', 'read_only': True,
-            'state_revision': revision, 'review_fingerprint': _digest({
-                'state': state, 'revision': revision, 'destination_identity': held_title}),
+        report = {'status': 'arr_recovery_review_matches', 'read_only': True,
+            'state_revision': revision, 'review_fingerprint': fingerprint,
             'pending_kind': 'arr_sync', 'pending_phase': intent['phase'],
             'remote_readbacks': 2, 'destination_unique': True,
             'intent_modified': False, 'media_actions_performed': False,
             'clearance_authorized': False}
+        yield report, session, key, verify
+
+
+def reconcile(*, expected_fingerprint, settings=None):
+    """Explicit bound-live acknowledgment; GET-only, no operation replay.
+
+    Both cooperating worker locks remain held from authority validation through
+    the single queue/intent CAS. A failed checkpoint is never retried. A crash
+    before commit leaves the original intent; after commit it is already gone.
+    """
+    if not isinstance(expected_fingerprint, str) or not re.fullmatch('[0-9a-f]{64}', expected_fingerprint):
+        raise ValueError('Exact review fingerprint required')
+    from app.sqlite_backend_gate import live_release_enabled, require_sqlite_read_authority
+    from app.sqlite_live_policy import validate_initial_live_policy
+    from app.sqlite_lock import audit_run_lock
+    from app.sqlite_scheduled_production import _hold_control_database
+    if not live_release_enabled():
+        raise RuntimeError('Bound live image required')
+    values = require_sqlite_read_authority(settings=settings)
+    validate_initial_live_policy(values)
+    database = Path(values['SQLITE_STATE_FILE'])
+    with audit_run_lock(values['STATE_FILE']) as verify_json:
+        with _hold_control_database(database.parent, database) as verify_control:
+            def verify_authority():
+                verify_json()
+                verify_control()
+                if require_sqlite_read_authority(settings=settings) != values:
+                    raise RuntimeError('Live authority changed')
+            with _verified_review(settings=values, verify_authority=verify_authority,
+                    expected_fingerprint=expected_fingerprint) as (report, session, key, verify):
+                verify()
+                # These exact entries were verified against two concrete fresh
+                # GETs while the destination and full tracking revision stayed
+                # pinned. Never mark/replay the original remote operation.
+                session.state['arr_sync_pending'].pop(key)
+                session.state.pop(INTENTS_KEY)
+                session.checkpoint()
+                verify()
+                return {'status': 'arr_intent_reconciled',
+                    'review_fingerprint': expected_fingerprint,
+                    'previous_revision': report['state_revision'],
+                    'state_revision': session.revision, 'remote_readbacks': 2,
+                    'media_actions_performed': False, 'arr_updates_sent': 0,
+                    'automatic_retry': False, 'tracking_clocks_preserved': True,
+                    'daily_claims_modified': False}
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description='Explicit Arr intent review or reconciliation')
+    parser.add_argument('--reconcile-reviewed-fingerprint')
+    args = parser.parse_args()
     try:
+        if args.reconcile_reviewed_fingerprint is not None:
+            result = reconcile(expected_fingerprint=args.reconcile_reviewed_fingerprint)
+            print(json.dumps(result, sort_keys=True))
+            return 0
         from app.sqlite_backend_gate import require_sqlite_read_authority
         settings = require_sqlite_read_authority()
         result = review(settings=settings)
@@ -142,6 +210,13 @@ def main():
         print(json.dumps(result, sort_keys=True))
         return 0
     except Exception:
+        if args.reconcile_reviewed_fingerprint is not None:
+            # An I/O failure may follow a committed CAS. Never claim unchanged
+            # state or offer an automatic retry on this path.
+            print(json.dumps({'status': 'arr_reconciliation_blocked_or_uncertain',
+                'state_change_may_have_committed': True, 'automatic_retry': False,
+                'media_actions_performed': False, 'arr_updates_sent': 0}))
+            return 2
         print(json.dumps({'status': 'arr_recovery_review_blocked', 'read_only': True,
             'intent_modified': False, 'media_actions_performed': False,
             'clearance_authorized': False}))
