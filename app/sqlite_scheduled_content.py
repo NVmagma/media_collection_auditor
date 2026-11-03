@@ -23,7 +23,7 @@ def _identity(info):
 
 
 def observe_scheduled_content(*, title_path, now, maximum_entries=100000,
-                              maximum_depth=64, maximum_seconds=30, timer=monotonic):
+                              maximum_depth=64, maximum_seconds=30, timer=monotonic, timezone_info=None):
     """Return newest naive local descendant mtime, or None for an empty title.
 
     A failure returns no timestamp. Callers must block that title's reset/move,
@@ -66,7 +66,8 @@ def observe_scheduled_content(*, title_path, now, maximum_entries=100000,
         observed = entries(fd, count_entries=True)
         for name, info in observed.items():
             check_time()
-            timestamp = datetime.fromtimestamp(info.st_mtime)
+            timestamp = (datetime.fromtimestamp(info.st_mtime) if timezone_info is None else
+                         datetime.fromtimestamp(info.st_mtime,tz=timezone_info).replace(tzinfo=None))
             if timestamp > now:
                 raise ScheduledContentBlocked('future_content_timestamp')
             newest = timestamp if newest is None else max(newest, timestamp)

@@ -205,3 +205,9 @@ lock. Source code is read-only, no Docker socket/host ports are mounted/publishe
 and the helper uses only the existing GET transports. The real auditor remains
 unchanged. Changing production inventory can invalidate the rehearsal; a blocked
 result is not permission to retry external actions or switch backends.
+
+The rehearsal derives naive lifecycle time and TV descendant mtimes using the
+captured lifecycle timezone (daily timezone, then TZ, then UTC). It passes an
+explicit timezone only to the JSON content reader; existing SQLite callers retain
+their default behavior. A Los Angeles fixture verifies that a 03:00 local content
+observation remains 03:00 in the proposed clock rather than becoming UTC wall time.

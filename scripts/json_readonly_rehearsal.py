@@ -49,7 +49,8 @@ def run(*, comparison, backup, fingerprint):
         'media_actions_performed':False,'arr_updates_sent':0,
         'production_services_changed':False,'freshness_verified':False,
         'backup_freshness_verified':False,'external_writers_excluded':False,
-        'settings_basis':'selected_backup','worker_configured':False}
+        'settings_basis':'selected_backup','lifecycle_timezone':result['lifecycle_timezone'],
+        'worker_configured':False}
 
 
 def main():

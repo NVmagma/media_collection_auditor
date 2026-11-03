@@ -179,3 +179,14 @@ def test_pending_intent_stops_before_any_media_inventory(local,monkeypatch):
     source.write_text(json.dumps(value))
     monkeypatch.setattr(module,'_open_directory',lambda *a: pytest.fail('No media enumeration before pending check'))
     with pytest.raises(RuntimeError): run(local)
+
+
+def test_content_reset_uses_captured_lifecycle_timezone(local):
+    from zoneinfo import ZoneInfo
+    source,values,movie,show,episode = local
+    values['SQLITE_DAILY_RUN_TIMEZONE'] = 'America/Los_Angeles'
+    observed = datetime(2026,1,10,3,tzinfo=ZoneInfo('America/Los_Angeles'))
+    os.utime(episode,(observed.timestamp(),observed.timestamp()))
+    result = run(local)
+    assert result['lifecycle_timezone'] == 'America/Los_Angeles'
+    assert result['clock_proposals'][0]['proposed'] == '2026-01-10T03:00:00'

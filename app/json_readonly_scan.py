@@ -11,6 +11,7 @@ from pathlib import Path
 import stat
 from time import monotonic
 import math
+from zoneinfo import ZoneInfo
 
 from app.json_scan_collection import InventoryTitle, LibraryInventory, collect_readonly_plan
 from app.json_tracking_store import JsonTrackingStore
@@ -40,7 +41,10 @@ def _identity(info):
 
 def rehearse_scan(*, state_file, settings, now=None, maximum_titles=100000,
                    collect=collect_readonly_plan, timer=monotonic, maximum_seconds=3600):
-    now = datetime.now() if now is None else now
+    values = deepcopy(settings)
+    zone_name = values.get('SQLITE_DAILY_RUN_TIMEZONE') or values.get('TZ') or 'UTC'
+    zone = ZoneInfo(zone_name)
+    now = datetime.now(zone).replace(tzinfo=None) if now is None else now
     if not isinstance(now,datetime) or now.tzinfo is not None:
         raise ValueError('Naive lifecycle observation time required')
     if type(maximum_titles) is not int or not 1 <= maximum_titles <= 100000:
@@ -54,7 +58,6 @@ def rehearse_scan(*, state_file, settings, now=None, maximum_titles=100000,
         if not math.isfinite(elapsed) or not 0 <= elapsed < maximum_seconds:
             raise RuntimeError('Rehearsal deadline exceeded')
         return maximum_seconds-elapsed
-    values = deepcopy(settings)
     reset_tv = _bool(values,'TV_NEW_EPISODES_RESET_CLOCK','true')
     holding = _days(values,'HOLDING_DAYS','7')
     removal = _days(values,'REMOVAL_DAYS','7')
@@ -129,7 +132,7 @@ def rehearse_scan(*, state_file, settings, now=None, maximum_titles=100000,
                         if name == 'TV' and stage == 'Waiting' and reset_tv:
                             try:
                                 newest = observe_scheduled_content(title_path=path+'/'+folder,now=now,
-                                    maximum_seconds=min(30,remaining()),timer=timer)
+                                    maximum_seconds=min(30,remaining()),timer=timer,timezone_info=zone)
                                 content_times[path+'/'+folder] = newest
                                 if newest is not None and sections == [CLOCKS[stage]] and newest > datetime.fromisoformat(snapshot[CLOCKS[stage]][key]):
                                     blocker = 'content_reset_required'
@@ -160,7 +163,7 @@ def rehearse_scan(*, state_file, settings, now=None, maximum_titles=100000,
                 if key in stage_rows and inventory(fd) != (stage_rows[key],ignored[key]):
                     raise RuntimeError('Inventory changed during rehearsal')
             for path,newest in content_times.items():
-                if observe_scheduled_content(title_path=path,now=now,maximum_seconds=min(30,remaining()),timer=timer) != newest:
+                if observe_scheduled_content(title_path=path,now=now,maximum_seconds=min(30,remaining()),timer=timer,timezone_info=zone) != newest:
                     raise RuntimeError('TV content changed during rehearsal')
         verify_inventory()
         result = collect(snapshot=snapshot,inventories=tuple(inventories),settings=values,
@@ -170,4 +173,4 @@ def rehearse_scan(*, state_file, settings, now=None, maximum_titles=100000,
             'ignored_housekeeping_entries':sum(ignored.values()),'tracking_modified':False,
             'inventory_issues':tuple(inventory_issues),
             'inventory_checked_before_and_after':True,
-            'inventory_independently_verified':False,'external_writers_excluded':False}
+            'inventory_independently_verified':False,'external_writers_excluded':False,'lifecycle_timezone':zone_name}
