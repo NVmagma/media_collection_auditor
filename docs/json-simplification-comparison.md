@@ -230,3 +230,53 @@ explicitly reports local-only scope and network disabled; it is not service
 readiness. Failures identify the last fixed diagnostic stage and a bounded error
 class without exception text, paths, tokens or remote payloads. This is a new
 read-only observation, not reconstruction of the earlier failed attempt.
+
+## JSON execution foundations (not deployed)
+
+- Archived attempt migration validates every retained entry's encoding, schema,
+  timezone, date and identity before selecting the latest UTC start. Empty,
+  partial or conflicting histories never initialize a fresh cooldown. Existing
+  control metadata cannot be overwritten. The archive and tracking dates remain
+  unchanged apart from explicit new control metadata in the isolated JSON copy.
+- Clock checkpointing validates an entire proposed batch and all fresh trusted
+  verification reads before saving any date. Discovery uses the current
+  observation time; TV resets require an exact prior Waiting clock and a newer
+  observed content date. No backdating, partial batch save, media operation or
+  scan-budget reset is performed.
+- The disconnected move executor pins source/destination directories, requires
+  fresh protection and exact Arr source proof, journals intent, then uses Linux
+  no-replace rename on one filesystem/mount. There is no overwrite/copy/delete
+  fallback. It checks moved identity/content and atomically saves the destination
+  clock together with the outstanding Arr sync journal before attempting the PUT.
+- The existing Sonarr transport incorrectly accepted only HTTP 200 for PUT while
+  Sonarr 4.0.20.3014's Accepted(id) returns HTTP 202. This is corrected to accept
+  both acknowledgment shapes while still requiring two independent exact GET
+  readbacks. It is a plausible cause of earlier successful-but-pending TV syncs,
+  not a reconstruction of every historical incident. See the official
+  [series controller](https://github.com/Sonarr/Sonarr/blob/v4.0.20.3014/src/Sonarr.Api.V3/Series/SeriesController.cs#L188)
+  and [response helper](https://github.com/Sonarr/Sonarr/blob/v4.0.20.3014/src/Sonarr.Http/REST/RestController.cs#L131).
+- A lost Arr acknowledgment preserves the moved clock and pending journal.
+  Explicit GET-only review/acknowledgment repeats media checks and two readbacks;
+  it clears only the exact selected sync, without another PUT, move replay,
+  cooldown reset or fabricated historical completion. Move-stage crash recovery
+  still needs its separate reconciliation path before production readiness.
+
+Disposable tests exercise actual folder renames, Movie/TV slots, HTTP 202,
+changing protection, occupied destinations and destination races, lost responses,
+failed post-move saves and SIGKILL immediately after rename or before Arr delivery.
+The native-host lab uses only two newly created writable directories and a new
+network-isolated container with loopback mock services. No production media,
+appdata, credentials, templates, Docker socket, host ports or host controls are
+mounted/changed. It does not activate a JSON worker or authorize permanent deletion.
+
+## Requested final cleanup
+
+After JSON execution/recovery, current UI/settings/integrations and state-preserving
+cutover are accepted, preserve an archive in Git history and remove the old storage
+implementation from this active branch. Extract genuinely shared path, schema,
+protection and transport helpers into neutral modules first; keep their tests.
+Remove obsolete workflows, Docker recipes, migration/release scripts, tests and
+active documentation references. Replace this transition document with the JSON
+operations guide. Do not delete the running service's recovery tools before
+cutover, nor interpret source cleanup as permission to remove retained host
+backups or rollback containers. Permanent deletion remains disabled.

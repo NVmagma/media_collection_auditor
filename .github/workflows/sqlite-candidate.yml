@@ -121,6 +121,10 @@ jobs:
         run: python -B scripts/run_sqlite_integration_checks.py --full-suite --basetemp "$RUNNER_TEMP/sqlite-release-fixtures"
       - name: Build sealed candidate without publishing
         run: python -B scripts/sqlite_candidate_build.py --base-image "$BASE_IMAGE" > "$RUNNER_TEMP/candidate-build.json"
+      - name: Verify JSON execution on new host-backed disposable roots
+        run: |
+          image=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate-build.json")
+          bash scripts/json_worker_lab.sh "$image" "$RUNNER_TEMP" "$RUNNER_TEMP" | tee "$RUNNER_TEMP/json-worker-acceptance.log"
       - name: Exercise actual candidate entrypoint and packaged worker
         run: |
           image=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate-build.json")

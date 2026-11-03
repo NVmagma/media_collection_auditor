@@ -80,6 +80,7 @@ class ScanAttempt:
     def __init__(self, session):
         self.session = session
         self._finished = False
+        self._move_libraries = set()
 
     def _active(self):
         self.session.verify()
