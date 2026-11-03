@@ -302,3 +302,39 @@ unrelated clocks, move media or send Arr updates. An incomplete library saves no
 partial discoveries for that library. Future episode timestamps remain per-title
 blockers. The public rehearsal cannot select this checkpoint mode. Scheduling,
 UI dispatch and production cutover are still pending.
+
+## Connected JSON service candidate
+
+The explicit `AUDITOR_WORKER_MODE=json_serialized` entrypoint now selects the
+serialized JSON cycle without importing the legacy automatic worker. The default
+JSON candidate image remains in preview until prepared live settings are supplied.
+Missing tracking/control metadata never creates a fresh live state or scan budget.
+
+Manual requests require administrator authentication, same-origin submission and
+live confirmation. Running/queued scans reject another request; all live starts
+share the persisted rolling one-hour cooldown. Daily scheduling waits for a future
+slot at startup, skips nonexistent DST wall times and uses only one fall-back
+slot. Settings are captured per scan, so applying ordinary settings does not
+invalidate storage or change an attempt already running. Permanent deletion,
+cross-filesystem moves and season pruning remain refused.
+
+At the user's request, this candidate permits up to **five Movie moves and five TV
+moves per scan**, with a total maximum of ten. Both planning and execution enforce
+the per-library limits. A lower explicitly selected total cap still applies.
+Increasing the existing production deployment's two-action configuration to ten
+is part of the later reviewed JSON preparation; this source change does not alter
+the running service. Removing the limits is a separate future decision.
+
+Activity is retained in private JSON history across restart. All scanned decisions
+are retained; the existing interface projects a bounded selection prioritizing
+proposed moves. A completed move/Arr update is separate from a proposal or uncertain
+operation. The settings screen uses Apply Requested Settings without a typed
+confirmation phrase, while unsupported destructive policies are still rejected.
+Administrator-only operation recovery repeats current local checks and exact Arr
+readbacks; a reviewed sync attempt never repeats a filesystem rename.
+
+The disposable actual-entrypoint fixture now checks a ten-move batch (five per
+library), settings changes, restart, retained history and unchanged cooldown,
+using synthetic media and loopback services only. No production cutover or source
+cleanup is implied by these tests. Arr-import integration and state-preserving
+cutover remain separate work before removal of the retained storage implementation.

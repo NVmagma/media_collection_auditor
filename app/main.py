@@ -47,6 +47,17 @@ def audit_counts(path, offset):
 
 
 if __name__ == "__main__":
+    from app.json_worker_service import enabled as json_worker_enabled
+    if json_worker_enabled():
+        if os.environ.get('AUDITOR_STATE_BACKEND','json') != 'json':
+            raise RuntimeError('JSON worker requires explicit JSON storage')
+        from app.json_worker_service import run_service
+        threading.Thread(target=start_web,name='web-ui',daemon=True).start()
+        try:
+            run_service()
+        except KeyboardInterrupt:
+            pass
+        raise SystemExit(0)
     from sqlite_backend_gate import scheduled_release_enabled, require_sqlite_production_activation
     if scheduled_release_enabled():
         # UI availability is separate from scan readiness. A changed binding

@@ -930,11 +930,17 @@ if (not read_only_service_enabled()
     ))
 
 
+from app.json_recovery_web import create_blueprint as create_json_recovery_blueprint
+app.register_blueprint(create_json_recovery_blueprint(admin_authorized))
+
+
 @app.route("/settings", methods=["GET", "POST"])
 def settings():
     if not admin_authorized():
         return Response("Settings require WEB_ADMIN_PASSWORD (and HTTP Basic authentication).",
                         401, {"WWW-Authenticate": 'Basic realm="Auditor settings"'})
+    from app.json_worker_service import enabled as json_worker_enabled
+    json_mode=json_worker_enabled()
     preview_mode = _preview_backend_gate().preview_release_enabled()
     live_mode = _preview_backend_gate().live_release_enabled()
     bound_mode=preview_mode or live_mode
@@ -973,7 +979,7 @@ def settings():
                     updated.pop(key, None)  # Fall back to Unraid environment.
                 else:
                     updated[key] = validate(key, raw)
-            if not bound_mode and (updated.get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "false"
+            if not bound_mode and not json_mode and (updated.get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "false"
                     or updated.get("ALLOW_PERMANENT_DELETE", "false") == "true"
                     or updated.get("ALLOW_FILESYSTEM_DELETE", "false") == "true"
                     or updated.get("ALLOW_CROSS_FILESYSTEM_MOVES", "false") == "true"
@@ -998,6 +1004,12 @@ def settings():
                     if digest:
                         return _change_preview_settings(restore=False, request_sha256=digest)
                 return redirect(url_for('settings', **{result['status']: '1'}))
+            if json_mode:
+                from app.json_worker_cycle import validate_policy
+                from config_store import initial_environment
+                validate_policy({**DEFAULTS,**initial_environment(),**updated})
+                if request.form.get('settings_action') != 'apply':
+                    raise ValueError('Use Apply Requested Settings to apply your changes.')
             save_config(updated)
             return redirect(url_for("settings", saved=1))
         except (ValueError, OSError) as exc:
@@ -1008,9 +1020,16 @@ def settings():
                      "Unraid" if key in os.environ else "Default") for key in KEYS}
     for key in SECRETS:
         values[key] = ""  # Never send stored tokens to the browser.
-    return render_template("settings.html", groups=FIELDS, values=values,
-                           secrets=SECRETS, bools=BOOLS, sources=sources, help_text=FIELD_HELP, error=error,
-                           success=success, preview_mode=bound_mode, live_mode=live_mode, requested=requested, unchanged=unchanged,
+    groups=FIELDS
+    help_text=FIELD_HELP
+    if json_mode:
+        groups={name:[key for key in keys if key!='RUN_INTERVAL_HOURS'] for name,keys in FIELDS.items()}
+        help_text={**FIELD_HELP,
+            'SQLITE_DAILY_RUN_TIME':['Daily Scan Time','Daily start in HH:MM. Manual live scans share the one-hour cooldown; overlapping scans are blocked.'],
+            'SQLITE_DAILY_RUN_TIMEZONE':['Scan Time Zone','IANA time zone for daily scans and lifecycle dates, such as America/Los_Angeles.']}
+    return render_template("settings.html", groups=groups, values=values,
+                           secrets=SECRETS, bools=BOOLS, sources=sources, help_text=help_text, error=error,
+                           success=success, json_mode=json_mode, preview_mode=bound_mode, live_mode=live_mode, requested=requested, unchanged=unchanged,
                            pending_settings=pending_settings, settings_application=settings_application,
                            locked_settings=locked_settings,
                            settings_applied=request.args.get('applied')=='1',
@@ -1084,11 +1103,11 @@ def run_button_status():
     """Session-only process observation; never starts or resumes a scan."""
     if not admin_authorized():
         return {"ok": False}, 401
-    if os.environ.get('AUDITOR_STATE_BACKEND', 'json') == 'sqlite':
+    if os.environ.get('AUDITOR_STATE_BACKEND','json') == 'sqlite':
         from app.sqlite_scheduled_observations import COORDINATOR
-        report = COORDINATOR.report()
+        report=COORDINATOR.report()
     else:
-        report = snapshot()
+        report=selected_run_snapshot(snapshot)
     return {"ok": True, "running": report.get("running") is True,
             "queued": report.get("queued") is True,
             "blocked": report.get("execution_blocked") is True}, 200, {"Cache-Control": "no-store"}
@@ -1102,6 +1121,21 @@ def run_now():
     if not origin or urlsplit(origin).netloc != request.host:
         return {"ok": False, "message": "Invalid request origin."}, 403
     backend = os.environ.get('AUDITOR_STATE_BACKEND', 'json')
+    from app.json_worker_service import enabled as json_worker_enabled,SERVICE
+    if json_worker_enabled():
+        if backend != 'json': return {'ok':False,'message':'Worker configuration requires review.'},409
+        from app.json_readonly_scan import _bool
+        try: live=not _bool(SERVICE.load_settings(),'DRY_RUN','true')
+        except Exception: return {'ok':False,'message':'Settings require review.'},409
+        if live and request.get_json(silent=True) != {'run_live_scan':True}:
+            return {'ok':False,'message':'Confirm this live scan before queuing it.'},409
+        result=SERVICE.request()
+        if result['status']=='queued':
+            return {'ok':True,'message':'Scan queued. Active settings are captured when it starts.'},202
+        if result['status']=='cooldown':
+            return {'ok':False,'message':'Live scans must start at least 60 minutes apart.',
+                'next_allowed_at':result['next_allowed_at']},429,{'Retry-After':str(result['retry_after_seconds'])}
+        return {'ok':False,'message':'A scan is active or the retained operation needs review.'},409
     gate = _preview_backend_gate()
     if gate.live_release_enabled():
         data=request.get_json(silent=True)
@@ -1145,6 +1179,9 @@ def run_now():
 
 @app.post("/api/rescue")
 def rescue():
+    from app.json_worker_service import enabled as json_worker_enabled
+    if json_worker_enabled():
+        return {'ok':False,'message':'Use reviewed operation recovery; legacy rescue is unavailable in this worker.'},409
     if not admin_authorized():
         return {"ok": False, "message": "Sign in through Settings first."}, 401
     origin = request.headers.get("Origin") or request.headers.get("Referer")

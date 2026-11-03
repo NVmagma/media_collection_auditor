@@ -34,7 +34,8 @@ def _project_tracking_status(capture):
             ("waiting", "first_seen"), ("holding", "queued"),
             ("keep", "keep_seen"), ("removal", "in_removal"),
             ("arr_sync_pending", "arr_sync_pending"))},
-        pending_operation_present="sqlite_pending_operations" in state,
+        pending_operation_present=("sqlite_pending_operations" in state or bool(state.get('arr_sync_pending'))
+            or isinstance(state.get('json_worker_control'),dict) and state['json_worker_control'].get('journal') is not None),
     )
     return report
 
@@ -346,7 +347,8 @@ def selected_run_snapshot(legacy_snapshot):
     """Select process observations without reading legacy history for SQLite."""
     backend = os.environ.get('AUDITOR_STATE_BACKEND', 'json')
     if backend == 'json':
-        return legacy_snapshot()
+        from app.json_worker_service import enabled,SERVICE
+        return SERVICE.report() if enabled() else legacy_snapshot()
     try:
         if backend != 'sqlite':
             raise RuntimeError('Unsupported backend')
@@ -361,6 +363,8 @@ def selected_run_snapshot(legacy_snapshot):
 
 def selected_audit_status_report(legacy_snapshot):
     if os.environ.get('AUDITOR_STATE_BACKEND', 'json') == 'json':
+        from app.json_worker_service import enabled,SERVICE
+        if enabled(): return SERVICE.report()
         try:
             current = legacy_snapshot()
         except (OSError, UnicodeError, ValueError, TypeError, RuntimeError):
@@ -371,7 +375,8 @@ def selected_audit_status_report(legacy_snapshot):
 
 def selected_run_history(legacy_history, limit=100):
     if os.environ.get('AUDITOR_STATE_BACKEND', 'json') == 'json':
-        return legacy_history(limit)
+        from app.json_worker_service import enabled,SERVICE
+        return SERVICE.history(limit) if enabled() else legacy_history(limit)
     try:
         if os.environ.get('AUDITOR_STATE_BACKEND') != 'sqlite':
             raise RuntimeError('Unsupported backend')
@@ -421,7 +426,10 @@ def read_selected_coverage(path, build):
 
 
 def selected_scan_capture():
-    """Process observations only. No JSON/log reconstruction or remote reads."""
+    """Selected worker observations; no remote reads or reconstructed outcomes."""
+    from app.json_worker_service import enabled,SERVICE
+    if enabled() and os.environ.get('AUDITOR_STATE_BACKEND','json') == 'json':
+        return {'run':SERVICE.report(),'history':SERVICE.history()}
     if os.environ.get('AUDITOR_STATE_BACKEND', 'json') != 'sqlite':
         return None
     try:
@@ -450,7 +458,8 @@ def project_scan_capture(capture):
     view = build_scan_view(run, capture.get('history'), title_details=False)
     if run.get('status') != 'advisory_only' or not view['history_available']:
         return {**base, 'status':'unavailable', 'current':None, 'rows':None}
-    return {**base, 'status':'advisory_only', 'history_partial':view['history_partial'],
+    return {**base, 'status':'advisory_only', 'history_scope':view['history_scope'],
+            'history_persistent':run.get('history_persistent') is True, 'history_partial':view['history_partial'],
             'current':{'state':view['current_state'], 'detail':view['current_detail']},
             'rows':view['rows']}
 

@@ -196,7 +196,7 @@ if (button) {
 }
 button?.addEventListener('click', async () => {
   const live=button.dataset.live === 'true';
-  const message=live ? ('Run a live scan now? This can move ' + (button.dataset.actionLimit === '2' ? 'one Movie and one TV show' : 'one title') + '. Live scans must start at least 60 minutes apart, and another scan cannot run concurrently. Permanent deletion is disabled.') : 'Start an audit using your saved configuration? In Live Mode this may move or delete media.';
+  const message=live ? ('Run a live scan now? This can move ' + (button.dataset.libraryLimit === '5' ? 'up to five Movies and five TV shows (' + button.dataset.actionLimit + ' total maximum)' : button.dataset.actionLimit === '2' ? 'one Movie and one TV show' : 'one title') + '. Live scans must start at least 60 minutes apart, and another scan cannot run concurrently. Permanent deletion is disabled.') : 'Start an audit using your saved configuration? In Live Mode this may move or delete media.';
   if (button.dataset.preview !== 'true' && !confirm(message)) return;
   runRequestPending = true;
   button.disabled = true;

@@ -1,6 +1,6 @@
 {% if attempt.title_details %}
 <details class="scan-title-details"><summary>Title decisions ({{ attempt.title_details['items']|length }} of {{ attempt.title_details.total_records }})</summary>
-<p class="muted">Recorded observations from this attempt. A proposal is not a completed move; uncertain outcomes require review. History resets after restart.</p>
+<p class="muted">Recorded observations from this attempt. A proposal is not a completed move; uncertain outcomes require review. {% if scan_view.history_scope == 'persistent' %}Recorded history is retained across restart.{% else %}History resets after restart.{% endif %}</p>
 <div class="table-wrap"><table><thead><tr><th>Title</th><th>Library / stage</th><th>Outcome</th><th>Reason</th></tr></thead><tbody>
 {% for detail in attempt.title_details['items'] %}<tr><td>{{ detail.title }}</td><td>{{ detail.library }} · {{ detail.stage }}{% if detail.destination %} → {{ detail.destination }}{% endif %}</td><td>{{ detail.outcome_label }}</td><td>{{ detail.reason }}</td></tr>{% endfor %}
 </tbody></table></div>

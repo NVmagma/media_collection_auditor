@@ -330,9 +330,10 @@ def build_scan_view(run, history, *, timezone_name=None, title_details=True):
         state, detail = 'Unavailable', 'Current running and queued state was not reported.'
     valid_history = isinstance(history, list)
     rows = [_scan_entry(record, timezone_name, title_details=title_details) for record in history[:100] if isinstance(record, dict)] if valid_history else []
-    available = valid_history and run.get('history_scope') == 'current_process' and (not history or bool(rows))
+    scope=run.get('history_scope')
+    available = valid_history and (scope == 'current_process' or scope == 'persistent' and run.get('history_persistent') is True) and (not history or bool(rows))
     return {'current_state': state, 'current_detail': detail, 'history_available': available,
         'history_partial': valid_history and any(not isinstance(record, dict) for record in history[:100]),
         'rows': rows if available else [], 'latest': rows[0] if available and rows else None,
-        'history_scope': 'current_process', 'freshness_verified': False,
+        'history_scope': scope if available else 'unavailable', 'freshness_verified': False,
         'skipped_title_count': None, 'blocked_title_count': None}

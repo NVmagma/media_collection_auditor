@@ -1,6 +1,6 @@
 """Disposable JSON execution acceptance. Only explicit new lab roots are used."""
 from copy import deepcopy
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -13,6 +13,9 @@ import tempfile
 import threading
 from time import monotonic
 import unittest
+import time
+import signal
+from urllib.parse import parse_qs
 from urllib.parse import urlsplit
 
 from app.json_move_execution import MoveRequest, execute_move
@@ -167,6 +170,117 @@ with scan_attempt(JsonTrackingStore(sys.argv[1]),now=datetime(2026,1,20,12,tzinf
         self.assertEqual(sum(method == 'PUT' for method,_ in self.server.calls),1)
         self.assertEqual((Path(request.destination_root)/request.title/'video.mkv').read_bytes(),b'DISPOSABLE JSON FIXTURE ONLY')
 
+    def test_actual_entrypoint_manual_scan_settings_and_restart(self):
+        import requests
+        from app.config_store import KEYS,DEFAULTS
+        all_requests={library:[request] for library,request in self.requests.items()}
+        with self.store.session() as state:
+            for library,template in self.requests.items():
+                resource='series' if library=='TV' else 'movie'
+                for index in range(1,6):
+                    title=template.title+' '+str(index); folder=Path(template.source_root)/title
+                    folder.mkdir(); media=folder/'video.mkv'; media.write_bytes(b'DISPOSABLE JSON SERVICE FIXTURE')
+                    old=datetime(2025,12,1).timestamp(); os.utime(media,(old,old))
+                    req=replace(template,title=title,title_id=(20 if library=='TV' else 10)+index,arr_source_path=str(folder))
+                    all_requests[library].append(req)
+                    state.state['first_seen'][('TV/' if library=='TV' else '')+title]=template.source_since
+                    self.server.rows['/api/v3/'+resource+'/'+str(req.title_id)]=dict(id=req.title_id,path=req.arr_source_path,monitored=True,
+                        seasons=[{'seasonNumber':1,'monitored':True}])
+            state.checkpoint()
+        handler=self.server.RequestHandlerClass
+        original_get=handler.do_GET
+        def get(handler):
+            url=urlsplit(handler.path)
+            if url.path=='/Users': return handler.respond([{'Id':'fixture-user'}])
+            if url.path.endswith('/Items'):
+                query=parse_qs(url.query); kind=query.get('IncludeItemTypes',['Movie'])[0]
+                library='TV' if kind=='Series' else 'Movies'
+                rows=[dict(Id='fixture-'+library+str(req.title_id),Type=kind,Name=req.title,Path=req.arr_source_path+('/video.mkv' if library=='Movies' else ''),
+                    Tags=['not-at-all'],UserData=dict(Played=True,PlayCount=1,IsFavorite=False)) for req in all_requests[library]]
+                start=int(query.get('StartIndex',['0'])[0]); limit=int(query.get('Limit',['100'])[0])
+                return handler.respond(dict(Items=rows[start:start+limit],TotalRecordCount=len(rows),StartIndex=start))
+            return original_get(handler)
+        handler.do_GET=get
+        for library,resource,id_ in (('Movies','movie',1),('TV','series',2)):
+            self.server.rows['/api/v3/'+resource]=[deepcopy(self.server.rows['/api/v3/'+resource+'/'+str(req.title_id)]) for req in all_requests[library]]
+            for suffix in ('_keep','_removal'): (self.media_root/(library+suffix)).mkdir()
+        with socket.socket() as sock:
+            sock.bind(('127.0.0.1',0)); port=sock.getsockname()[1]
+        base='http://127.0.0.1:'+str(port); remote='http://127.0.0.1:'+str(self.server.server_port)
+        token='synthetic-json-service-integration-token'
+        values=dict(STATE_FILE=str(self.store.path),AUDITOR_STATE_BACKEND='json',AUDITOR_WORKER_MODE='json_serialized',
+            DRY_RUN='false',MAX_ACTIONS_PER_RUN='10',ENABLE_MOVIES='true',ENABLE_TV='true',TZ='UTC',
+            SQLITE_DAILY_RUN_TIME=(datetime.now(timezone.utc)+timedelta(minutes=2)).strftime('%H:%M'),
+            SQLITE_DAILY_RUN_TIMEZONE='UTC',WEB_PORT=str(port),WEB_SESSION_SECRET='synthetic-json-fixture-session',
+            WEB_ADMIN_USER='fixture-admin',WEB_ADMIN_PASSWORD='fixture-password',INTEGRATION_API_TOKEN=token,
+            WEB_CONFIG_FILE=str(self.state_root/'config.json'),AUDIT_HISTORY_FILE=str(self.state_root/'history.jsonl'),
+            JELLYFIN_HOST_URL=remote,JELLYFIN_API_TOKEN='synthetic-jellyfin-token',
+            RADARR_URL=remote,SONARR_URL=remote,RADARR_API_KEY='synthetic-arr-token',SONARR_API_KEY='synthetic-arr-token')
+        for library,prefix in (('Movies','RADARR'),('TV','SONARR')):
+            for field,suffix in (('TRANSIENT',''),('HOLDING','_hold'),('KEEP','_keep'),('REMOVAL','_removal')):
+                values[prefix+'_'+field+'_PATH']=str(self.media_root/(library+suffix))
+        process=None
+        session=requests.Session(); session.trust_env=False
+        def start():
+            nonlocal process
+            process=subprocess.Popen([sys.executable,'-B','-m','app.main'],env={**os.environ,**values},
+                stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            for _ in range(200):
+                if process.poll() is not None: raise AssertionError('Synthetic JSON service stopped before readiness')
+                try:
+                    if session.get(base+'/health',timeout=1).status_code==200: return
+                except requests.RequestException: pass
+                time.sleep(.05)
+            raise AssertionError('Synthetic JSON service readiness expired')
+        def stop():
+            if process is not None and process.poll() is None:
+                process.send_signal(signal.SIGINT)
+                try: process.wait(timeout=10)
+                except subprocess.TimeoutExpired: process.kill(); process.wait(timeout=5); raise
+        def login():
+            response=session.post(base+'/login',data=dict(username='fixture-admin',password='fixture-password'),
+                headers={'Origin':base},allow_redirects=False,timeout=10)
+            self.assertEqual(response.status_code,302)
+        headers={'Authorization':'Bearer '+token}
+        try:
+            start(); login(); original=self.store.path.read_bytes()
+            page=session.get(base+'/settings',timeout=10)
+            self.assertEqual(page.status_code,200); self.assertIn('Apply Requested Settings',page.text)
+            self.assertNotIn('Type I UNDERSTAND',page.text)
+            self.assertEqual(self.store.path.read_bytes(),original)
+            response=session.post(base+'/api/run-now',json={'run_live_scan':True},headers={'Origin':base},timeout=10)
+            self.assertEqual(response.status_code,202)
+            for _ in range(300):
+                report=session.get(base+'/api/v1/audit-status',headers=headers,timeout=3).json()
+                if report['last_finished'] and not report['running']: break
+                time.sleep(.05)
+            else: self.fail('Synthetic manual scan did not finish')
+            self.assertEqual(report['last_result'],'completed')
+            self.assertEqual(report['per_library_action_limit'],5)
+            state=json.loads(self.store.path.read_bytes())
+            self.assertEqual(len(state['queued']),10)
+            self.assertEqual(sum(key.startswith('TV/') for key in state['queued']),5)
+            self.assertEqual(len(state['first_seen']),2)
+            self.assertEqual(sum(method=='PUT' for method,_ in self.server.calls),10)
+            history=session.get(base+'/api/v1/scan-history',headers=headers,timeout=10)
+            self.assertEqual(history.status_code,200); self.assertTrue(history.json()['history_persistent'])
+            form={key:values.get(key,DEFAULTS.get(key,'')) for key in KEYS}
+            form.update(settings_action='apply',ENABLE_TV='false',HOLDING_DAYS='8')
+            response=session.post(base+'/settings',data=form,headers={'Origin':base},allow_redirects=False,timeout=10)
+            self.assertEqual(response.status_code,302)
+            saved=json.loads((self.state_root/'config.json').read_bytes())
+            self.assertEqual(saved['ENABLE_TV'],'false'); self.assertEqual(saved['HOLDING_DAYS'],'8')
+            unchanged=self.store.path.read_bytes()
+            stop(); start(); login()
+            report=session.get(base+'/api/v1/audit-status',headers=headers,timeout=5).json()
+            self.assertEqual(report['last_result'],'completed'); self.assertTrue(report['history_persistent'])
+            response=session.post(base+'/api/run-now',json={'run_live_scan':True},headers={'Origin':base},timeout=10)
+            self.assertEqual(response.status_code,429)
+            self.assertEqual(self.store.path.read_bytes(),unchanged)
+            self.assertEqual(sum(method=='PUT' for method,_ in self.server.calls),10)
+        finally:
+            stop(); session.close()
+
     def test_new_favorite_blocks_disliked_move_before_intent(self):
         request=self.requests['Movies']
         with scan_attempt(self.store,now=NOW.replace(tzinfo=timezone.utc),trigger='manual') as attempt:
@@ -195,7 +309,7 @@ def main():
     print(json.dumps({'status':'json_execution_fixture_verified','tests':result.testsRun,
         'fixture_only':True,'production_services_changed':False,'production_media_mounted':False,
         'external_requests_sent':False,'permanent_deletion_performed':False,
-        'lost_ack_get_only_recovery_verified':True,'sigkill_move_recovery_verified':True,'movie_and_tv_moves_verified':True}))
+        'lost_ack_get_only_recovery_verified':True,'sigkill_move_recovery_verified':True,'actual_json_service_verified':True,'five_moves_per_library_verified':True,'movie_and_tv_moves_verified':True}))
     return 0
 
 
