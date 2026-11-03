@@ -33,6 +33,8 @@ old_id=$(docker inspect --format '{{.Id}}' media_collection_auditor)
 signature() { docker inspect --format '{{.Id}} {{json .Config}} {{json .HostConfig}} {{json .Mounts}} {{.State.Running}}' "$old_id" | sha256sum | cut -d' ' -f1; }
 before=$(signature)
 while IFS= read -r source; do
+  [ -n "$source" ] || continue
+  [ "$source" != / ] || fail preparation_parent_overlaps_current_bind
   case "$base" in "$source"|"$source"/*) fail preparation_parent_overlaps_current_bind;; esac
 done < <(docker inspect --format '{{range .Mounts}}{{printf "%s\n" .Source}}{{end}}' "$old_id")
 step=new_private_root
