@@ -1026,6 +1026,9 @@ def settings():
     groups=FIELDS
     help_text=FIELD_HELP
     if json_mode:
+        from app.json_worker_service import read_saved_settings
+        try: read_saved_settings()
+        except ValueError as exc: error=error or str(exc)
         groups={name:[key for key in keys if key!='RUN_INTERVAL_HOURS'] for name,keys in FIELDS.items()}
         help_text={**FIELD_HELP,
             'SQLITE_DAILY_RUN_TIME':['Daily Scan Time','Daily start in HH:MM. Manual live scans share the one-hour cooldown; overlapping scans are blocked.'],

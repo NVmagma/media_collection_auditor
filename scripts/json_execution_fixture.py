@@ -283,6 +283,21 @@ with scan_attempt(JsonTrackingStore(sys.argv[1]),now=datetime(2026,1,20,12,tzinf
             self.assertEqual(response.status_code,429)
             self.assertEqual(self.store.path.read_bytes(),unchanged)
             self.assertEqual(sum(method=='PUT' for method,_ in self.server.calls),10)
+            config_path=self.state_root/'config.json'; valid_config=config_path.read_bytes()
+            # Broken saved preview settings must not select the live ENV fallback.
+            preview_config=json.loads(valid_config); preview_config['DRY_RUN']='true'
+            config_path.write_text(json.dumps(preview_config)); config_path.write_bytes(b'{')
+            response=session.post(base+'/api/run-now',json={'run_live_scan':True},headers={'Origin':base},timeout=10)
+            self.assertEqual(response.status_code,409)
+            self.assertEqual(session.get(base+'/health',timeout=5).status_code,200)
+            paused_page=session.get(base+'/settings',timeout=5)
+            self.assertEqual(paused_page.status_code,200); self.assertIn('scans remain paused',paused_page.text)
+            self.assertTrue(session.get(base+'/api/v1/audit-status',headers=headers,timeout=5).json()['execution_blocked'])
+            config_path.unlink()
+            self.assertEqual(session.post(base+'/api/run-now',json={'run_live_scan':True},headers={'Origin':base},timeout=5).status_code,409)
+            config_path.write_bytes(valid_config); config_path.chmod(0o600)
+            self.assertEqual(self.store.path.read_bytes(),unchanged)
+            self.assertEqual(sum(method=='PUT' for method,_ in self.server.calls),10)
         finally:
             stop(); session.close()
 
