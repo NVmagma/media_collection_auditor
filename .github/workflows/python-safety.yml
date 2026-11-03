@@ -40,7 +40,7 @@ jobs:
       - name: Verify dashboard workspace in Chromium
         env:
           WEB_SESSION_SECRET: ci-only-session-secret
-          PYTHONPATH: ${{ github.workspace }}/app:${{ github.workspace }}/tests
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/app:${{ github.workspace }}/tests
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/dashboard-browsers
         run: |
           npm ci --prefix tests/dashboard-browser --ignore-scripts --no-audit --no-fund
