@@ -49,8 +49,26 @@ def text(value, limit=255):
     return value
 
 
+def _json_worker():
+    return os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized'
+
+
+def _read_authority(*,settings=None):
+    if _json_worker():
+        from app.json_arr_import_service import values
+        return values(settings)
+    return require_sqlite_read_authority(settings=settings)
+
+
 def library_config(values, name):
     if name not in ('Movies', 'TV'): raise ArrImportError('selection_invalid')
+    if _json_worker():
+        from types import SimpleNamespace
+        from app.json_worker_cycle import stage_paths
+        from app.json_readonly_scan import _bool
+        if not _bool(values,'ENABLE_TV' if name=='TV' else 'ENABLE_MOVIES','false' if name=='TV' else 'true'):
+            raise ArrImportError('library_disabled')
+        return SimpleNamespace(name=name,roots=tuple(stage_paths(values,name)[0].items()))
     libraries = [lib for lib in scheduled_worker_from_settings(values).libraries if lib.name == name]
     if len(libraries) != 1: raise ArrImportError('library_disabled')
     return libraries[0]
@@ -107,7 +125,7 @@ def checked_catalog(client):
 
 
 def options(*, library, settings=None):
-    values = require_sqlite_read_authority(settings=settings)
+    values = _read_authority(settings=settings)
     config = library_config(values, library)
     client = client_for(values, library)
     version = check_version(client)
@@ -124,7 +142,7 @@ def options(*, library, settings=None):
                     locations.setdefault(entry.name, []).append(stage)
         finally: os.close(fd)
     folders = sorted(locations)
-    if require_sqlite_read_authority(settings=settings) != values:
+    if _read_authority(settings=settings) != values:
         raise ArrImportError('binding_changed')
     return {'version': version, 'quality_profiles': [
         {key: p[key] for key in ('id', 'name')} for p in available_profiles],
@@ -134,7 +152,7 @@ def options(*, library, settings=None):
 
 
 def lookup(*, library, term, settings=None):
-    values = require_sqlite_read_authority(settings=settings)
+    values = _read_authority(settings=settings)
     client = client_for(values, library); check_version(client)
     records = client.get(client.resource + '/lookup', term=text(term, 200))
     if not isinstance(records, list) or len(records) > 1000:
@@ -149,7 +167,7 @@ def lookup(*, library, term, settings=None):
         year = record.get('year')
         rows.append({'provider_id': key, 'title': text(record.get('title')),
             'year': year if type(year) is int and 1800 <= year <= 3000 else None})
-    if require_sqlite_read_authority(settings=settings) != values:
+    if _read_authority(settings=settings) != values:
         raise ArrImportError('binding_changed')
     return {'matches': rows[:20], 'truncated': len(rows) > 20, 'read_only': True}
 
@@ -294,6 +312,9 @@ def locked_context(*, settings=None, execute=False):
 
 
 def review(*, selection, settings=None):
+    if _json_worker():
+        from app import json_arr_import_service
+        return json_arr_import_service.review(selection=selection,settings=settings)
     with locked_context(settings=settings) as (values, authority):
         with held_import(values, selection, verify_authority=authority) as (session, verify, local):
             if INTENTS_KEY in session.state: raise ArrImportError('pending_operation')
@@ -329,6 +350,9 @@ def verify_remote(client, details):
 
 
 def apply(*, selection, expected_fingerprint, settings=None):
+    if _json_worker():
+        from app import json_arr_import_service
+        return json_arr_import_service.apply(selection=selection,expected_fingerprint=expected_fingerprint,settings=settings)
     if not isinstance(expected_fingerprint, str) or not re.fullmatch('[0-9a-f]{64}', expected_fingerprint):
         raise ArrImportError('review_required')
     with locked_context(settings=settings, execute=True) as (values, authority):
@@ -358,6 +382,9 @@ def apply(*, selection, expected_fingerprint, settings=None):
 
 def recover(*, expected_fingerprint=None, settings=None):
     """Explicit GET-only review/clearance of one pending import, never another POST."""
+    if _json_worker():
+        from app import json_arr_import_service
+        return json_arr_import_service.recover(expected_fingerprint=expected_fingerprint,settings=settings)
     if not live_release_enabled(): raise ArrImportError('live_import_unavailable')
     with locked_context(settings=settings) as (values, authority):
         store = GuardedSQLiteStateStore(values['SQLITE_STATE_FILE'])

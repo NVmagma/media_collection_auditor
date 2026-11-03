@@ -338,3 +338,21 @@ library), settings changes, restart, retained history and unchanged cooldown,
 using synthetic media and loopback services only. No production cutover or source
 cleanup is implied by these tests. Arr-import integration and state-preserving
 cutover remain separate work before removal of the retained storage implementation.
+
+## Existing-folder Arr imports on JSON
+
+The existing administrator import interface now selects the JSON state session
+when the serialized JSON worker is selected. Folder and provider/profile reviews
+retain the same bounded payload checks. All imports remain unmonitored, with
+movie/episode searches disabled and TV seasons unmonitored. Importing registers
+an existing folder; it does not move files, reset tracking clocks or consume/reset
+the scan cooldown.
+
+The worker lock excludes concurrent scan/import dispatch. The JSON operation
+journal is saved before one create request. A lost response leaves that intent
+pending, blocks scans and new imports, and permits only explicit GET-based
+verification/acknowledgment through Verify pending import. Changed folders,
+profiles, settings or tracking invalidate a saved review. Readback mismatches
+retain the intent. Tests make SQLite connections and binding calls fail if this
+JSON path attempts them. The retained deployment's import path remains available
+until the later cutover and source cleanup.
