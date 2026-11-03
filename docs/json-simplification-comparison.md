@@ -74,3 +74,24 @@ Tower's offline candidate was prepared from the post-reconciliation backup at
 source revision 11: 554 Waiting records, seven Holding, two Removal, 15 Keep,
 zero pending Arr updates, and 14 archived scan claims. That is a point-in-time
 comparison input, not a current production backup or inventory freshness claim.
+
+## Isolated worker storage foundation
+
+`app/json_tracking_store.py` is not wired into the entrypoint. It provides an
+explicit session over one existing JSON file, holding the existing shared audit
+lock for the session and writing only when checkpoint is requested. Checkpoints
+write a private temporary file, fsync, replace atomically and fsync the directory.
+Unknown fields and original lifecycle timestamps survive. Exiting or raising an
+exception does not implicitly save partially modified in-memory state.
+
+Missing/invalid state, duplicate keys, nonfinite extension values, unsafe links
+and intervening file replacement are refused. Cooperative concurrent processes
+are blocked by the lock. This does not fence noncooperating external writers or
+make filesystem moves and Arr HTTP atomic. A checkpoint exception after replace
+is uncertain: it must not trigger replay of an external action. Operation-journal
+and scan-admission integration remain subsequent worker work.
+
+Disposable Linux tests cover two-process contention, failures during replacement
+and actual SIGKILL immediately before/after replacement. Restart reads a complete
+old/new snapshot; abandoned temporary files are not adopted. The builder and
+reader comparison remain separate from production selection or activation.
