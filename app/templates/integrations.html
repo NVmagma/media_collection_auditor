@@ -4,6 +4,7 @@
 {% set sidebar_page = 'integrations' %}{% include '_sidebar.html' %}
 <div class="app-content"><header class="settings-header"><div><h1>API &amp; integrations</h1><p>Connect read-only dashboards without sharing your administrator login.</p></div></header>
 <main class="settings-main" id="main-content">
+<section class="panel"><h2>Import existing media</h2><p>Register an existing library folder in Radarr or Sonarr after reviewing its provider match and quality profile. Its stage is preserved; imports start unmonitored with download searches disabled.</p><a class="button" href="/arr-imports">Review an existing-media import</a></section>
 <section class="settings-status-grid" aria-label="API status">
 <article class="settings-status-card"><h2>Credential</h2><p>{{ 'Configured' if token_ready else 'Missing or invalid' }}</p><p>The integration token grants read-only API access. Its value is never displayed here.</p></article>
 <article class="settings-status-card"><h2>Tracking</h2><p>{{ 'Available' if readiness.tracking_available else 'Needs review' }}</p><p>Authority: {{ readiness.storage_authority }} · Binding: {{ readiness.binding_status }}</p><p>Availability does not verify freshness or authorize media actions.</p></article>

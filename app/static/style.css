@@ -263,6 +263,21 @@
 .settings-app fieldset:disabled .save-button{opacity:.5;cursor:not-allowed}
 .settings-app fieldset:disabled input,.settings-app fieldset:disabled select{opacity:.65;cursor:not-allowed}
 
+/* Existing-media imports share the settings shell and a compact review column. */
+.arr-import-app .import-workspace{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(280px,1fr);gap:18px;align-items:start}
+.arr-import-app label{display:block;margin:14px 0 6px;font-size:13px;font-weight:600;color:#afc0d4}
+.arr-import-app input,.arr-import-app select{display:block;width:100%;min-width:0;margin-bottom:10px;padding:10px;border:1px solid #34465c;border-radius:8px;background:#0c1725;color:#e9eef7;font:inherit}
+.arr-import-app input:focus-visible,.arr-import-app select:focus-visible{outline:2px solid #97c4ff;outline-offset:2px}
+.arr-import-app button{margin:4px 6px 4px 0}
+.arr-import-app button:disabled{opacity:.5;cursor:not-allowed}
+.arr-import-app #import-folder-hint{font-size:12px;color:#9cafc6}
+.arr-import-app .import-review-column{min-width:0}
+.arr-import-app .import-review-column a{color:#91c7ff;text-decoration:none}
+.arr-import-app .import-review-column a:hover{text-decoration:underline}
+.arr-import-app #import-status{margin-top:0}
+.arr-import-app details>summary{cursor:pointer;font-weight:600}
+@media(max-width:1050px){.arr-import-app .import-workspace{grid-template-columns:minmax(0,1fr)}}
+
 /* Public connection coordinates wrap without pushing narrow screens sideways. */
 .integrations-app .panel { margin-bottom: 20px; padding: 20px; min-width: 0; }
 .integrations-app input { max-width: 100%; min-width: 0; box-sizing: border-box; }

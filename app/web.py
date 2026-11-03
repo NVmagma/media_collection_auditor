@@ -903,6 +903,15 @@ def admin_authorized():
     return bool(getattr(g, "user", None) and g.user["admin"])
 
 
+try:
+    from app.arr_import_web import create_blueprint as _create_arr_import_blueprint
+except ModuleNotFoundError as error:
+    if error.name not in ('app', 'app.arr_import_web'):
+        raise
+else:
+    app.register_blueprint(_create_arr_import_blueprint(is_admin=admin_authorized))
+
+
 # Experimental SQLite recovery views are opt-in and never select SQLite as
 # the production tracking backend. Only the literal value "true" enables them.
 if (not read_only_service_enabled()

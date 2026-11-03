@@ -51,6 +51,8 @@ jobs:
           npm run test:settings --prefix tests/dashboard-browser -- "$RUNNER_TEMP/settings-workspace"
           python -B -c 'import os; from pathlib import Path; from settings_workspace_case import render_integration_workspace; Path(os.environ["RUNNER_TEMP"],"integration-setup.html").write_text(render_integration_workspace())'
           npm run test:integrations --prefix tests/dashboard-browser -- "$RUNNER_TEMP/integration-setup.html"
+          python -B tests/arr_import_workspace_case.py "$RUNNER_TEMP/arr-imports.html"
+          node scripts/test_arr_import_workspace.cjs "$RUNNER_TEMP/arr-imports.html"
       - name: Compile all Python files
         run: python -m compileall -q app tests
       - name: Install pytest
@@ -59,6 +61,11 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/app:${{ github.workspace }}/tests
         run: python -B -m pytest -q tests/test_sqlite_arr_recovery_review.py tests/test_sqlite_arr_recovery_apply.py tests/test_sqlite_scan_preflight_review.py
+      - name: Verify explicit existing-media Arr imports and recovery
+        env:
+          WEB_SESSION_SECRET: ci-only-session-secret
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/app:${{ github.workspace }}/tests
+        run: python -B -m pytest -q tests/test_arr_import_service.py tests/test_arr_import_web.py tests/test_arr_import_transport.py
       - name: Run preview settings and web availability regressions
         env:
           WEB_SESSION_SECRET: ci-only-session-secret

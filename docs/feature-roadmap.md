@@ -17,6 +17,13 @@ new image and state-preserving handoff are accepted and deployed.
 
 ## Current next work
 
+- Explicit existing-media Arr import is implemented for Sonarr 4 / Radarr 6:
+  administrator provider/profile review, existing folder with its stage preserved,
+  unmonitored with searches disabled, guarded intent and GET-only recovery.
+  See [the import contract](arr-existing-import.md). It is not installed on Tower
+  until the next reviewed state-preserving live update. Per-title Arr eligibility
+  handling and fuller/paginated decision retention remain separate follow-up work.
+
 - Live canary cutover and authenticated readiness completed on Tower on October
   29. Its first scheduled run is awaiting October 30 observation. Keep the
   one-action cap until that result is reviewed; deployment is not evidence of a
