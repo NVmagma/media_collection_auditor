@@ -284,6 +284,48 @@ with scan_attempt(JsonTrackingStore(sys.argv[1]),now=datetime(2026,1,20,12,tzinf
         finally:
             stop(); session.close()
 
+    def test_private_cutover_cli_copies_latest_state_and_claims_without_starting_service(self):
+        import base64,hashlib
+        from scripts.unraid_live_update_backup import capture_backup
+        source=self.store.path.read_bytes(); snapshot=json.loads(source); snapshot.pop(KEY)
+        packet=self.state_root/'backup'; packet.mkdir(mode=0o700)
+        destination=self.state_root/'prepared'; destination.mkdir(mode=0o700)
+        start=NOW.replace(tzinfo=timezone.utc)-timedelta(minutes=20)
+        claim=dict(schema_version=2,phase='slot_claimed',timezone='UTC',local_date=start.date().isoformat(),
+            automatic_replay=False,trigger='manual',scheduled_at=start.isoformat(),started_at=start.isoformat())
+        name=hashlib.sha256(('manual-live\0UTC\0'+start.isoformat()).encode()).hexdigest()+'.json'
+        claims=dict(present=True,entries={name:base64.b64encode(json.dumps(claim).encode()).decode()})
+        current=dict(Name='/media_collection_auditor',Id='a'*64,Image='sha256:'+'b'*64,
+            Config=dict(Env=['DRY_RUN=false','MAX_ACTIONS_PER_RUN=2','TZ=UTC','SQLITE_DAILY_RUN_TIMEZONE=UTC']))
+        inputs={key:(raw,(1,index)) for index,(key,raw) in enumerate((
+            ('saved-config.json',b'{"ENABLE_TV":"true","private_extension":"retained"}'),
+            ('retained-source.json',b'{"old_source":"retained"}'),('current-binding.json',b'{"old_binding":"retained"}')))}
+        info=packet.stat(); selected=(info.st_dev,info.st_ino)
+        capture_backup(directory=packet,expected_identity=selected,container=current,template=b'<Container/>',
+            source_revision='c'*40,validate_current=lambda:None,read_snapshot=lambda:(deepcopy(snapshot),7),
+            read_inputs=lambda:deepcopy(inputs),read_claims=lambda:(deepcopy(claims),('synthetic',1)))
+        fingerprint=hashlib.sha256((packet/'backup-complete.json').read_bytes()).hexdigest()
+        image=dict(Id='sha256:'+'d'*64,Config=dict(Labels={
+            'org.opencontainers.image.revision':'e'*40,'io.media-collection-auditor.worker':'json-serialized'},
+            Entrypoint=['python','-B','-m','app.main'],Cmd=None,Volumes=None,StopSignal='SIGINT',
+            Env=['AUDITOR_WORKER_MODE=json_serialized','AUDITOR_STATE_BACKEND=json','DRY_RUN=true','MAX_ACTIONS_PER_RUN=10']))
+        info=destination.stat()
+        result=subprocess.run([sys.executable,'-B','-m','scripts.json_cutover_prepare',
+            '--backup',str(packet),'--backup-identity',str(selected[0])+':'+str(selected[1]),
+            '--fingerprint',fingerprint,'--root',str(destination),
+            '--root-identity',str(info.st_dev)+':'+str(info.st_ino),'--revision','e'*40,
+            '--original-container-id',current['Id']],input=json.dumps([image]).encode(),
+            stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=20)
+        self.assertEqual(result.returncode,0,'Synthetic private preparation must succeed')
+        report=json.loads(result.stdout)
+        self.assertEqual(report['status'],'json_replacement_prepared_not_started')
+        self.assertFalse(report['deployment_authorized']); self.assertEqual(report['per_library_action_limit'],5)
+        migrated=json.loads((destination/'logs/auditor_state.json').read_bytes())
+        self.assertEqual(migrated[KEY]['last_started_at'],start.isoformat()); migrated.pop(KEY)
+        self.assertEqual(migrated,snapshot)
+        self.assertEqual((destination/'scan-claims-archive.json').read_bytes(),(packet/'daily-claims.json').read_bytes())
+        self.assertEqual(self.store.path.read_bytes(),source); self.assertFalse(self.server.calls)
+
     def test_new_favorite_blocks_disliked_move_before_intent(self):
         request=self.requests['Movies']
         with scan_attempt(self.store,now=NOW.replace(tzinfo=timezone.utc),trigger='manual') as attempt:
@@ -312,7 +354,7 @@ def main():
     print(json.dumps({'status':'json_execution_fixture_verified','tests':result.testsRun,
         'fixture_only':True,'production_services_changed':False,'production_media_mounted':False,
         'external_requests_sent':False,'permanent_deletion_performed':False,
-        'lost_ack_get_only_recovery_verified':True,'sigkill_move_recovery_verified':True,'actual_json_service_verified':True,'five_moves_per_library_verified':True,'packaged_entrypoint_verified':os.environ.get('JSON_FIXTURE_PACKAGED_APP') == 'true','movie_and_tv_moves_verified':True}))
+        'lost_ack_get_only_recovery_verified':True,'sigkill_move_recovery_verified':True,'actual_json_service_verified':True,'five_moves_per_library_verified':True,'private_preparation_cli_verified':True,'packaged_entrypoint_verified':os.environ.get('JSON_FIXTURE_PACKAGED_APP') == 'true','movie_and_tv_moves_verified':True}))
     return 0
 
 

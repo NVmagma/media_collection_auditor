@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir -r /app/requirements.txt -c /app/runtime-constrai
 COPY app/ /app/app/
 COPY unraid/assets/Media_Collection_Auditor_Badge.png /app/app/static/auditor-badge.png
 COPY unraid/assets/media-collection-auditor-icon.png /app/app/static/auditor-icon.png
-RUN WEB_SESSION_SECRET=synthetic-build-import-check python -B -c "import app.main, app.json_worker_cycle, app.json_worker_service, app.json_operation_recovery; assert app.json_worker_service.enabled()"
+RUN WEB_SESSION_SECRET=synthetic-build-import-check python -B -c "import app.main, app.json_worker_cycle, app.json_worker_service, app.json_operation_recovery, app.json_arr_import_service; assert app.json_worker_service.enabled()"
 ARG SOURCE_REVISION
 LABEL org.opencontainers.image.revision="${SOURCE_REVISION}" \
       org.opencontainers.image.title="Media Collection Auditor JSON worker" \

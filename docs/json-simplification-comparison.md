@@ -356,3 +356,21 @@ profiles, settings or tracking invalidate a saved review. Readback mismatches
 retain the intent. Tests make SQLite connections and binding calls fail if this
 JSON path attempts them. The retained deployment's import path remains available
 until the later cutover and source cleanup.
+
+## Private cutover preparation
+
+The preparation helper reads an explicitly fingerprinted current-live backup and
+writes a new private directory only. It uses the latest logical tracking snapshot,
+retains unknown fields and the full claim archive, and initializes the JSON
+cooldown from the latest validated previous scan start. It preserves the captured
+settings except for the authorized total cap of ten (five per library), switches
+the runtime to the JSON worker and drops obsolete storage-specific environment
+paths. Permanent deletion and cross-filesystem moves remain disabled.
+
+Every generated file is hashed in a completion receipt. Bad image contracts,
+partial claim archives, changed inputs, replaced directories and interrupted
+preparations do not become complete/replayable preparations. The helper mounts
+only the selected backup read-only, the source checkout read-only and its new
+private destination read-write. It does not mount production media, Docker's
+socket or templates, and it does not stop/start services. The receipt explicitly
+leaves freshness, writer quiescence and deployment authorization unverified.

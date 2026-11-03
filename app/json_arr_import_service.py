@@ -47,7 +47,7 @@ def held(selection,settings=None,*,execute=False,allow_pending=False):
     if folder.startswith('.'): raise ArrImportError('unsafe_folder')
     shared.positive(selection['provider_id']); shared.positive(selection['quality_profile_id'])
     config=shared.library_config(captured,library); roots=dict(config.roots)
-    local,remote=stage_paths(captured,library)
+    _,remote=stage_paths(captured,library)
     store=JsonTrackingStore(captured.get('STATE_FILE','/app/logs/auditor_state.json'))
     paths=list(map(Path,roots.values()))
     if any(a==b or a in b.parents or b in a.parents for i,a in enumerate(paths) for b in paths[i+1:]):
