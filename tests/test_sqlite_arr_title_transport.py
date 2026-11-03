@@ -99,3 +99,34 @@ def test_unsafe_remote_source_path_never_puts(path):
     with patch.object(transport, '_request', return_value={'id':42,'path':path,'monitored':False}) as request:
         with pytest.raises(ArrTitleTransportError): transport(DETAILS)
         assert request.call_count == 1
+
+
+@pytest.mark.parametrize('acknowledgment', [200,202])
+def test_sonarr_acknowledgment_always_requires_two_independent_readbacks(acknowledgment):
+    transport = ArrTitleUpdate(service='sonarr',base_url='http://fixture.invalid',
+        token='synthetic-token',source_path='/arr/holding/Title',title_folder='Title')
+    old = {'id':42,'path':'/arr/holding/Title','monitored':False,'seasons':[{'seasonNumber':1,'monitored':False}]}
+    new = {**old,'path':'/arr/keep/Title','monitored':True}
+    responses=[]
+    for status,row in [(200,old),(acknowledgment,new),(200,new),(200,new)]:
+        response = BytesIO(__import__('json').dumps(row).encode()); response.status = status
+        responses.append(response)
+    with patch.object(transport._opener,'open',side_effect=responses) as opened:
+        assert transport(dict(DETAILS,service='sonarr',monitored=True)) is True
+    assert [call.args[0].get_method() for call in opened.call_args_list] == ['GET','PUT','GET','GET']
+    assert all(response.closed for response in responses)
+
+
+def test_sonarr_202_with_mismatched_readback_stays_uncertain():
+    import json
+    transport = ArrTitleUpdate(service='sonarr',base_url='http://fixture.invalid',
+        token='synthetic-token',source_path='/arr/holding/Title',title_folder='Title')
+    old = {'id':42,'path':'/arr/holding/Title','monitored':False}
+    new = {**old,'path':'/arr/keep/Title','monitored':True}
+    responses=[]
+    for status,row in [(200,old),(202,new),(200,old)]:
+        response = BytesIO(json.dumps(row).encode()); response.status = status; responses.append(response)
+    with patch.object(transport._opener,'open',side_effect=responses) as opened:
+        with pytest.raises(ArrTitleTransportError): transport(dict(DETAILS,service='sonarr',monitored=True))
+        with pytest.raises(ArrTitleTransportError): transport(dict(DETAILS,service='sonarr',monitored=True))
+        assert opened.call_count == 3

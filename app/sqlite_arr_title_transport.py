@@ -59,7 +59,9 @@ class ArrTitleUpdate:
                 'X-Api-Key': self._token, 'Cache-Control': 'no-cache',
                 'Accept': 'application/json', 'Content-Type': 'application/json'})
             with self._opener.open(request, timeout=min(10, remaining)) as response:
-                expected = (202,) if method == 'PUT' and self._service == 'radarr' else (200,)
+                # Sonarr 4's Accepted(id) returns 202; its v3 schema also
+                # documents 200. Acceptance alone never clears the intent.
+                expected = ((202,) if self._service == 'radarr' else (200, 202)) if method == 'PUT' else (200,)
                 if response.status not in expected:
                     raise ValueError('status')
                 raw = bytearray()
