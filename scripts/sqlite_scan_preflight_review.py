@@ -6,21 +6,60 @@ inputs; it cannot reconstruct the exact cause of an earlier failed attempt.
 """
 from datetime import datetime
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import traceback
 
 from app.sqlite_audit_session import RevisionedAuditSession
-from app.sqlite_arr_catalog import configured_arr_queue_resolver
+from app.sqlite_arr_catalog import configured_arr_queue_resolver, ArrCatalogGET, canonical_arr_record_path
 from app.sqlite_backend_gate import require_sqlite_read_authority
 from app.sqlite_lock import audit_run_lock
 from app.sqlite_operation_coordinator import INTENTS_KEY
 from app.sqlite_scheduled_configured_slot import _configured_run_inputs
 from app.sqlite_scheduled_production import _hold_control_database
+from app.sqlite_scheduled_paths import _canonical
 from app.sqlite_scheduled_worker import prepare_scheduled_worker
 from app.state_store import GuardedSQLiteStateStore
 
 
-def diagnose(*, settings=None):
+def selected_arr_paths(*, settings, prepared):
+    """Compare only selected folders; never guess an ID or rewrite a catalog."""
+    bindings = {binding.media_key: binding for binding in prepared.bindings}
+    libraries = {library.name: library for library in prepared.configuration.libraries}
+    catalogs = {}
+    rows = []
+    for move in prepared.plan.moves:
+        binding = bindings[move.media_key]
+        service, prefix = ('radarr', 'RADARR') if binding.library == 'Movies' else ('sonarr', 'SONARR')
+        url, token = settings.get(prefix + '_URL', ''), settings.get(prefix + '_API_KEY', '')
+        row = {'library': binding.library, 'title': binding.folder,
+            'source_stage': move.source_stage, 'destination_stage': move.destination_stage}
+        if not url and not token:
+            rows.append({**row, 'status': 'arr_integration_disabled'})
+            continue
+        if binding.library not in catalogs:
+            records = ArrCatalogGET(service=service, base_url=url, token=token)()
+            paths, ids = [], set()
+            for record in records:
+                if (not isinstance(record, dict) or type(record.get('id')) is not int
+                        or record['id'] <= 0 or record['id'] in ids
+                        or type(record.get('monitored')) is not bool):
+                    raise RuntimeError('Catalog identity invalid')
+                ids.add(record['id'])
+                paths.append(canonical_arr_record_path(record.get('path')))
+            catalogs[binding.library] = paths
+        roots = dict(libraries[binding.library].roots)
+        remote_root = (settings.get(prefix + '_APP_' + move.source_stage.upper() + '_PATH', '').strip()
+            if move.source_stage != 'Waiting' else '') or roots[move.source_stage]
+        expected = _canonical(remote_root) + '/' + binding.folder
+        matches = [path for path in catalogs[binding.library]
+            if PurePosixPath(path).name == binding.folder]
+        rows.append({**row, 'status': 'exact_source_match' if matches == [expected]
+            else 'source_missing_or_changed', 'expected_source_path': expected,
+            'matching_records': len(matches), 'catalog_paths': matches[:3]})
+    return rows
+
+
+def diagnose(*, settings=None, compare_arr_paths=False):
     stage = 'binding_validation'
     result = {'read_only': True, 'media_actions_performed': False,
         'arr_updates_sent': 0, 'daily_claims_modified': False,
@@ -59,6 +98,16 @@ def diagnose(*, settings=None):
                     # and never invoke the checkpointing worker in a diagnostic.
                     result.update(status='discovery_checkpoint_required', diagnostic_stage=stage)
                     return result
+                if compare_arr_paths:
+                    stage = 'selected_arr_path_comparison'
+                    # Bound diagnostic output independently of the scan ceiling.
+                    if len(prepared.plan.moves) > 20:
+                        raise RuntimeError('Diagnostic candidate limit exceeded')
+                    comparisons = selected_arr_paths(settings=values, prepared=prepared)
+                    verify()
+                    result.update(status='selected_arr_paths_observed', diagnostic_stage=stage,
+                        candidates=comparisons, execution_verified=False)
+                    return result
                 stage = 'arr_catalog_resolution'
                 requests = configured_arr_queue_resolver(settings=values, config=config)(prepared)
                 verify()
@@ -77,6 +126,10 @@ def diagnose(*, settings=None):
 
 
 if __name__ == '__main__':
-    report = diagnose()
+    import argparse
+    parser = argparse.ArgumentParser(description='GET-only scan preparation review')
+    parser.add_argument('--compare-arr-paths', action='store_true')
+    args = parser.parse_args()
+    report = diagnose(compare_arr_paths=args.compare_arr_paths)
     print(json.dumps(report, sort_keys=True))
     raise SystemExit(2 if report['status'] == 'scan_preflight_review_blocked' else 0)

@@ -74,3 +74,49 @@ def test_pending_intent_blocks_before_any_collection(bound, monkeypatch):
     report = diagnostic.diagnose(settings=values)
     assert report['diagnostic_stage'] == 'pending_operation_check'
     fetch.assert_not_called()
+
+
+def test_comparison_mode_keeps_real_preparation_read_only(bound, monkeypatch):
+    _, _, control, _, values = bound
+    resolver = Mock(side_effect=AssertionError('No execution request construction'))
+    monkeypatch.setattr(diagnostic, 'configured_arr_queue_resolver', resolver)
+    before = (control/'state.db').read_bytes()
+    report = diagnostic.diagnose(settings=values, compare_arr_paths=True)
+    assert report['status'] == 'selected_arr_paths_observed'
+    assert len(report['candidates']) == 2
+    assert {row['library'] for row in report['candidates']} == {'Movies', 'TV'}
+    assert all(row['status'] == 'arr_integration_disabled' for row in report['candidates'])
+    assert report['execution_verified'] is False
+    assert (control/'state.db').read_bytes() == before
+    resolver.assert_not_called()
+
+
+@pytest.mark.parametrize('kind', ['missing', 'other_root', 'exact'])
+def test_selected_path_comparison_reports_only_capped_candidates(bound, monkeypatch, kind):
+    _, _, control, _, values = bound
+    for prefix in ('RADARR', 'SONARR'):
+        values[prefix + '_URL'] = 'http://synthetic.invalid'
+        values[prefix + '_API_KEY'] = 'synthetic-private-token'
+    # Test the GET-only comparison helper against a synthetic selected plan.
+    from types import SimpleNamespace
+    prepared = SimpleNamespace(
+        bindings=(SimpleNamespace(media_key='TV/Selected', folder='Selected', library='TV'),),
+        configuration=SimpleNamespace(libraries=(SimpleNamespace(name='TV',
+            roots=(('Waiting', '/media/TV'),)),)),
+        plan=SimpleNamespace(moves=(SimpleNamespace(media_key='TV/Selected',
+            source_stage='Waiting', destination_stage='Holding'),)))
+    records = [{'id': 99, 'path': '/media/TV/Unrelated', 'monitored': True}]
+    if kind != 'missing':
+        records.append({'id': 7, 'path': ('/other' if kind == 'other_root' else '/media/TV') + '/Selected/',
+            'monitored': True})
+    fetch = Mock(return_value=records)
+    factory = Mock(return_value=fetch)
+    monkeypatch.setattr(diagnostic, 'ArrCatalogGET', factory)
+    before = (control/'state.db').read_bytes()
+    rows = diagnostic.selected_arr_paths(settings=values, prepared=prepared)
+    assert len(rows) == 1 and rows[0]['title'] == 'Selected'
+    assert rows[0]['matching_records'] == (0 if kind == 'missing' else 1)
+    assert rows[0]['status'] == ('exact_source_match' if kind == 'exact' else 'source_missing_or_changed')
+    assert 'Unrelated' not in str(rows) and 'synthetic-private-token' not in str(rows)
+    factory.assert_called_once()
+    assert (control/'state.db').read_bytes() == before

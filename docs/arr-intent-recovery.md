@@ -66,3 +66,10 @@ the diagnostic reports that condition and stops without simulating a committed
 plan. Success covers preparation/catalog reads only, not execution or historical
 failure reconstruction. Activity's retained 100-row sample is separate from the
 worker's 100,000-title collection ceiling and the live one-per-library move cap.
+
+For a source-path mismatch, add `--compare-arr-paths` after `python -B -`.
+This repeats the read-only preparation, then reports the exact selected titles,
+their expected source paths, and exact-folder Arr catalog matches. It reports
+at most 20 selected candidates. It does not list all unrelated folder mismatches,
+guess alternative IDs, change Arr paths or authorize execution. A directory
+missing from an Arr catalog is not, by itself, evidence of missing media.
