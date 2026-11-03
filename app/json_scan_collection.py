@@ -22,6 +22,7 @@ class InventoryTitle:
     folder: str
     stage: str
     threshold_days: int
+    blocker: str | None = None
 
 
 @dataclass(frozen=True)
@@ -76,7 +77,7 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
         for title in inventory.titles:
             if not isinstance(title, InventoryTitle): raise ValueError('Known title binding required')
             key = ('TV/' if inventory.library == 'TV' else '') + title.folder
-            titles.append(TitleObservation(key,title.stage,title.threshold_days,None,'unavailable'))
+            titles.append(TitleObservation(key,title.stage,title.threshold_days,None,'unavailable',title.blocker))
         prelim.append(LibraryObservation(inventory.library,False,False,tuple(titles)))
     plan_scan(snapshot=snapshot,libraries=prelim,now=now,maximum_titles=maximum_titles)
     tags = validated_tag_names({name:settings.get(key, default) for name,key,default in (
@@ -87,7 +88,7 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
     observations, collection_status = [], []
     for inventory, preliminary in zip(inventories,prelim,strict=True):
         check_deadline()
-        jf_complete = arr_complete = inventory.complete
+        jf_complete = arr_complete = False
         signals = {}
         catalog = {}
         if inventory.complete and inventory.titles:
@@ -95,8 +96,13 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
                 fetch = jellyfin_factory(base_url=settings.get('JELLYFIN_HOST_URL',''),
                     token=settings.get('JELLYFIN_API_TOKEN',''))
                 cached = _ScanCatalog(fetch)
+                jf_complete = True
+                jf_checked = False
                 for title, initial in zip(inventory.titles,preliminary.titles,strict=True):
                     check_deadline()
+                    if title.blocker is not None:
+                        continue
+                    jf_checked = True
                     result = collect_title_observation(fetch=cached,
                         jellyfin_type='Series' if inventory.library == 'TV' else 'Movie',
                         folder=title.folder,media_key=initial.media_key,now=now,tag_names=tags)
@@ -104,6 +110,7 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
                         jf_complete = False
                         break
                     signals[initial.media_key] = result['signals'] if result['status'] == 'shape_valid_untrusted' else None
+                jf_complete = jf_complete and jf_checked
             except Exception:
                 jf_complete = False  # Fixed status only; no remote exception/payload retained.
             check_deadline()
@@ -111,6 +118,7 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
                 prefix, service = ('SONARR','sonarr') if inventory.library == 'TV' else ('RADARR','radarr')
                 catalog = _catalog(arr_factory(service=service,
                     base_url=settings.get(prefix+'_URL',''),token=settings.get(prefix+'_API_KEY','')))
+                arr_complete = True
             except Exception:
                 arr_complete = False
             check_deadline()
@@ -122,10 +130,10 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
                 else 'exact_source_match' if matches[0] == roots[inventory.library][title.stage]+'/'+title.folder
                 else 'path_conflict')
             titles.append(TitleObservation(initial.media_key,title.stage,title.threshold_days,
-                signals.get(initial.media_key),status))
+                signals.get(initial.media_key),status,title.blocker))
         observations.append(LibraryObservation(inventory.library,jf_complete,arr_complete,tuple(titles)))
         collection_status.append({'library':inventory.library,'inventory_complete':inventory.complete,
-            'jellyfin_complete':jf_complete,'arr_complete':arr_complete,'titles':len(titles)})
+            'jellyfin_complete':jf_complete,'arr_complete':arr_complete,'titles':len(titles) if inventory.complete else None})
     check_deadline()
     result = plan_scan(snapshot=snapshot,libraries=observations,now=now,
         maximum_titles=maximum_titles,favorites_trigger_keep=favorites == 'true')

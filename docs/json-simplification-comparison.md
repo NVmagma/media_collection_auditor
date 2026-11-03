@@ -173,3 +173,35 @@ need worker integration. The result explicitly leaves independent inventory and
 freshness unverified and grants no media action authority. No scan claim or state
 file is modified by collection. A malformed inventory or pending journal fails
 before requests, and exceeding the whole-run deadline returns no partial plan.
+
+## Combined filesystem/service rehearsal
+
+`app/json_readonly_scan.py` opens configured local stages with no-follow directory
+handles and compares root/title identities before and after GET collection. Missing
+or unsafe stages block the affected library and produce fixed issue summaries.
+Overlapping/aliased roots are refused. `.DS_Store` regular files and
+`.deletedByTMM` directories are reported as ignored housekeeping; neither is
+removed. Unknown hidden entries and symlinks are not adopted as media titles.
+
+TV Waiting content uses the existing bounded no-follow observation routine.
+Future timestamps and unreadable/symlinked content skip the affected show.
+Observed newer content proposes a reset and blocks use of the old clock; new
+folders propose the current observation date without backdating. Proposals are
+not applied. Successful content observations are repeated before and after
+service collection. External writers are not fenced, and no result establishes
+future freshness or permission to move.
+
+`scripts/json_readonly_rehearsal.py` checks the selected offline candidate against
+its verified live backup, uses that backup's captured settings/credentials only
+inside the helper, and runs the combined rehearsal. Its redacted output includes
+all-title reason counts, up to two proposed titles, per-library completeness and
+clock-proposal counts. It verifies comparison state and archived claims remain
+byte-identical. It never configures a worker, saves clocks, creates scan claims,
+sends Arr updates or calls a production container control API.
+
+The Tower check must mount production media read-only, the selected backup
+read-only and only the disposable comparison directory writable for its advisory
+lock. Source code is read-only, no Docker socket/host ports are mounted/published,
+and the helper uses only the existing GET transports. The real auditor remains
+unchanged. Changing production inventory can invalidate the rehearsal; a blocked
+result is not permission to retry external actions or switch backends.

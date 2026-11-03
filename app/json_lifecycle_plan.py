@@ -16,6 +16,7 @@ from app.sqlite_title_identity import validate_title_folder
 from app.json_scan_control import KEY, _control
 
 SIGNALS = {'played', 'favorite', 'disliked', 'keep', 'keep_all', 'protected'}
+BLOCKERS = {'future_content_timestamp', 'content_unavailable', 'content_reset_required', 'discovery_required'}
 ARR = {'exact_source_match', 'missing_record', 'path_conflict', 'ambiguous_record', 'unavailable'}
 DESTINATIONS = {('Waiting','hold'):'Holding', ('Waiting','keep'):'Keep',
     ('Holding','rescue'):'Keep', ('Holding','to_removal'):'Removal'}
@@ -28,6 +29,7 @@ class TitleObservation:
     threshold_days: int
     signals: dict | None
     arr_status: str
+    blocker: str | None = None
 
 
 @dataclass(frozen=True)
@@ -75,7 +77,8 @@ def plan_scan(*, snapshot, libraries, now, favorites_trigger_keep=True, maximum_
             if (not isinstance(title, TitleObservation) or title.stage not in CLOCKS
                     or type(title.threshold_days) is not int or title.threshold_days < 0
                     or not isinstance(title.arr_status, str) or title.arr_status not in ARR
-                    or not isinstance(title.media_key, str)):
+                    or not isinstance(title.media_key, str)
+                    or title.blocker is not None and title.blocker not in BLOCKERS):
                 raise ValueError('Invalid title observation')
             key = title.media_key
             prefix = 'TV/' if library.library == 'TV' else ''
@@ -93,7 +96,8 @@ def plan_scan(*, snapshot, libraries, now, favorites_trigger_keep=True, maximum_
     for library in captured:
         for title in library.titles:
             destination = None
-            if not library.jellyfin_complete: reason = 'jellyfin_collection_incomplete'
+            if title.blocker is not None: reason = title.blocker
+            elif not library.jellyfin_complete: reason = 'jellyfin_collection_incomplete'
             elif not library.arr_complete: reason = 'arr_catalog_unavailable'
             elif title.signals is None: reason = 'jellyfin_unavailable'
             elif title.stage == 'Removal': reason = 'deletion_not_authorized'
