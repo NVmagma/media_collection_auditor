@@ -3,7 +3,7 @@
 Missing/new TV clocks are proposals for review, not inferred old dates or move
 permission. No entrypoint selects this module for a live worker.
 """
-from contextlib import ExitStack
+from contextlib import ExitStack, nullcontext
 from copy import deepcopy
 from datetime import datetime
 import os
@@ -43,7 +43,28 @@ def _identity(info):
 
 
 def rehearse_scan(*, state_file, settings, now=None, maximum_titles=100000,
-                   collect=collect_readonly_plan, timer=monotonic, maximum_seconds=3600, observer=lambda stage: None):
+                   collect=collect_readonly_plan, timer=monotonic, maximum_seconds=3600,
+                   observer=lambda stage: None):
+    """Read-only public rehearsal; never opens a checkpoint-capable worker mode."""
+    return _scan(state_file=state_file, settings=settings, now=now,
+        maximum_titles=maximum_titles, collect=collect, timer=timer,
+        maximum_seconds=maximum_seconds, observer=observer)
+
+
+def collect_worker_scan(session, *, settings, **kwargs):
+    """Collect under the worker's existing exclusive session and save fresh clocks.
+
+    This only updates discovery/content dates; moves remain a separate executor.
+    The caller owns admission and holds the same session throughout collection.
+    """
+    session.verify()
+    return _scan(state_file=str(session._path), settings=settings,
+                 _session=session, _save_clocks=True, **kwargs)
+
+
+def _scan(*, state_file, settings, now=None, maximum_titles=100000,
+                   collect=collect_readonly_plan, timer=monotonic, maximum_seconds=3600, observer=lambda stage: None,
+                   _session=None, _save_clocks=False):
     values = deepcopy(settings)
     zone_name = values.get('SQLITE_DAILY_RUN_TIMEZONE') or values.get('TZ') or 'UTC'
     zone = ZoneInfo(zone_name)
@@ -87,7 +108,7 @@ def rehearse_scan(*, state_file, settings, now=None, maximum_titles=100000,
         definitions.append((name,local,remote,_days(values,wait,'30' if name == 'Movies' else '60')))
     if not definitions: raise ValueError('At least one library required')
     observer('tracking_validation')
-    with JsonTrackingStore(state_file).session() as session, ExitStack() as stack:
+    with (JsonTrackingStore(state_file).session() if _session is None else nullcontext(_session)) as session, ExitStack() as stack:
         snapshot = deepcopy(session.state)
         plan_scan(snapshot=snapshot,libraries=[LibraryObservation(name,False,False,())
             for name,_,_,_ in definitions],now=now,maximum_titles=maximum_titles)
@@ -175,13 +196,49 @@ def rehearse_scan(*, state_file, settings, now=None, maximum_titles=100000,
                 if observe_scheduled_content(title_path=path,now=now,maximum_seconds=min(30,remaining()),timer=timer,timezone_info=zone) != newest:
                     raise RuntimeError('TV content changed during rehearsal')
         verify_inventory()
+        changed_dates = 0
+        if _save_clocks:
+            from app.json_clock_updates import ClockObservation, apply_clock_observations
+            complete_libraries = {item.library for item in inventories if item.complete}
+            changes = tuple(ClockObservation(
+                ('TV/' if row['library'] == 'TV' else '')+row['title'],row['stage'],
+                row['previous'],datetime.fromisoformat(row['proposed']),
+                'discovered' if row['reason'] == 'discovery_required' else 'content_reset')
+                for row in clock_proposals if row['library'] in complete_libraries)
+            def verify_clock(change):
+                library = 'TV' if change.media_key.startswith('TV/') else 'Movies'
+                folder = change.media_key[3:] if library == 'TV' else change.media_key
+                fd,path,initial = roots[library,change.stage]
+                reopened = _open_directory(path)
+                try:
+                    if _identity(os.fstat(reopened)) != initial:
+                        return False
+                finally: os.close(reopened)
+                if _identity(os.stat(folder,dir_fd=fd,follow_symlinks=False)) != stage_rows[library,change.stage][folder]:
+                    return False
+                content_path = path+'/'+folder
+                if content_path in content_times:
+                    return observe_scheduled_content(title_path=content_path,now=now,
+                        maximum_seconds=min(30,remaining()),timer=timer,timezone_info=zone) == content_times[content_path]
+                return True
+            changed_dates = apply_clock_observations(session,changes=changes,now=now,
+                verify_change=verify_clock)['changed_dates']
+            snapshot = deepcopy(session.state)
+            # Rebuild local blockers against the newly recorded clocks. Service reads
+            # use this snapshot, so they cannot move using a superseded TV clock.
+            applied = {change.media_key for change in changes}
+            inventories = [LibraryInventory(item.library,item.roots,tuple(
+                InventoryTitle(title.folder,title.stage,title.threshold_days,
+                    None if ('TV/' if item.library == 'TV' else '')+title.folder in applied else title.blocker)
+                for title in item.titles),item.complete) for item in inventories]
+            verify_inventory()
         observer('service_collection')
         result = collect(snapshot=snapshot,inventories=tuple(inventories),settings=values,
             now=now,maximum_titles=maximum_titles,maximum_seconds=remaining(),timer=timer)
         observer('inventory_revalidation')
         verify_inventory()
-        return {**result,'comparison_only':True, 'clock_proposals':tuple(clock_proposals),
-            'ignored_housekeeping_entries':sum(ignored.values()),'tracking_modified':False,
+        return {**result,'comparison_only':not _save_clocks, 'clock_proposals':tuple(clock_proposals),
+            'ignored_housekeeping_entries':sum(ignored.values()),'tracking_modified':bool(changed_dates),'clock_changes_applied':changed_dates,
             'inventory_issues':tuple(inventory_issues),
             'inventory_checked_before_and_after':True,
             'inventory_independently_verified':False,'external_writers_excluded':False,'lifecycle_timezone':zone_name}

@@ -289,3 +289,14 @@ active documentation references. Replace this transition document with the JSON
 operations guide. Do not delete the running service's recovery tools before
 cutover, nor interpret source cleanup as permission to remove retained host
 backups or rollback containers. Permanent deletion remains disabled.
+
+## Worker clock collection integration
+
+The disconnected JSON worker collector can now use its already-held tracking
+session. It verifies local stage/title identities and TV content again before
+atomically recording discoveries and episode resets, then collects services and
+plans against the updated snapshot. It does not backdate discoveries, alter
+unrelated clocks, move media or send Arr updates. An incomplete library saves no
+partial discoveries for that library. Future episode timestamps remain per-title
+blockers. The public rehearsal cannot select this checkpoint mode. Scheduling,
+UI dispatch and production cutover are still pending.
