@@ -211,3 +211,22 @@ captured lifecycle timezone (daily timezone, then TZ, then UTC). It passes an
 explicit timezone only to the JSON content reader; existing SQLite callers retain
 their default behavior. A Los Angeles fixture verifies that a 03:00 local content
 observation remains 03:00 in the proposed clock rather than becoming UTC wall time.
+
+### Existing configuration compatibility and local-only diagnosis
+
+The initial Tower rehearsal returned only a generic blocked result. Source
+review found two gaps in the new rehearsal: stage paths lacked the existing
+MEDIA_PATH-derived defaults, and captured saved settings were stricter than the
+application's known-key/string conversion rules. The rehearsal now uses those
+same defaults and saved-config precedence, preserves explicit overrides, and
+ignores unknown saved metadata without changing it. Boolean policy strings keep
+the existing case/whitespace handling. Tests cover absent/empty path overrides,
+saved JSON boolean values and unknown configuration extensions.
+
+`--local-only` validates backup/candidate/settings, inventories media and proposes
+clock observations without constructing a service collector or making network
+requests. Mount the helper with `--network none` for this diagnostic. Output
+explicitly reports local-only scope and network disabled; it is not service
+readiness. Failures identify the last fixed diagnostic stage and a bounded error
+class without exception text, paths, tokens or remote payloads. This is a new
+read-only observation, not reconstruction of the earlier failed attempt.

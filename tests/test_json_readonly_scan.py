@@ -190,3 +190,23 @@ def test_content_reset_uses_captured_lifecycle_timezone(local):
     result = run(local)
     assert result['lifecycle_timezone'] == 'America/Los_Angeles'
     assert result['clock_proposals'][0]['proposed'] == '2026-01-10T03:00:00'
+
+
+@pytest.mark.parametrize('explicit', ['absent','empty'])
+def test_media_path_defaults_match_existing_application(local,explicit):
+    source,values,*_ = local
+    expected = run(local)
+    values['MEDIA_PATH'] = str(source.parent)
+    for prefix in ('RADARR','SONARR'):
+        for field in ('TRANSIENT','HOLDING','KEEP','REMOVAL'):
+            key = prefix+'_'+field+'_PATH'
+            if explicit == 'absent': values.pop(key)
+            else: values[key] = ''
+    result = run(local)
+    assert result['moves'] == expected['moves'] and result['scanned_titles'] == expected['scanned_titles']
+
+
+def test_existing_case_insensitive_boolean_settings_are_supported(local):
+    source,values,*_ = local
+    values.update(ENABLE_TV='True',TV_NEW_EPISODES_RESET_CLOCK=' TRUE ')
+    assert run(local)['scanned_titles'] == 2

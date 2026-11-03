@@ -11,6 +11,7 @@ from pathlib import Path
 import stat
 from time import monotonic
 import math
+import posixpath
 from zoneinfo import ZoneInfo
 
 from app.json_scan_collection import InventoryTitle, LibraryInventory, collect_readonly_plan
@@ -24,12 +25,14 @@ from app.sqlite_title_identity import validate_title_folder
 
 def _bool(values,key,default):
     value = values.get(key,default)
+    if isinstance(value,str): value = value.strip().lower()
     if value not in ('true','false'): raise ValueError('Explicit boolean setting required')
     return value == 'true'
 
 
 def _days(values,key,default):
     raw = values.get(key,default)
+    if isinstance(raw,str): raw = raw.strip()
     if not isinstance(raw,str) or not raw.isascii() or not raw.isdecimal() or not 0 <= int(raw) <= 100000:
         raise ValueError('Bounded lifecycle duration required')
     return int(raw)
@@ -40,7 +43,7 @@ def _identity(info):
 
 
 def rehearse_scan(*, state_file, settings, now=None, maximum_titles=100000,
-                   collect=collect_readonly_plan, timer=monotonic, maximum_seconds=3600):
+                   collect=collect_readonly_plan, timer=monotonic, maximum_seconds=3600, observer=lambda stage: None):
     values = deepcopy(settings)
     zone_name = values.get('SQLITE_DAILY_RUN_TIMEZONE') or values.get('TZ') or 'UTC'
     zone = ZoneInfo(zone_name)
@@ -59,6 +62,7 @@ def rehearse_scan(*, state_file, settings, now=None, maximum_titles=100000,
             raise RuntimeError('Rehearsal deadline exceeded')
         return maximum_seconds-elapsed
     reset_tv = _bool(values,'TV_NEW_EPISODES_RESET_CLOCK','true')
+    base = _canonical(values.get('MEDIA_PATH','/media').strip())
     holding = _days(values,'HOLDING_DAYS','7')
     removal = _days(values,'REMOVAL_DAYS','7')
     definitions, all_paths = [], []
@@ -68,7 +72,10 @@ def rehearse_scan(*, state_file, settings, now=None, maximum_titles=100000,
         if not _bool(values,enabled,'true' if name == 'Movies' else 'false'): continue
         local, remote = {}, {}
         for stage,field in (('Waiting','TRANSIENT'),('Holding','HOLDING'),('Keep','KEEP'),('Removal','REMOVAL')):
-            path = _canonical(values.get(prefix+'_'+field+'_PATH',''))
+            explicit = values.get(prefix+'_'+field+'_PATH','')
+            if not isinstance(explicit,str): raise ValueError('String stage path required')
+            suffix = {'Waiting':'','Holding':'_hold','Keep':'_keep','Removal':'_removal'}[stage]
+            path = _canonical(explicit.strip() or posixpath.join(base,name+suffix))
             current = Path(path)
             if current == Path('/') or current == private or current in private.parents or private in current.parents:
                 raise ValueError('Disjoint dedicated media roots required')
@@ -79,6 +86,7 @@ def rehearse_scan(*, state_file, settings, now=None, maximum_titles=100000,
             remote[stage] = _canonical(override or path)
         definitions.append((name,local,remote,_days(values,wait,'30' if name == 'Movies' else '60')))
     if not definitions: raise ValueError('At least one library required')
+    observer('tracking_validation')
     with JsonTrackingStore(state_file).session() as session, ExitStack() as stack:
         snapshot = deepcopy(session.state)
         plan_scan(snapshot=snapshot,libraries=[LibraryObservation(name,False,False,())
@@ -99,6 +107,7 @@ def rehearse_scan(*, state_file, settings, now=None, maximum_titles=100000,
                     if len(rows) >= maximum_titles: raise RuntimeError('Inventory limit exceeded')
                     rows[entry.name] = _identity(info)
             return rows, excluded
+        observer('local_inventory')
         inventories, clock_proposals, inventory_issues, total = [], [], [], 0
         for name,local,remote,wait in definitions:
             complete, titles, seen_keys = True, [], set()
@@ -166,8 +175,10 @@ def rehearse_scan(*, state_file, settings, now=None, maximum_titles=100000,
                 if observe_scheduled_content(title_path=path,now=now,maximum_seconds=min(30,remaining()),timer=timer,timezone_info=zone) != newest:
                     raise RuntimeError('TV content changed during rehearsal')
         verify_inventory()
+        observer('service_collection')
         result = collect(snapshot=snapshot,inventories=tuple(inventories),settings=values,
             now=now,maximum_titles=maximum_titles,maximum_seconds=remaining(),timer=timer)
+        observer('inventory_revalidation')
         verify_inventory()
         return {**result,'comparison_only':True, 'clock_proposals':tuple(clock_proposals),
             'ignored_housekeeping_entries':sum(ignored.values()),'tracking_modified':False,

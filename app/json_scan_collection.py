@@ -84,6 +84,7 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
         ('keep','KEEP_TAG','keep'), ('disliked','DISLIKE_TAG','not-at-all'),
         ('keep_all','KEEP_ALL_SEASONS_TAG','keep-all-seasons'), ('protected','PROTECT_TAG','keep-forever'))})
     favorites = settings.get('FAVORITES_TRIGGER_KEEP','true')
+    if isinstance(favorites,str): favorites = favorites.strip().lower()
     if favorites not in ('true','false'): raise ValueError('Explicit favorites policy required')
     observations, collection_status = [], []
     for inventory, preliminary in zip(inventories,prelim,strict=True):
