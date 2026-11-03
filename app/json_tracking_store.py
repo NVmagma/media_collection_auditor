@@ -66,6 +66,15 @@ class JsonTrackingSession:
             raise RuntimeError('Tracking changed outside the worker')
 
     def checkpoint(self):
+        try:
+            self._checkpoint()
+        except BaseException:
+            # A failure can follow replacement. Prevent callers from continuing
+            # an uncertain session or treating a failed intent save as authority.
+            self._closed = True
+            raise
+
+    def _checkpoint(self):
         raw = _encode(self.state)
         self.verify()
         name = '.json-worker-' + secrets.token_hex(16) + '.tmp'

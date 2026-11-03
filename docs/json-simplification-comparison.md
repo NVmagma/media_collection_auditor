@@ -95,3 +95,35 @@ Disposable Linux tests cover two-process contention, failures during replacement
 and actual SIGKILL immediately before/after replacement. Restart reads a complete
 old/new snapshot; abandoned temporary files are not adopted. The builder and
 reader comparison remain separate from production selection or activation.
+
+## Isolated scan control and operation journal
+
+`app/json_scan_control.py` remains disconnected from production. It holds the
+JSON session lock for the whole scan and checkpoints the attempt start before
+returning control to a future worker. Manual and scheduled starts share a rolling
+3600-second cooldown stored in the same JSON file. Restart and clock rollback
+cannot reset it. Normal settings changes do not require a storage binding.
+
+Control initialization is explicit, cannot overwrite existing metadata or pending
+operations, and requires the separately verified latest old scan timestamp. The
+archived Tower claims have **not** been translated or activated. That migration
+proof and scheduling/due-slot integration remain required before a live worker.
+
+The journal checkpoints a single move/Arr intent before permitting an executor
+to act. Clearing it requires the exact operation identifier and a trusted local
+fresh-outcome verifier; browser-supplied booleans are not such verification.
+Wrong IDs, false/failed verification and tracking mutation during verification
+leave the durable journal intact. No recovery endpoint or media/HTTP executor is
+provided by this module. Restart never replays a journaled action automatically.
+
+An interrupted scan without a pending journal may start a fresh scan after its
+cooldown. An unresolved journal requires review. Completion is explicit and
+refused while an operation is pending; simply returning from a context is not
+reported as completion. A failed atomic checkpoint invalidates that session so a
+caller cannot continue external work after an uncertain state save.
+
+Tests include competing processes, manual/scheduled cooldown across reopened
+state, explicit initialization, clock rollback, pending legacy operations, lost
+verification acknowledgments, and actual SIGKILL with/without an operation.
+Per-library action selection, fresh protection checks, remote readback routines,
+recovery UI and schedule handling remain worker integration work.

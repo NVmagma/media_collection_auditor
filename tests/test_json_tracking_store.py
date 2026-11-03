@@ -139,3 +139,12 @@ with JsonTrackingStore(path).session() as session:
         if phase == 'after_replace': expected['keep_seen']['Committed'] = '2026-01-03T03:04:05'
         assert session.state == expected
     if phase == 'before_replace': assert store.path.read_bytes() == before
+
+
+def test_failed_checkpoint_cannot_be_caught_and_used_to_continue_actions(store, monkeypatch):
+    with pytest.raises(RuntimeError):
+        with store.session() as session:
+            monkeypatch.setattr(os, 'replace', lambda *a, **k: (_ for _ in ()).throw(OSError('synthetic')))
+            with pytest.raises(OSError): session.checkpoint()
+            with pytest.raises(RuntimeError): session.verify()
+            with pytest.raises(RuntimeError): session.checkpoint()
