@@ -150,3 +150,26 @@ partial scan. Presentation pagination is still separate work. Tested 541-title
 observations preserve all rows and dates. No journal, scan claim, tracking date,
 folder or external catalog is written by planning. These changes are not wired
 to the running SQLite service or the legacy JSON worker.
+
+## GET-only collection integration
+
+`app/json_scan_collection.py` connects the existing bounded Jellyfin GET
+transport, complete per-user pagination/BoxSet handling and Arr v3 catalog GETs
+to the JSON advisory planner. Each invocation detaches settings and snapshot,
+creates fresh scan-scoped catalogs and retains no credentials or raw service
+responses in its report. Selected provider matches remain non-authorizing.
+
+Actual loopback HTTP tests cover 129 movies plus two shows, two Jellyfin users,
+second-page collection, second-user favorites/failures, changing pagination,
+missing/conflicting/ambiguous Arr mappings and failed Sonarr/Jellyfin reads.
+Only GET requests are sent. Arr trailing-slash compatibility remains reused.
+One catalog per library per scan is sufficient; there is no retry after failure.
+New scans reread protections rather than reusing the previous scan's cache.
+
+This is a complete **service collection rehearsal with supplied synthetic local
+inventory**, not production inventory verification. Local root/title descriptor
+validation, TV episode clock reset/discovery and before-move fresh checks still
+need worker integration. The result explicitly leaves independent inventory and
+freshness unverified and grants no media action authority. No scan claim or state
+file is modified by collection. A malformed inventory or pending journal fails
+before requests, and exceeding the whole-run deadline returns no partial plan.
