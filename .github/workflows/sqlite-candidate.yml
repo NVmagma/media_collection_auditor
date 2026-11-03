@@ -18,6 +18,8 @@ on:
       - 'scripts/sqlite_media_view_review*'
       - 'tests/test_sqlite_media_view_review*'
       - 'app/**'
+      - 'scripts/json_execution_fixture.py'
+      - 'scripts/json_worker_lab.sh'
       - 'scripts/dashboard_clock_*'
       - 'scripts/interface_api_release_lab.sh'
       - 'scripts/integration_*fixture.py'
