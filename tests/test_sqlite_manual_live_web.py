@@ -88,10 +88,24 @@ def test_active_scan_blocks_new_request_even_after_cooldown(page):
 
 def test_run_button_status_reports_queue_without_starting_or_exposing_payload(page):
     client, observer, wake, _, check = page
-    assert client.get('/api/run-status').json == {'ok': True, 'running': False, 'queued': False}
+    assert client.get('/api/run-status').json == {'ok': True, 'running': False, 'queued': False, 'blocked': False}
     observer.request_manual_live()
     response = client.get('/api/run-status')
-    assert response.json == {'ok': True, 'running': False, 'queued': True}
+    assert response.json == {'ok': True, 'running': False, 'queued': True, 'blocked': False}
     assert response.headers['Cache-Control'] == 'no-store'
+    wake.assert_not_called()
+    check.assert_not_called()
+
+
+def test_blocked_gate_is_current_status_not_a_new_completed_attempt(page):
+    client, observer, wake, _, check = page
+    observer.observe_execution_gate(blocked=True)
+    assert client.get('/api/run-status').json == {
+        'ok': True, 'running': False, 'queued': False, 'blocked': True}
+    assert observer.history() == []
+    assert observer.report()['last_started'] is None
+    observer.observe_execution_gate(blocked=False)
+    assert client.get('/api/run-status').json['blocked'] is False
+    assert observer.history() == []
     wake.assert_not_called()
     check.assert_not_called()

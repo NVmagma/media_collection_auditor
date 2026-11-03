@@ -12,10 +12,11 @@ if (!file) throw Error('Pass the synthetic page rendered by tests/dashboard_work
     const page = await browser.newPage({viewport: {width: 1280, height: 1000}});
     const errors = [], posts = [];
     let scanRunning = false;
+    let scanBlocked = false;
     page.on('pageerror', error => errors.push(error.message));
     await page.route('**/*', route => {
       const request = route.request(), url = new URL(request.url());
-      if (url.pathname === '/api/run-status') return route.fulfill({contentType:'application/json',body:JSON.stringify({ok:true,running:scanRunning,queued:false})});
+      if (url.pathname === '/api/run-status') return route.fulfill({contentType:'application/json',body:JSON.stringify({ok:true,running:scanRunning,queued:false,blocked:scanBlocked})});
       if (request.method() !== 'GET') {
         posts.push(request.method());
         if (url.hostname==='fixture.invalid' && url.pathname==='/api/run-now') {
@@ -191,6 +192,11 @@ if (!file) throw Error('Pass the synthetic page rendered by tests/dashboard_work
     await page.waitForFunction(() => document.getElementById('run-now').textContent === 'Scan running…');
     assert.equal(await page.locator('#run-now').isDisabled(),true);
     scanRunning = false;
+    scanBlocked = true;
+    await page.waitForFunction(() => document.getElementById('run-now').textContent === 'Review required',{},{timeout:10000});
+    assert.equal(await page.locator('#run-now').isDisabled(),true);
+    assert.match(await page.locator('#run-result').textContent(),/previous attempt is historical/);
+    scanBlocked = false;
     await page.waitForFunction(() => !document.getElementById('run-now').disabled,{},{timeout:10000});
     assert.deepEqual(posts,['POST']);
     await page.goto('http://fixture.invalid/');

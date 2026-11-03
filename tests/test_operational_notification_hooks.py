@@ -45,9 +45,11 @@ def test_repeated_scheduler_exception_is_one_redacted_delivery(monkeypatch,capsy
 
 
 def test_binding_review_alert_deduplicates_without_worker(monkeypatch):
-    send,_,_=service_case(monkeypatch,lambda *_:pytest.fail('No invalid worker run'),gate_failure=True)
+    send,_,observer=service_case(monkeypatch,lambda *_:pytest.fail('No invalid worker run'),gate_failure=True)
     assert send.call_count==1
     assert send.call_args.args[3]['event']=='settings_review_required'
+    assert observer.report()['execution_blocked'] is True
+    assert observer.history() == []
 
 
 def test_waiting_cycle_does_not_rearm_failed_scan_alert(monkeypatch):

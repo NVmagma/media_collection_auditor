@@ -22,6 +22,19 @@ class ScheduledRunObservations:
         self._scheduler_state = 'unobserved'
         self._history = []
         self._active = None
+        self._execution_blocked = False
+
+    def observe_execution_gate(self, *, blocked):
+        """Current process gate observation, separate from completed attempts.
+
+        Never reconstruct history or clear a durable intent. Only the service
+        sets this after its real authority check succeeds or raises.
+        """
+        if type(blocked) is not bool:
+            raise ValueError('Explicit gate observation required')
+        with self._lock:
+            self._observed = True
+            self._execution_blocked = blocked
 
     def _now(self):
         value = self._clock()
@@ -181,6 +194,7 @@ class ScheduledRunObservations:
             'running': self._running if self._observed else None,
             'queued': (self._manual_pending or self._manual_claimed) if self._observed else None, 'rescuing': False if self._observed else None,
             'scheduler_state': self._scheduler_state, 'next_run': self._next_run,
+            'execution_blocked': self._execution_blocked,
             'last_started': latest.get('started_at'), 'last_finished': None if self._running else latest.get('finished_at'),
             'last_result': None if self._running else latest.get('result'), 'last_trigger': latest.get('trigger'),
             'result_basis': latest.get('result_basis'),

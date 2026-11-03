@@ -1081,7 +1081,8 @@ def run_button_status():
     else:
         report = snapshot()
     return {"ok": True, "running": report.get("running") is True,
-            "queued": report.get("queued") is True}, 200, {"Cache-Control": "no-store"}
+            "queued": report.get("queued") is True,
+            "blocked": report.get("execution_blocked") is True}, 200, {"Cache-Control": "no-store"}
 
 
 @app.post("/api/run-now")

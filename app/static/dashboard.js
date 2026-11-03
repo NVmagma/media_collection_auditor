@@ -177,12 +177,15 @@ async function refreshRunButton() {
     const state = await response.json();
     if (state.ok !== true || typeof state.running !== 'boolean' || typeof state.queued !== 'boolean') throw Error('Invalid status');
     if (runRequestPending) return;
-    button.disabled = state.running || state.queued;
-    button.textContent = state.running ? 'Scan running…' : state.queued ? 'Scan queued…' : runButtonLabel;
-    if (state.running || state.queued) document.getElementById('run-result').textContent =
+    const blocked = state.blocked === true;
+    button.disabled = state.running || state.queued || blocked;
+    button.textContent = state.running ? 'Scan running…' : blocked ? 'Review required' : state.queued ? 'Scan queued…' : runButtonLabel;
+    if (blocked && !state.running) document.getElementById('run-result').textContent =
+      'The scheduler is blocked or has an uncertain outcome. Review the retained operation and settings before another scan. The previous attempt is historical.';
+    else if (state.running || state.queued) document.getElementById('run-result').textContent =
       state.running ? 'A scan is in progress. Another scan cannot start yet.' : 'A scan is queued.';
     else if (button.dataset.wasBusy === 'true') document.getElementById('run-result').textContent = runDefaultHint;
-    button.dataset.wasBusy = String(state.running || state.queued);
+    button.dataset.wasBusy = String(state.running || state.queued || blocked);
   } catch (error) {
     // Preserve the existing disabled state until a successful observation.
   } finally { runStatusPending = false; }

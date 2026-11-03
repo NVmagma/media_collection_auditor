@@ -30,6 +30,7 @@ def run_daily_service(*, apply_settings):
             if os.environ.get('AUDITOR_STATE_BACKEND', 'json') != 'sqlite':
                 raise RuntimeError('Preview cannot select a different backend')
             require_sqlite_production_activation()
+            COORDINATOR.observe_execution_gate(blocked=False)
             notification_settings = dict(os.environ)
             NOTIFICATIONS.clear('settings_review_required')
             phase = 'scan_blocked_or_uncertain'
@@ -50,6 +51,7 @@ def run_daily_service(*, apply_settings):
             # No raw connection errors/settings/token details in worker logs.
             # The cycle advances before dispatch; claims/intents are retained.
             COORDINATOR.cancel_pending_preview()
+            COORDINATOR.observe_execution_gate(blocked=True)
             print('[SQLITE SCHEDULER] Attempt blocked or uncertain; no automatic replay.', flush=True)
             alert = NOTIFICATIONS.emit(notification_settings, phase)
             if alert['attempted']:
