@@ -98,3 +98,23 @@ def test_unsafe_policy_refused_before_claim_or_services(cycle_case,key,value):
     store,values,_,server,_=cycle_case; values[key]=value; before=store.path.read_bytes()
     with pytest.raises(ValueError): run(cycle_case)
     assert store.path.read_bytes() == before and not server.calls
+
+
+def test_storage_failure_keeps_verified_movie_result_and_leaves_tv_outcome_unknown(cycle_case,monkeypatch):
+    from app.json_tracking_store import JsonTrackingSession
+    store,_,_,server,_=cycle_case
+    checkpoint=JsonTrackingSession.checkpoint
+    def fail(session):
+        journal=session.state.get(KEY,{}).get('journal')
+        if journal and journal['library']=='TV' and journal['kind']=='arr_sync':
+            session._closed=True
+            raise OSError('synthetic uncertain checkpoint')
+        return checkpoint(session)
+    monkeypatch.setattr(JsonTrackingSession,'checkpoint',fail)
+    result=run(cycle_case)
+    assert result['result']=='failed' and result['failure_stage']=='storage_revalidation'
+    assert [row['library'] for row in result['completed_moves']]==['Movies']
+    assert result['pending_operation_present'] is None
+    state=json.loads(store.path.read_bytes())
+    assert state[KEY]['journal']['kind']=='move' and state[KEY]['journal']['library']=='TV'
+    assert sum(method=='PUT' for method,_ in server.calls)==1

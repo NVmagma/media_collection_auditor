@@ -930,8 +930,9 @@ if (not read_only_service_enabled()
     ))
 
 
-from app.json_recovery_web import create_blueprint as create_json_recovery_blueprint
-app.register_blueprint(create_json_recovery_blueprint(admin_authorized))
+if os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized':
+    from app.json_recovery_web import create_blueprint as create_json_recovery_blueprint
+    app.register_blueprint(create_json_recovery_blueprint(admin_authorized))
 
 
 @app.route("/settings", methods=["GET", "POST"])
@@ -939,8 +940,7 @@ def settings():
     if not admin_authorized():
         return Response("Settings require WEB_ADMIN_PASSWORD (and HTTP Basic authentication).",
                         401, {"WWW-Authenticate": 'Basic realm="Auditor settings"'})
-    from app.json_worker_service import enabled as json_worker_enabled
-    json_mode=json_worker_enabled()
+    json_mode=os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized'
     preview_mode = _preview_backend_gate().preview_release_enabled()
     live_mode = _preview_backend_gate().live_release_enabled()
     bound_mode=preview_mode or live_mode
@@ -1121,8 +1121,8 @@ def run_now():
     if not origin or urlsplit(origin).netloc != request.host:
         return {"ok": False, "message": "Invalid request origin."}, 403
     backend = os.environ.get('AUDITOR_STATE_BACKEND', 'json')
-    from app.json_worker_service import enabled as json_worker_enabled,SERVICE
-    if json_worker_enabled():
+    if os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized':
+        from app.json_worker_service import SERVICE
         if backend != 'json': return {'ok':False,'message':'Worker configuration requires review.'},409
         from app.json_readonly_scan import _bool
         try: live=not _bool(SERVICE.load_settings(),'DRY_RUN','true')
@@ -1179,8 +1179,7 @@ def run_now():
 
 @app.post("/api/rescue")
 def rescue():
-    from app.json_worker_service import enabled as json_worker_enabled
-    if json_worker_enabled():
+    if os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized':
         return {'ok':False,'message':'Use reviewed operation recovery; legacy rescue is unavailable in this worker.'},409
     if not admin_authorized():
         return {"ok": False, "message": "Sign in through Settings first."}, 401

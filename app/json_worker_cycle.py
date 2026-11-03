@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 from app.json_move_execution import MoveRequest, execute_move
 from app.json_readonly_scan import collect_worker_scan, rehearse_scan, _bool, _days
-from app.json_scan_control import KEY, scan_attempt
+from app.json_scan_control import KEY, scan_attempt, ScanAdmissionBlocked
 from app.json_scan_collection import _catalog
 from app.sqlite_arr_catalog import ArrCatalogGET, canonical_arr_record_path
 from app.sqlite_arr_title_transport import ArrTitleUpdate
@@ -97,6 +97,23 @@ class JSONMoveServices:
 
 def run_cycle(store, *, settings, trigger, now=None, services=None, collect=collect_worker_scan,
               preview=rehearse_scan):
+    evidence={}
+    try:
+        return _run_cycle(store,settings=settings,trigger=trigger,now=now,services=services,
+            collect=collect,preview=preview,evidence=evidence)
+    except ScanAdmissionBlocked:
+        raise
+    except Exception as error:
+        if not evidence: raise
+        # A failed final state verification must not erase independently verified
+        # earlier completions, or turn an unreadable journal into "no pending work".
+        return {**deepcopy(evidence),'result':'failed','failure_stage':'storage_revalidation',
+            'error_type':type(error).__name__,'pending_operation_present':None,
+            'completed_moves':tuple(evidence['completed_moves']),
+            'permanent_deletion_authorized':False}
+
+
+def _run_cycle(store, *, settings, trigger, now, services, collect, preview, evidence):
     values,limit=validate_policy(settings)
     now=datetime.now(timezone.utc) if now is None else now
     if not isinstance(now,datetime) or now.tzinfo is None: raise ValueError('Aware cycle time required')
@@ -107,8 +124,9 @@ def run_cycle(store, *, settings, trigger, now=None, services=None, collect=coll
         return {**result,'execution_mode':'preview','completed_moves':(), 'result':'completed'}
     adapter=JSONMoveServices(values) if services is None else services
     with scan_attempt(store,now=now,trigger=trigger) as attempt:
-        report={'execution_mode':'live','scanned_titles':None,'decisions':(),
-                'completed_moves':[],'discovery_changes':None,'failure_stage':None}
+        report=evidence
+        report.update(execution_mode='live',scanned_titles=None,decisions=(),
+                completed_moves=[],discovery_changes=None,failure_stage=None)
         phase='collection'
         try:
             plan=collect(attempt.session,settings=values,now=local_now)

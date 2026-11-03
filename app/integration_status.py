@@ -347,8 +347,10 @@ def selected_run_snapshot(legacy_snapshot):
     """Select process observations without reading legacy history for SQLite."""
     backend = os.environ.get('AUDITOR_STATE_BACKEND', 'json')
     if backend == 'json':
-        from app.json_worker_service import enabled,SERVICE
-        return SERVICE.report() if enabled() else legacy_snapshot()
+        if os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized':
+            from app.json_worker_service import SERVICE
+            return SERVICE.report()
+        return legacy_snapshot()
     try:
         if backend != 'sqlite':
             raise RuntimeError('Unsupported backend')
@@ -363,8 +365,9 @@ def selected_run_snapshot(legacy_snapshot):
 
 def selected_audit_status_report(legacy_snapshot):
     if os.environ.get('AUDITOR_STATE_BACKEND', 'json') == 'json':
-        from app.json_worker_service import enabled,SERVICE
-        if enabled(): return SERVICE.report()
+        if os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized':
+            from app.json_worker_service import SERVICE
+            return SERVICE.report()
         try:
             current = legacy_snapshot()
         except (OSError, UnicodeError, ValueError, TypeError, RuntimeError):
@@ -375,8 +378,10 @@ def selected_audit_status_report(legacy_snapshot):
 
 def selected_run_history(legacy_history, limit=100):
     if os.environ.get('AUDITOR_STATE_BACKEND', 'json') == 'json':
-        from app.json_worker_service import enabled,SERVICE
-        return SERVICE.history(limit) if enabled() else legacy_history(limit)
+        if os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized':
+            from app.json_worker_service import SERVICE
+            return SERVICE.history(limit)
+        return legacy_history(limit)
     try:
         if os.environ.get('AUDITOR_STATE_BACKEND') != 'sqlite':
             raise RuntimeError('Unsupported backend')
@@ -427,8 +432,8 @@ def read_selected_coverage(path, build):
 
 def selected_scan_capture():
     """Selected worker observations; no remote reads or reconstructed outcomes."""
-    from app.json_worker_service import enabled,SERVICE
-    if enabled() and os.environ.get('AUDITOR_STATE_BACKEND','json') == 'json':
+    if os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized' and os.environ.get('AUDITOR_STATE_BACKEND','json') == 'json':
+        from app.json_worker_service import SERVICE
         return {'run':SERVICE.report(),'history':SERVICE.history()}
     if os.environ.get('AUDITOR_STATE_BACKEND', 'json') != 'sqlite':
         return None

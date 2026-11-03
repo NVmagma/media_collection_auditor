@@ -47,8 +47,7 @@ def audit_counts(path, offset):
 
 
 if __name__ == "__main__":
-    from app.json_worker_service import enabled as json_worker_enabled
-    if json_worker_enabled():
+    if os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized':
         if os.environ.get('AUDITOR_STATE_BACKEND','json') != 'json':
             raise RuntimeError('JSON worker requires explicit JSON storage')
         from app.json_worker_service import run_service
