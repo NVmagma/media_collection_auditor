@@ -223,8 +223,11 @@ with scan_attempt(JsonTrackingStore(sys.argv[1]),now=datetime(2026,1,20,12,tzinf
         session=requests.Session(); session.trust_env=False
         def start():
             nonlocal process
-            process=subprocess.Popen([sys.executable,'-B','-m','app.main'],env={**os.environ,**values},
-                stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            child_env={**os.environ,**values}
+            packaged=os.environ.get('JSON_FIXTURE_PACKAGED_APP') == 'true'
+            if packaged: child_env['PYTHONPATH']='/app/app:/app'
+            process=subprocess.Popen([sys.executable,'-B','-m','app.main'],env=child_env,
+                cwd='/app' if packaged else None,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
             for _ in range(200):
                 if process.poll() is not None: raise AssertionError('Synthetic JSON service stopped before readiness')
                 try:
@@ -309,7 +312,7 @@ def main():
     print(json.dumps({'status':'json_execution_fixture_verified','tests':result.testsRun,
         'fixture_only':True,'production_services_changed':False,'production_media_mounted':False,
         'external_requests_sent':False,'permanent_deletion_performed':False,
-        'lost_ack_get_only_recovery_verified':True,'sigkill_move_recovery_verified':True,'actual_json_service_verified':True,'five_moves_per_library_verified':True,'movie_and_tv_moves_verified':True}))
+        'lost_ack_get_only_recovery_verified':True,'sigkill_move_recovery_verified':True,'actual_json_service_verified':True,'five_moves_per_library_verified':True,'packaged_entrypoint_verified':os.environ.get('JSON_FIXTURE_PACKAGED_APP') == 'true','movie_and_tv_moves_verified':True}))
     return 0
 
 
