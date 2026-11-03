@@ -325,7 +325,7 @@ def read_selected_dashboard_state(path):
             from .dashboard_tracking_snapshot import read_json_dashboard_snapshot
         else:
             from dashboard_tracking_snapshot import read_json_dashboard_snapshot
-        return read_json_dashboard_snapshot(path).state
+        return read_json_dashboard_snapshot(path,require_existing=os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized').state
     _require_sqlite_authority()
     from app.sqlite_tracking_view import capture_candidate_dashboard_state
     state = capture_candidate_dashboard_state(os.environ.get('SQLITE_STATE_FILE',

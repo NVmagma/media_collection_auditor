@@ -374,3 +374,10 @@ only the selected backup read-only, the source checkout read-only and its new
 private destination read-write. It does not mount production media, Docker's
 socket or templates, and it does not stop/start services. The receipt explicitly
 leaves freshness, writer quiescence and deployment authorization unverified.
+
+The serialized worker requires a readable, unique-key saved-settings object. A
+missing/corrupt configuration pauses scanning rather than falling back from a
+saved preview policy into live environment defaults. Unknown configuration fields
+remain inert and are retained when applying known settings. Missing tracking is
+also unavailable in the new dashboard path; it is never rendered as a fresh empty
+installation or initialized automatically.

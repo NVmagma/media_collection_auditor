@@ -1006,10 +1006,13 @@ def settings():
                 return redirect(url_for('settings', **{result['status']: '1'}))
             if json_mode:
                 from app.json_worker_cycle import validate_policy
+                from app.json_worker_service import read_saved_settings
                 from config_store import initial_environment
                 validate_policy({**DEFAULTS,**initial_environment(),**updated})
                 if request.form.get('settings_action') != 'apply':
                     raise ValueError('Use Apply Requested Settings to apply your changes.')
+                retained=read_saved_settings()
+                updated={**{key:value for key,value in retained.items() if key not in KEYS},**updated}
             save_config(updated)
             return redirect(url_for("settings", saved=1))
         except (ValueError, OSError) as exc:

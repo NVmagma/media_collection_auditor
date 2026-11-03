@@ -18,9 +18,31 @@ def enabled():
     return os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized'
 
 
+def read_saved_settings():
+    """A missing/corrupt file pauses this worker; never reactivate live defaults."""
+    from config_store import CONFIG_FILE
+    from app.sqlite_scheduled_paths import _open_directory
+    from app.sqlite_release_recovery import _local
+    from app.sqlite_json import parse_unique_json
+    try:
+        parent=_open_directory(str(CONFIG_FILE.parent))
+        try: raw=_local(parent,CONFIG_FILE.name)[0]
+        finally: os.close(parent)
+        if len(raw)>2*1024*1024: raise ValueError('Settings too large')
+        saved=parse_unique_json(raw)
+        if not isinstance(saved,dict): raise ValueError('Settings object required')
+        return saved
+    except Exception:
+        raise ValueError('Stored settings could not be read; scans remain paused.') from None
+
+
 def settings_snapshot():
-    from config_store import DEFAULTS,initial_environment,load_config
-    return {**DEFAULTS,**initial_environment(),**load_config()}
+    from config_store import DEFAULTS,KEYS,initial_environment,validate
+    saved=read_saved_settings()
+    try: selected={key:validate(key,str(value)) for key,value in saved.items() if key in KEYS}
+    except Exception:
+        raise ValueError('Stored settings are invalid; scans remain paused.') from None
+    return {**DEFAULTS,**initial_environment(),**selected}
 
 
 def next_daily(settings,now):

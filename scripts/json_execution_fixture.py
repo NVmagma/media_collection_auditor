@@ -219,6 +219,8 @@ with scan_attempt(JsonTrackingStore(sys.argv[1]),now=datetime(2026,1,20,12,tzinf
         for library,prefix in (('Movies','RADARR'),('TV','SONARR')):
             for field,suffix in (('TRANSIENT',''),('HOLDING','_hold'),('KEEP','_keep'),('REMOVAL','_removal')):
                 values[prefix+'_'+field+'_PATH']=str(self.media_root/(library+suffix))
+        (self.state_root/'config.json').write_bytes(b'{}')
+        (self.state_root/'config.json').chmod(0o600)
         process=None
         session=requests.Session(); session.trust_env=False
         def start():

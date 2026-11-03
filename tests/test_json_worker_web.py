@@ -42,6 +42,8 @@ def test_integration_token_and_foreign_origin_cannot_queue(page,monkeypatch):
 def test_settings_use_apply_without_typed_phrase_but_refuse_deletion(page,monkeypatch):
     client,worker,case=page; values=case[1]
     monkeypatch.setattr(web,'load_config',lambda:values)
+    from app import json_worker_service
+    monkeypatch.setattr(json_worker_service,'read_saved_settings',lambda:{'unknown_extension':{'retain':True}})
     save=Mock(); monkeypatch.setattr(web,'save_config',save)
     response=client.get('/settings')
     assert response.status_code == 200 and 'Apply Requested Settings' in response.text
@@ -50,6 +52,7 @@ def test_settings_use_apply_without_typed_phrase_but_refuse_deletion(page,monkey
     form.update(settings_action='apply',MAX_ACTIONS_PER_RUN='2',ENABLE_TV='false')
     assert client.post('/settings',data=form,headers={'Origin':'http://localhost'}).status_code == 302
     assert save.call_args.args[0]['ENABLE_TV'] == 'false'
+    assert save.call_args.args[0]['unknown_extension']=={'retain':True}
     save.reset_mock(); form['ALLOW_PERMANENT_DELETE']='true'
     response=client.post('/settings',data=form,headers={'Origin':'http://localhost'})
     assert response.status_code == 200 and 'Unsupported destructive policy' in response.text
