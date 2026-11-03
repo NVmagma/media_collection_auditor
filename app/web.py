@@ -1135,9 +1135,11 @@ def run_now():
         except Exception: return {'ok':False,'message':'Settings require review.'},409
         if live and request.get_json(silent=True) != {'run_live_scan':True}:
             return {'ok':False,'message':'Confirm this live scan before queuing it.'},409
-        result=SERVICE.request()
+        result=SERVICE.request(expected_dry_run=not live)
         if result['status']=='queued':
             return {'ok':True,'message':'Scan queued. Active settings are captured when it starts.'},202
+        if result['status']=='settings_changed':
+            return {'ok':False,'message':'Settings changed during this request. Review them and request a fresh scan.'},409
         if result['status']=='cooldown':
             return {'ok':False,'message':'Live scans must start at least 60 minutes apart.',
                 'next_allowed_at':result['next_allowed_at']},429,{'Retry-After':str(result['retry_after_seconds'])}

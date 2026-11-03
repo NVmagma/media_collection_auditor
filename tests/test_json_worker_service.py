@@ -86,3 +86,21 @@ def test_fall_back_has_one_daily_slot_and_invalid_time_is_refused():
     assert next_daily(values,first-timedelta(seconds=1)) == first
     assert next_daily(values,first) == datetime(2026,11,2,9,30,tzinfo=timezone.utc)
     with pytest.raises(ValueError): next_daily({'DAILY_RUN_TIME':'25:00'},NOW)
+
+
+@pytest.mark.parametrize('key,value',[('DRY_RUN','true'),('MAX_ACTIONS_PER_RUN','10'),('ENABLE_TV','false')])
+def test_changed_queued_settings_never_expand_or_change_a_confirmed_attempt(cycle_case,key,value):
+    store,values,_,server,_=cycle_case; worker=service(cycle_case)
+    before=store.path.read_bytes()
+    assert worker.request()['status']=='queued'
+    values[key]=value
+    record=worker.run_once(trigger='manual')
+    assert record['result']=='failed' and record['moves_completed'] is None
+    assert store.path.read_bytes()==before and not server.calls
+    assert not worker.report()['queued']
+
+
+def test_preview_request_cannot_queue_live_settings(cycle_case):
+    worker=service(cycle_case)
+    assert worker.request(expected_dry_run=True)['status']=='settings_changed'
+    assert not worker.report()['queued']

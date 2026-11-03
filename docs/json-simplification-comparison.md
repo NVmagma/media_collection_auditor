@@ -381,3 +381,9 @@ saved preview policy into live environment defaults. Unknown configuration field
 remain inert and are retained when applying known settings. Missing tracking is
 also unavailable in the new dashboard path; it is never rendered as a fresh empty
 installation or initialized automatically.
+
+Manual requests also pin their effective settings while queued. If those settings
+change before execution, the queued request is refused before admission and must
+be requested again. A preview-to-live race cannot bypass the live confirmation or
+expand the action cap that the administrator reviewed. This is per-request
+validation; it does not bind ordinary settings to the storage release.

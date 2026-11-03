@@ -67,7 +67,7 @@ class JSONWorkerService:
                  load_settings=settings_snapshot,record=None,read_records=None):
         self.clock,self.execute,self.load_settings=clock,execute,load_settings
         self.record,self.read_records=record,read_records
-        self.lock=Lock(); self.wake=Event(); self.running=False; self.queued=False
+        self.lock=Lock(); self.wake=Event(); self.running=False; self.queued=False; self.queued_settings=None
         self.latest=None; self.records=[]; self.next_run=None; self.execution_blocked=False
 
     def gate(self,values):
@@ -76,13 +76,17 @@ class JSONWorkerService:
         with JsonTrackingStore(values.get('STATE_FILE','/app/logs/auditor_state.json')).session() as session:
             return admission_status(session.state,now=self.clock())
 
-    def request(self):
+    def request(self,*,expected_dry_run=None):
         with self.lock:
             if self.running or self.queued: return {'status':'busy'}
-            try: gate=self.gate(self.load_settings())
+            try:
+                values=deepcopy(self.load_settings())
+                if expected_dry_run is not None and _bool(values,'DRY_RUN','true') is not expected_dry_run:
+                    return {'status':'settings_changed'}
+                gate=self.gate(values)
             except Exception: return {'status':'review_required'}
             if gate['status'] != 'ready': return gate
-            self.queued=True; self.wake.set()
+            self.queued_settings=values; self.queued=True; self.wake.set()
             return {'status':'queued'}
 
     def report(self):
@@ -125,6 +129,8 @@ class JSONWorkerService:
             if self.running: raise RuntimeError('A scan is already active')
             if trigger == 'manual' and not self.queued: raise RuntimeError('Manual request required')
             if trigger == 'scheduled' and self.queued: raise RuntimeError('Manual request already queued')
+            queued_settings=deepcopy(self.queued_settings)
+            self.queued_settings=None
             self.running=True; self.queued=False; self.wake.clear()
             record=dict(id=uuid4().hex,trigger=trigger,started_at=self.clock().isoformat(),finished_at=None,
                 result=None,worker_mode='json_serialized',freshness_verified=False,
@@ -134,6 +140,8 @@ class JSONWorkerService:
         result=None
         try:
             values=deepcopy(self.load_settings())
+            if trigger=='manual' and values!=queued_settings:
+                raise ValueError('Queued settings changed; request a fresh scan')
             record['dry_run']=_bool(values,'DRY_RUN','true')
             result=self.execute(JsonTrackingStore(values.get('STATE_FILE','/app/logs/auditor_state.json')),
                 settings=values,trigger=trigger,now=self.clock())

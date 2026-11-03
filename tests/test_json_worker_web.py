@@ -66,3 +66,16 @@ def test_scan_history_api_uses_json_worker_and_does_not_start_collection(page):
     assert response.status_code == 200
     assert 'synthetic-token' not in response.text
     assert client.get('/api/v1/audit-status',headers=AUTH).json['storage_authority'] == 'json'
+
+
+def test_preview_to_live_race_does_not_bypass_manual_confirmation(page,monkeypatch):
+    from copy import deepcopy
+    client,worker,case=page
+    first=deepcopy(case[1]); first['DRY_RUN']='true'
+    second=deepcopy(case[1]); second['DRY_RUN']='false'
+    reads=iter([first,second])
+    monkeypatch.setattr(worker,'load_settings',lambda:next(reads))
+    before=case[0].path.read_bytes()
+    response=client.post('/api/run-now',headers={'Origin':'http://localhost'})
+    assert response.status_code==409 and 'Settings changed' in response.json['message']
+    assert not worker.queued and case[0].path.read_bytes()==before
