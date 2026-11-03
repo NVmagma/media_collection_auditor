@@ -32,6 +32,9 @@ old_id=$(docker inspect --format '{{.Id}}' media_collection_auditor)
 [[ "$old_id" =~ ^[0-9a-f]{64}$ ]] || fail current_container_identity_invalid
 signature() { docker inspect --format '{{.Id}} {{json .Config}} {{json .HostConfig}} {{json .Mounts}} {{.State.Running}}' "$old_id" | sha256sum | cut -d' ' -f1; }
 before=$(signature)
+while IFS= read -r source; do
+  case "$base" in "$source"|"$source"/*) fail preparation_parent_overlaps_current_bind;; esac
+done < <(docker inspect --format '{{range .Mounts}}{{printf "%s\n" .Source}}{{end}}' "$old_id")
 step=new_private_root
 root=$(mktemp -d "$base/auditor-json-preparation.XXXXXX")
 packet_id=$(stat -Lc '%d:%i' "$packet"); root_id=$(stat -Lc '%d:%i' "$root")
