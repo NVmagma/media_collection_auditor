@@ -47,3 +47,22 @@ a committed write: inspect current state instead of assuming nothing changed or
 retrying automatically. No rollback to an old snapshot is offered. Ordinary
 scans still cannot clear an intent implicitly. The scheduler's real authority
 check determines when execution can resume; review status alone never does.
+
+## A subsequent scan fails without an intent
+
+Do not repeat reconciliation: a new failure may have a different cause.
+`scripts/sqlite_scan_preflight_review.py` runs the existing configured GET-only
+collector and Arr catalog resolver under the worker locks, without claiming a
+slot, writing discovery clocks, moving media, or sending Arr updates:
+
+```bash
+docker exec -i media_collection_auditor python -B - < scripts/sqlite_scan_preflight_review.py
+```
+
+Its report identifies the diagnostic stage, bounded code locations on failure,
+and full evaluated-title count when preparation returns. Exception text and
+private remote payloads are not printed. If discovery clocks need a checkpoint,
+the diagnostic reports that condition and stops without simulating a committed
+plan. Success covers preparation/catalog reads only, not execution or historical
+failure reconstruction. Activity's retained 100-row sample is separate from the
+worker's 100,000-title collection ceiling and the live one-per-library move cap.
