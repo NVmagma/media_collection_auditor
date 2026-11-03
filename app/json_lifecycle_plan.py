@@ -50,10 +50,11 @@ class TitleDecision:
     outcome: str
 
 
-def plan_scan(*, snapshot, libraries, now, favorites_trigger_keep=True, maximum_titles=100000):
+def plan_scan(*, snapshot, libraries, now, favorites_trigger_keep=True, maximum_titles=100000, per_library_action_limit=1):
     if (not isinstance(now, datetime) or now.tzinfo is not None
             or type(favorites_trigger_keep) is not bool or type(maximum_titles) is not int
-            or not 1 <= maximum_titles <= 100000 or not isinstance(libraries, (tuple,list))
+            or not 1 <= maximum_titles <= 100000 or type(per_library_action_limit) is not int
+            or not 1 <= per_library_action_limit <= 5 or not isinstance(libraries, (tuple,list))
             or not 1 <= len(libraries) <= 2):
         raise ValueError('Explicit bounded scan policy required')
     state = deepcopy(snapshot)
@@ -119,7 +120,7 @@ def plan_scan(*, snapshot, libraries, now, favorites_trigger_keep=True, maximum_
                     reason = {'missing_record':'arr_record_missing', 'path_conflict':'arr_path_conflict',
                         'ambiguous_record':'arr_record_ambiguous', 'unavailable':'arr_catalog_unavailable'}[title.arr_status]
                     destination = None
-                elif used[library.library] >= 1:
+                elif used[library.library] >= per_library_action_limit:
                     reason, outcome = 'action_cap', 'capped'
                 else:
                     used[library.library] += 1
@@ -129,5 +130,5 @@ def plan_scan(*, snapshot, libraries, now, favorites_trigger_keep=True, maximum_
             if outcome == 'proposed': moves.append(row)
     return {'status':'advisory_only', 'read_only':True, 'media_actions_authorized':False,
         'scanned_titles':total, 'decisions':tuple(decisions), 'moves':tuple(moves),
-        'maximum_actions':2, 'per_library_action_limit':1,
+        'maximum_actions':2*per_library_action_limit, 'per_library_action_limit':per_library_action_limit,
         'permanent_deletion_authorized':False}

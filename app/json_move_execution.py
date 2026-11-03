@@ -48,14 +48,15 @@ def _identity(info): return [info.st_dev,info.st_ino]
 
 
 def execute_move(attempt, *, request, now, fetch_protection, arr_preflight, arr_complete,
-                 favorites_trigger_keep=True, tv_reset=True, timezone_info=None):
+                 favorites_trigger_keep=True, tv_reset=True, timezone_info=None, per_library_limit=1):
     if (not isinstance(request,MoveRequest) or request.library not in ('Movies','TV')
             or (request.source_stage,request.destination_stage) not in TRANSITIONS
             or request.service != ('radarr' if request.library == 'Movies' else 'sonarr')
             or type(request.title_id) is not int or request.title_id <= 0
             or type(request.monitored) is not bool or type(request.threshold_days) is not int
             or request.threshold_days < 0 or type(favorites_trigger_keep) is not bool
-            or type(tv_reset) is not bool or not isinstance(now,datetime) or now.tzinfo is not None
+            or type(tv_reset) is not bool or type(per_library_limit) is not int
+            or not 1 <= per_library_limit <= 5 or not isinstance(now,datetime) or now.tzinfo is not None
             or now > datetime.now() or not all(callable(fn) for fn in (fetch_protection,arr_preflight,arr_complete))):
         raise ValueError('Explicit safe move request required')
     validate_title_folder(request.title)
@@ -68,7 +69,8 @@ def execute_move(attempt, *, request, now, fetch_protection, arr_preflight, arr_
     key = ('TV/' if request.library == 'TV' else '')+request.title
     session = attempt.session
     attempt._active()
-    if request.library in attempt._move_libraries: raise RuntimeError('Library action slot already used')
+    if attempt._move_counts.get(request.library,0) >= per_library_limit:
+        raise RuntimeError('Library action slots already used')
     source_path,destination_path = Path(request.source_root),Path(request.destination_root)
     if (source_path == destination_path or source_path in destination_path.parents or destination_path in source_path.parents
             or any(root == session._path or root in session._path.parents for root in (source_path,destination_path))):
@@ -134,7 +136,7 @@ def execute_move(attempt, *, request, now, fetch_protection, arr_preflight, arr_
             'media_fingerprint':fingerprint,'media_files':files,'destination_since':now.isoformat(),
             'dispatch_attempts':0}
         identifier = attempt.record_intent(kind='move',library=request.library,title=request.title,details=details)
-        attempt._move_libraries.add(request.library)
+        attempt._move_counts[request.library]=attempt._move_counts.get(request.library,0)+1
         verify()
         rename_directory_noreplace_at(source,request.title,destination,request.title)
         os.fsync(source); os.fsync(destination)

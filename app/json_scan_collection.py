@@ -55,6 +55,10 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
             or not math.isfinite(maximum_seconds) or not 0 < maximum_seconds <= 3600):
         raise ValueError('Explicit bounded collection required')
     snapshot, inventories, settings = deepcopy((snapshot, inventories, settings))
+    raw_limit=settings.get('JSON_PER_LIBRARY_ACTION_LIMIT','1')
+    if not isinstance(raw_limit,str) or raw_limit not in ('1','2','3','4','5'):
+        raise ValueError('Bounded per-library action limit required')
+    per_library_limit=int(raw_limit)
     start = timer()
     def check_deadline():
         elapsed = timer()-start
@@ -137,6 +141,7 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
             'jellyfin_complete':jf_complete,'arr_complete':arr_complete,'titles':len(titles) if inventory.complete else None})
     check_deadline()
     result = plan_scan(snapshot=snapshot,libraries=observations,now=now,
-        maximum_titles=maximum_titles,favorites_trigger_keep=favorites == 'true')
+        maximum_titles=maximum_titles,favorites_trigger_keep=favorites == 'true',
+        per_library_action_limit=per_library_limit)
     return {**result,'library_status':tuple(collection_status),
         'inventory_independently_verified':False,'freshness_verified':False}
