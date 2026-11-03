@@ -57,3 +57,20 @@ creates a new private candidate; interrupted candidates remain incomplete. Scan
 claims are archived **not activated**: a later worker must explicitly translate
 and verify cooldown continuity before live acceptance. It is not a JSON release.
 No production files or services are changed by the development tests.
+
+## Reader comparison progress
+
+The current selected JSON dashboard reader and authenticated Homarr endpoints
+have been tested with 541 synthetic Waiting records plus Movie/TV Holding, Keep
+and Removal records. Every timestamp and unknown state field remains intact;
+public projections omit private extensions. Both library filters match the same
+snapshot projection, and the ten-item widget limit does not cap collection totals.
+The current dashboard and separate Review page render from JSON without SQLite
+reads or external requests. Corrupt/missing JSON keeps integration responses
+unavailable and does not recreate state. These tests do not establish worker,
+settings-application or Arr-import parity and do not authorize a backend switch.
+
+Tower's offline candidate was prepared from the post-reconciliation backup at
+source revision 11: 554 Waiting records, seven Holding, two Removal, 15 Keep,
+zero pending Arr updates, and 14 archived scan claims. That is a point-in-time
+comparison input, not a current production backup or inventory freshness claim.
