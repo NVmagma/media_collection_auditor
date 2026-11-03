@@ -1,3 +1,12 @@
+## Active simplification review — 2026-11-03
+
+The user approved evaluating JSON with the current interface before further live
+feature expansion. Production remains SQLite; no backend switch is authorized by
+this document. See [the comparison plan](json-simplification-comparison.md) for
+current source findings, retained safeguards and acceptance gates. The old JSON
+worker is not ready to activate unchanged. Entries below retain historical status
+and must not be treated as current deployment instructions.
+
 <!-- Current candidate update: 2026-10-30 -->
 
 Hourly manual live scans are implemented for the next immutable image: one active
