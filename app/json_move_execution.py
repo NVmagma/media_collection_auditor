@@ -62,7 +62,8 @@ def execute_move(attempt, *, request, now, fetch_protection, arr_preflight, arr_
     if request.title.startswith('.'): raise ValueError('Media title required')
     for path in (request.source_root,request.destination_root,request.arr_destination_root,request.arr_source_path):
         if _canonical(path) == '/': raise ValueError('Dedicated media paths required')
-    if request.arr_source_path.rsplit('/',1)[-1] != request.title:
+    if (request.arr_source_path.rsplit('/',1)[-1] != request.title
+            or request.arr_source_path == request.arr_destination_root+'/'+request.title):
         raise ValueError('Arr source title mismatch')
     key = ('TV/' if request.library == 'TV' else '')+request.title
     session = attempt.session
@@ -130,16 +131,19 @@ def execute_move(attempt, *, request, now, fetch_protection, arr_preflight, arr_
         if request.monitored != wanted: raise RuntimeError('Arr monitoring policy changed')
         verify()
         details = {'request':asdict(request),'media_key':key,'title_identity':identity,
-            'media_fingerprint':fingerprint,'media_files':files,'destination_since':now.isoformat()}
+            'media_fingerprint':fingerprint,'media_files':files,'destination_since':now.isoformat(),
+            'dispatch_attempts':0}
         identifier = attempt.record_intent(kind='move',library=request.library,title=request.title,details=details)
         attempt._move_libraries.add(request.library)
         verify()
         rename_directory_noreplace_at(source,request.title,destination,request.title)
+        os.fsync(source); os.fsync(destination)
         verify(moved=True)
         # One atomic checkpoint records both the moved clock and outstanding sync.
         session.state[CLOCKS[request.source_stage]].pop(key)
         session.state[CLOCKS[request.destination_stage]][key] = now.isoformat()
         session.state[KEY]['journal']['kind'] = 'arr_sync'
+        session.state[KEY]['journal']['details']['dispatch_attempts'] = 1
         session.checkpoint()
         verify(moved=True)
         sent = arr_complete(request)

@@ -258,8 +258,17 @@ read-only observation, not reconstruction of the earlier failed attempt.
 - A lost Arr acknowledgment preserves the moved clock and pending journal.
   Explicit GET-only review/acknowledgment repeats media checks and two readbacks;
   it clears only the exact selected sync, without another PUT, move replay,
-  cooldown reset or fabricated historical completion. Move-stage crash recovery
-  still needs its separate reconciliation path before production readiness.
+  cooldown reset or fabricated historical completion.
+- Move-stage recovery independently verifies whether the original folder remains
+  at its source or has reached its destination. It can cancel an unperformed
+  intent or record the original move clock without repeating the rename. Both
+  locations present, a replaced folder, changed tracking or conflicting remote
+  records retain the journal for review.
+- If the folder moved but the remote record still points to its source, a
+  separately reviewed action can attempt the outstanding Arr update once. The
+  attempt counter is saved before dispatch, invalidating the previous review
+  even after a lost response. Normal exact readbacks remain mandatory; restart
+  never dispatches this action automatically.
 
 Disposable tests exercise actual folder renames, Movie/TV slots, HTTP 202,
 changing protection, occupied destinations and destination races, lost responses,

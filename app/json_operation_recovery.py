@@ -1,10 +1,11 @@
-"""Explicit GET-only acknowledgment for a verified pending JSON Arr sync.
+"""Explicit recovery of a journaled move or Arr synchronization.
 
-No remote writes or move replay. Two fresh exact readbacks and unchanged local
-media/tracking are required again when applying the selected review fingerprint.
+Reviews use GET only. Reconciliation never repeats a folder move; a remote PUT
+requires a separate fresh review and a persisted, single-use dispatch attempt.
 """
 from contextlib import ExitStack
-from dataclasses import asdict
+from copy import deepcopy
+from datetime import datetime
 import hashlib
 import json
 import os
@@ -20,13 +21,14 @@ from app.sqlite_scheduled_paths import _canonical, _open_directory
 from app.sqlite_title_identity import validate_title_folder
 
 
-def _inspect(session, read_record):
+def _inspect(session, read_record, *, kind='arr_sync', durable=False):
     session.verify()
     journal = _control(session.state)['journal']
-    if not isinstance(journal,dict) or journal['kind'] != 'arr_sync':
+    if not isinstance(journal,dict) or journal['kind'] != kind:
         raise RuntimeError('Pending Arr synchronization required')
     details = journal['details']
-    if set(details) != {'request','media_key','title_identity','media_fingerprint','media_files','destination_since'}:
+    fields = {'request','media_key','title_identity','media_fingerprint','media_files','destination_since'}
+    if set(details) not in (fields,fields | {'dispatch_attempts'}):
         raise RuntimeError('Recognized move synchronization journal required')
     request = MoveRequest(**details['request'])
     validate_title_folder(request.title)
@@ -44,8 +46,15 @@ def _inspect(session, read_record):
         raise RuntimeError('Pending operation identity invalid')
     for value in (request.source_root,request.destination_root,request.arr_source_path,request.arr_destination_root):
         if _canonical(value) == '/': raise ValueError('Dedicated media paths required')
+    attempts = details.get('dispatch_attempts',0)
+    if type(attempts) is not int or not 0 <= attempts <= 1000:
+        raise RuntimeError('Dispatch history invalid')
+    stamp = datetime.fromisoformat(details['destination_since'])
+    if stamp.tzinfo is not None or stamp > datetime.now(): raise RuntimeError('Move observation time invalid')
     clocks = [section for section in CLOCKS.values() if key in session.state[section]]
-    if clocks != [CLOCKS[request.destination_stage]] or session.state[clocks[0]][key] != details['destination_since']:
+    clock_stage = request.source_stage if kind == 'move' else request.destination_stage
+    expected_stamp = request.source_since if kind == 'move' else details['destination_since']
+    if clocks != [CLOCKS[clock_stage]] or session.state[clocks[0]][key] != expected_stamp:
         raise RuntimeError('Moved tracking clock changed')
     before = json.dumps(session.state,sort_keys=True,allow_nan=False).encode()
     with ExitStack() as stack:
@@ -53,7 +62,18 @@ def _inspect(session, read_record):
         for path in (request.source_root,request.destination_root):
             fd=_open_directory(path); stack.callback(os.close,fd)
             info=os.fstat(fd); roots.append((fd,path,[info.st_dev,info.st_ino]))
-        title_fd=os.open(request.title,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_NONBLOCK,dir_fd=roots[1][0])
+        present=[]
+        for index,(fd,_,_) in enumerate(roots):
+            try: info=os.stat(request.title,dir_fd=fd,follow_symlinks=False)
+            except FileNotFoundError: continue
+            present.append((index,info))
+        if len(present) != 1: raise RuntimeError('Title location is ambiguous or missing')
+        index,info=present[0]
+        if not stat.S_ISDIR(info.st_mode) or [info.st_dev,info.st_ino] != details['title_identity']:
+            raise RuntimeError('Journaled title replaced')
+        physical='destination' if index == 1 else 'source'
+        if kind == 'arr_sync' and physical != 'destination': raise RuntimeError('Moved title unavailable')
+        title_fd=os.open(request.title,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_NONBLOCK,dir_fd=roots[index][0])
         stack.callback(os.close,title_fd)
         def verify():
             session.verify()
@@ -65,31 +85,44 @@ def _inspect(session, read_record):
                     current=os.fstat(reopened)
                     if [current.st_dev,current.st_ino] != identity: raise RuntimeError('Media root replaced')
                 finally: os.close(reopened)
-            info=os.stat(request.title,dir_fd=roots[1][0],follow_symlinks=False)
+            info=os.stat(request.title,dir_fd=roots[index][0],follow_symlinks=False)
             if not stat.S_ISDIR(info.st_mode) or [info.st_dev,info.st_ino] != details['title_identity']:
                 raise RuntimeError('Moved title replaced')
-            try: os.stat(request.title,dir_fd=roots[0][0],follow_symlinks=False)
+            try: os.stat(request.title,dir_fd=roots[1-index][0],follow_symlinks=False)
             except FileNotFoundError: pass
             else: raise RuntimeError('Title source reappeared')
             if media_fingerprint(title_fd) != (details['media_fingerprint'],details['media_files']):
                 raise RuntimeError('Moved content changed')
         verify()
+        remote=[]
         for _ in range(2):
             observed=read_record(request)
             if (not isinstance(observed,dict) or type(observed.get('id')) is not int
-                    or observed['id'] != request.title_id
-                    or canonical_arr_record_path(observed.get('path')) != request.arr_destination_root+'/'+request.title
-                    or type(observed.get('monitored')) is not bool or observed['monitored'] != request.monitored):
+                    or observed['id'] != request.title_id or type(observed.get('monitored')) is not bool):
+                raise RuntimeError('Remote synchronization identity not verified')
+            path=canonical_arr_record_path(observed.get('path'))
+            outcome=('destination' if path == request.arr_destination_root+'/'+request.title
+                and observed['monitored'] == request.monitored else
+                'source' if path == request.arr_source_path else None)
+            if outcome is None or physical == 'source' and outcome != 'source':
                 raise RuntimeError('Remote synchronization outcome not verified')
+            remote.append((outcome,observed['monitored']))
             verify()
-        fingerprint=hashlib.sha256(before+json.dumps(session._identity).encode()).hexdigest()
-        return fingerprint
+        if remote[0] != remote[1]: raise RuntimeError('Remote record changed between reads')
+        if durable:
+            for fd,_,_ in roots: os.fsync(fd)
+            verify()
+        evidence=json.dumps([session._identity,physical,remote[0]]).encode()
+        fingerprint=hashlib.sha256(before+evidence).hexdigest()
+        return fingerprint,request,physical,remote[0][0]
 
 
 def review_pending_sync(store, *, read_record):
     with store.session() as session:
-        fingerprint=_inspect(session,read_record)
-    return {'status':'pending_sync_matches','review_fingerprint':fingerprint,
+        fingerprint,_,_,outcome=_inspect(session,read_record)
+    return {'status':'pending_sync_matches' if outcome == 'destination' else 'pending_sync_not_yet_applied',
+        'remote_outcome':outcome,'required_action':'acknowledge' if outcome == 'destination' else 'finish_arr_sync',
+        'review_fingerprint':fingerprint,
         'remote_readbacks':2,'media_actions_performed':False,'arr_updates_sent':0,
         'intent_modified':False,'read_only':True}
 
@@ -98,10 +131,69 @@ def acknowledge_pending_sync(store, *, read_record, expected_fingerprint):
     if not isinstance(expected_fingerprint,str) or re.fullmatch('[0-9a-f]{64}',expected_fingerprint) is None:
         raise ValueError('Exact reviewed synchronization required')
     with store.session() as session:
-        fingerprint=_inspect(session,read_record)
+        fingerprint,_,_,outcome=_inspect(session,read_record)
+        if outcome != 'destination': raise RuntimeError('Arr update has not been verified')
         if fingerprint != expected_fingerprint: raise RuntimeError('Reviewed operation changed')
         session.state[KEY]['journal']=None
         session.checkpoint()
     return {'status':'pending_sync_acknowledged','remote_readbacks':2,'arr_updates_sent':0,
         'media_actions_performed':False,'tracking_clocks_preserved':True,'scan_claims_modified':False,
         'automatic_replay':False,'historical_completion_recorded':False}
+
+
+def review_pending_move(store, *, read_record):
+    with store.session() as session:
+        fingerprint,_,physical,remote=_inspect(session,read_record,kind='move')
+    return {'status':'pending_move_observed','physical_location':physical,'remote_outcome':remote,
+        'required_action':'record_move' if physical == 'destination' else 'cancel_unperformed_move',
+        'review_fingerprint':fingerprint,'remote_readbacks':2,'intent_modified':False,
+        'read_only':True,'media_actions_performed':False,'arr_updates_sent':0}
+
+
+def reconcile_pending_move(store, *, read_record, expected_fingerprint):
+    if not isinstance(expected_fingerprint,str) or re.fullmatch('[0-9a-f]{64}',expected_fingerprint) is None:
+        raise ValueError('Exact reviewed move required')
+    with store.session() as session:
+        fingerprint,request,physical,remote=_inspect(session,read_record,kind='move',durable=True)
+        if fingerprint != expected_fingerprint: raise RuntimeError('Reviewed move changed')
+        journal=session.state[KEY]['journal']; details=journal['details']; key=details['media_key']
+        if physical == 'destination':
+            session.state[CLOCKS[request.source_stage]].pop(key)
+            session.state[CLOCKS[request.destination_stage]][key]=details['destination_since']
+            if remote == 'destination': session.state[KEY]['journal']=None
+            else: journal['kind']='arr_sync'
+            status='observed_move_recorded'
+        else:
+            session.state[KEY]['journal']=None
+            status='unperformed_move_canceled'
+        session.checkpoint()
+    return {'status':status,'arr_sync_pending':physical == 'destination' and remote == 'source',
+        'media_actions_performed':False,'arr_updates_sent':0,'scan_claims_modified':False,
+        'automatic_replay':False,'historical_completion_recorded':False}
+
+
+def finish_pending_sync(store, *, read_record, send_update, expected_fingerprint):
+    """One explicitly reviewed PUT attempt; never selected automatically on restart."""
+    if (not isinstance(expected_fingerprint,str) or re.fullmatch('[0-9a-f]{64}',expected_fingerprint) is None
+            or not callable(send_update)):
+        raise ValueError('Exact reviewed sync and trusted update adapter required')
+    with store.session() as session:
+        fingerprint,request,_,outcome=_inspect(session,read_record)
+        if fingerprint != expected_fingerprint or outcome != 'source':
+            raise RuntimeError('Reviewed outstanding update changed')
+        details=session.state[KEY]['journal']['details']
+        attempts=details.get('dispatch_attempts',0)
+        if attempts >= 1000: raise RuntimeError('Dispatch limit requires review')
+        details['dispatch_attempts']=attempts+1
+        session.checkpoint()  # An old review cannot authorize another PUT after failure.
+        before=deepcopy(session.state)
+        if send_update(request) is not True: raise RuntimeError('Arr outcome remains uncertain')
+        session.verify()
+        if session.state != before: raise RuntimeError('Tracking changed during update')
+        _,_,_,outcome=_inspect(session,read_record)
+        if outcome != 'destination': raise RuntimeError('Arr destination not verified')
+        session.state[KEY]['journal']=None
+        session.checkpoint()
+    return {'status':'reviewed_arr_sync_completed','arr_update_attempts':1,'remote_readbacks':2,
+        'media_actions_performed':False,'tracking_clocks_preserved':True,
+        'scan_claims_modified':False,'automatic_retry':False,'historical_completion_recorded':False}
