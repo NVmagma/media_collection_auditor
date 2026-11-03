@@ -127,3 +127,26 @@ state, explicit initialization, clock rollback, pending legacy operations, lost
 verification acknowledgments, and actual SIGKILL with/without an operation.
 Per-library action selection, fresh protection checks, remote readback routines,
 recovery UI and schedule handling remain worker integration work.
+
+## Read-only lifecycle planning
+
+`app/json_lifecycle_plan.py` is a pure advisory planner, not a worker or authority
+check. It accepts detached, complete adapter observations and reuses the existing
+lifecycle decision function and reason contract. It validates the snapshot once,
+then checks clocks per title without rescanning the whole snapshot for each row.
+The future adapter must prove collection completeness and exact Arr path matches;
+fixture flags alone do not establish either, and execution must refresh evidence.
+
+Selection currently reserves one Movie and one TV proposal. Missing Arr records,
+conflicting paths and ambiguous records skip the affected title without consuming
+a slot; the next eligible title can be proposed. Incomplete Jellyfin/Arr library
+collection blocks that library's proposals. Incomplete signals or missing clocks
+never become permission to move. Protected/favorite/keep TV decisions remain
+whole-title decisions; no season pruning or permanent deletion is proposed.
+
+The planner retains every decision up to the explicit 100,000-title total bound.
+Exceeding the bound refuses the plan instead of returning an apparent complete
+partial scan. Presentation pagination is still separate work. Tested 541-title
+observations preserve all rows and dates. No journal, scan claim, tracking date,
+folder or external catalog is written by planning. These changes are not wired
+to the running SQLite service or the legacy JSON worker.
