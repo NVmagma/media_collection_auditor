@@ -27,7 +27,6 @@ def _serve_fixture(directory, token, ready):
         os.environ['STATE_FILE'] = str(Path(directory) / 'state.json')
         os.environ['WEB_CONFIG_FILE'] = str(Path(directory) / 'config.json')
         os.environ['ACTION_LOG_FILE'] = str(Path(directory) / 'actions.jsonl')
-        os.environ['EXPERIMENTAL_SQLITE_RECOVERY_VIEW'] = 'false'
         os.environ['AUDIT_HISTORY_FILE'] = str(Path(directory) / 'history.jsonl')
         os.environ['WEB_SESSION_SECRET'] = secrets.token_urlsafe(32)
         os.environ['INTEGRATION_API_TOKEN'] = token

@@ -1,6 +1,6 @@
 """Storage boundary for future state backends; production remains JSON-only.
 
-This interface does not select or activate SQLite. It provides a small,
+This interface provides a small,
 testable contract before changing the auditor's persistence behavior.
 """
 
@@ -44,35 +44,3 @@ class JsonStateStore:
         if Path(original).resolve() != self.state_path.resolve():
             raise RuntimeError("JSON store path differs from configured auditor state")
         collection_auditor.save_state(state)
-
-
-class RevisionedStateStore(Protocol):
-    """Required contract for future concurrent SQLite audit operations.
-
-    A caller must carry the revision returned by load_with_revision into its
-    subsequent save. This interface deliberately has no unguarded save method.
-    """
-
-    def load_with_revision(self) -> tuple[dict[str, Any], int]:
-        ...
-
-    def save_if_revision(self, state: dict[str, Any], revision: int) -> None:
-        ...
-
-
-class GuardedSQLiteStateStore:
-    """Restricted SQLite adapter; does not expose unconditional writes.
-
-    Experimental only. This class is not selected by the live auditor.
-    """
-
-    def __init__(self, database: str | Path):
-        from app.sqlite_store import SQLiteStateStore
-
-        self._backend = SQLiteStateStore(database)
-
-    def load_with_revision(self) -> tuple[dict[str, Any], int]:
-        return self._backend.load_with_revision()
-
-    def save_if_revision(self, state: dict[str, Any], revision: int) -> None:
-        self._backend.save_if_revision(state, revision)

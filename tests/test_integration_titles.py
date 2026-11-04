@@ -76,7 +76,7 @@ def test_title_routes_require_bearer_and_explicit_opt_in(api, monkeypatch, view)
     assert response.headers['Cache-Control'] == 'no-store'
     assert response.headers['Vary'] == 'Authorization'
     assert path.read_bytes() == raw
-    assert client.post(url, headers=AUTH).status_code == 401
+    assert client.post(url, headers=AUTH).status_code == 405
     monkeypatch.setenv('READ_ONLY_API_SERVICE', 'true')
     assert client.get(url, headers=AUTH).status_code == 200
 
@@ -130,11 +130,11 @@ def test_one_snapshot_and_stable_ties(tmp_path, monkeypatch):
 def test_unapproved_sqlite_titles_never_fall_back_to_json(api, monkeypatch, view):
     client, path = api
     original = path.read_bytes()
-    monkeypatch.setenv('AUDITOR_STATE_BACKEND', 'sqlite')
+    monkeypatch.setenv('AUDITOR_STATE_BACKEND', 'unsupported')
     monkeypatch.setenv('INTEGRATION_API_TITLE_DETAILS', 'true')
     response = client.get('/api/v1/titles/' + view, headers=AUTH)
     assert response.status_code == 503
-    assert response.json['storage_authority'] == 'sqlite'
+    assert response.json['storage_authority'] == 'unavailable'
     assert response.json['items'] is None
     assert 'private-title' not in response.text
     assert path.read_bytes() == original

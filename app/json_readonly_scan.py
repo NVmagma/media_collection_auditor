@@ -66,7 +66,7 @@ def _scan(*, state_file, settings, now=None, maximum_titles=100000,
                    collect=collect_readonly_plan, timer=monotonic, maximum_seconds=3600, observer=lambda stage: None,
                    _session=None, _save_clocks=False):
     values = deepcopy(settings)
-    zone_name = values.get('SQLITE_DAILY_RUN_TIMEZONE') or values.get('TZ') or 'UTC'
+    zone_name = values.get('DAILY_RUN_TIMEZONE') or values.get('TZ') or 'UTC'
     zone = ZoneInfo(zone_name)
     now = datetime.now(zone).replace(tzinfo=None) if now is None else now
     if not isinstance(now,datetime) or now.tzinfo is not None:

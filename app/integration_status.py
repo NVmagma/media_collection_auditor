@@ -1,3 +1,4 @@
+from app.tracking_schema import has_pending_extension
 """Offline, redacted status contract; no network endpoint or action authority."""
 from datetime import datetime, timezone, timedelta
 import os
@@ -34,7 +35,7 @@ def _project_tracking_status(capture):
             ("waiting", "first_seen"), ("holding", "queued"),
             ("keep", "keep_seen"), ("removal", "in_removal"),
             ("arr_sync_pending", "arr_sync_pending"))},
-        pending_operation_present=("sqlite_pending_operations" in state or bool(state.get('arr_sync_pending'))
+        pending_operation_present=(has_pending_extension(state) or bool(state.get('arr_sync_pending'))
             or isinstance(state.get('json_worker_control'),dict) and state['json_worker_control'].get('journal') is not None),
     )
     return report
@@ -259,51 +260,17 @@ def _unavailable():
     raise RuntimeError('Selected tracking source unavailable')
 
 
-def _bound_sqlite_release():
-    from app.sqlite_backend_gate import preview_release_enabled, live_release_enabled
-    return preview_release_enabled() or live_release_enabled()
 
 
-def _preview_metadata():
-    try:
-        from app.sqlite_backend_gate import preview_release_enabled, live_release_enabled
-        if live_release_enabled():
-            from app.config_store import load_config
-            limits = load_config()
-            slots = limits.get('MAX_ACTIONS_PER_RUN', os.environ.get('MAX_ACTIONS_PER_RUN', '1')) == '2'
-            return {'production_activation': 'scheduled_moves', 'execution_mode': 'scheduled_live_moves',
-                    'media_actions_authorized': False, 'worker_mode': 'hourly_moves_library_slots' if slots else 'hourly_moves_one_action',
-                    'maximum_actions':2 if slots else 1, 'per_library_action_limit':1 if slots else None, 'minimum_live_scan_interval_seconds': 3600,
-                    'permanent_deletion_authorized': False}
-        if preview_release_enabled():
-            return {'production_activation': 'preview_only', 'execution_mode': 'scheduled_preview',
-                    'media_actions_authorized': False}
-    except ImportError:
-        pass
-    return {}
 
 
-def _selected_report(path, view, holding_days, library=None):
-    options = {} if library is None else {"library": library}
-    backend = os.environ.get('AUDITOR_STATE_BACKEND', 'json')
-    if backend == 'json':
-        return read_tracking_status(path) if view == 'summary' else read_tracking_titles(path, view, holding_days=holding_days, **options)
-    try:
-        if backend != 'sqlite':
-            raise RuntimeError('Unsupported backend')
-        _require_sqlite_authority()
-        from app.sqlite_tracking_view import capture_candidate_tracking_view
-        report = capture_candidate_tracking_view(os.environ.get('SQLITE_STATE_FILE',
-            '/app/logs/sqlite_worker/state.db'), holding_days=holding_days, **options)[
-                {'summary': 'summary', 'oldest-waiting': 'oldest_waiting', 'leaving-soon': 'leaving_soon'}[view]]
-        if _bound_sqlite_release():
-            _require_sqlite_authority()  # Do not project an intervening unbound snapshot.
-        return {**report, 'storage_authority': 'sqlite', **_preview_metadata()}
-    except RuntimeError:
-        report = (_project_tracking_status(_unavailable) if view == 'summary' else
-                  _project_tracking_titles(_unavailable, view, holding_days=holding_days, library_filter=library))
-        return {**report, 'storage_authority': 'sqlite' if backend == 'sqlite' else 'unavailable',
-                'state_revision': None}
+def _selected_report(path,view,holding_days,library=None):
+    options={} if library is None else {'library':library}
+    if os.environ.get('AUDITOR_STATE_BACKEND','json') == 'json':
+        return read_tracking_status(path) if view=='summary' else read_tracking_titles(path,view,holding_days=holding_days,**options)
+    report=(_project_tracking_status(_unavailable) if view=='summary' else
+            _project_tracking_titles(_unavailable,view,holding_days=holding_days,library_filter=library))
+    return {**report,'storage_authority':'unavailable','state_revision':None}
 
 
 def read_selected_tracking_status(path):
@@ -317,96 +284,46 @@ def read_selected_tracking_titles(path, view, *, holding_days=7, library=None):
 
 
 def read_selected_dashboard_state(path):
-    backend = os.environ.get('AUDITOR_STATE_BACKEND', 'json')
-    if backend not in ('json', 'sqlite'):
-        raise RuntimeError('Unsupported tracking backend')
-    if backend == 'json':
-        if __package__:
-            from .dashboard_tracking_snapshot import read_json_dashboard_snapshot
-        else:
-            from dashboard_tracking_snapshot import read_json_dashboard_snapshot
-        return read_json_dashboard_snapshot(path,require_existing=os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized').state
-    _require_sqlite_authority()
-    from app.sqlite_tracking_view import capture_candidate_dashboard_state
-    state = capture_candidate_dashboard_state(os.environ.get('SQLITE_STATE_FILE',
-        '/app/logs/sqlite_worker/state.db'))
-    if _bound_sqlite_release():
-        _require_sqlite_authority()
-    return state
+    from app.backend_selection import require_json_backend
+    require_json_backend(os.environ.get('AUDITOR_STATE_BACKEND','json'))
+    return read_json_dashboard_snapshot(path,require_existing=os.environ.get('AUDITOR_WORKER_MODE')=='json_serialized').state
 
 
-def _require_sqlite_authority():
-    if __package__:
-        from .sqlite_backend_gate import require_sqlite_read_authority
-    else:
-        from sqlite_backend_gate import require_sqlite_read_authority
-    require_sqlite_read_authority()
 
 
 def selected_run_snapshot(legacy_snapshot):
-    """Select process observations without reading legacy history for SQLite."""
-    backend = os.environ.get('AUDITOR_STATE_BACKEND', 'json')
-    if backend == 'json':
-        if os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized':
-            from app.json_worker_service import SERVICE
-            return SERVICE.report()
-        return legacy_snapshot()
-    try:
-        if backend != 'sqlite':
-            raise RuntimeError('Unsupported backend')
-        _require_sqlite_authority()
-        from app.sqlite_scheduled_observations import COORDINATOR
-        return {**COORDINATOR.report(), 'storage_authority': 'sqlite', **_preview_metadata()}
-    except RuntimeError:
-        return {**audit_status_report(None), 'source': 'selected_coordinator_unavailable',
-                'storage_authority': 'sqlite' if backend == 'sqlite' else 'unavailable',
-                'history_scope': 'unavailable', 'history_persistent': False}
+    if os.environ.get('AUDITOR_STATE_BACKEND','json')!='json': return {**audit_status_report(None),'storage_authority':'unavailable'}
+    if os.environ.get('AUDITOR_WORKER_MODE')=='json_serialized':
+        from app.json_worker_service import SERVICE
+        return SERVICE.report()
+    return legacy_snapshot()
 
 
 def selected_audit_status_report(legacy_snapshot):
-    if os.environ.get('AUDITOR_STATE_BACKEND', 'json') == 'json':
-        if os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized':
-            from app.json_worker_service import SERVICE
-            return SERVICE.report()
-        try:
-            current = legacy_snapshot()
-        except (OSError, UnicodeError, ValueError, TypeError, RuntimeError):
-            current = None
-        return audit_status_report(current)
-    return selected_run_snapshot(legacy_snapshot)
+    if os.environ.get('AUDITOR_STATE_BACKEND','json')!='json': return {**audit_status_report(None),'storage_authority':'unavailable'}
+    if os.environ.get('AUDITOR_WORKER_MODE')=='json_serialized':
+        from app.json_worker_service import SERVICE
+        return SERVICE.report()
+    try: current=legacy_snapshot()
+    except (OSError,UnicodeError,ValueError,TypeError,RuntimeError): current=None
+    return audit_status_report(current)
 
 
-def selected_run_history(legacy_history, limit=100):
-    if os.environ.get('AUDITOR_STATE_BACKEND', 'json') == 'json':
-        if os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized':
-            from app.json_worker_service import SERVICE
-            return SERVICE.history(limit)
-        return legacy_history(limit)
-    try:
-        if os.environ.get('AUDITOR_STATE_BACKEND') != 'sqlite':
-            raise RuntimeError('Unsupported backend')
-        _require_sqlite_authority()
-        from app.sqlite_scheduled_observations import COORDINATOR
-        return COORDINATOR.history(limit)
-    except RuntimeError:
-        return []
+def selected_run_history(legacy_history,limit=100):
+    if os.environ.get('AUDITOR_STATE_BACKEND','json')!='json': return []
+    if os.environ.get('AUDITOR_WORKER_MODE')=='json_serialized':
+        from app.json_worker_service import SERVICE
+        return SERVICE.history(limit)
+    return legacy_history(limit)
 
 
 def read_selected_coverage(path, build):
     """Project bounded aggregate inventory while verifying the selected snapshot.
 
     The callback receives detached tracking only. Never return its source payload.
-    SQLite keeps the existing identity/revision guard across local inventory.
+    JSON reads are checked before and after local inventory.
     """
     backend = os.environ.get('AUDITOR_STATE_BACKEND', 'json')
-    if backend == 'sqlite':
-        _require_sqlite_authority()
-        from app.sqlite_tracking_view import _candidate_capture
-        with _candidate_capture(os.environ.get('SQLITE_STATE_FILE', '/app/logs/sqlite_worker/state.db')) as capture:
-            report = build(capture.state)
-            revision = capture.revision
-        _require_sqlite_authority()
-        return {**report, 'storage_authority':'sqlite', 'state_revision':revision}
     if backend != 'json':
         raise RuntimeError('Unsupported tracking backend')
     if __package__:
@@ -431,20 +348,10 @@ def read_selected_coverage(path, build):
 
 
 def selected_scan_capture():
-    """Selected worker observations; no remote reads or reconstructed outcomes."""
-    if os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized' and os.environ.get('AUDITOR_STATE_BACKEND','json') == 'json':
+    if os.environ.get('AUDITOR_WORKER_MODE')=='json_serialized' and os.environ.get('AUDITOR_STATE_BACKEND','json')=='json':
         from app.json_worker_service import SERVICE
         return {'run':SERVICE.report(),'history':SERVICE.history()}
-    if os.environ.get('AUDITOR_STATE_BACKEND', 'json') != 'sqlite':
-        return None
-    try:
-        _require_sqlite_authority()
-        from app.sqlite_scheduled_observations import COORDINATOR
-        capture = COORDINATOR.capture()
-        _require_sqlite_authority()
-        return capture
-    except RuntimeError:
-        return None
+    return None
 
 
 def project_scan_capture(capture):
@@ -488,7 +395,7 @@ def selected_backup_status():
             or not re.fullmatch(r'[0-9a-f]{64}', fingerprint)):
         return {**base, 'status':'selection_invalid', 'packet_verified':False}
     try:
-        from app.sqlite_release_recovery import inspect_update_backup
+        from app.json_backup import inspect_backup as inspect_update_backup
         report = inspect_update_backup(directory=directory, expected_identity=tuple(map(int,identity.split(':'))),
                                        expected_fingerprint=fingerprint, max_total_bytes=16 * 1024 * 1024)
         now = datetime.now(timezone.utc)
@@ -497,6 +404,6 @@ def selected_backup_status():
         return {**base, 'status':'packet_verified', 'packet_verified':True,
                 'captured_at':captured, 'age_seconds':int(age) if age is not None and age >= 0 else None,
                 'capture_time_status':'unknown' if age is None else 'future' if age < 0 else 'recorded',
-                'verified_at':now.isoformat(), 'payload_files_verified':6}
+                'verified_at':now.isoformat(), 'payload_files_verified':2}
     except (ImportError, OSError, RuntimeError, ValueError, TypeError, KeyError, AttributeError):
         return {**base, 'status':'verification_failed', 'packet_verified':False}

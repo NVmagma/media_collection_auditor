@@ -34,3 +34,8 @@ def validate_snapshot(state: dict[str, dict[str, Any]]) -> None:
                 or (entry.get("monitored") is not None
                     and type(entry["monitored"]) is not bool)):
             raise RuntimeError("Invalid Arr retry entry")
+
+
+def has_pending_extension(state):
+    """Reserved pending-operation extensions require explicit recovery."""
+    return any(isinstance(key,str) and key.endswith('_pending_operations') for key in state)

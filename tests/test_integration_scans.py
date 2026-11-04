@@ -3,7 +3,7 @@ from datetime import datetime, timezone, timedelta
 import pytest
 from tests.test_integration_api import api,AUTH,TOKEN
 import web
-from app.sqlite_scheduled_observations import ScheduledRunObservations
+from scripts.scan_observations_fixture import ScheduledRunObservations
 
 
 @pytest.fixture
@@ -120,22 +120,3 @@ def test_malformed_unknown_fields_and_counts_are_not_projected(scans,monkeypatch
     assert response.json['history_partial'] is True
     assert response.json['items'][0]['moves_proposed'] is None
     assert 'never' not in response.text
-
-
-def test_selected_capture_verifies_binding_before_and_after(monkeypatch):
-    import integration_status as selected
-    import app.sqlite_scheduled_observations as observations
-    observer=ScheduledRunObservations()
-    observer.observe_cycle(next_run=datetime(2026,10,28,tzinfo=timezone.utc),status='waiting')
-    monkeypatch.setenv('AUDITOR_STATE_BACKEND','sqlite')
-    monkeypatch.setattr(observations,'COORDINATOR',observer)
-    calls=[]
-    monkeypatch.setattr(selected,'_require_sqlite_authority',lambda:calls.append('checked'))
-    assert selected.selected_scan_capture()['history']==[]
-    assert calls==['checked','checked']
-    calls.clear()
-    def gate():
-        calls.append('checked')
-        if len(calls)==2:raise RuntimeError('private')
-    monkeypatch.setattr(selected,'_require_sqlite_authority',gate)
-    assert selected.selected_scan_capture() is None

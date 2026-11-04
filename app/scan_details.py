@@ -23,7 +23,7 @@ REASONS = {
     'future_observation': 'The saved lifecycle date is in the future.',
     'jellyfin_unavailable': 'Jellyfin protection information is unavailable.',
     'deletion_not_authorized': 'Permanent deletion is disabled.',
-    'unresolved_sqlite_operation': 'An unresolved operation requires review.',
+    'unresolved_operation': 'An unresolved operation requires review.',
     'discovery_checkpoint_required': 'New or changed lifecycle dates need a checkpoint and fresh plan.',
     'policy_review': 'The lifecycle decision requires review.',
 }

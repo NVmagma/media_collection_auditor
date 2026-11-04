@@ -1,150 +1,18 @@
-# Integration setup and readiness
+# Integration setup
 
-Administrator browser sessions can open `/integrations` from Settings or the
-Dashboard. The page shows token configuration (never its value), selected tracking
-readiness, title/poster options, copyable connection coordinates, movie/TV queries,
-and error and token-replacement instructions. The browser origin is a suggested
-base URL; it does not prove reachability from Homarr or Homepage. Copy controls
-fall back to selecting the text when clipboard access is unavailable over HTTP.
+Open **Integrations** for the current readiness and copyable API URLs. Configure a
+strong `INTEGRATION_API_TOKEN`, title details and optional artwork/coverage flags.
+Keep the token private. Use the auditor's host port, normally `8089`, rather than
+the container's internal `8080` when accessing it through the Unraid host.
 
-`GET /api/v1/readiness` uses the same dedicated Bearer token as summary/title
-routes. It returns API/schema versions, supported routes/libraries, tracking
-availability and preview binding status. It does not collect Jellyfin, Arr or
-filesystem inventory, claim freshness, expose titles/paths/tokens, or authorize
-media actions. A valid token is required even when the preview binding is paused.
-Unavailable tracking or binding returns 503, never an empty successful result.
-API-only services report coordinator scope unavailable.
+For Homarr choose an HTTP API source, a Base URL such as `http://SERVER:8089`, and
+Bearer authentication. Enter the token alone in the credential field. Add a GET
+request named `titles` with path `/api/v1/titles/leaving-soon`. Under query values,
+add key `library`, literal value `Movies` or `TV`. Do not duplicate `http://` in the
+Base URL. Keep the JSX template's expected library consistent with that query.
 
-Authenticated unknown v1 routes return `route_not_found`; unauthorized callers
-still receive the existing auth response first. Existing route response contracts,
-unsupported method handling and disabled-title behavior remain compatible.
-All integration responses and the administrator setup page use no-store caching.
-
-Token rotation remains a container environment operation. The page documents
-local random generation and replacing INTEGRATION_API_TOKEN in the existing
-reviewed Unraid template, preserving its mounts, image, flags and settings.
-After recreation the old token is rejected; widgets must use the new token.
-The page neither displays nor changes secrets, settings, state or services.
-
-## Related notification delivery
-
-Opt-in redacted operational alerts are documented in
-[operational notifications](operational-notifications.md). Notifications do not
-add integration-token permission to execute scans, change settings or control media.
-
-## Disposable visual review
-
-The existing `scripts/dashboard_workspace_lab.sh` also serves `/integrations`
-with synthetic status, no actual tokens and all POSTs refused. Use the running
-fixture's URL plus `/integrations`. Production services are not connected.
-
-## Library coverage endpoint
-
-`GET /api/v1/coverage` requires the dedicated Bearer token and explicit
-`INTEGRATION_API_COVERAGE=true`. It uses the same inventory and clock summary as
-Review, with at most 10,000 directory entries per selected stage. Optional
-`library=Movies` or `library=TV` limits both the inventory reads and counts.
-Disabled libraries and duplicate/invalid library values return 400.
-
-The fixed response has at most eight aggregate rows, never title names, absolute
-paths, secrets or raw warning messages. Each row reports folder count, missing,
-invalid and future dates, and tracking records without a matching stage folder.
-The latter does not prove that a title was deleted. Unsupported/missing tracking
-never falls back to empty state or JSON when SQLite is selected.
-
-`complete=true` means all requested directories and tracking could be observed;
-it does not certify live freshness, atomic filesystem state or action permission.
-Unavailable directories return 503, retaining explicit unavailable rows with
-unknown counts. Incomplete aggregate totals are null. Snapshot, settings or
-source-identity changes invalidate the whole response. SQLite identity/revision
-checks span inventory collection. This is an observation only: it writes no dates,
-state, settings, media or service controls and makes no remote media requests.
-
-Run `bash scripts/integration_coverage_lab.sh EXISTING_LAB_PARENT` on Tower after
-updating the approved development checkout. It uses the cached auditor image only
-as a Python/Flask runtime, current committed source, and newly created fixture
-folders/state. Five actual loopback HTTP cases exercise auth/opt-in, filtering,
-missing directories/state and source changes. No production mounts, host ports,
-Docker socket, external connections or worker are used. Artifacts are retained.
-
-## Scan history and proposals
-
-`GET /api/v1/scan-history` uses the dedicated Bearer credential. Parameters:
-
-- `page`: 1–100, default 1.
-- `page_size`: 1–20, default 5.
-- `outcome`: `all`, `completed`, `review` or `unknown`; default `all`.
-
-The response contains `items`, `total_records`, `has_more`, the requested page
-and outcome, and a separate `current` scheduler presentation. Rows use the same
-allowlisted projection as Scans/History: normalized outcome, timing, duration,
-trigger, reason and counts. Invalid duplicate parameters return 400 before capture.
-Unknown counts are null; free-text errors and private worker payloads are omitted.
-At most 100 attempts are retained. Pagination is relative to each capture; new
-attempts can shift page boundaries between requests. It is not a durable cursor.
-
-`GET /api/v1/proposals` reports `proposal_scope=latest_recorded_attempt` and
-`proposal_kind=counts_only`. `moves_proposed` and `discovery_changes` are exposed
-as preview-completion counts only when the latest retained attempt has a verified
-completed preview result. Failure, missing timing or an empty history does not
-reuse older successful counts. The normalized `latest_attempt` and current
-scheduler state remain separate. During a running attempt, the latest recorded
-attempt can therefore describe an earlier run. Per-title proposal/skip/block
-details are not retained, so no endpoint invents them or rescans media to fill in.
-
-Both endpoints take one detached coordinator capture under its existing lock,
-checking preview authority before and after selection. No worker invocation,
-tracking mutation, JSON-history fallback, remote collection or action permission
-is added. History is **current-process only**, not persistent across restart.
-Before a coordinator observation, on a separate API-only service, on legacy JSON
-workers or when binding is unavailable, return 503 with unknown data. An observed
-waiting coordinator with no retained attempts returns an honest empty history.
-
-Run `bash scripts/integration_scans_lab.sh EXISTING_LAB_PARENT` for five disposable
-real-loopback HTTP checks on Tower. It uses the cached Python/Flask runtime,
-current committed source and an isolated in-process test coordinator. No production
-worker, state, services or ports are connected. The fixture tests transport and
-projection; it does not assert that a production coordinator is available.
-
-## Selected backup status
-
-`GET /api/v1/backup-status` requires the dedicated Bearer credential. The API
-accepts no query parameters and never discovers or selects a packet from a URL.
-Configure all three operator-pinned environment values together:
-
-- `INTEGRATION_API_BACKUP_DIRECTORY`: canonical container-visible private packet directory.
-- `INTEGRATION_API_BACKUP_IDENTITY`: reviewed directory `device:inode`.
-- `INTEGRATION_API_BACKUP_FINGERPRINT`: SHA-256 of its reviewed `backup-complete.json`.
-
-The packet must be accessible through a separately reviewed deployment layout.
-This increment does not add mounts, copy production packets or change templates.
-Do not expose private packet contents through static/web directories or logs.
-
-The endpoint uses the same inspector as update/recovery tooling, now shared in
-`app/sqlite_release_recovery.py`. It verifies the pinned receipt, request hash,
-all six payload hashes, private file/directory identities and valid tracking
-without pending operation intents. It rechecks contents/identities before
-returning. API inspection has a 16 MiB total packet-content budget; oversized,
-inaccessible, corrupt, replaced or partial packets return 503 with a redacted
-failure. Existing offline inspection retains its prior byte limits.
-
-A successful response says `packet_verified`, `backup_scope=explicitly_selected_packet`,
-`current_state_comparison=not_performed`, `restore_tested=false` and
-`restore_authorized=false`. It does not prove newest-backup selection, current
-tracking coverage, off-host durability, writer exclusion or a successful restore.
-No private paths, fingerprints, names, tokens or backup payloads are returned.
-The authenticated endpoint remains usable while the preview binding is paused;
-backup verification never grants worker activation or recovery authority.
-
-New backup captures include a UTC `captured_at` in their completion receipt.
-Older or unparseable receipt times yield unknown age; future times yield unknown
-age with a future-clock status. No age is guessed from modification times.
-`verified_at` is this request's inspection time, not backup creation time.
-No receipt or tracking file is modified by inspection. No status is persisted
-or automatically restored, and unconfigured selection returns explicit 503.
-
-Run `bash scripts/integration_backup_lab.sh EXISTING_LAB_PARENT` for five
-private-loopback HTTP cases using only new fixture packets and a new container.
-The cached auditor image supplies Python/Flask; current committed code supplies
-the test. Production paths and Docker sockets are not mounted, no host ports are
-published, and no service or restoration commands run.
+An empty Holding list is valid. A 401 is an authentication problem; an external
+request error may be an incorrect URL or connectivity issue. A 503 indicates
+unavailable observations and must not be treated as an empty collection. Test the
+API before changing the widget's presentation. See [API contract](integration-api.md)
+and [widget examples](integration-widgets.md).

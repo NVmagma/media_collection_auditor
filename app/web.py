@@ -35,65 +35,32 @@ app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
                   SESSION_COOKIE_SECURE=os.environ.get("WEB_SECURE_COOKIE", "false").lower() == "true",
                   PERMANENT_SESSION_LIFETIME=timedelta(hours=12))
 
-def _preview_backend_gate():
-    # Legacy JSON images copy modules flat; preview images include the app package.
-    try:
-        from app import sqlite_backend_gate
-    except ModuleNotFoundError as error:
-        if error.name != 'app':
-            raise
-        import sqlite_backend_gate
-    return sqlite_backend_gate
 
 
 @app.before_request
 def require_login():
-    gate = _preview_backend_gate()
-    preview = gate.preview_release_enabled()
-    live = gate.live_release_enabled()
-    if read_only_service_enabled() and not preview and request.endpoint not in (
-            "integration_summary", "integration_audit_status", "integration_titles", "integration_readiness", "integration_coverage", "integration_scan_history", "integration_proposals", "integration_backup_status", "health"):
-        return {"status": "read_only_service"}, 404
-    if request.path.startswith("/api/v1/"):
-        failure = authorize_summary(request.headers.get("Authorization"))
+    if read_only_service_enabled() and request.endpoint not in (
+        'integration_summary','integration_audit_status','integration_titles','integration_readiness',
+        'integration_coverage','integration_scan_history','integration_proposals','integration_backup_status','health'):
+        return {'status':'read_only_service'},404
+    if request.path.startswith('/api/v1/'):
+        failure=authorize_summary(request.headers.get('Authorization'))
         if failure is not None: return failure
-        if request.endpoint is None and getattr(request.routing_exception, "code", None) == 404:
-            return {"status": "route_not_found", "schema_version": 1,
-                    "message": "Unknown integration route. See /api/v1/readiness for supported routes."}, 404
-    if request.endpoint in ("integration_readiness", "integration_backup_status"):
+        if request.endpoint is None and getattr(request.routing_exception,'code',None)==404:
+            return {'status':'route_not_found','schema_version':1,'message':'Unknown integration route. See /api/v1/readiness for supported routes.'},404
         return None
-    if request.endpoint in ("integration_summary", "integration_audit_status", "integration_titles", "integration_coverage", "integration_scan_history", "integration_proposals"):
-        if preview or live:
-            try: (gate.require_sqlite_read_authority if live else gate.require_sqlite_production_activation)()
-            except RuntimeError:
-                return {"status":"live_paused" if live else "preview_paused", "read_only":True, "media_actions_authorized":False,
-                        "message":"Scheduled scans are paused; settings or tracking need review."}, 503
-        return None
-    if request.endpoint in ("login", "login_background", "health", "static"):
-        return None
-    g.user = current_user()
+    if request.endpoint in ('login','login_background','health','static'): return None
+    g.user=current_user()
     if g.user is None:
-        if request.path.startswith("/api/"):
-            return {"ok": False, "message": "Please sign in."}, 401
-        return redirect(url_for("login"))
-    if (preview or live) and request.endpoint not in ('settings','logout','run_now','run_button_status','apply_preview_settings','restore_preview_settings','integration_setup'):
-        try: (gate.require_sqlite_read_authority if live else gate.require_sqlite_production_activation)()
-        except RuntimeError:
-            if request.path.startswith('/api/'):
-                return {'status':'live_paused' if live else 'preview_paused','media_actions_authorized':False}, 503
-            return render_template('preview-paused.html', live_mode=live), 503
-    if request.endpoint in ("settings", "test_connection", "run_now", "rescue", "apply_preview_settings", "restore_preview_settings", "integration_setup") and not g.user["admin"]:
-        if request.path.startswith("/api/"):
-            return {"ok": False, "message": "Administrator access required."}, 403
-        return Response("Administrator access required.", 403)
+        if request.path.startswith('/api/'): return {'ok':False,'message':'Please sign in.'},401
+        return redirect(url_for('login'))
+    if request.endpoint in ('settings','test_connection','run_now','rescue','integration_setup') and not g.user['admin']:
+        if request.path.startswith('/api/'): return {'ok':False,'message':'Administrator access required.'},403
+        return Response('Administrator access required.',403)
 
 @app.context_processor
 def user_context():
-    return {"viewer": getattr(g, "user", None),
-            "experimental_sqlite_recovery_enabled": (
-                os.environ.get("EXPERIMENTAL_SQLITE_RECOVERY_VIEW", "").lower() == "true"
-                and "experimental_sqlite_recovery_view" in app.blueprints
-            )}
+    return {'viewer':getattr(g,'user',None)}
 
 @app.get("/login-background")
 def login_background():
@@ -157,26 +124,18 @@ def integration_response_headers(response):
 
 def _integration_readiness():
     """Selected tracking readiness; no remote collection or credential projection."""
-    gate = _preview_backend_gate()
-    preview = gate.preview_release_enabled()
-    live = gate.live_release_enabled()
-    binding = 'not_required'
-    if preview or live:
-        try:
-            (gate.require_sqlite_read_authority if live else gate.require_sqlite_production_activation)()
-            binding = 'verified'
-        except RuntimeError:
-            binding = 'review_required'
-    report = None if binding == 'review_required' else read_tracking_status(STATE_FILE)
+    binding='not_required'
+    report=read_tracking_status(STATE_FILE)
+    selected=selected_run_snapshot(snapshot) if not read_only_service_enabled() else {}
     available = isinstance(report, dict) and report.get('status') == 'advisory_only'
     return {
         'schema_version': 1, 'api_version': 'v1',
         'status': 'ready' if available else 'unavailable',
         'tracking_available': available, 'binding_status': binding,
-        'storage_authority': os.environ.get('AUDITOR_STATE_BACKEND', 'json') if os.environ.get('AUDITOR_STATE_BACKEND', 'json') in ('json', 'sqlite') else 'unavailable',
+        'storage_authority': os.environ.get('AUDITOR_STATE_BACKEND', 'json') if os.environ.get('AUDITOR_STATE_BACKEND', 'json') == 'json' else 'unavailable',
         'freshness_verified': False, 'read_only': True,
         'media_actions_authorized': False,
-        'execution_mode': 'scheduled_live_moves' if live else ('scheduled_preview' if preview else 'read_only_integration'),
+        'execution_mode': selected.get('execution_mode','read_only_integration'),
         'title_details_enabled': os.environ.get('INTEGRATION_API_TITLE_DETAILS', 'false').lower() == 'true',
         'poster_lookup_enabled': os.environ.get('INTEGRATION_API_MEDIA', 'false').lower() == 'true',
         'coordinator_scope': 'unavailable' if read_only_service_enabled() else 'current_process',
@@ -664,7 +623,7 @@ def dashboard(initial_workspace="Overview"):
                     preview.append({"title": item["title"], "library": item["library"],
                                     "stage": stage, "action": action})
     preview.sort(key=lambda item: (item["library"], item["stage"], item["title"].casefold()))
-    display_zone=config.get('SQLITE_DAILY_RUN_TIMEZONE') or os.environ.get('SQLITE_DAILY_RUN_TIMEZONE') or os.environ.get('TZ')
+    display_zone=config.get('DAILY_RUN_TIMEZONE') or os.environ.get('DAILY_RUN_TIMEZONE') or os.environ.get('TZ')
     run = selected_run_snapshot(snapshot)
     history = selected_run_history(read_history, 100)
     return render_template("dashboard.html", scan_view=build_scan_view(run, history, timezone_name=display_zone), initial_workspace=initial_workspace, overview=dashboard_overview(stages, clock_coverage, libraries=enabled_libraries, tracking_available=state_error is None, limit=3), dashboard_timezone=display_zone, clock_coverage=clock_coverage, actions=actions, state=state, state_error=state_error, stages=stages, inventory_warnings=inventory_warnings, health_issues=health_issues, run=run, history=history,
@@ -926,136 +885,50 @@ else:
     app.register_blueprint(_create_arr_import_blueprint(is_admin=admin_authorized))
 
 
-# Experimental SQLite recovery views are opt-in and never select SQLite as
-# the production tracking backend. Only the literal value "true" enables them.
-if (not read_only_service_enabled()
-        and os.environ.get("EXPERIMENTAL_SQLITE_RECOVERY_VIEW", "").lower() == "true"):
-    from app.sqlite_recovery_api import create_recovery_status_blueprint
-    from app.sqlite_recovery_view import create_recovery_view_blueprint
-
-    _experimental_database = os.environ.get("EXPERIMENTAL_SQLITE_RECOVERY_DB", "")
-    if not _experimental_database:
-        raise RuntimeError("Experimental SQLite recovery database path required")
-    app.register_blueprint(create_recovery_status_blueprint(
-        _experimental_database, is_admin=admin_authorized,
-    ))
-    app.register_blueprint(create_recovery_view_blueprint(
-        _experimental_database, is_admin=admin_authorized,
-    ))
-
-
 if os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized':
     from app.json_recovery_web import create_blueprint as create_json_recovery_blueprint
     app.register_blueprint(create_json_recovery_blueprint(admin_authorized))
 
 
-@app.route("/settings", methods=["GET", "POST"])
+@app.route('/settings',methods=['GET','POST'])
 def settings():
     if not admin_authorized():
-        return Response("Settings require WEB_ADMIN_PASSWORD (and HTTP Basic authentication).",
-                        401, {"WWW-Authenticate": 'Basic realm="Auditor settings"'})
-    json_mode=os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized'
-    preview_mode = _preview_backend_gate().preview_release_enabled()
-    live_mode = _preview_backend_gate().live_release_enabled()
-    bound_mode=preview_mode or live_mode
-    locked_settings=()
-    if live_mode:
-        from app.sqlite_live_settings import LOCKED
-        locked_settings=LOCKED
-    saved = load_config()
-    pending_settings = {'status':'none','changed_keys':[]}
-    settings_application = {'status':'none'}
-    if bound_mode:
-        from app.sqlite_preview_settings import pending_request_summary
-        from config_store import CONFIG_FILE, initial_environment
-        from app.sqlite_preview_settings_apply import application_status
-        baseline = initial_environment()
-        pending_settings = pending_request_summary(config_path=CONFIG_FILE,environment=baseline)
-        settings_application = application_status(settings=baseline)
-    error = None
-    success = request.args.get("saved") == "1"
-    requested = request.args.get("requested") == "1"
-    unchanged = request.args.get("unchanged") == "1"
-    if request.method == "POST":
-        # Reject cross-origin browser submissions; don't accept unauthenticated writes.
-        origin = request.headers.get("Origin") or request.headers.get("Referer")
-        if not origin or urlsplit(origin).netloc != request.host:
-            return Response("Invalid request origin", 403)
-        if bound_mode and settings_application['status']=='recovery_required':
-            return redirect(url_for('settings',apply_error='1'))
-        updated = dict(saved)
+        return Response('Administrator access required.',403)
+    from app.json_worker_service import read_saved_settings
+    from app.json_worker_cycle import validate_policy
+    from config_store import initial_environment
+    from app.legacy_settings import SCHEDULE_ALIASES
+    saved=load_config(); error=None
+    if request.method=='POST':
+        origin=request.headers.get('Origin') or request.headers.get('Referer')
+        if not origin or urlsplit(origin).netloc!=request.host: return Response('Invalid request origin',403)
+        updated=dict(saved)
         try:
             for key in KEYS:
-                raw = request.form.get(key, "").strip()
-                if key in SECRETS and not raw:
-                    continue  # Empty password field preserves existing secret.
-                if not raw and key not in BOOLS:
-                    updated.pop(key, None)  # Fall back to Unraid environment.
-                else:
-                    updated[key] = validate(key, raw)
-            if not bound_mode and not json_mode and (updated.get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "false"
-                    or updated.get("ALLOW_PERMANENT_DELETE", "false") == "true"
-                    or updated.get("ALLOW_FILESYSTEM_DELETE", "false") == "true"
-                    or updated.get("ALLOW_CROSS_FILESYSTEM_MOVES", "false") == "true"
-                    or updated.get("ENABLE_SEASON_PRUNING", "false") == "true"):
-                if request.form.get("safety_confirmation") != "I UNDERSTAND":
-                    raise ValueError("Type I UNDERSTAND to confirm potentially destructive settings.")
-            if bound_mode:
-                if live_mode:
-                    from app.sqlite_live_settings import request_settings
-                else:
-                    from app.sqlite_preview_settings import request_settings
-                from config_store import CONFIG_FILE
-                apply_now = request.form.get('settings_action') == 'apply'
-                result = request_settings(config_path=CONFIG_FILE, updated=updated, environment=baseline,
-                                          include_digest=apply_now)
-                if apply_now:
-                    # Pin the exact request just staged by this submission. If
-                    # unchanged, only an explicitly supplied retained digest may
-                    # select the previously reviewed request. Never adopt a newer
-                    # request by rereading its digest after staging.
-                    digest = result.get('request_sha256') if result['status'] == 'requested' else request.form.get('request_sha256')
-                    if digest:
-                        return _change_preview_settings(restore=False, request_sha256=digest)
-                return redirect(url_for('settings', **{result['status']: '1'}))
-            if json_mode:
-                from app.json_worker_cycle import validate_policy
-                from app.json_worker_service import read_saved_settings
-                from config_store import initial_environment
-                validate_policy({**DEFAULTS,**initial_environment(),**updated})
-                if request.form.get('settings_action') != 'apply':
-                    raise ValueError('Use Apply Requested Settings to apply your changes.')
-                retained=read_saved_settings()
-                updated={**{key:value for key,value in retained.items() if key not in KEYS},**updated}
+                raw=request.form.get(key,'').strip()
+                if key in SECRETS and not raw: continue
+                if not raw and key not in BOOLS: updated.pop(key,None)
+                else: updated[key]=validate(key,raw)
+            validate_policy({**DEFAULTS,**initial_environment(),**updated})
+            if request.form.get('settings_action')!='apply':
+                raise ValueError('Use Apply Requested Settings to apply your changes.')
+            retained=read_saved_settings()
+            updated={**{key:value for key,value in retained.items() if key not in KEYS and key not in SCHEDULE_ALIASES},**updated}
             save_config(updated)
-            return redirect(url_for("settings", saved=1))
-        except (ValueError, OSError) as exc:
-            error = str(exc)
-    values = {key: saved.get(key, os.environ.get(key, DEFAULTS.get(key, "")))
-              for key in KEYS}
-    sources = {key: ("Web override" if key in saved else
-                     "Unraid" if key in os.environ else "Default") for key in KEYS}
-    for key in SECRETS:
-        values[key] = ""  # Never send stored tokens to the browser.
-    groups=FIELDS
-    help_text=FIELD_HELP
-    if json_mode:
-        from app.json_worker_service import read_saved_settings
-        try: read_saved_settings()
-        except ValueError as exc: error=error or str(exc)
-        groups={name:[key for key in keys if key!='RUN_INTERVAL_HOURS'] for name,keys in FIELDS.items()}
-        help_text={**FIELD_HELP,
-            'SQLITE_DAILY_RUN_TIME':['Daily Scan Time','Daily start in HH:MM. Manual live scans share the one-hour cooldown; overlapping scans are blocked.'],
-            'SQLITE_DAILY_RUN_TIMEZONE':['Scan Time Zone','IANA time zone for daily scans and lifecycle dates, such as America/Los_Angeles.']}
-    return render_template("settings.html", groups=groups, values=values,
-                           secrets=SECRETS, bools=BOOLS, sources=sources, help_text=help_text, error=error,
-                           success=success, json_mode=json_mode, preview_mode=bound_mode, live_mode=live_mode, requested=requested, unchanged=unchanged,
-                           pending_settings=pending_settings, settings_application=settings_application,
-                           locked_settings=locked_settings,
-                           settings_applied=request.args.get('applied')=='1',
-                           settings_restored=request.args.get('restored')=='1',
-                           settings_apply_error=request.args.get('apply_error')=='1',
-                           settings_apply_busy=request.args.get('apply_busy')=='1')
+            return redirect(url_for('settings',saved='1'))
+        except (ValueError,OSError) as exc: error=str(exc)
+    try: read_saved_settings()
+    except ValueError as exc: error=error or str(exc)
+    baseline=initial_environment()
+    values={key:saved.get(key,baseline.get(key,DEFAULTS.get(key,''))) for key in KEYS}
+    sources={key:('Web override' if key in saved else 'Unraid' if key in baseline else 'Default') for key in KEYS}
+    for key in SECRETS: values[key]=''
+    groups={name:[key for key in keys if key!='RUN_INTERVAL_HOURS'] for name,keys in FIELDS.items()}
+    return render_template('settings.html',groups=groups,values=values,secrets=SECRETS,bools=BOOLS,sources=sources,
+        help_text=FIELD_HELP,error=error,success=request.args.get('saved')=='1',json_mode=True,
+        preview_mode=False,live_mode=False,requested=False,unchanged=False,pending_settings={'status':'none'},
+        settings_application={'status':'none'},locked_settings=(),settings_applied=False,
+        settings_restored=False,settings_apply_error=False,settings_apply_busy=False)
 
 
 @app.post("/api/test-connection/<service>")
@@ -1070,67 +943,18 @@ def test_connection(service):
     return check_connection(service)
 
 
-def _change_preview_settings(*, restore, request_sha256=None):
-    if not admin_authorized():
-        return Response('Administrator access required.',403)
-    origin = request.headers.get('Origin') or request.headers.get('Referer')
-    if not origin or urlsplit(origin).netloc != request.host:
-        return Response('Invalid request origin.',403)
-    gate=_preview_backend_gate()
-    if not (gate.preview_release_enabled() or gate.live_release_enabled()):
-        return Response('Bound settings application unavailable.',409)
-    from config_store import initial_environment
-    from app.sqlite_lock import StateLockBusy
-    if gate.live_release_enabled():
-        from app.sqlite_live_settings import apply_requested_settings,restore_previous_settings
-    else:
-        from app.sqlite_preview_settings_apply import apply_requested_settings, restore_previous_settings
-    notification_settings = {**initial_environment(), **load_config()}
-    try:
-        action = restore_previous_settings if restore else apply_requested_settings
-        digest = request.form.get('request_sha256','') if request_sha256 is None else request_sha256
-        action(settings=initial_environment(),request_sha256=digest)
-    except StateLockBusy:
-        return redirect(url_for('settings',apply_busy='1'))
-    except Exception:
-        # Pending files and journals retain details privately; no raw errors or
-        # connection credentials are returned through the settings page.
-        try:
-            from app.operational_notifications import NOTIFICATIONS
-            NOTIFICATIONS.emit(notification_settings, 'settings_review_required')
-        except Exception:
-            pass  # Alerts cannot change the settings transaction's outcome.
-        return redirect(url_for('settings',apply_error='1'))
-    from app.operational_notifications import NOTIFICATIONS
-    NOTIFICATIONS.clear('settings_review_required')
-    from run_control import wake_worker
-    wake_worker()  # Reload effective settings; this does not queue a scan.
-    return redirect(url_for('settings',**{('restored' if restore else 'applied'):'1'}))
 
 
-@app.post('/settings/apply')
-def apply_preview_settings():
-    return _change_preview_settings(restore=False)
 
 
-@app.post('/settings/restore')
-def restore_preview_settings():
-    return _change_preview_settings(restore=True)
 
 
-@app.get("/api/run-status")
+@app.get('/api/run-status')
 def run_button_status():
-    """Session-only process observation; never starts or resumes a scan."""
-    if not admin_authorized():
-        return {"ok": False}, 401
-    if os.environ.get('AUDITOR_STATE_BACKEND','json') == 'sqlite':
-        from app.sqlite_scheduled_observations import COORDINATOR
-        report=COORDINATOR.report()
-    else:
-        report=selected_run_snapshot(snapshot)
-    return {"ok": True, "running": report.get("running") is True,
-            "queued": report.get("queued") is True,
-            "blocked": report.get("execution_blocked") is True}, 200, {"Cache-Control": "no-store"}
+    if not admin_authorized(): return {'ok':False},401
+    report=selected_run_snapshot(snapshot)
+    return {'ok':True,'running':report.get('running') is True,'queued':report.get('queued') is True,
+        'blocked':report.get('execution_blocked') is True},200,{'Cache-Control':'no-store'}
 
 
 @app.post("/api/run-now")
@@ -1158,45 +982,7 @@ def run_now():
             return {'ok':False,'message':'Live scans must start at least 60 minutes apart.',
                 'next_allowed_at':result['next_allowed_at']},429,{'Retry-After':str(result['retry_after_seconds'])}
         return {'ok':False,'message':'A scan is active or the retained operation needs review.'},409
-    gate = _preview_backend_gate()
-    if gate.live_release_enabled():
-        data=request.get_json(silent=True)
-        if not isinstance(data,dict) or set(data)!={'run_live_scan'} or data['run_live_scan'] is not True:
-            return {'ok':False,'message':'Explicitly confirm this live scan using its configured action limits.'},409
-        try:
-            from datetime import timezone
-            from app.sqlite_scheduled_production import _live_scan_status
-            values=gate.require_sqlite_production_activation()
-            cooldown = _live_scan_status(values,datetime.now(timezone.utc))
-            if cooldown['status'] != 'ready':
-                return {'ok':False,'message':'Live scans must start at least 60 minutes apart. No scan was queued.',
-                    'next_allowed_at':cooldown['next_allowed_at']},429,{'Retry-After':str(cooldown['retry_after_seconds'])}
-        except Exception:
-            return {'ok':False,'message':'Live configuration needs review; no scan was queued.'},409
-        from app.sqlite_scheduled_observations import COORDINATOR
-        if COORDINATOR.request_manual_live():
-            from run_control import wake_worker
-            wake_worker()
-            return {'ok':True,'message':'Live scan queued. It can move ' + ('one Movie and one TV show' if values.get('MAX_ACTIONS_PER_RUN') == '2' else 'one title') + '; the next live scan must wait at least 60 minutes.'},202
-        return {'ok':False,'message':'A scan is already running or queued.'},409
-    if gate.preview_release_enabled() or backend == 'sqlite':
-        if not gate.preview_release_enabled():
-            return {'ok': False, 'message': 'This backend runs only at its configured daily time.'}, 409
-        try:
-            gate.require_sqlite_production_activation()
-        except RuntimeError:
-            return {'ok': False, 'message': 'Preview configuration unavailable; scan was not queued.'}, 409
-        from app.sqlite_scheduled_observations import COORDINATOR
-        if COORDINATOR.request_manual_preview():
-            from run_control import wake_worker
-            wake_worker()
-            return {'ok': True, 'message': 'Read-only preview queued. Daily schedule unchanged.'}, 202
-        return {'ok': False, 'message': 'A scan is already running or queued.'}, 409
-    if backend != 'json':
-        return {'ok': False, 'message': 'Unsupported run backend.'}, 409
-    if request_run():
-        return {"ok": True, "message": "Audit queued. Refresh the dashboard for results."}, 202
-    return {"ok": False, "message": "An audit is already running or queued."}, 409
+    return {'ok':False,'message':'Serialized worker configuration is required.'},409
 
 
 @app.post("/api/rescue")

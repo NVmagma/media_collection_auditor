@@ -38,7 +38,8 @@ def read_saved_settings():
 
 def settings_snapshot():
     from config_store import DEFAULTS,KEYS,initial_environment,validate
-    saved=read_saved_settings()
+    from app.legacy_settings import normalize_schedule
+    saved=normalize_schedule(read_saved_settings())
     try: selected={key:validate(key,str(value)) for key,value in saved.items() if key in KEYS}
     except Exception:
         raise ValueError('Stored settings are invalid; scans remain paused.') from None
@@ -47,10 +48,10 @@ def settings_snapshot():
 
 def next_daily(settings,now):
     if now.tzinfo is None: raise ValueError('Aware schedule clock required')
-    raw=settings.get('DAILY_RUN_TIME') or settings.get('SQLITE_DAILY_RUN_TIME') or '02:00'
+    raw=settings.get('DAILY_RUN_TIME') or '02:00'
     if not isinstance(raw,str) or not re.fullmatch(r'(?:[01][0-9]|2[0-3]):[0-5][0-9]',raw):
         raise ValueError('Daily time must be HH:MM')
-    zone=ZoneInfo(settings.get('DAILY_RUN_TIMEZONE') or settings.get('SQLITE_DAILY_RUN_TIMEZONE') or settings.get('TZ') or 'UTC')
+    zone=ZoneInfo(settings.get('DAILY_RUN_TIMEZONE') or settings.get('TZ') or 'UTC')
     hour,minute=map(int,raw.split(':')); day=now.astimezone(zone).date()
     for offset in range(370):
         candidate=datetime.combine(day+timedelta(days=offset),datetime.min.time()).replace(
@@ -137,7 +138,7 @@ class JSONWorkerService:
                 result_basis='worker_return',moves_completed=None,arr_completed=None,moves_proposed=None,
                 discovery_changes=None,movies_processed=None,tv_processed=None)
             self.latest=deepcopy(record)
-        result=None
+        result=None; values=None
         try:
             values=deepcopy(self.load_settings())
             if trigger=='manual' and values!=queued_settings:
@@ -169,6 +170,13 @@ class JSONWorkerService:
             with self.lock:
                 self.running=False; self.latest=deepcopy(record)
                 self.records.append(deepcopy(record)); self.records=self.records[-100:]
+        if isinstance(values,dict):
+            try:
+                from app.operational_notifications import NOTIFICATIONS
+                if record['result']=='completed': NOTIFICATIONS.clear('scan_blocked_or_uncertain')
+                else: NOTIFICATIONS.emit(values,'scan_blocked_or_uncertain')
+            except Exception:
+                pass  # Opt-in delivery cannot change tracking or scan results.
         print('[JSON WORKER] Attempt result='+str(record['result'])+
             ' verified_moves='+str(record.get('moves_completed'))+
             ' outcome='+str(record.get('result_basis')),flush=True)
@@ -204,7 +212,7 @@ def run_service(*,stop=None):
     while not stop.is_set():
         try:
             values=SERVICE.load_settings(); now=SERVICE.clock()
-            current=tuple(values.get(key) for key in ('DAILY_RUN_TIME','DAILY_RUN_TIMEZONE','SQLITE_DAILY_RUN_TIME','SQLITE_DAILY_RUN_TIMEZONE','TZ'))
+            current=tuple(values.get(key) for key in ('DAILY_RUN_TIME','DAILY_RUN_TIMEZONE','TZ'))
             if target is None or current != signature: target=next_daily(values,now); signature=current
             with SERVICE.lock: SERVICE.next_run=target; queued=SERVICE.queued
             error_reported=False

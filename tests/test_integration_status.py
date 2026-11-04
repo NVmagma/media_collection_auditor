@@ -35,11 +35,11 @@ def test_counts_overlap_and_pending_payload_is_not_exposed(tmp_path, monkeypatch
     path = tmp_path / 'state.json'
     state = {'first_seen': {'secret-title': '2024-01-01'},
              'queued': {'secret-title': '2024-01-02'},
-             'sqlite_pending_operations': None,
+             'legacy_pending_operations': None,
              'unknown': {'api_key': 'secret-token', 'path': '/private/media'}}
     raw = json.dumps(state)
     path.write_text(raw)
-    monkeypatch.setenv('AUDITOR_STATE_BACKEND', 'sqlite')
+    monkeypatch.setenv('AUDITOR_STATE_BACKEND', 'unsupported')
     report = read_tracking_status(path)
     assert report['tracking_counts']['waiting'] == 1
     assert report['tracking_counts']['holding'] == 1

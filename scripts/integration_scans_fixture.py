@@ -5,7 +5,7 @@ import os
 import unittest
 from unittest.mock import patch
 from scripts.integration_coverage_fixture import CoverageFixtureTests
-from app.sqlite_scheduled_observations import ScheduledRunObservations
+from scripts.scan_observations_fixture import ScheduledRunObservations
 import web
 
 

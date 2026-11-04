@@ -40,9 +40,6 @@ if (!prefix) throw Error('Pass the synthetic output prefix from tests/settings_w
     assert.equal(await page.locator('#apply-settings-button').evaluate(button=>button.form.id),'settings-form');
     assert.equal(await page.locator('#safety_confirmation').count(),0);
     assert.equal(await page.getByText('Save Requested Changes',{exact:true}).count(),0);
-    assert.equal(await page.locator('input[name="request_sha256"]').inputValue(),'a'.repeat(64));
-    await page.locator('.pending-field-names summary').click();
-    assert.match(await page.locator('.pending-field-names').textContent(),/Manage TV Shows/);
     await page.locator('#field-JELLYFIN_HOST_URL').fill('https://edited.example.invalid');
     assert.match(await page.locator('#settings-draft-status').textContent(),/1 unsaved field edit/);
     await page.locator('#field-JELLYFIN_HOST_URL').fill('https://jellyfin.example.invalid');
@@ -77,11 +74,6 @@ if (!prefix) throw Error('Pass the synthetic output prefix from tests/settings_w
       assert.equal(await page.locator('#field-JELLYFIN_API_TOKEN').inputValue(),'');
       assert.equal(await page.locator('input[name="request_sha256"]').count(),0);
     }
-    await page.goto('http://fixture.invalid/settings?scenario=recovery');
-    assert.match(await page.locator('#settings-draft-status').textContent(),/Editing paused/);
-    assert.equal(await page.locator('#field-JELLYFIN_HOST_URL').isDisabled(),true);
-    assert.equal(await page.locator('form[action="/settings/restore"] button').isEnabled(),true);
-    assert.equal(await page.locator('form[action="/settings/apply"]').count(),0);
     await page.goto('http://fixture.invalid/settings');
     await page.locator('[data-tab="Lifecycle"]').click();
     await page.locator('#field-HOLDING_DAYS').fill('11');
@@ -91,15 +83,13 @@ if (!prefix) throw Error('Pass the synthetic output prefix from tests/settings_w
     const submitted=new URLSearchParams(posts[1].body);
     assert.equal(submitted.get('settings_action'),'apply');
     assert.equal(submitted.get('HOLDING_DAYS'),'11');
-    assert.equal(submitted.get('request_sha256'),'a'.repeat(64));
+    assert.equal(submitted.has('request_sha256'),false);
     assert.equal(submitted.has('safety_confirmation'),false);
     await page.goto('http://fixture.invalid/settings?scenario=live');
-    assert.match(await page.locator('body').innerText(),/bound action limits/);
-    assert.equal(await page.locator('#field-MAX_ACTIONS_PER_RUN').count(),0);
-    assert.equal(await page.locator('input[name=MAX_ACTIONS_PER_RUN]').inputValue(),'1');
+    await page.locator('[data-tab=Safety]').click();
+    assert.equal(await page.locator('#field-MAX_ACTIONS_PER_RUN').isEnabled(),true);
     await page.locator('[data-tab=Lifecycle]').click();
-    assert.equal(await page.locator('#field-HOLDING_DAYS').isEnabled(),true);
-    assert.equal(await page.locator('#field-SQLITE_DAILY_RUN_TIMEZONE').count(),0);
+    assert.equal(await page.locator('#field-DAILY_RUN_TIMEZONE').isEnabled(),true);
     assert.equal(await page.locator('#apply-settings-button').isEnabled(),true);
     assert.deepEqual(errors,[]);
     if(process.env.DASHBOARD_SCREENSHOT_DIRECTORY) {
@@ -109,7 +99,7 @@ if (!prefix) throw Error('Pass the synthetic output prefix from tests/settings_w
       await page.screenshot({path:path.join(process.env.DASHBOARD_SCREENSHOT_DIRECTORY,'settings-ready.png'),fullPage:true});
     }
     console.log(JSON.stringify({status:'settings_workspace_browser_verified',draft_edits_local_only:true,
-      ready_stale_clean_review_resubmit_recovery_verified:true,actual_settings_application_performed:false,
+      apply_only_form_and_secret_privacy_verified:true,actual_settings_application_performed:false,
       production_services_changed:false}));
   } finally {await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

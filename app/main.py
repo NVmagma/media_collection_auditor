@@ -47,66 +47,15 @@ def audit_counts(path, offset):
 
 
 if __name__ == "__main__":
-    if os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized':
-        if os.environ.get('AUDITOR_STATE_BACKEND','json') != 'json':
-            raise RuntimeError('JSON worker requires explicit JSON storage')
+    from backend_selection import require_json_backend
+    require_json_backend(os.environ.get('AUDITOR_STATE_BACKEND','json'))
+    os.environ.setdefault('AUDITOR_WORKER_MODE','json_serialized')
+    if read_only_service_enabled():
+        start_web()
+    else:
         from app.json_worker_service import run_service
         threading.Thread(target=start_web,name='web-ui',daemon=True).start()
         try:
             run_service()
         except KeyboardInterrupt:
             pass
-        raise SystemExit(0)
-    from sqlite_backend_gate import scheduled_release_enabled, require_sqlite_production_activation
-    if scheduled_release_enabled():
-        # UI availability is separate from scan readiness. A changed binding
-        # pauses the preview worker; it never selects the legacy JSON worker.
-        from app.sqlite_scheduled_service import run_daily_service
-        threading.Thread(target=start_web, name="web-ui", daemon=True).start()
-        try:
-            run_daily_service(apply_settings=apply_settings)
-        except KeyboardInterrupt:
-            pass
-        raise SystemExit(0)
-    if read_only_service_enabled():
-        start_web()
-        raise SystemExit(0)
-    if os.environ.get("AUDITOR_STATE_BACKEND", "json") == "sqlite":
-        require_sqlite_production_activation()  # Sealed builds still refuse SQLite.
-    threading.Thread(target=start_web, name="web-ui", daemon=True).start()
-    auditor = None
-    while True:
-        interval = 0
-        record = None
-        started = False
-        log_path = os.environ.get("ACTION_LOG_FILE", "/app/logs/auditor_actions.jsonl")
-        offset = os.path.getsize(log_path) if os.path.exists(log_path) else 0
-        result = "completed"
-        error = None
-        try:
-            apply_settings()
-            auditor = importlib.import_module("collection_auditor") if auditor is None else importlib.reload(auditor)
-            interval = auditor.RUN_INTERVAL_HOURS
-            log_path = auditor.ACTION_LOG_FILE
-            offset = os.path.getsize(log_path) if os.path.exists(log_path) else 0
-            trigger = begin_run(auditor.DRY_RUN)
-            started = True
-            record = new_record(trigger, auditor.DRY_RUN)
-            auditor.run_with_alerts()
-        except (Exception, SystemExit) as exc:
-            result = "failed"
-            error = f"{type(exc).__name__}: {str(exc)[:200]}"
-            print(f"[AUDITOR ERROR] {error}", flush=True)
-        finally:
-            summary = summarize_actions(log_path, offset)
-            if record is None:
-                # Configuration errors are recorded too, without assuming a run began.
-                trigger = begin_run(os.environ.get("DRY_RUN", "true").lower() == "true") if not started else "scheduled"
-                record = new_record(trigger, os.environ.get("DRY_RUN", "true").lower() == "true")
-            try:
-                finish_record(record, result, summary, error)
-            except OSError as exc:
-                print(f"[HISTORY ERROR] {exc}", flush=True)
-            finish_run(result, summary["movies_processed"], summary["tv_processed"], interval)
-        print(f"[SCHEDULER] Waiting for next run ({interval} hours; manual runs available).", flush=True)
-        wait_for_run(interval * 3600 if interval > 0 else None)

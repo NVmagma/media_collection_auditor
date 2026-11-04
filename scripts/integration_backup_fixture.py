@@ -5,7 +5,8 @@ import json
 import os
 import unittest
 from scripts.integration_coverage_fixture import CoverageFixtureTests
-from scripts.unraid_update_backup import capture_backup,SECTIONS
+from app.json_backup import create_backup
+from app.tracking_schema import SECTIONS
 
 
 class BackupFixtureTests(unittest.TestCase):
@@ -14,15 +15,10 @@ class BackupFixtureTests(unittest.TestCase):
 
     def setUp(self):
         self.setUpHTTP()
-        self.packet=self.root/'packet';self.packet.mkdir(mode=0o700)
-        state={key:{} for key in SECTIONS}
-        state['first_seen']={'Private fixture title':'2024-01-01'}
-        inputs={key:(b'{"private":"private-secret-never-output"}',(1,n)) for n,key in enumerate(
-            ('saved-config.json','retained-source.json','current-binding.json'))}
-        capture_backup(directory=self.packet,expected_identity=(self.packet.stat().st_dev,self.packet.stat().st_ino),
-            container={'Name':'/media_collection_auditor','Id':'a'*64,'Image':'sha256:'+'b'*64},
-            template=b'<Container/>',source_revision='c'*40,validate_current=lambda:None,
-            read_snapshot=lambda:(deepcopy(state),0),read_inputs=lambda:deepcopy(inputs))
+        self.packet=self.root/'packet'
+        source=self.root/'backup-source.json';source.write_text(json.dumps({key:{} for key in SECTIONS}))
+        config=self.root/'backup-config.json';config.write_text('{"private":"private-secret-never-output"}')
+        create_backup(state_file=source,config_file=config,directory=self.packet)
         self.select()
 
     def select(self):

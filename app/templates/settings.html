@@ -1,50 +1,14 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Settings · Media Collection Auditor</title><link rel="stylesheet" href="/static/style.css"></head>
-<body class="app-shell settings-app">
-{% set sidebar_page = 'settings' %}{% include '_sidebar.html' %}
-<div class="app-content">
-<header class="settings-header"><div><h1>Settings</h1><p>Manage your auditor without editing Docker environment variables.</p></div><span class="header-note">{{ 'Apply requests after review' if preview_mode else 'Changes apply next audit' }}</span></header>
+<body class="app-shell settings-app">{% set sidebar_page='settings' %}{% include '_sidebar.html' %}
+<div class="app-content"><header class="settings-header"><div><h1>Settings</h1><p>Manage your auditor without editing Docker environment variables.</p></div><span class="header-note">Changes apply next scan</span></header>
 <main class="settings-main" id="main-content">
-{% if live_mode %}<div class="alert" role="status">Live settings use reviewed application. The bound action limits, deletion safeguards, media root and time zone remain fixed during the canary. Applying settings does not start a scan.</div>{% endif %}
-{% if preview_mode %}
-<section class="settings-status-grid" aria-label="Configuration status">
-  <article class="settings-status-card"><span class="settings-step">1 · ACTIVE CONFIGURATION</span><h2>{{ 'Recovery required' if settings_application.status == 'recovery_required' else 'Active values loaded' }}</h2>
-    {% if settings_application.status == 'recovery_required' %}<p>An application was interrupted. Scans are paused; restore the previous settings before editing again.</p>
-    {% else %}<p>The form starts from active settings. Edits remain local until you choose Apply Requested Settings.</p><p class="muted">Connection tests use active settings, not your unsaved edits or pending request.</p>{% endif %}
-  </article>
-  <article class="settings-status-card"><span class="settings-step">2 · SAVED REQUEST</span>
-    {% if pending_settings.status == 'requested' %}<h2>Settings request pending</h2><p>Active settings have not changed merely because a request was saved.</p>
-    {% if pending_settings.changed_keys %}<details class="pending-field-names"><summary>Requested field names ({{ pending_settings.changed_keys|length }})</summary><ul>{% for key in pending_settings.changed_keys if key in help_text %}<li>{{ help_text[key][0] }}</li>{% endfor %}</ul></details>{% endif %}
-    {% elif pending_settings.status == 'stale' %}<h2>Out-of-date request</h2><p>The saved request was made against an older configuration. It has not been applied. Review the active settings before submitting a new request.</p>
-    {% elif pending_settings.status == 'none' %}<h2>No pending changes</h2><p>Apply Requested Settings validates your edits and applies them together. It does not queue a scan.</p>
-    {% else %}<h2>Request needs review</h2><p>The saved settings request needs review. Active settings have not been changed by this request.</p>{% endif %}
-  </article>
-  <article class="settings-status-card {% if settings_application.status == 'recovery_required' %}settings-recovery-card{% endif %}"><span class="settings-step">3 · APPLY / RECOVER</span>
-    {% if settings_application.status == 'recovery_required' %}<h2>Restore before editing</h2>
-    <form method="post" action="/settings/restore"><p>A settings application was interrupted. Scans are paused. Restore the previous settings to recover; tracking is preserved.</p><input type="hidden" name="request_sha256" value="{{ settings_application.request_sha256 }}"><button class="save-button" type="submit">Restore Previous Settings</button></form>
-    {% else %}<h2>{{ 'Ready for application' if settings_application.status == 'ready' else 'Apply reviewed edits' }}</h2>
-    <p>Apply validates and applies your edits in one action. If nothing was edited, it applies the saved request shown here, when available.</p>
-    {% if settings_application.status == 'resubmit_required' %}<p>A retained attempt needs new edits before another request can be applied.</p>{% endif %}
-    <p class="muted">Tracking and lifecycle clocks are preserved. {{ 'Applying settings does not perform media actions.' if live_mode else 'Media actions remain disabled.' }}</p>
-    <button class="save-button" id="apply-settings-button" form="settings-form" type="submit">Apply Requested Settings</button>
-    {% endif %}
-  </article>
-</section>
-{% endif %}
-{% if requested %}<div class="alert" role="status">Requested settings saved. Active settings have not changed.</div>{% endif %}
-{% if unchanged %}<div class="alert" role="status">No active settings changes were requested.</div>{% endif %}
 {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
-{% if success and not preview_mode %}<div class="alert" role="status">Settings saved. Changes will apply at the next audit run.</div>{% endif %}
-{% if settings_applied %}<div class="alert" role="status">Requested settings applied. Tracking and lifecycle clocks were preserved. No scan was queued.</div>{% endif %}
-{% if settings_restored %}<div class="alert" role="status">Previous settings restored. Tracking and lifecycle clocks were preserved.</div>{% endif %}
-{% if settings_apply_busy %}<div class="alert" role="status">A scan or settings operation is active. The request is retained; try again when it finishes.</div>{% endif %}
-{% if settings_apply_error %}<div class="alert error" role="alert">The settings operation did not complete. Review the status below before trying again. Tracking was not reset.</div>{% endif %}
-<div class="settings-editor-note"><p>{% if settings_application.status == 'recovery_required' %}Editing is paused. Restore previous settings before making another request.{% elif preview_mode %}Fields start from active values. Edit them, then choose Apply Requested Settings.{% else %}Fields show the current configuration. Changes apply after saving.{% endif %}</p><span id="settings-draft-status" role="status" aria-live="polite">No unsaved field edits</span></div>
-
-<form method="post" action="/settings" id="settings-form" data-preview="{{ 'true' if preview_mode else 'false' }}">
-{% if preview_mode %}<input type="hidden" name="settings_action" value="apply">{% if settings_application.status == 'ready' %}<input type="hidden" name="request_sha256" value="{{ settings_application.request_sha256 }}">{% endif %}{% endif %}
-<fieldset style="border:0;padding:0;margin:0;min-width:0" {% if settings_application.status == 'recovery_required' %}disabled{% endif %}>
+{% if success %}<div class="alert" role="status">Settings applied. Tracking and lifecycle clocks were preserved. No scan was queued.</div>{% endif %}
+<div class="settings-editor-note"><p>Edit the current configuration, then choose Apply Requested Settings.</p><span id="settings-draft-status" role="status" aria-live="polite">No unsaved field edits</span></div>
+<form method="post" action="/settings" id="settings-form" data-preview="true">
+<input type="hidden" name="settings_action" value="apply"><fieldset style="border:0;padding:0;margin:0;min-width:0">
 {% for group, keys in groups.items() %}
 <section class="settings-section{% if not loop.first %} hidden-section{% endif %}" data-panel="{{ group }}">
 <h2>{{ group }} Settings</h2>
@@ -53,17 +17,17 @@
 <div class="setting-row">
 <div class="setting-description"><label for="field-{{ key }}">{{ help_text[key][0] }}</label><small>{{ help_text[key][1] }}</small><span class="source-indicator">{{ sources[key] }}</span></div>
 <div class="setting-control">
-{% if key in locked_settings %}<input type="hidden" name="{{ key }}" value="{{ values[key] }}"><p class="muted">Fixed for this canary: {{ values[key] }}</p>{% else %}
+
 {% if key in bools %}
 <select id="field-{{ key }}" name="{{ key }}"><option value="true" {% if values[key]|lower == 'true' %}selected{% endif %}>Enabled</option><option value="false" {% if values[key]|lower == 'false' %}selected{% endif %}>Disabled</option></select>
 {% else %}
 <input id="field-{{ key }}" name="{{ key }}" type="{{ 'password' if key in secrets else 'text' }}" value="{{ values[key] }}" autocomplete="off" placeholder="{{ 'Leave blank to keep existing secret' if key in secrets else 'Unraid default if blank' }}">
 {% endif %}
-{% endif %}</div></div>
+</div></div>
 {% endfor %}
 {% if group == 'Connections' %}
 <div class="connection-tests">
-<h3>Test saved connections</h3><p class="section-description">{% if preview_mode %}Tests use active settings. Requested changes are not used until applied.{% else %}Save your connection settings first. Tests use saved settings or Unraid defaults, and never change your media.{% endif %}</p>
+<h3>Test saved connections</h3><p class="section-description">Tests use the saved configuration, not unsaved edits. Apply changes before testing.</p>
 {% for service in ['jellyfin', 'radarr', 'sonarr'] %}
 <div class="connection-test-row"><span>{{ service|capitalize }}</span><button type="button" class="test-button" data-test-service="{{ service }}">Test Connection</button><span class="test-result" data-test-result="{{ service }}" role="status" aria-live="polite"></span></div>
 {% endfor %}
@@ -71,15 +35,5 @@
 {% endif %}
 </section>
 {% endfor %}
-{% if json_mode %}
-<input type="hidden" name="settings_action" value="apply">
-<div class="save-panel"><div><strong>Apply configuration</strong><p>Changes apply together to the next scan. A scan already in progress keeps its captured settings. Applying settings does not start a scan.</p></div>
-<button class="save-button" type="submit">Apply Requested Settings</button></div>
-{% elif not preview_mode and not live_mode %}
-<div class="save-panel"><div><strong>Save configuration</strong><p>Settings are stored in persistent appdata. Potentially destructive options require confirmation.</p>
-<label class="confirm-label" for="safety_confirmation">Safety confirmation (when required)</label>
-<input id="safety_confirmation" name="safety_confirmation" autocomplete="off" placeholder="Type I UNDERSTAND"></div>
-<button class="save-button" type="submit">Save Changes</button></div>
-{% endif %}
-</fieldset></form></main></div>
-<script src="{{ url_for('static', filename='settings.js') }}" defer></script></body></html>
+<div class="save-panel"><div><strong>Apply configuration</strong><p>Changes apply together to the next scan. A running scan keeps its captured settings. Applying settings does not start a scan.</p></div><button class="save-button" id="apply-settings-button" type="submit">Apply Requested Settings</button></div>
+</fieldset></form></main></div><script src="/static/settings.js" defer></script></body></html>

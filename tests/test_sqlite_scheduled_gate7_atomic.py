@@ -1,1 +1,0 @@
-from scripts.sqlite_scheduled_gate7_fixture import ScheduledAtomicFixtureTests

@@ -1,3 +1,4 @@
+from app.tracking_schema import has_pending_extension
 """Explicit atomic clock checkpoints after fresh trusted local verification.
 
 Not an HTTP endpoint or worker entrypoint. A caller must freshly establish
@@ -28,7 +29,7 @@ def apply_clock_observations(session, *, changes, now, verify_change):
         raise ValueError('Explicit bounded clock observations required')
     session.verify()
     before = deepcopy(session.state)
-    if ('sqlite_pending_operations' in before or before.get('arr_sync_pending')
+    if (has_pending_extension(before) or before.get('arr_sync_pending')
             or KEY in before and _control(before)['journal'] is not None):
         raise RuntimeError('Pending operation requires review')
     seen = set()

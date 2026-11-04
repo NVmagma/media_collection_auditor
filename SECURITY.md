@@ -11,7 +11,7 @@ exploit, credentials, tokens, or private media paths.**
 ## Supported deployments
 
 The supported deployment target is the current Unraid Docker release.
-Development branches are experimental. SQLite is not approved as the
+Development branches are experimental. JSON is the
 production state authority, and permanent filesystem deletion remains disabled.
 
 ## Review and remediation

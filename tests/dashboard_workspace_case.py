@@ -22,7 +22,7 @@ def render_workspace(*, admin=False, tracking_available=True, run_updates=None, 
     state['first_seen']['TV/Retained unmatched (2026)'] = '2026-10-01T11:30:00'
     config = {'ENABLE_MOVIES': 'true', 'ENABLE_TV': 'true', 'DRY_RUN': 'true',
               'ALLOW_PERMANENT_DELETE': 'false'}
-    run = {'storage_authority': 'sqlite', 'execution_mode': 'scheduled_preview',
+    run = {'storage_authority': 'json', 'execution_mode': 'scheduled_preview',
            'production_activation': 'preview_only', 'running': False, 'queued': False,
            'status': 'advisory_only', 'last_result': 'completed',
            'movies_processed': None, 'tv_processed': None,

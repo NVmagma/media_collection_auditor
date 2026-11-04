@@ -1,3 +1,4 @@
+from app.tracking_schema import has_pending_extension
 """Pure JSON-worker advisory planning; no collectors, writes, HTTP or moves.
 
 Inputs must come from complete verified adapters. A plan never authorizes an
@@ -61,7 +62,7 @@ def plan_scan(*, snapshot, libraries, now, favorites_trigger_keep=True, maximum_
     validate_snapshot(state)
     if KEY in state:
         _control(state)  # Malformed worker metadata is not equivalent to no journal.
-    if ('sqlite_pending_operations' in state or state.get('arr_sync_pending')
+    if (has_pending_extension(state) or state.get('arr_sync_pending')
             or isinstance(state.get(KEY), dict) and state[KEY].get('journal') is not None):
         raise RuntimeError('Pending operation requires review')
     captured = deepcopy(libraries)

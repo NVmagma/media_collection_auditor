@@ -73,9 +73,9 @@ def test_pending_operation_blocks_restart_request_without_replay(cycle_case):
 
 
 def test_daily_startup_waits_for_future_slot_and_spring_gap_is_skipped():
-    settings={'SQLITE_DAILY_RUN_TIME':'02:00','TZ':'America/Los_Angeles'}
+    settings={'DAILY_RUN_TIME':'02:00','TZ':'America/Los_Angeles'}
     assert next_daily(settings,datetime(2026,1,20,11,tzinfo=timezone.utc)) == datetime(2026,1,21,10,tzinfo=timezone.utc)
-    settings['SQLITE_DAILY_RUN_TIME']='02:30'
+    settings['DAILY_RUN_TIME']='02:30'
     # March 8's 02:30 does not exist, so there is no surprise shifted run.
     assert next_daily(settings,datetime(2026,3,8,8,tzinfo=timezone.utc)) == datetime(2026,3,9,9,30,tzinfo=timezone.utc)
 

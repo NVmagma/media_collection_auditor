@@ -5,8 +5,8 @@ import os
 import json
 from audit_history import new_record, finish_record
 from run_control import begin_rescue, end_rescue
-from sqlite_backend_gate import require_json_backend
-from sqlite_lock import audit_run_lock, StateLockBusy
+from backend_selection import require_json_backend
+from state_lock import audit_run_lock, StateLockBusy
 
 def rescue_title(library, title, destination):
     if library not in ("Movies", "TV") or destination not in ("keep", "holding"):
@@ -16,7 +16,7 @@ def rescue_title(library, title, destination):
     try:
         require_json_backend(os.environ.get("AUDITOR_STATE_BACKEND", "json"))
     except RuntimeError:
-        return False, "Manual rescue requires the JSON backend; SQLite activation is disabled.", 409
+        return False, "Manual rescue requires the JSON backend.", 409
     if not begin_rescue():
         return False, "Audit or rescue already in progress.", 409
     try:
@@ -25,7 +25,7 @@ def rescue_title(library, title, destination):
         try:
             require_json_backend(os.environ.get("AUDITOR_STATE_BACKEND", "json"))
         except RuntimeError:
-            return False, "Manual rescue requires the JSON backend; SQLite activation is disabled.", 409
+            return False, "Manual rescue requires the JSON backend.", 409
         state_file, dry_run = auditor.STATE_FILE, auditor.DRY_RUN
         with audit_run_lock(state_file) as verify_lock:
             def verify_binding():

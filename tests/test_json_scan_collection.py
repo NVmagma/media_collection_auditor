@@ -134,7 +134,7 @@ def test_unmatched_jellyfin_title_never_becomes_unprotected(services):
 
 def test_invalid_identity_and_pending_state_refuse_before_any_http(services):
     server,snapshot,inventory,settings = services
-    snapshot['sqlite_pending_operations'] = {'kind':'move'}
+    snapshot['legacy_pending_operations'] = {'kind':'move'}
     with pytest.raises(RuntimeError): collect(services)
     assert not server.calls
 

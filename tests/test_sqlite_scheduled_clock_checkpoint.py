@@ -1,1 +1,0 @@
-from scripts.sqlite_scheduled_checkpoint_fixture import ScheduledClockCheckpointFixtureTests

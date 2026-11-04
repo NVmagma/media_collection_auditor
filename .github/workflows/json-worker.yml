@@ -7,17 +7,15 @@ on:
       - 'tests/test_json*'
       - 'scripts/json_execution_fixture.py'
       - 'scripts/json_worker_lab.sh'
-      - 'scripts/json_cutover_prepare.py'
-      - 'scripts/json_cutover_prepare_host.sh'
-      - 'scripts/json_cutover_review.py'
-      - 'scripts/json_cutover_source_review.py'
-      - 'scripts/json_cutover_review_host.sh'
-      - 'scripts/json_cutover_execute.py'
-      - 'scripts/json_cutover_execute_host.sh'
-      - 'docker/json-worker.Dockerfile'
-      - 'docker/sqlite-candidate-constraints.txt'
+      - 'docker/runtime.Dockerfile'
+      - 'docker/runtime-constraints.txt'
       - 'requirements.txt'
       - '.github/workflows/json-worker.yml'
+  workflow_call:
+    inputs:
+      publish:
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       publish:
@@ -45,22 +43,22 @@ jobs:
           PYTHONPATH: .:app:tests
           WEB_SESSION_SECRET: synthetic-ci-json-session
           PYTHONDONTWRITEBYTECODE: '1'
-        run: python -B -m pytest -q tests/test_json_*.py tests/test_sqlite_arr_title_transport.py tests/test_dashboard_scan_view.py tests/test_docker_runtime_context.py
+        run: python -B -m pytest -q tests/test_json_*.py tests/test_arr_title_transport.py tests/test_dashboard_scan_view.py tests/test_docker_runtime_context.py
       - name: Check JSON host wrapper syntax
-        run: bash -n scripts/json_worker_lab.sh scripts/json_cutover_prepare_host.sh scripts/json_cutover_review_host.sh scripts/json_cutover_execute_host.sh
+        run: bash -n scripts/json_worker_lab.sh
       - name: Build exact JSON candidate without publishing
-        run: docker build -f docker/json-worker.Dockerfile --build-arg SOURCE_REVISION="$GITHUB_SHA" --iidfile "$RUNNER_TEMP/json-worker-image.id" .
+        run: docker build -f docker/runtime.Dockerfile --build-arg SOURCE_REVISION="$GITHUB_SHA" --iidfile "$RUNNER_TEMP/json-worker-image.id" .
       - name: Verify packaged entrypoint, five moves per library and process recovery
         run: bash scripts/json_worker_lab.sh "$(cat "$RUNNER_TEMP/json-worker-image.id")" "$RUNNER_TEMP" "$RUNNER_TEMP" | tee "$RUNNER_TEMP/json-worker-acceptance.log"
       - name: Authenticate candidate publication
-        if: github.event_name == 'workflow_dispatch' && inputs.publish
+        if: inputs.publish
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish the accepted candidate without rebuilding
-        if: github.event_name == 'workflow_dispatch' && inputs.publish
+        if: inputs.publish
         run: |
           reference="ghcr.io/nvmagma/media_collection_auditor:json-candidate-$GITHUB_SHA"
           docker tag "$(cat "$RUNNER_TEMP/json-worker-image.id")" "$reference"

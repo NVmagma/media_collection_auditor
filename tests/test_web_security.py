@@ -207,12 +207,6 @@ class WebSecurityTests(unittest.TestCase):
         with patch.object(web, "current_user", return_value={"name": "Admin", "admin": True}):
             self.assertEqual(self.client.post("/api/run-now", headers={"Origin": "https://evil.example"}).status_code, 403)
 
-    def test_admin_run_now_calls_queue_only_after_origin_check(self):
-        with patch.object(web, "current_user", return_value={"name": "Admin", "admin": True}), \
-             patch.object(web, "request_run", return_value=True) as queue:
-            response = self.client.post("/api/run-now", headers={"Origin": "http://localhost"})
-            self.assertEqual(response.status_code, 202)
-            queue.assert_called_once()
 
     def test_admin_rescue_dispatches_validated_request(self):
         with patch.object(web, "current_user", return_value={"name": "Admin", "admin": True}), \
@@ -256,26 +250,3 @@ class DashboardLinkTests(unittest.TestCase):
         with patch.object(web,'load_config',return_value={'JELLYFIN_HOST_URL':'http://jellyfin:8096','JELLYFIN_API_TOKEN':'private'}), \
              patch.object(web,'_poster_index',return_value={'name:example':'item-id'}):
             self.assertEqual(web._jellyfin_item_id('Example (2024)','Movies'),('http://jellyfin:8096','item-id'))
-
-
-class ManualPreviewDashboardTests(unittest.TestCase):
-    def test_preview_button_is_enabled_without_changing_sealed_daily_only_control(self):
-        from html.parser import HTMLParser
-        class Button(HTMLParser):
-            def handle_starttag(self,tag,attrs):
-                values=dict(attrs)
-                if tag=='button' and values.get('id')=='run-now': self.values=values
-        for mode,enabled in (('scheduled_preview',True),(None,False)):
-            run={'storage_authority':'sqlite','execution_mode':mode,'running':False,'queued':False}
-            stages={name:[] for name in ('Waiting','Holding','Removal','Keep')}
-            with patch.object(web,'current_user',return_value={'name':'Admin','admin':True}), \
-                 patch.object(web,'load_actions',return_value=[]), patch.object(web,'load_state',return_value={}), \
-                 patch.object(web,'load_config',return_value={}), patch.object(web,'filesystem_stages',return_value=(stages,[])), \
-                 patch.object(web,'_dashboard_signals',return_value=None), \
-                 patch.object(web,'selected_run_snapshot',return_value=run), \
-                 patch.object(web,'selected_run_history',return_value=[]):
-                response=web.app.test_client().get('/')
-            self.assertEqual(response.status_code,200)
-            parser=Button(); parser.feed(response.get_data(as_text=True))
-            self.assertEqual('disabled' not in parser.values,enabled)
-            self.assertEqual(parser.values['data-preview'],'true' if enabled else 'false')

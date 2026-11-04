@@ -1,3 +1,4 @@
+from app.tracking_schema import has_pending_extension
 """Isolated JSON scan admission and operation journal; no media/HTTP executor.
 
 Caller holds a JsonTrackingStore session for the whole scan. Ordinary setting
@@ -57,7 +58,7 @@ def initialize_control(session, *, previous_started_at):
     Migration is responsible for proving previous_started_at from the old claims.
     """
     session.verify()
-    if KEY in session.state or 'sqlite_pending_operations' in session.state or session.state.get('arr_sync_pending'):
+    if KEY in session.state or has_pending_extension(session.state) or session.state.get('arr_sync_pending'):
         raise ScanAdmissionBlocked('existing_control_or_operation')
     started = _time(previous_started_at)
     session.state[KEY] = {'schema_version':1, 'last_started_at':started.isoformat(),
@@ -68,7 +69,7 @@ def initialize_control(session, *, previous_started_at):
 def admission_status(state, *, now):
     now = _time(now)
     value = _control(state)
-    if value['journal'] is not None or 'sqlite_pending_operations' in state or state.get('arr_sync_pending'):
+    if value['journal'] is not None or has_pending_extension(state) or state.get('arr_sync_pending'):
         return {'status':'review_required', 'retry_after_seconds':0, 'next_allowed_at':None}
     eligible = _time(value['last_started_at']) + timedelta(seconds=INTERVAL_SECONDS)
     remaining = max(0, math.ceil((eligible-now).total_seconds()))

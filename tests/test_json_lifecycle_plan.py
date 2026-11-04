@@ -5,7 +5,7 @@ from datetime import datetime
 
 import pytest
 from app.json_lifecycle_plan import LibraryObservation, TitleObservation, plan_scan
-from app.sqlite_lifecycle_decision_bridge import review_decision
+from app.lifecycle_decisions import decide
 from app.scan_details import reason_code
 from test_json_tracking_store import state
 
@@ -97,7 +97,8 @@ def test_all_decisions_retained_beyond_100_without_mutating_dates():
 def test_reuses_existing_policy_and_reason_contract(stage,section,flags):
     snapshot = state(); snapshot['first_seen'].pop('Movie'); snapshot[section]['Movie'] = '2026-01-01'
     signal = {**SIGNALS,**flags}
-    expected = review_decision(snapshot,'Movie',stage,NOW,30,signal,True)
+    outcome,explanation=decide(stage,19,30,signal,True)
+    expected={'explanation':explanation}
     row, = plan(snapshot,[library('Movies',title(stage=stage,signals=signal))])['decisions']
     assert row.reason == reason_code(expected)
 

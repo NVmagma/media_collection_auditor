@@ -1,23 +1,17 @@
 name: Docker Image
-
-# The official branch shares the fully tested preview release pipeline. No
-# floating tag is published by a merge, and Tower is never deployed by Actions.
 on:
   workflow_dispatch:
     inputs:
-      publish_preview:
-        description: 'Publish a versioned preview image after complete acceptance'
+      publish:
+        description: Publish an accepted versioned JSON image
         type: boolean
         default: false
-
 permissions:
   contents: read
   packages: write
-
 jobs:
-  validated-preview:
-    if: github.ref == 'refs/heads/feature/unraid'
-    uses: ./.github/workflows/sqlite-candidate.yml
+  validated-json:
+    uses: ./.github/workflows/json-worker.yml
     with:
-      publish_preview: ${{ inputs.publish_preview }}
+      publish: ${{ inputs.publish }}
     secrets: inherit

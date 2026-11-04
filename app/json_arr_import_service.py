@@ -1,3 +1,4 @@
+from app.tracking_schema import has_pending_extension
 """Explicit JSON-backed Arr registration of existing folders; no move or search.
 
 The same worker lock covers review and dispatch. One durable import intent
@@ -56,7 +57,7 @@ def held(selection,settings=None,*,execute=False,allow_pending=False):
         raise ArrImportError('unsafe_folder')
     with store.session() as session,ExitStack() as stack:
         if not allow_pending and (_pending(session) is not None or session.state.get('arr_sync_pending')
-                                  or 'sqlite_pending_operations' in session.state):
+                                  or has_pending_extension(session.state)):
             raise ArrImportError('pending_operation')
         parents={}; identities=set(); present=[]
         for stage,path in roots.items():

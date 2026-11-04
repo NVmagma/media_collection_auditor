@@ -32,10 +32,3 @@ def test_all_administrator_screens_have_same_navigation_and_signout():
         assert 'aria-label="Sign out"' in page
         assert 'class="topbar"' not in page
     assert '/settings' in expected and '/integrations' in expected and '/review' in expected
-
-def test_read_only_users_keep_library_and_logs_without_administrator_links():
-    for page in (render_workspace().text,render_page('logs.html',admin=False),render_page('preview-paused.html',admin=False)):
-        links=Navigation(page).links
-        assert '/logs' in links and '/#Library' in links and '/review' in links
-        assert '/settings' not in links and '/integrations' not in links
-        assert '/experimental/sqlite/recovery' not in links

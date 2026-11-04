@@ -14,7 +14,7 @@ import pytest
 APP = Path(__file__).resolve().parents[1] / "app"
 sys.path.insert(0, str(APP))
 import manual_rescue
-from sqlite_lock import state_writer_lock
+from state_lock import state_writer_lock
 
 
 @pytest.fixture
@@ -56,8 +56,8 @@ def test_another_process_blocks_rescue_before_load_or_move(rescue, lock):
     script = '''
 import sys
 sys.path.insert(0, sys.argv[1])
-import sqlite_lock
-with getattr(sqlite_lock, sys.argv[3])(sys.argv[2]):
+import state_lock
+with getattr(state_lock, sys.argv[3])(sys.argv[2]):
     print("LOCKED", flush=True)
     sys.stdin.readline()
 '''
@@ -98,7 +98,7 @@ def blocked_from_process(state_file):
     script = '''
 import sys
 sys.path.insert(0, sys.argv[1])
-from sqlite_lock import migration_lock, StateLockBusy
+from state_lock import migration_lock, StateLockBusy
 try:
     with migration_lock(sys.argv[2]):
         print("OWNED")
@@ -172,18 +172,6 @@ def test_move_error_releases_both_guards_without_updating_state(rescue):
         pass
 
 
-def test_backend_loaded_during_import_is_rechecked_before_lock(rescue, monkeypatch):
-    root, state_file, source, auditor, library = rescue
-    def imported(name):
-        monkeypatch.setenv("AUDITOR_STATE_BACKEND", "sqlite")
-        return auditor
-    monkeypatch.setattr(manual_rescue, "importlib", SimpleNamespace(import_module=imported))
-    result = manual_rescue.rescue_title("Movies", "Example", "keep")
-    assert result[0] is False and result[2] == 409
-    auditor.load_state.assert_not_called()
-    auditor.safe_move_directory.assert_not_called()
-    assert not Path(str(state_file) + ".migration.lock").exists()
-    manual_rescue.end_rescue.assert_called_once()
 
 
 def test_save_error_preserves_bytes_and_releases_coordination(rescue, monkeypatch):

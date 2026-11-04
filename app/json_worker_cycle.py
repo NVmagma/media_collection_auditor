@@ -117,7 +117,7 @@ def _run_cycle(store, *, settings, trigger, now, services, collect, preview, evi
     values,limit=validate_policy(settings)
     now=datetime.now(timezone.utc) if now is None else now
     if not isinstance(now,datetime) or now.tzinfo is None: raise ValueError('Aware cycle time required')
-    zone=ZoneInfo(values.get('SQLITE_DAILY_RUN_TIMEZONE') or values.get('TZ') or 'UTC')
+    zone=ZoneInfo(values.get('DAILY_RUN_TIMEZONE') or values.get('TZ') or 'UTC')
     local_now=now.astimezone(zone).replace(tzinfo=None)
     if _bool(values,'DRY_RUN','true'):
         result=preview(state_file=store.path,settings=values,now=local_now)

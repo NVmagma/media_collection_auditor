@@ -58,9 +58,9 @@ requests; it need not be reachable from the Mac browser.
 ```sh
 (
   set -eu
-  cd /mnt/user/sqlite_lab_checkout
-  [ "$(git branch --show-current)" = "feature/sqlite" ]
-  git pull --ff-only origin feature/sqlite
+  cd /mnt/user/auditor_checkout
+  [ "$(git branch --show-current)" = "feature/interface-api" ]
+  git pull --ff-only origin feature/interface-api
   bash scripts/integration_widget_lab.sh sample
 )
 ```
@@ -118,7 +118,7 @@ Next data checks can be started together without touching the sample instance:
 ```sh
 (
   set -eu
-  cd /mnt/user/sqlite_lab_checkout
+  cd /mnt/user/auditor_checkout
   for scenario in unavailable empty; do
     printf '\nScenario: %s\n' "$scenario"
     bash scripts/integration_widget_lab.sh "$scenario"

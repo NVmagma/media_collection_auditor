@@ -3,7 +3,7 @@
 This is the offline reader and response format reused by the
 [authenticated summary endpoint](integration-api.md). The CLI itself adds no
 listener, network collector or action endpoint.
-JSON remains authoritative; SQLite environment flags cannot redirect this reader.
+JSON remains authoritative; Unsupported backend flags cannot redirect this reader.
 Dedicated bearer authentication is documented with the endpoint.
 
 Run from a checkout with project dependencies installed:

@@ -173,7 +173,7 @@ There is no nested scroll container, image request, browser fetch or navigation
 link. Size each board widget to fit its rows; actual no-scroll acceptance depends
 on the installed renderer, board height and viewport, especially on mobile.
 
-For a synthetic ten-row preview, update only the checkout on `feature/sqlite`
+For a synthetic ten-row preview, update only the checkout on `feature/interface-api`
 and run `bash scripts/integration_widget_lab.sh titles`. This uses the existing
 expiring isolated fixture launcher, not production state. It exposes both title
 routes with twelve synthetic records each, capped at ten with a truncation note.
@@ -244,7 +244,7 @@ Removal dates. It does not enable TV lifecycle operations or season pruning.
 No TV holding records means no tracked TV items for this view; the widget does
 not fabricate missing dates or infer tracking merely from folders.
 
-A newly initialized empty SQLite preview has no title records even when the
+A newly initialized empty JSON installation has no title records even when the
 folder-based dashboard shows media. Preview scans do not persist discovery clocks.
 An explicitly reviewed initialization/import is needed to populate tracking.
 The operator chose to restore the retained prior tracking records and dates,

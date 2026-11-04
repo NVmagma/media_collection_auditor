@@ -122,38 +122,6 @@ def test_changed_settings_invalidates_whole_report(coverage_api,monkeypatch):
     assert response.status_code==503 and response.json['rows'] is None
 
 
-@pytest.mark.parametrize('changed',[False,True])
-def test_sqlite_capture_checks_revision_across_inventory(coverage_api,monkeypatch,tmp_path,changed):
-    from app.sqlite_snapshot_writer import write_offline_snapshot
-    from app.sqlite_state import SECTIONS
-    from app.sqlite_audit_session import RevisionedAuditSession
-    from app.state_store import GuardedSQLiteStateStore
-    import app.integration_status as selected
-    # web imports the flat module in legacy runtime layout.
-    import integration_status as flat_selected
-    client,state,media,config=coverage_api
-    payload={key:{} for key in SECTIONS}
-    payload['first_seen']={'Private same title':'2024-01-01'}
-    database=tmp_path/'tracking.db'
-    write_offline_snapshot(payload,database)
-    monkeypatch.setenv('AUDITOR_STATE_BACKEND','sqlite')
-    monkeypatch.setenv('SQLITE_STATE_FILE',str(database))
-    monkeypatch.setattr(selected,'_require_sqlite_authority',lambda:None)
-    monkeypatch.setattr(flat_selected,'_require_sqlite_authority',lambda:None)
-    original=web.filesystem_stages
-    def scan(*a,**kw):
-        result=original(*a,**kw)
-        if changed:RevisionedAuditSession(GuardedSQLiteStateStore(database)).checkpoint()
-        return result
-    monkeypatch.setattr(web,'filesystem_stages',scan)
-    json_before=state.read_bytes();database_before=database.read_bytes()
-    response=client.get('/api/v1/coverage',headers=AUTH)
-    assert state.read_bytes()==json_before
-    if changed:
-        assert response.status_code==503 and response.json['rows'] is None
-    else:
-        assert response.status_code==200 and response.json['storage_authority']=='sqlite'
-        assert response.json['state_revision']==0 and database.read_bytes()==database_before
 
 
 def test_unapproved_sqlite_never_uses_json(coverage_api,monkeypatch):

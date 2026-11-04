@@ -13,7 +13,7 @@ image=$(docker inspect --format '{{.Image}}' media_collection_auditor)
 [[ "$image" =~ ^sha256:[0-9a-f]{64}$ ]] || exit 2
 lab=$(mktemp -d "$base/integration-backup.XXXXXX")
 mkdir "$lab/source"
-git archive "$revision" app scripts/integration_coverage_fixture.py scripts/unraid_update_backup.py scripts/integration_backup_fixture.py | tar -xf - -C "$lab/source"
+git archive "$revision" app scripts/integration_coverage_fixture.py scripts/integration_backup_fixture.py | tar -xf - -C "$lab/source"
 printf 'Lab directory: %s\nsource_revision=%s\nfixture_only=true\n' "$lab" "$revision"
 container=$(docker create --pull=never --network none --read-only --user "$(id -u):$(id -g)" \
   --cap-drop ALL --security-opt no-new-privileges --pids-limit 64 --memory 256m \

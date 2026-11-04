@@ -1,1 +1,0 @@
-from scripts.sqlite_restore_fixture import RestoreFixtureTests

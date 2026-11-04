@@ -105,7 +105,7 @@ def test_unknown_or_unresolved_control_never_resets_or_claims(initialized, chang
     with initialized.session() as session:
         if change == 'absent': session.state.pop(KEY)
         elif change == 'malformed': session.state[KEY] = {'unknown':'preserve'}
-        elif change == 'old_intent': session.state['sqlite_pending_operations'] = {'kind':'move'}
+        elif change == 'old_intent': session.state['legacy_pending_operations'] = {'kind':'move'}
         else: session.state['arr_sync_pending']['TV/Existing'] = {
             'stage':'keep', 'root':'/media/TV_keep', 'monitored':True}
         session.checkpoint()

@@ -104,119 +104,18 @@ the representative synthetic collection. This is not a fixed-height/clipped view
 phone layouts stack, and critical errors or unusually long content may still
 require scrolling. The full Library and Review content remain available.
 
-## Scans and process-local History
+## Scans and persistent History
 
-The SQLite Scans workspace now separates current running/queued/waiting/blocked
-observations, the latest recorded attempt, and the existing saved-date timer
-estimates. A missed daily slot is not presented as a completed scan. Run Preview
-retains its existing administrator and backend-mode checks.
+The Scans workspace separates current running, queued, waiting and blocked status,
+recorded attempts and saved-date timer estimates. History is persisted in appdata
+and survives restarts. Result filters, five-entry pages and expandable per-title
+outcomes distinguish verified moves from proposals and uncertain operations.
+Missing counts remain unknown. Display limits do not limit inventory scanning.
 
-History renders a scalar-only projection of the scheduler's existing records,
-with result filters, five-entry pages and expandable outcome details. Preview
-proposals, discovery changes, completed moves and Arr updates remain distinct.
-Missing counts stay unknown. Valid aware start/finish times provide durations;
-missing/reversed/naive times cannot certify completion. Times display using the
-configured dashboard zone where available. Mode comes from each record, not
-from current settings; an absent mode is not labeled Live. Raw exceptions,
-unknown keys, source payloads and unrecognized reason text are not forwarded to
-the new SQLite view. The legacy JSON history table remains compatible.
+## Settings and local drafts
 
-No new scheduler history is collected or persisted. SQLite history is still
-bounded to the current process (up to 100 entries) and resets after restart.
-Per-title proposal manifests and skipped/blocked title counts/reasons are not
-retained in these observations; the UI explicitly says they are not recorded.
-It does not infer them from folder inventory or action-log totals, retry a run,
-reconcile an intent or authorize any media operation.
-
-The disposable preview includes synthetic completed previews, a recorded live
-outcome and failed/uncertain outcomes to exercise the labels and filters. These
-are illustrative records; no actual scan or media operation took place.
-
-## Settings status and local drafts
-
-The Settings page separates active field values, the saved request and explicit
-application/recovery into three status cards. Only allowlisted field names are
-shown for requested changes; pending values and credentials are not projected.
-The editor begins with the existing values. Local changes receive an unsaved
-indicator; edits and indicator text are not autosaved or put in browser storage.
-Preview Settings has one Apply Requested Settings action. It validates and stages
-the submitted edits, then applies that exact request through the guarded transaction.
-With unchanged edits, only the explicitly rendered ready request digest can be
-applied. Concurrent replacement requests are never substituted. The separate
-Save Requested Changes button and typed acknowledgement are removed in preview;
-backend origin, administrator, binding, locking, validation and restore checks remain.
-
-Recovery retains the disabled editor and explicit Restore form outside it.
-Stale/review/resubmit states allow submitting newly reviewed edits without adopting
-a retained request digest. Recovery offers Restore only. Connection tests keep using
-the active server endpoint; typed draft values are not sent by those tests.
-The legacy non-preview save flow remains supported.
-
-The synthetic Tower server offers `/settings` and
-`/settings?scenario=recovery` (also `stale`, `clean`, `review`, `resubmit`). These
-are generated demonstration states, not the host's actual settings. All POST
-submissions are refused by that fixture server. Use placeholder edits only;
-actual apply/restore behavior is covered separately by disposable backend tests.
-
-Settings verification: 128 focused Linux tests and 8 subtests passed, including
-application/recovery/security and Docker runtime checks. Real Chromium checks
-cover local draft counts, credential masking, all six status states, category
-switching, the single Apply form submission and 1440/900/390/320px widths. A private HTTP fixture check verified the
-page and script while refusing application. Existing Dashboard browser checks
-still pass. User visual acceptance is pending; no production service changed.
-
-## Shared application shell follow-up (2026-10-28)
-
-User requests consistent navigation and visual treatment across Dashboard,
-Settings and other application pages. Use Settings as the reference: main
-sections in a left sidebar and the selected content on the right. Preserve
-clickable dashboard sections and the separate Review page, compact desktop
-layout and accessible/mobile navigation. Unify typography, spacing, cards,
-active/visited states and page headers rather than restyling one page alone.
-Live move readiness takes priority; this shell work follows it.
-
-## Shared left navigation implementation (2026-10-29)
-
-Dashboard, separate Review, Settings, API setup, Activity Logs and paused-state
-screens now include one shared sidebar template. Workspace destinations stay in
-the same order across pages; Settings categories appear beneath the application
-links on the left. Dashboard cards, library/stage controls and section deep links
-retain their existing behavior. Administrator-only settings/API/recovery links
-remain conditional, and every authenticated page provides sign-out.
-
-Headers, content margins, active states and sidebar spacing use the same shell.
-On narrow screens the sidebar becomes a compact icon rail with accessible names;
-its navigation scrolls independently on short screens. A skip-to-content link
-supports keyboard use. The standalone sign-in screen remains outside the
-signed-in shell.
-
-Verification: 56 focused Python tests passed. Chromium verified Dashboard,
-Settings and API setup through 320px widths, existing navigation and form
-behavior, no horizontal overflow, and desktop overview fit at 1280/1440x1000.
-Synthetic screenshots were visually inspected. No production service, tracking,
-schedule or live policy was changed; rollout and user visual acceptance remain
-separate from this source update.
-
-## Recorded title decisions (2026-10-29)
-
-Scans and History can display up to 100 title decisions per attempt, with selected
-moves prioritized over unchanged titles. Fixed policy reasons explain elapsed
-Waiting/Holding periods, Jellyfin keep/favorite/protection/dislike signals,
-missing/conflicting dates, disabled deletion and the shared action cap. A
-proposal remains distinct from a verified completed move and an uncertain stop.
-Verified move observations are published before Arr delivery so a later delivery
-failure does not erase that observation. Titles are validated bound folder names;
-paths, credentials, raw exceptions and unrecognized payload fields are dropped.
-
-Records remain bounded and process-local, reset after restart and do not grant
-replay or recovery authority. Earlier records without details remain unknown.
-The existing integration scan/proposal APIs remain counts-only and omit titles.
-
-## Operator controls follow-up (2026-10-29)
-
-The shared Settings shell supports reviewed live application and recovery while
-showing fixed canary controls as labeled values. Run Live Scan Now is explicit,
-administrator-only and confirms that it uses today's daily action budget. It
-cannot add a second scheduled/manual attempt on that local date. Browser checks
-exercise its confirmation and exact JSON request only against synthetic routes.
-No production worker is connected to those UI fixtures.
+The form shows current settings and local draft markers. Apply Requested Settings
+validates edits and saves them together for the next scan; a running scan retains
+its captured settings. Connection tests use saved values. Secret values never
+appear in draft indicators or browser storage. There is no separate staged-request
+or settings-restoration transaction.

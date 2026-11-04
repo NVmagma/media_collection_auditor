@@ -55,14 +55,14 @@ def test_browser_session_and_query_token_are_not_api_credentials(api, monkeypatc
     assert client.get('/api/v1/summary?token=' + TOKEN).status_code == 401
 
 
-def test_sqlite_selection_never_falls_back_to_json_and_leaves_state_unchanged(api, monkeypatch):
+def test_unsupported_backend_selection_never_falls_back_to_json_and_leaves_state_unchanged(api, monkeypatch):
     client, path = api
     raw = path.read_bytes()
-    monkeypatch.setenv('AUDITOR_STATE_BACKEND', 'sqlite')
+    monkeypatch.setenv('AUDITOR_STATE_BACKEND', 'unsupported')
     response = client.get('/api/v1/summary?state=/some/other/file', headers=AUTH)
     assert response.status_code == 503
     assert response.json['tracking_counts'] is None
-    assert response.json['storage_authority'] == 'sqlite'
+    assert response.json['storage_authority'] == 'unavailable'
     assert response.json['freshness_verified'] is False
     assert response.json['production_authorized'] is False
     assert 'private-title' not in response.text
@@ -180,22 +180,22 @@ def test_audit_status_disabled_and_browser_session_not_sufficient(api, monkeypat
     assert client.get('/api/v1/audit-status', headers=AUTH).status_code == 404
 
 
-def test_sqlite_audit_status_never_reads_json_coordinator_history(api, monkeypatch):
+def test_unsupported_backend_audit_status_never_reads_json_coordinator_history(api, monkeypatch):
     client, _ = api
-    monkeypatch.setenv('AUDITOR_STATE_BACKEND', 'sqlite')
+    monkeypatch.setenv('AUDITOR_STATE_BACKEND', 'unsupported')
     monkeypatch.setattr(web, 'snapshot', lambda: pytest.fail('No JSON coordinator fallback'))
     response = client.get('/api/v1/audit-status', headers=AUTH)
     assert response.status_code == 503
-    assert response.json['storage_authority'] == 'sqlite'
+    assert response.json['storage_authority'] == 'unavailable'
     assert response.json['last_result'] is None and response.json['running'] is None
 
 
-def test_sqlite_manual_run_does_not_queue_legacy_worker(api, monkeypatch):
+def test_unsupported_backend_manual_run_does_not_queue_legacy_worker(api, monkeypatch):
     client, _ = api
-    monkeypatch.setenv('AUDITOR_STATE_BACKEND', 'sqlite')
+    monkeypatch.setenv('AUDITOR_STATE_BACKEND', 'unsupported')
     monkeypatch.setattr(web, 'current_user', lambda: {'admin': True})
     monkeypatch.setattr(web, 'admin_authorized', lambda: True)
     monkeypatch.setattr(web, 'request_run', lambda: pytest.fail('Daily-only backend cannot queue legacy worker'))
     response = client.post('/api/run-now', headers={'Origin': 'http://localhost'})
     assert response.status_code == 409
-    assert 'daily time' in response.json['message']
+    assert 'configuration' in response.json['message']

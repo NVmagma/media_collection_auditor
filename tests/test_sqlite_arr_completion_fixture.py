@@ -1,1 +1,0 @@
-from scripts.sqlite_arr_completion_fixture import ArrCompletionFixtureTests

@@ -9,7 +9,7 @@ from flask import Blueprint, request, session, render_template
 
 from app import arr_import_service as service
 from app.arr_import_transport import ArrImportError
-from app.sqlite_lock import StateLockBusy
+from app.state_lock import StateLockBusy
 
 MESSAGES = {
     'selection_invalid': 'Choose an existing folder, provider match and quality profile.',

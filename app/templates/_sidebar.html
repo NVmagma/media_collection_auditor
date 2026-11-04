@@ -16,7 +16,6 @@
       {% if viewer.admin %}
       <a href="/settings" aria-label="Settings" {% if sidebar_page == 'settings' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-label">Settings</span></a>
       <a href="/integrations" aria-label="API setup" {% if sidebar_page == 'integrations' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">↗</span><span class="nav-label">API setup</span></a>
-      {% if experimental_sqlite_recovery_enabled %}<a href="/experimental/sqlite/recovery" aria-label="SQLite recovery"><span class="nav-icon" aria-hidden="true">↺</span><span class="nav-label">SQLite recovery</span></a>{% endif %}
       {% endif %}
     </nav>
     {% if sidebar_page == 'settings' %}

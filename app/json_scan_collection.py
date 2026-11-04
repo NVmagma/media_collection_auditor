@@ -1,7 +1,7 @@
 """GET-only service adapters for the isolated JSON advisory planner.
 
 Inventory is supplied by a trusted local adapter; this module does not verify
-filesystem inventory or grant move permission. No SQLite, claims or state saves.
+filesystem inventory or grant move permission. No claims or state saves.
 """
 from copy import deepcopy
 from dataclasses import dataclass

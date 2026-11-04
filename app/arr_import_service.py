@@ -1,3 +1,6 @@
+from app.arr_catalog import canonical_arr_record_path
+from app.filesystem_paths import _canonical,_open_directory
+from app.title_identity import validate_title_folder
 """Explicit existing-folder Arr registration, separate from lifecycle dispatch.
 
 Imports are never automatic. Existing stage folders, unmonitored, no searches.
@@ -16,17 +19,6 @@ import stat
 from time import monotonic
 
 from app.arr_import_transport import ArrImportHTTP, ArrImportError
-from app.sqlite_arr_catalog import canonical_arr_record_path
-from app.sqlite_audit_session import RevisionedAuditSession
-from app.sqlite_backend_gate import (require_sqlite_read_authority,
-    require_sqlite_production_activation, live_release_enabled)
-from app.sqlite_lock import audit_run_lock
-from app.sqlite_operation_coordinator import INTENTS_KEY, SQLiteOperationCoordinator
-from app.sqlite_scheduled_paths import _canonical, _open_directory
-from app.sqlite_scheduled_production import _hold_control_database
-from app.sqlite_scheduled_settings import scheduled_worker_from_settings
-from app.sqlite_title_identity import validate_title_folder
-from app.state_store import GuardedSQLiteStateStore
 
 MEDIA_SUFFIXES = frozenset(('.mkv', '.mp4', '.m4v', '.avi', '.mov', '.ts', '.m2ts', '.mpg', '.mpeg', '.wmv', '.iso'))
 
@@ -49,29 +41,21 @@ def text(value, limit=255):
     return value
 
 
-def _json_worker():
-    return os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized'
 
 
 def _read_authority(*,settings=None):
-    if _json_worker():
-        from app.json_arr_import_service import values
-        return values(settings)
-    return require_sqlite_read_authority(settings=settings)
+    from app.json_arr_import_service import values
+    return values(settings)
 
 
-def library_config(values, name):
-    if name not in ('Movies', 'TV'): raise ArrImportError('selection_invalid')
-    if _json_worker():
-        from types import SimpleNamespace
-        from app.json_worker_cycle import stage_paths
-        from app.json_readonly_scan import _bool
-        if not _bool(values,'ENABLE_TV' if name=='TV' else 'ENABLE_MOVIES','false' if name=='TV' else 'true'):
-            raise ArrImportError('library_disabled')
-        return SimpleNamespace(name=name,roots=tuple(stage_paths(values,name)[0].items()))
-    libraries = [lib for lib in scheduled_worker_from_settings(values).libraries if lib.name == name]
-    if len(libraries) != 1: raise ArrImportError('library_disabled')
-    return libraries[0]
+def library_config(values,name):
+    from types import SimpleNamespace
+    from app.json_worker_cycle import stage_paths
+    from app.json_readonly_scan import _bool
+    if name not in ('Movies','TV'): raise ArrImportError('selection_invalid')
+    if not _bool(values,'ENABLE_TV' if name=='TV' else 'ENABLE_MOVIES','false' if name=='TV' else 'true'):
+        raise ArrImportError('library_disabled')
+    return SimpleNamespace(name=name,roots=tuple(stage_paths(values,name)[0].items()))
 
 
 def client_for(values, name, verify=lambda: None):
@@ -190,59 +174,6 @@ def media_fingerprint(fd):
     return digest(sorted(rows)), len(rows)
 
 
-@contextmanager
-def held_import(values, selection, *, verify_authority):
-    if set(selection) != {'library', 'folder', 'provider_id', 'quality_profile_id'}:
-        raise ArrImportError('selection_invalid')
-    name, folder = selection['library'], validate_title_folder(selection['folder'])
-    if folder.startswith('.'): raise ArrImportError('unsafe_folder')
-    positive(selection['provider_id']); positive(selection['quality_profile_id'])
-    config = library_config(values, name)
-    roots = dict(config.roots)
-    database = Path(values['SQLITE_STATE_FILE'])
-    with ExitStack() as stack:
-        parents = {}
-        for stage, path in roots.items():
-            parents[stage] = _open_directory(path); stack.callback(os.close, parents[stage])
-        present = []
-        for stage, fd in parents.items():
-            try: item = os.stat(folder, dir_fd=fd, follow_symlinks=False)
-            except FileNotFoundError: continue
-            if not stat.S_ISDIR(item.st_mode): raise ArrImportError('unsafe_folder')
-            present.append(stage)
-        if len(present) != 1: raise ArrImportError('folder_changed')
-        source_stage = present[0]
-        title_fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK,
-            dir_fd=parents[source_stage]); stack.callback(os.close, title_fd)
-        session = RevisionedAuditSession(GuardedSQLiteStateStore(database))
-        initial, revision = session.read_verified_snapshot()
-        media, files = media_fingerprint(title_fd)
-        title_identity = (os.fstat(title_fd).st_dev, os.fstat(title_fd).st_ino)
-        def verify():
-            verify_authority()
-            present = []
-            for stage, fd in parents.items():
-                current_fd = _open_directory(roots[stage])
-                try:
-                    a, b = os.fstat(current_fd), os.fstat(fd)
-                    if (a.st_dev, a.st_ino) != (b.st_dev, b.st_ino): raise ArrImportError('folder_changed')
-                finally: os.close(current_fd)
-                try: item = os.stat(folder, dir_fd=fd, follow_symlinks=False)
-                except FileNotFoundError: continue
-                present.append(stage)
-                if stage == source_stage and (not stat.S_ISDIR(item.st_mode)
-                        or (item.st_dev, item.st_ino) != title_identity): raise ArrImportError('folder_changed')
-            if present != [source_stage] or media_fingerprint(title_fd)[0] != media:
-                raise ArrImportError('folder_changed')
-            session.read_verified_snapshot()
-        verify()
-        prefix = 'RADARR' if name == 'Movies' else 'SONARR'
-        override = (values.get(prefix + '_APP_' + source_stage.upper() + '_PATH', '').strip()
-            if source_stage != 'Waiting' else '')
-        remote_root = _canonical(override or roots[source_stage])
-        yield session, verify, {'path': remote_root + '/' + folder,
-            'root': remote_root, 'stage': source_stage, 'media_fingerprint': media, 'media_files': files,
-            'title_identity': title_identity, 'state': initial, 'revision': revision}
 
 
 def payload_review(client, selection, local):
@@ -295,36 +226,11 @@ def payload_review(client, selection, local):
     return payload, summary, selected[0]['_configuration_sha256']
 
 
-@contextmanager
-def locked_context(*, settings=None, execute=False):
-    if execute and not live_release_enabled(): raise ArrImportError('live_import_unavailable')
-    values = (require_sqlite_production_activation if execute else require_sqlite_read_authority)(settings=settings)
-    database = Path(values['SQLITE_STATE_FILE'])
-    with audit_run_lock(values['STATE_FILE']) as verify_json:
-        with _hold_control_database(database.parent, database) as verify_control:
-            def verify_authority():
-                verify_json(); verify_control()
-                if require_sqlite_read_authority(settings=settings) != values:
-                    raise ArrImportError('binding_changed')
-            verify_authority()
-            yield values, verify_authority
-            verify_authority()
 
 
-def review(*, selection, settings=None):
-    if _json_worker():
-        from app import json_arr_import_service
-        return json_arr_import_service.review(selection=selection,settings=settings)
-    with locked_context(settings=settings) as (values, authority):
-        with held_import(values, selection, verify_authority=authority) as (session, verify, local):
-            if INTENTS_KEY in session.state: raise ArrImportError('pending_operation')
-            client = client_for(values, selection['library'], verify)
-            payload, summary, profile_hash = payload_review(client, selection, local)
-            verify()
-            fingerprint = digest({'payload': payload, 'local': local, 'settings': values,
-                'quality_profile': profile_hash})
-            return {**summary, 'review_fingerprint': fingerprint,
-                'read_only': True, 'execution_authorized': False}
+def review(*,selection,settings=None):
+    from app import json_arr_import_service
+    return json_arr_import_service.review(selection=selection,settings=settings)
 
 
 def verify_remote(client, details):
@@ -349,71 +255,11 @@ def verify_remote(client, details):
             raise ArrImportError('import_outcome_unverified')
 
 
-def apply(*, selection, expected_fingerprint, settings=None):
-    if _json_worker():
-        from app import json_arr_import_service
-        return json_arr_import_service.apply(selection=selection,expected_fingerprint=expected_fingerprint,settings=settings)
-    if not isinstance(expected_fingerprint, str) or not re.fullmatch('[0-9a-f]{64}', expected_fingerprint):
-        raise ArrImportError('review_required')
-    with locked_context(settings=settings, execute=True) as (values, authority):
-        with held_import(values, selection, verify_authority=authority) as (session, verify, local):
-            if INTENTS_KEY in session.state: raise ArrImportError('pending_operation')
-            client = client_for(values, selection['library'], verify)
-            payload, summary, profile_hash = payload_review(client, selection, local)
-            if digest({'payload': payload, 'local': local, 'settings': values,
-                    'quality_profile': profile_hash}) != expected_fingerprint:
-                raise ArrImportError('review_changed')
-            details = {**selection, 'path': local['path'], 'media_fingerprint': local['media_fingerprint'],
-                'stage': local['stage'], 'title_identity': list(local['title_identity']), 'service': client.service}
-            coordinator = SQLiteOperationCoordinator(session)
-            coordinator.begin(secrets.token_hex(16), 'arr_import', details)
-            intent = deepcopy(session.state[INTENTS_KEY])
-            client.create(payload)  # The only create call; any failure retains the intent.
-            verify_remote(client, details)
-            verify()
-            if session.state.get(INTENTS_KEY) != intent: raise ArrImportError('pending_operation_changed')
-            session.state.pop(INTENTS_KEY)
-            session.checkpoint(); verify()
-            return {'status': 'existing_media_import_verified', 'state_revision': session.revision,
-                'verification_scope': 'arr_record_registration', 'arr_file_scan_verified': False,
-                'media_actions_performed': False, 'download_searches': False, 'monitoring': 'off',
-                'automatic_retry': False, 'tracking_clocks_preserved': True, 'daily_claims_modified': False}
+def apply(*,selection,expected_fingerprint,settings=None):
+    from app import json_arr_import_service
+    return json_arr_import_service.apply(selection=selection,expected_fingerprint=expected_fingerprint,settings=settings)
 
 
-def recover(*, expected_fingerprint=None, settings=None):
-    """Explicit GET-only review/clearance of one pending import, never another POST."""
-    if _json_worker():
-        from app import json_arr_import_service
-        return json_arr_import_service.recover(expected_fingerprint=expected_fingerprint,settings=settings)
-    if not live_release_enabled(): raise ArrImportError('live_import_unavailable')
-    with locked_context(settings=settings) as (values, authority):
-        store = GuardedSQLiteStateStore(values['SQLITE_STATE_FILE'])
-        state, revision = store.load_with_revision()
-        intent = state.get(INTENTS_KEY)
-        if (not isinstance(intent, dict) or set(intent) != {'id', 'kind', 'phase', 'details'}
-                or not isinstance(intent.get('id'), str) or not re.fullmatch('[0-9a-f]{32}', intent['id'])
-                or intent.get('kind') != 'arr_import'
-                or intent.get('phase') != 'intent_recorded' or not isinstance(intent.get('details'), dict)):
-            raise ArrImportError('no_pending_import')
-        details = intent['details']
-        if set(details) != {'library', 'folder', 'provider_id', 'quality_profile_id',
-                'path', 'stage', 'media_fingerprint', 'title_identity', 'service'}:
-            raise ArrImportError('pending_operation_changed')
-        selection = {key: details[key] for key in ('library', 'folder', 'provider_id', 'quality_profile_id')}
-        with held_import(values, selection, verify_authority=authority) as (session, verify, local):
-            if (session.state != state or session.revision != revision
-                    or details['path'] != local['path'] or details['stage'] != local['stage']
-                    or details['media_fingerprint'] != local['media_fingerprint']
-                    or details['title_identity'] != list(local['title_identity'])):
-                raise ArrImportError('pending_operation_changed')
-            fingerprint = digest({'state': state, 'revision': revision, 'local': local, 'settings': values})
-            if expected_fingerprint is not None and fingerprint != expected_fingerprint:
-                raise ArrImportError('review_changed')
-            client = client_for(values, selection['library'], verify)
-            if details['service'] != client.service: raise ArrImportError('pending_operation_changed')
-            check_version(client); verify_remote(client, details); verify()
-            if expected_fingerprint is None:
-                return {'status': 'import_outcome_matches', 'review_fingerprint': fingerprint, 'read_only': True}
-            session.state.pop(INTENTS_KEY); session.checkpoint(); verify()
-            return {'status': 'import_intent_reconciled', 'state_revision': session.revision,
-                'arr_create_requests_sent': 0, 'media_actions_performed': False, 'automatic_retry': False}
+def recover(*,expected_fingerprint=None,settings=None):
+    from app import json_arr_import_service
+    return json_arr_import_service.recover(expected_fingerprint=expected_fingerprint,settings=settings)

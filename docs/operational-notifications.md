@@ -1,6 +1,6 @@
 # Opt-in operational failure notifications
 
-SQLite preview can send two fixed event types:
+The JSON worker can send two fixed event types:
 
 - `scan_blocked_or_uncertain`: a scheduled/manual attempt failed, returned a
   non-completed outcome, or could not proceed after configuration validation.

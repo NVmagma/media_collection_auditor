@@ -51,20 +51,6 @@ def test_setup_is_private_read_only_and_explicit(api, monkeypatch):
     assert state.read_bytes() == before
 
 
-def test_paused_preview_readiness_and_setup_still_available(api, monkeypatch):
-    client, _ = api
-    class Gate:
-        def preview_release_enabled(self): return True
-        def live_release_enabled(self): return False
-        def require_sqlite_production_activation(self): raise RuntimeError('private path secret')
-    monkeypatch.setattr(web, '_preview_backend_gate', lambda:Gate())
-    monkeypatch.setattr(web, 'read_tracking_status', lambda *_:pytest.fail('No unbound reads'))
-    response = client.get('/api/v1/readiness', headers=AUTH)
-    assert response.status_code == 503
-    assert response.json['binding_status'] == 'review_required'
-    assert 'secret' not in response.text
-    monkeypatch.setattr(web, 'current_user', lambda:{'admin':True,'name':'Tester'})
-    assert client.get('/integrations').status_code == 200
 
 
 def test_sidecar_readiness_has_no_coordinator_claim(api, monkeypatch):

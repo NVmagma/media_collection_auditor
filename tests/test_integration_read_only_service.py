@@ -77,7 +77,7 @@ def test_invalid_service_selection_never_falls_back_to_worker(monkeypatch, value
 def test_actual_image_entrypoint_exits_before_importing_worker_or_writing_session_key(tmp_path):
     runtime = context(tmp_path)
     (runtime / 'collection_auditor.py').write_text('raise AssertionError("Worker imported")\n')
-    env = {'PYTHONPATH': str(runtime), 'READ_ONLY_API_SERVICE': 'true',
+    env = {'PYTHONPATH': str(runtime)+':'+str(runtime/'app'), 'READ_ONLY_API_SERVICE': 'true',
            'WEB_SESSION_KEY_FILE': str(runtime / 'must-not-create.key'),
            'EXPERIMENTAL_SQLITE_RECOVERY_VIEW': 'true',
            'EXPERIMENTAL_SQLITE_RECOVERY_DB': str(runtime / 'must-not-open.db')}
@@ -85,7 +85,7 @@ def test_actual_image_entrypoint_exits_before_importing_worker_or_writing_sessio
 import runpy
 from flask import Flask
 Flask.run = lambda *a, **kw: print("API_WEB_STARTED")
-runpy.run_path("main.py", run_name="__main__")
+runpy.run_module("app.main", run_name="__main__")
 '''
     result = subprocess.run([sys.executable, '-B', '-c', child], env=env,
                             cwd=runtime, capture_output=True, text=True, timeout=10)

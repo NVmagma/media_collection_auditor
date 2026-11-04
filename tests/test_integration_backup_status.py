@@ -5,16 +5,18 @@ import os
 from datetime import datetime,timedelta,timezone
 import pytest
 from tests.test_integration_api import api,AUTH,TOKEN
-from tests.test_unraid_update_backup import case
-from scripts.unraid_update_backup import capture_backup
+from app.json_backup import create_backup
+from app.tracking_schema import SECTIONS
 import web
 
 
 @pytest.fixture
 def packet_api(api,tmp_path,monkeypatch):
     client,state=api
-    root,payload,inputs,options=case(tmp_path)
-    capture_backup(**options)
+    root=tmp_path/'backup'
+    source=tmp_path/'source.json';source.write_text(json.dumps({key:{} for key in SECTIONS}))
+    config=tmp_path/'config.json';config.write_text('{"private":"private-secret"}')
+    create_backup(state_file=source,config_file=config,directory=root)
     def select():
         info=root.stat()
         monkeypatch.setenv('INTEGRATION_API_BACKUP_DIRECTORY',str(root))
@@ -37,7 +39,7 @@ def test_verified_packet_redacted_and_unchanged(packet_api):
     response=client.get('/api/v1/backup-status',headers=AUTH)
     assert response.status_code==200
     report=response.json
-    assert report['packet_verified'] and report['payload_files_verified']==6
+    assert report['packet_verified'] and report['payload_files_verified']==2
     assert report['capture_time_status']=='recorded' and report['age_seconds']>=0
     assert report['restore_tested'] is False and report['restore_authorized'] is False
     assert report['current_state_comparison']=='not_performed' and report['freshness_verified'] is False
@@ -90,20 +92,11 @@ def test_unconfigured_and_partial_selection_are_explicit(api,monkeypatch):
     assert '/private' not in response.text
 
 
-def test_paused_preview_can_check_backup_without_tracking_or_activation(packet_api,monkeypatch):
-    client,*_=packet_api
-    class Gate:
-        def preview_release_enabled(self):return True
-        def live_release_enabled(self):return False
-        def require_sqlite_production_activation(self):pytest.fail('Backup metadata does not authorize a worker')
-    monkeypatch.setattr(web,'_preview_backend_gate',lambda:Gate())
-    monkeypatch.setattr(web,'read_tracking_status',lambda *a:pytest.fail('No tracking reads'))
-    assert client.get('/api/v1/backup-status',headers=AUTH).status_code==200
 
 
 def test_shared_inspector_budget_refuses_before_returning_verified(packet_api):
-    from app.sqlite_release_recovery import inspect_update_backup
+    from app.json_backup import inspect_backup as inspect_update_backup
     client,_,root,select=packet_api
-    with pytest.raises(RuntimeError,match='budget'):
+    with pytest.raises(RuntimeError):
         inspect_update_backup(directory=root,expected_identity=(root.stat().st_dev,root.stat().st_ino),
             expected_fingerprint=hashlib.sha256((root/'backup-complete.json').read_bytes()).hexdigest(),max_total_bytes=1)

@@ -53,21 +53,14 @@ def coverage(state,settings):
 
 def main():
     try:
-        from app.sqlite_json import parse_unique_json
+        from app.json_validation import parse_unique_json
         raw=sys.stdin.buffer.read(16*1024*1024+1)
         if len(raw)>16*1024*1024:raise ValueError('Bounded container observation required')
         items=parse_unique_json(raw)
         if not isinstance(items,list) or len(items)!=1:raise ValueError('One auditor required')
         env=dict(item.split('=',1) for item in items[0]['Config']['Env'])
         backend=env.get('AUDITOR_STATE_BACKEND','json')
-        if backend=='sqlite':
-            from app.sqlite_backend_gate import require_sqlite_production_activation
-            from app.sqlite_tracking_view import capture_candidate_dashboard_state
-            effective=require_sqlite_production_activation(settings=env)
-            state=capture_candidate_dashboard_state(effective['SQLITE_STATE_FILE'])
-            report=coverage(state,effective)
-            require_sqlite_production_activation(settings=env)
-        elif backend=='json':
+        if backend=='json':
             from app.config_store import KEYS
             from app.dashboard_tracking_snapshot import read_json_dashboard_snapshot
             config=parse_unique_json(Path(env.get('WEB_CONFIG_FILE','/app/logs/auditor_config.json')).read_bytes())

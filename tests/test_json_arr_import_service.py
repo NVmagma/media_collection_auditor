@@ -65,11 +65,6 @@ def case(tmp_path,monkeypatch,request):
     server.profile={'id':2,'name':'Existing HD','cutoff':1}
     values[prefix+'_URL']='http://127.0.0.1:'+str(server.server_port); values[prefix+'_API_KEY']='synthetic-private-token'
     thread=threading.Thread(target=server.serve_forever,daemon=True); thread.start()
-    # Any accidental route through the retained SQLite binding is a failure.
-    import sqlite3
-    monkeypatch.setattr(sqlite3,'connect',lambda *args,**kwargs:pytest.fail('No SQLite connection'))
-    monkeypatch.setattr(imports,'require_sqlite_read_authority',lambda **_:pytest.fail('No SQLite authority'))
-    monkeypatch.setattr(imports,'require_sqlite_production_activation',lambda **_:pytest.fail('No SQLite activation'))
     try: yield dict(store=store,values=values,server=server,media=media,folder=folder,
                     selection=dict(library=library,folder=folder.name,provider_id=100,quality_profile_id=2))
     finally: server.shutdown(); server.server_close(); thread.join()
