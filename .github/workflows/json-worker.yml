@@ -9,6 +9,9 @@ on:
       - 'scripts/json_worker_lab.sh'
       - 'scripts/json_cutover_prepare.py'
       - 'scripts/json_cutover_prepare_host.sh'
+      - 'scripts/json_cutover_review.py'
+      - 'scripts/json_cutover_source_review.py'
+      - 'scripts/json_cutover_review_host.sh'
       - 'docker/json-worker.Dockerfile'
       - 'docker/sqlite-candidate-constraints.txt'
       - 'requirements.txt'
@@ -42,7 +45,7 @@ jobs:
           PYTHONDONTWRITEBYTECODE: '1'
         run: python -B -m pytest -q tests/test_json_*.py tests/test_sqlite_arr_title_transport.py tests/test_dashboard_scan_view.py tests/test_docker_runtime_context.py
       - name: Check JSON host wrapper syntax
-        run: bash -n scripts/json_worker_lab.sh scripts/json_cutover_prepare_host.sh
+        run: bash -n scripts/json_worker_lab.sh scripts/json_cutover_prepare_host.sh scripts/json_cutover_review_host.sh
       - name: Build exact JSON candidate without publishing
         run: docker build -f docker/json-worker.Dockerfile --build-arg SOURCE_REVISION="$GITHUB_SHA" --iidfile "$RUNNER_TEMP/json-worker-image.id" .
       - name: Verify packaged entrypoint, five moves per library and process recovery

@@ -387,3 +387,30 @@ change before execution, the queued request is refused before admission and must
 be requested again. A preview-to-live race cannot bypass the live confirmation or
 expand the action cap that the administrator reviewed. This is per-request
 validation; it does not bind ordinary settings to the storage release.
+
+## Private cutover review
+
+After preparation, `scripts/json_cutover_review_host.sh` accepts the cached JSON
+image ID, private preparation directory, selected backup directory, backup
+fingerprint and immutable published image reference. It performs two GET-only,
+network-disabled source checks with the old cached image's packaged validator and
+read-only current mounts. Tracking revision and values, retained inputs, binding,
+settings and the entire claim archive must still match the selected backup. A
+running-writer observation never establishes quiescence. A changed source stops
+review; it is not silently copied into an already reviewed preparation.
+
+The candidate helper independently checks prepared file hashes and complete
+tracking/settings/cooldown parity, plus the unique unchanged managed template.
+It writes a new private proposal with two binds: the existing native media root
+and the new JSON logs directory. Ports, icon, integration secrets and approved
+security settings are preserved. The root filesystem stays read-only, root has
+only DAC_OVERRIDE above dropped capabilities, restart remains disabled, and no
+permanent deletion is enabled. The old control directory is retained on disk and
+is not mounted into the proposed JSON container.
+
+Neither helper mounts the Docker socket. Only the host wrapper reads Docker
+metadata; it issues no stop, create, start or template installation commands.
+Review receipts leave deployment authorization and stopped-writer freshness
+unverified. A later explicit handoff must repeat source validation after stopping
+the old worker before activating these prepared files. Partial reviews are kept
+and cannot be completed by replaying into the same output directory.
