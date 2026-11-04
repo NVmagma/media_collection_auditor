@@ -105,6 +105,17 @@ if (!prefix) throw Error('Pass the synthetic output prefix from tests/settings_w
     assert.equal(await page.locator('#acknowledge-removal-deletion').isChecked(),false);
     assert.equal(await page.locator('#removal-deletion-warning').isVisible(),false);
     assert.equal(await page.locator('[name=ENABLE_SEASON_PRUNING]').inputValue(),'false');
+    assert.equal(await page.locator('#orphan-quarantine-warning').isVisible(),false);
+    await page.locator('#field-ORPHAN_CLEANUP_ENABLED').selectOption('true');
+    assert.equal(await page.locator('#orphan-quarantine-warning').isVisible(),true);
+    assert.match(await page.locator('#orphan-quarantine-warning').innerText(),/does not permanently delete/);
+    const beforeOrphanConsent = posts.length;
+    await page.locator('#apply-settings-button').click();
+    assert.equal(posts.length,beforeOrphanConsent);
+    await page.locator('#acknowledge-orphan-quarantine').check();
+    await page.locator('#field-ORPHAN_CLEANUP_ENABLED').selectOption('false');
+    assert.equal(await page.locator('#acknowledge-orphan-quarantine').isChecked(),false);
+    assert.equal(await page.locator('#orphan-quarantine-warning').isVisible(),false);
     assert.deepEqual(errors,[]);
     if(process.env.DASHBOARD_SCREENSHOT_DIRECTORY) {
       await page.setViewportSize({width:1440,height:1000});

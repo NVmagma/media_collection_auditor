@@ -88,3 +88,22 @@ def test_preview_to_live_race_does_not_bypass_manual_confirmation(page,monkeypat
     response=client.post('/api/run-now',headers={'Origin':'http://localhost'})
     assert response.status_code==409 and 'Settings changed' in response.json['message']
     assert not worker.queued and case[0].path.read_bytes()==before
+
+
+def test_orphan_cleanup_has_separate_acknowledgement_and_never_enables_permanent_deletion(page,monkeypatch):
+    from app.orphan_cleanup import CONSENT_KEY,CONSENT_VERSION
+    client,worker,case=page;values=case[1];before=case[0].path.read_bytes()
+    monkeypatch.setattr(web,'load_config',lambda:values)
+    monkeypatch.setattr(json_worker_service,'read_saved_settings',lambda:{'unknown_extension':{'retain':True}})
+    save=Mock();monkeypatch.setattr(web,'save_config',save)
+    form={key:values.get(key,web.DEFAULTS.get(key,'')) for key in web.KEYS}
+    form.update(settings_action='apply',ORPHAN_CLEANUP_ENABLED='true',ALLOW_PERMANENT_DELETE='false')
+    response=client.post('/settings',data=form,headers={'Origin':'http://localhost'})
+    assert 'Acknowledge the orphan metadata quarantine warning' in response.text
+    save.assert_not_called()
+    form['acknowledge_orphan_quarantine']='yes'
+    assert client.post('/settings',data=form,headers={'Origin':'http://localhost'}).status_code==302
+    saved=save.call_args.args[0]
+    assert saved[CONSENT_KEY]==CONSENT_VERSION and saved['ALLOW_PERMANENT_DELETE']=='false'
+    assert saved['unknown_extension']=={'retain':True}
+    assert case[0].path.read_bytes()==before and not worker.queued

@@ -108,3 +108,5 @@ See the [roadmap](docs/feature-roadmap.md) and [branch workflow](docs/branch-wor
 See [LICENSE](LICENSE).
 
 Removal-stage whole-title deletion is an opt-in feature described in [Removal deletion](docs/removal-deletion.md). It stays off until explicitly acknowledged in Settings.
+
+The scanner detects metadata-only orphan folders. Optional [recoverable metadata quarantine](docs/orphan-metadata-quarantine.md) requires complete Arr/Jellyfin absence checks and 24 hours of unchanged observations. It is off by default and never deletes files.

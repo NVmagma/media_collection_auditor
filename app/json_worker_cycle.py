@@ -27,6 +27,8 @@ def validate_policy(settings):
     if not isinstance(values,dict): raise ValueError('Explicit settings required')
     from app.deletion_policy import validate_consent
     validate_consent(values)
+    from app.orphan_cleanup import validate_consent as validate_orphan_consent
+    validate_orphan_consent(values)
     for flag in ('ALLOW_FILESYSTEM_DELETE',
                  'ALLOW_CROSS_FILESYSTEM_MOVES','ENABLE_SEASON_PRUNING'):
         if _bool(values,flag,'false'): raise ValueError('Unsupported destructive policy')
@@ -50,7 +52,7 @@ def stage_paths(values,library):
 
 class JSONMoveServices:
     """Fresh per-candidate reads; never reuse scan-time protection as move proof."""
-    def __init__(self,values): self.values=deepcopy(values)
+    def __init__(self,values): self.values,_=validate_policy(values)
 
     def prepare(self,decision,session):
         values=self.values; library=decision.library
@@ -104,11 +106,42 @@ class JSONMoveServices:
     def authorize_delete(self):
         from app.json_worker_service import settings_snapshot
         # No stale queued settings may retain destructive authority after a change.
-        current=settings_snapshot()
-        validate_policy(current)
+        current,_=validate_policy(settings_snapshot())
         if _bool(current,'DRY_RUN','true') or not _bool(current,'ALLOW_PERMANENT_DELETE','false'):
             raise RuntimeError('Live deletion consent was revoked')
         if current != self.values: raise RuntimeError('Settings changed; request a fresh scan')
+
+    def authorize_orphan(self):
+        from app.json_worker_service import settings_snapshot
+        from app.orphan_cleanup import validate_consent
+        current,_=validate_policy(settings_snapshot())
+        if current!=self.values or _bool(current,'DRY_RUN','true') or not validate_consent(current):
+            raise RuntimeError('Orphan cleanup settings changed or consent was revoked')
+
+    def orphan_absence(self,folder):
+        import unicodedata
+        values=self.values;library=folder['library'];title=folder['title']
+        prefix,service=('SONARR','sonarr') if library=='TV' else ('RADARR','radarr')
+        local,remote=stage_paths(values,library)
+        expected={local[folder['stage']]+'/'+title,remote[folder['stage']]+'/'+title}
+        fold=lambda text:unicodedata.normalize('NFC',text).casefold()
+        try:
+            def absent():
+                rows=ArrCatalogGET(service=service,base_url=values.get(prefix+'_URL',''),token=values.get(prefix+'_API_KEY',''))()
+                _catalog(lambda:rows)
+                for row in rows:
+                    path=canonical_arr_record_path(row['path'])
+                    if fold(PurePosixPath(path).name)==fold(title) or any(path==p or path.startswith(p+'/') or p.startswith(path+'/') for p in expected):return False
+                return True
+            if not absent():return False
+            tags=validated_tag_names({name:values.get(key,default) for name,key,default in (
+                ('keep','KEEP_TAG','keep'),('disliked','DISLIKE_TAG','not-at-all'),
+                ('keep_all','KEEP_ALL_SEASONS_TAG','keep-all-seasons'),('protected','PROTECT_TAG','keep-forever'))})
+            result=collect_title_observation(fetch=ScheduledJellyfinGET(base_url=values.get('JELLYFIN_HOST_URL',''),
+                token=values.get('JELLYFIN_API_TOKEN','')),jellyfin_type='Series' if library=='TV' else 'Movie',
+                folder=title,media_key=folder['media_key'],now=datetime.now(),tag_names=tags)
+            return result.get('absence_verified') is True and absent()
+        except Exception:return False
 
     def protection(self,request,now):
         values=self.values
@@ -140,6 +173,7 @@ def run_cycle(store, *, settings, trigger, now=None, services=None, collect=coll
             'error_type':type(error).__name__,'pending_operation_present':None,
             'completed_moves':tuple(evidence['completed_moves']),
             'completed_deletions':tuple(evidence.get('completed_deletions',())),
+            'completed_quarantines':tuple(evidence.get('completed_quarantines',())),
             'permanent_deletion_authorized':False}
 
 
@@ -156,12 +190,15 @@ def _run_cycle(store, *, settings, trigger, now, services, collect, preview, evi
     with scan_attempt(store,now=now,trigger=trigger) as attempt:
         report=evidence
         report.update(execution_mode='live',scanned_titles=None,decisions=(),
-                completed_moves=[],completed_deletions=[],discovery_changes=None,failure_stage=None)
+                completed_moves=[],completed_deletions=[],completed_quarantines=[],discovery_changes=None,failure_stage=None)
         phase='collection'
         try:
             plan=collect(attempt.session,settings=values,now=local_now)
+            from app.orphan_cleanup import plan_cleanup,record_observations,decisions as orphan_decisions
+            cleanup=plan_cleanup(attempt.session.state,plan,values,now)
+            record_observations(attempt.session,cleanup)
             report.update(scanned_titles=plan['scanned_titles'],
-                decisions=tuple(asdict(row) for row in plan['decisions']),
+                decisions=orphan_decisions(plan,cleanup),
                 discovery_changes=plan['clock_changes_applied'])
             for decision in plan['moves'][:limit]:
                 phase='candidate_preparation'
@@ -196,6 +233,26 @@ def _run_cycle(store, *, settings, trigger, now, services, collect, preview, evi
                         for row in report['decisions'])
                     continue
                 report['completed_deletions'].append(asdict(decision))
+            for folder in cleanup['ready']:
+                from app.json_orphan_quarantine import execute_quarantine
+                from app.orphan_cleanup import OrphanRecheckBlocked
+                selected=(folder['library'],folder['media_key'])
+                def update_orphan(reason,outcome):
+                    report['decisions']=tuple({**row,'reason':reason,'outcome':outcome} if
+                        (row['library'],row['media_key'])==selected else row for row in report['decisions'])
+                used=len(report['completed_moves'])+len(report['completed_deletions'])+len(report['completed_quarantines'])
+                if used>=limit or attempt._move_counts.get(folder['library'],0)>=5:
+                    update_orphan('action_cap','capped');continue
+                phase='metadata_quarantine'
+                try:
+                    outcome=execute_quarantine(attempt,row=folder,settings=values,now=now,
+                        fresh_absence=adapter.orphan_absence,authorize=adapter.authorize_orphan)
+                except OrphanRecheckBlocked:
+                    attempt.session.verify()
+                    if attempt.session.state[KEY]['journal'] is not None:raise
+                    update_orphan('orphan_recheck_blocked','skipped');continue
+                report['completed_quarantines'].append({**{key:folder[key] for key in ('library','media_key','stage')},
+                    'quarantine_id':outcome['quarantine_id']})
             attempt.finish(result='completed')
             report['result']='completed'
         except Exception as error:
@@ -209,6 +266,7 @@ def _run_cycle(store, *, settings, trigger, now, services, collect, preview, evi
         report['pending_operation_present']=attempt.session.state[KEY]['journal'] is not None
         report['completed_moves']=tuple(report['completed_moves'])
         report['completed_deletions']=tuple(report['completed_deletions'])
+        report['completed_quarantines']=tuple(report['completed_quarantines'])
         report['permanent_deletion_authorized']=_bool(values,'ALLOW_PERMANENT_DELETE','false')
         from app.jellyfin_refresh import refresh_after_moves
         report['jellyfin_refresh']=refresh_after_moves(settings=values,

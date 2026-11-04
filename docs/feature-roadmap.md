@@ -10,6 +10,7 @@
 - Authenticated integration APIs, Movie/TV Homarr widgets and artwork links.
 - Explicit existing-folder Arr imports, unmonitored with no download searches.
 - Atomic settings application without typed confirmation phrases.
+- Recursive video detection and opt-in metadata-only orphan quarantine with a 24-hour observation period.
 
 ## Next priorities
 

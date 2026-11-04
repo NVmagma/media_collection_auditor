@@ -31,14 +31,25 @@ def project_activity(records,limit=1000):
         completed=(result=='completed' and record.get('result_basis')=='worker_return' and _time(record.get('finished_at')) is not None)
         status='completed' if completed else 'failed' if result=='failed' else 'unknown'
         detail=('Recorded scan result. ' if completed else 'Blocked, uncertain or incomplete scan result. ')
-        detail+='Verified moves: '+_count(record.get('moves_completed'))+'. Verified deletions: '+_count(record.get('deletions_completed'))+'. Tracking date changes: '+_count(record.get('discovery_changes'))+'.'
+        detail+='Verified moves: '+_count(record.get('moves_completed'))+'. Verified deletions: '+_count(record.get('deletions_completed'))+'. Metadata quarantines: '+_count(record.get('metadata_quarantines_completed'))+'. Tracking date changes: '+_count(record.get('discovery_changes'))+'.'
         events.append(dict(time=when,library='All',action='scan',status=status,folder='-',detail=detail))
         details=project_details(record.get('title_details'))
         if details:
             for item in details['items']:
                 transition=item['stage']+(' to '+item['destination'] if item['destination'] else '')
+                recovery=''
+                if item['outcome']=='quarantined':
+                    import re
+                    receipts=record.get('quarantine_receipts',())
+                    if not isinstance(receipts,(list,tuple)):receipts=()
+                    for receipt in receipts[:10]:
+                        if (isinstance(receipt,dict) and receipt.get('library')==item['library']
+                                and receipt.get('media_key')==('TV/' if item['library']=='TV' else '')+item['title']
+                                and isinstance(receipt.get('quarantine_id'),str)
+                                and re.fullmatch('[0-9a-f]{32}',receipt['quarantine_id'])):
+                            recovery=' Recovery ID: '+receipt['quarantine_id']+'.'
                 events.append(dict(time=when,library=item['library'],action=transition,
-                    status=item['outcome'],folder=item['title'],detail=item['outcome_label']+'. '+item['reason']))
+                    status=item['outcome'],folder=item['title'],detail=item['outcome_label']+'. '+item['reason']+recovery))
         if len(events)>=limit: break
     return events[:limit]
 

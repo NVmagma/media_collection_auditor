@@ -5,7 +5,7 @@ permission. No entrypoint selects this module for a live worker.
 """
 from contextlib import ExitStack, nullcontext
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime,timezone
 import os
 from pathlib import Path
 import stat
@@ -130,6 +130,7 @@ def _scan(*, state_file, settings, now=None, maximum_titles=100000,
             return rows, excluded
         observer('local_inventory')
         inventories, clock_proposals, inventory_issues, total = [], [], [], 0
+        metadata_observations=[]; negative_inventory={}
         for name,local,remote,wait in definitions:
             complete, titles, seen_keys = True, [], set()
             for stage,path in local.items():
@@ -154,12 +155,22 @@ def _scan(*, state_file, settings, now=None, maximum_titles=100000,
                         total += 1
                         if total > maximum_titles: raise ValueError('Total inventory limit exceeded')
                         blocker = None
+                        from app.orphan_inventory import inspect_title
+                        try:
+                            content=inspect_title(path+'/'+folder)
+                            if content['status']!='video_present':
+                                negative_inventory[path+'/'+folder]=content
+                                blocker='no_video' if content['status']=='metadata_only' else 'no_video_unknown_files'
+                                if blocker=='no_video':
+                                    metadata_observations.append(dict(library=name,media_key=key,title=folder,stage=stage,
+                                        source_root=path,root_identity=list(roots[name,stage][2][:2]),**content))
+                        except (OSError,RuntimeError): blocker='content_unavailable'
                         sections = [section for section in CLOCKS.values() if key in snapshot[section]]
-                        if not sections:
+                        if not sections and blocker is None:
                             blocker = 'discovery_required'
                             clock_proposals.append({'library':name,'title':folder,'stage':stage,
                                 'reason':'discovery_required','previous':None,'proposed':now.isoformat()})
-                        if name == 'TV' and stage == 'Waiting' and reset_tv:
+                        if name == 'TV' and stage == 'Waiting' and reset_tv and blocker not in ('no_video','no_video_unknown_files','content_unavailable'):
                             try:
                                 newest = observe_scheduled_content(title_path=path+'/'+folder,now=now,
                                     maximum_seconds=min(30,remaining()),timer=timer,timezone_info=zone)
@@ -192,6 +203,10 @@ def _scan(*, state_file, settings, now=None, maximum_titles=100000,
                 finally: os.close(reopened)
                 if key in stage_rows and inventory(fd) != (stage_rows[key],ignored[key]):
                     raise RuntimeError('Inventory changed during rehearsal')
+            from app.orphan_inventory import inspect_title
+            for path,observed in negative_inventory.items():
+                remaining()
+                if inspect_title(path)!=observed: raise RuntimeError('No-video inventory changed during collection')
             for path,newest in content_times.items():
                 if observe_scheduled_content(title_path=path,now=now,maximum_seconds=min(30,remaining()),timer=timer,timezone_info=zone) != newest:
                     raise RuntimeError('TV content changed during rehearsal')
@@ -237,6 +252,11 @@ def _scan(*, state_file, settings, now=None, maximum_titles=100000,
             now=now,maximum_titles=maximum_titles,maximum_seconds=remaining(),timer=timer)
         observer('inventory_revalidation')
         verify_inventory()
+        result={**result,'metadata_observations':tuple(metadata_observations)}
+        from app.orphan_cleanup import plan_cleanup,decisions as orphan_decisions
+        from app.json_lifecycle_plan import TitleDecision
+        cleanup=plan_cleanup(snapshot,result,values,now.replace(tzinfo=zone).astimezone(timezone.utc))
+        result['decisions']=tuple(TitleDecision(**row) for row in orphan_decisions(result,cleanup))
         return {**result,'comparison_only':not _save_clocks, 'clock_proposals':tuple(clock_proposals),
             'ignored_housekeeping_entries':sum(ignored.values()),'tracking_modified':bool(changed_dates),'clock_changes_applied':changed_dates,
             'inventory_issues':tuple(inventory_issues),

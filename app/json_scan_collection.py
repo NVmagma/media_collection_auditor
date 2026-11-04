@@ -95,6 +95,7 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
         check_deadline()
         jf_complete = arr_complete = False
         signals = {}
+        absence = {}
         catalog = {}
         if inventory.complete and inventory.titles:
             try:
@@ -105,7 +106,7 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
                 jf_checked = False
                 for title, initial in zip(inventory.titles,preliminary.titles,strict=True):
                     check_deadline()
-                    if title.blocker is not None:
+                    if title.blocker is not None and title.blocker!='no_video':
                         continue
                     jf_checked = True
                     result = collect_title_observation(fetch=cached,
@@ -114,6 +115,7 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
                     if 'jellyfin_collection_incomplete' in result['blockers']:
                         jf_complete = False
                         break
+                    absence[initial.media_key] = result.get('absence_verified') is True
                     signals[initial.media_key] = result['signals'] if result['status'] == 'shape_valid_untrusted' else None
                 jf_complete = jf_complete and jf_checked
             except Exception:
@@ -135,7 +137,7 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
                 else 'exact_source_match' if matches[0] == roots[inventory.library][title.stage]+'/'+title.folder
                 else 'path_conflict')
             titles.append(TitleObservation(initial.media_key,title.stage,title.threshold_days,
-                signals.get(initial.media_key),status,title.blocker))
+                signals.get(initial.media_key),status,title.blocker,absence.get(initial.media_key,False)))
         observations.append(LibraryObservation(inventory.library,jf_complete,arr_complete,tuple(titles)))
         collection_status.append({'library':inventory.library,'inventory_complete':inventory.complete,
             'jellyfin_complete':jf_complete,'arr_complete':arr_complete,'titles':len(titles) if inventory.complete else None})

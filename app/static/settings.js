@@ -77,3 +77,24 @@ if (deletionSwitch && deletionWarning && deletionAck) {
   }, true);
   updateDeletionWarning();
 }
+
+const orphanSwitch = document.getElementById('field-ORPHAN_CLEANUP_ENABLED');
+const orphanWarning = document.getElementById('orphan-quarantine-warning');
+const orphanAck = document.getElementById('acknowledge-orphan-quarantine');
+if (editor && orphanSwitch && orphanWarning && orphanAck) {
+  function updateOrphanWarning() {
+    const on = orphanSwitch.value === 'true';
+    orphanWarning.hidden = !on; orphanAck.required = on;
+    if (!on) orphanAck.checked = false;
+  }
+  orphanSwitch.addEventListener('change', () => { orphanAck.checked = false; updateOrphanWarning(); });
+  editor.addEventListener('submit', event => {
+    if (orphanSwitch.value === 'true' && !orphanAck.checked) {
+      event.preventDefault(); showTab('Safety'); orphanAck.focus();
+    }
+  });
+  editor.addEventListener('invalid', event => {
+    if (event.target === orphanAck) { showTab('Safety'); orphanAck.focus(); }
+  }, true);
+  updateOrphanWarning();
+}

@@ -66,3 +66,7 @@ initialization. The normal entrypoint never initializes tracking implicitly.
 ## Optional Removal deletion
 
 Whole-title Removal deletion now has a separate warning and acknowledgement. It is disabled by default and initially limited to one deletion per library per scan. Read [Removal deletion](removal-deletion.md) before opting in. Season pruning and direct filesystem deletion remain unavailable.
+
+## Metadata-only leftovers
+
+Recursive video detection preserves real, hidden, partial and unknown content. [Orphan metadata quarantine](orphan-metadata-quarantine.md) is a separate opt-in: it requires complete service absence checks and 24 hours of stable observations, retains files recoverably, and never enables permanent deletion.

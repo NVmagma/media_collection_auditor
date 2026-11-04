@@ -13,7 +13,7 @@ from test_json_readonly_scan import local, fake_collect, NOW
 
 def test_discovery_and_episode_reset_are_saved_before_service_collection(local):
     source,values,movie,show,episode=local
-    (movie.parent/'New').mkdir()
+    fresh=movie.parent/'New';fresh.mkdir();(fresh/'video.mkv').write_bytes(b'disposable media')
     stamp=datetime(2026,1,10).timestamp(); os.utime(episode,(stamp,stamp))
     before=json.loads(source.read_bytes()); seen=[]
     def collect(**kwargs):

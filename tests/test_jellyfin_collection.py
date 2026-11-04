@@ -147,3 +147,13 @@ def test_collection_grouping_disabled_for_every_user_and_page():
     assert result["signals"]["disliked"] is True
     assert len(observed) == 3
     assert all(query["CollapseBoxSetItems"] == "false" for query in observed)
+
+
+def test_only_complete_unmatched_catalogs_prove_absence_for_metadata_cleanup():
+    assert collect(transport({'u1':[],'u2':[]}))['absence_verified'] is True
+    def failed(path,params):
+        if path=='/Users':return [{'Id':'u1'}]
+        raise TimeoutError('unavailable')
+    assert collect(failed)['absence_verified'] is False
+    assert collect(transport({'u1':[item(path='/media/Movies/movie/file.mkv')],'u2':[]}))['absence_verified'] is False
+    assert collect(transport({'u1':[item()],'u2':[item()]}))['absence_verified'] is False

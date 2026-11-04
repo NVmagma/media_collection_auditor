@@ -105,7 +105,7 @@ def test_known_housekeeping_is_ignored_without_removing_it(local):
 
 def test_new_folder_reports_discovery_without_backdating(local):
     source,values,*_ = local
-    (Path(values['RADARR_TRANSIENT_PATH'])/'New').mkdir()
+    fresh=Path(values['RADARR_TRANSIENT_PATH'])/'New';fresh.mkdir();(fresh/'video.mkv').write_bytes(b'disposable media')
     before = source.read_bytes()
     result = run(local)
     assert result['clock_proposals'] == ({'library':'Movies','title':'New','stage':'Waiting',

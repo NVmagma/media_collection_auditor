@@ -270,6 +270,7 @@ def _scan_entry(record, zone, *, title_details=True):
         'duration': duration, 'duration_display': duration_display, 'reason': reason,
         'moves_proposed': _scan_counter(record.get('moves_proposed')),
         'discovery_changes': _scan_counter(record.get('discovery_changes')),
+        'metadata_quarantines_completed': _scan_counter(record.get('metadata_quarantines_completed')),
         'deletions_completed': _scan_counter(record.get('deletions_completed')),
         'deletions_proposed': _scan_counter(record.get('deletions_proposed')),
         'moves_completed': _scan_counter(record.get('moves_completed')),

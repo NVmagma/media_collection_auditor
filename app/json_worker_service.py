@@ -44,7 +44,8 @@ def settings_snapshot():
     except Exception:
         raise ValueError('Stored settings are invalid; scans remain paused.') from None
     from app.deletion_policy import CONSENT_KEY
-    return {**DEFAULTS,**initial_environment(),**selected,CONSENT_KEY:saved.get(CONSENT_KEY)}
+    from app.orphan_cleanup import CONSENT_KEY as ORPHAN_CONSENT
+    return {**DEFAULTS,**initial_environment(),**selected,CONSENT_KEY:saved.get(CONSENT_KEY),ORPHAN_CONSENT:saved.get(ORPHAN_CONSENT)}
 
 
 def next_daily(settings,now):
@@ -114,6 +115,8 @@ class JSONWorkerService:
                 execution_blocked=self.execution_blocked,last_started=latest.get('started_at'),
                 last_finished=None if self.running else latest.get('finished_at'),
                 last_result=None if self.running else latest.get('result'),last_trigger=latest.get('trigger'),
+                metadata_quarantines_completed=latest.get('metadata_quarantines_completed'),
+                orphan_cleanup_enabled=values.get('ORPHAN_CLEANUP_ENABLED')=='true',
                 moves_completed=latest.get('moves_completed'),moves_proposed=latest.get('moves_proposed'),
                 discovery_changes=latest.get('discovery_changes'),dry_run=latest.get('dry_run'),
                 result_basis=latest.get('result_basis'),state_revision=None,
@@ -155,12 +158,14 @@ class JSONWorkerService:
             decisions=[row if isinstance(row,dict) else asdict(row) for row in decisions]
             completed=result.get('completed_moves',())
             deleted=result.get('completed_deletions',())
+            quarantined=result.get('completed_quarantines',())
             record.update(moves_completed=len(completed),deletions_completed=len(deleted),
+                metadata_quarantines_completed=len(quarantined),quarantine_receipts=quarantined,
                 deletions_proposed=sum(row['outcome']=='delete_proposed' for row in decisions),arr_completed=len(completed)+len(deleted),
                 moves_proposed=sum(row['outcome']=='proposed' for row in decisions),
                 discovery_changes=result.get('discovery_changes',result.get('clock_changes_applied')),
                 scanned_titles=result.get('scanned_titles'),json_decisions=decisions)
-            record['title_details']=_title_details(decisions,completed,result.get('result'),result.get('uncertain_media_key'),deleted)
+            record['title_details']=_title_details(decisions,completed,result.get('result'),result.get('uncertain_media_key'),deleted,quarantined)
             with self.lock: self.execution_blocked=result.get('pending_operation_present') is True
         except Exception as error:
             record.update(result='failed',result_basis='blocked_or_uncertain',error_type=type(error).__name__)
@@ -188,18 +193,19 @@ class JSONWorkerService:
         return record
 
 
-def _title_details(decisions,completed,result,uncertain=None,deleted=()):
+def _title_details(decisions,completed,result,uncertain=None,deleted=(),quarantined=()):
     from app.scan_details import REASONS,project_details
     finished={(row['library'],row['media_key']) for row in completed}
+    quarantine_keys={(row['library'],row['media_key']) for row in quarantined}
     deleted_keys={(row['library'],row['media_key']) for row in deleted}
     # Keep all decisions in private persistent history; existing display shows a bounded page.
-    ordered=sorted(decisions,key=lambda row:row['outcome'] not in ('proposed','delete_proposed','capped'))
+    ordered=sorted(decisions,key=lambda row:row['outcome'] not in ('proposed','delete_proposed','quarantine_proposed','capped'))
     items=[]
     for row in ordered[:100]:
-        outcome=('deleted' if (row['library'],row['media_key']) in deleted_keys else 'completed' if (row['library'],row['media_key']) in finished else
+        outcome=('quarantined' if (row['library'],row['media_key']) in quarantine_keys else 'deleted' if (row['library'],row['media_key']) in deleted_keys else 'completed' if (row['library'],row['media_key']) in finished else
             'uncertain' if row['media_key']==uncertain else
-            'not_attempted' if row['outcome'] in ('proposed','delete_proposed') and result != 'completed' else
-            'planned' if row['outcome'] in ('proposed','delete_proposed') else row['outcome'])
+            'not_attempted' if row['outcome'] in ('proposed','delete_proposed','quarantine_proposed') and result != 'completed' else
+            'planned' if row['outcome'] in ('proposed','delete_proposed','quarantine_proposed') else row['outcome'])
         items.append(dict(library=row['library'],title=row['media_key'][3:] if row['library']=='TV' else row['media_key'],
             stage=row['stage'],destination=row['destination'],reason_code=row['reason'] if row['reason'] in REASONS else 'policy_review',outcome=outcome))
     details=project_details(dict(schema_version=1,total_records=len(decisions),items=items))

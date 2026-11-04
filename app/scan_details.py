@@ -8,6 +8,17 @@ else:
 LIMIT = 100
 
 REASONS = {
+    'no_video': 'No video file was found in this folder.',
+    'no_video_unknown_files': 'No recognized video found; unknown files prevent automatic metadata cleanup.',
+    'orphan_keep_preserved': 'No video found; Keep folders are preserved.',
+    'no_video_arr_managed': 'No video found, but Arr still manages or references this title; folder preserved.',
+    'orphan_arr_unverified': 'No video found; Arr absence could not be verified, so the folder is preserved.',
+    'orphan_jellyfin_unverified': 'No video found; Jellyfin absence could not be verified, so the folder is preserved.',
+    'orphan_metadata': 'Metadata only; complete Arr and Jellyfin checks found no matching title.',
+    'orphan_cleanup_disabled': 'Metadata-only orphan detected; recoverable quarantine is disabled.',
+    'orphan_observation_wait': 'Metadata-only orphan detected; waiting for 24 hours of unchanged observations.',
+    'orphan_quarantine_ready': 'Stable metadata-only orphan; eligible for recoverable quarantine after fresh checks.',
+    'orphan_recheck_blocked': 'Fresh Arr/Jellyfin absence was not verified; no quarantine was performed.',
     'protected': 'Protected by keep-forever; preserve the entire title.',
     'keep_tag': 'Selected with the Jellyfin keep tag.',
     'favorite': 'Selected by Jellyfin favorite protection.',
@@ -46,7 +57,7 @@ _EXPLANATIONS = {
     'No lifecycle move proposed for this stage.': 'no_transition',
 }
 
-OUTCOMES = {'planned':'Proposed; not completed', 'skipped':'Skipped', 'capped':'Action limit',
+OUTCOMES = {'quarantined':'Metadata quarantined (recoverable)', 'planned':'Proposed; not completed', 'skipped':'Skipped', 'capped':'Action limit',
     'deleted':'Arr deletion verified', 'completed':'Move completed', 'uncertain':'Stopped / uncertain', 'not_attempted':'Not attempted'}
 
 STAGES = ('Waiting','Holding','Keep','Removal')

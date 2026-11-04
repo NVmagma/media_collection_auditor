@@ -17,7 +17,7 @@ from app.title_identity import validate_title_folder
 from app.json_scan_control import KEY, _control
 
 SIGNALS = {'played', 'favorite', 'disliked', 'keep', 'keep_all', 'protected'}
-BLOCKERS = {'future_content_timestamp', 'content_unavailable', 'content_reset_required', 'discovery_required'}
+BLOCKERS = {'future_content_timestamp', 'content_unavailable', 'content_reset_required', 'discovery_required','no_video','no_video_unknown_files'}
 ARR = {'exact_source_match', 'missing_record', 'path_conflict', 'ambiguous_record', 'unavailable'}
 DESTINATIONS = {('Waiting','hold'):'Holding', ('Waiting','keep'):'Keep',
     ('Holding','rescue'):'Keep', ('Holding','to_removal'):'Removal'}
@@ -31,6 +31,7 @@ class TitleObservation:
     signals: dict | None
     arr_status: str
     blocker: str | None = None
+    jellyfin_absent: bool = False
 
 
 @dataclass(frozen=True)
@@ -80,6 +81,7 @@ def plan_scan(*, snapshot, libraries, now, favorites_trigger_keep=True, maximum_
                     or type(title.threshold_days) is not int or title.threshold_days < 0
                     or not isinstance(title.arr_status, str) or title.arr_status not in ARR
                     or not isinstance(title.media_key, str)
+                    or type(title.jellyfin_absent) is not bool
                     or title.blocker is not None and title.blocker not in BLOCKERS):
                 raise ValueError('Invalid title observation')
             key = title.media_key
@@ -93,13 +95,19 @@ def plan_scan(*, snapshot, libraries, now, favorites_trigger_keep=True, maximum_
                     or not SIGNALS <= title.signals.keys()
                     or any(type(value) is not bool for value in title.signals.values())):
                 raise ValueError('Incomplete protection signals')
-    decisions, moves, deletions = [], [], []
+    decisions, moves, deletions, orphans = [], [], [], []
     deletion_used = {name:0 for name in names}
     used = {name:0 for name in names}
     for library in captured:
         for title in library.titles:
             destination = None
-            if title.blocker is not None: reason = title.blocker
+            if title.blocker == 'no_video':
+                if title.stage=='Keep': reason='orphan_keep_preserved'
+                elif not library.arr_complete: reason='orphan_arr_unverified'
+                elif title.arr_status!='missing_record': reason='no_video_arr_managed'
+                elif not library.jellyfin_complete or not title.jellyfin_absent: reason='orphan_jellyfin_unverified'
+                else: reason='orphan_metadata'
+            elif title.blocker is not None: reason = title.blocker
             elif not library.jellyfin_complete: reason = 'jellyfin_collection_incomplete'
             elif not library.arr_complete: reason = 'arr_catalog_unavailable'
             elif title.signals is None: reason = 'jellyfin_unavailable'
@@ -143,7 +151,8 @@ def plan_scan(*, snapshot, libraries, now, favorites_trigger_keep=True, maximum_
             decisions.append(row)
             if outcome == 'proposed': moves.append(row)
             if outcome == 'delete_proposed': deletions.append(row)
+            if reason == 'orphan_metadata': orphans.append(row)
     return {'status':'advisory_only', 'read_only':True, 'media_actions_authorized':False,
         'scanned_titles':total, 'decisions':tuple(decisions), 'moves':tuple(moves),
         'maximum_actions':2*per_library_action_limit, 'per_library_action_limit':per_library_action_limit,
-        'permanent_deletion_authorized':False,'deletions':tuple(deletions)}
+        'permanent_deletion_authorized':False,'deletions':tuple(deletions),'orphans':tuple(orphans)}

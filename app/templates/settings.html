@@ -28,6 +28,10 @@
 </div></div>
 {% endfor %}
 {% if group == 'Safety' %}
+<aside id="orphan-quarantine-warning" class="alert" role="note" {% if values['ORPHAN_CLEANUP_ENABLED']|lower != 'true' %}hidden{% endif %}>
+<h3>Recoverable metadata quarantine</h3><p>{{ orphan_warning }}</p>
+<label><input type="checkbox" name="acknowledge_orphan_quarantine" value="yes" id="acknowledge-orphan-quarantine"> I understand that verified metadata-only orphan folders will be moved into recoverable quarantine.</label>
+</aside>
 <aside id="removal-deletion-warning" class="alert error" role="note" {% if values['ALLOW_PERMANENT_DELETE']|lower != 'true' %}hidden{% endif %}>
 <h3>Removal deletion can permanently erase media</h3><p>{{ deletion_warning }}</p>
 <label><input type="checkbox" name="acknowledge_removal_deletion" value="yes" id="acknowledge-removal-deletion"> I understand that live scans may delete eligible Removal titles and that the auditor cannot restore their files.</label>

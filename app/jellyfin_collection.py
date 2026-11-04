@@ -42,6 +42,7 @@ def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
     tag_names = validated_tag_names(tag_names)
     blockers = []
     matched = []
+    near_match = False
     try:
         users = fetch("/Users", None)
         if not isinstance(users, list) or not users:
@@ -105,6 +106,9 @@ def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
                         raise ValueError("Unexpected Jellyfin media type")
                     pure = PurePosixPath(path)
                     name = pure.parent.name if jellyfin_type == "Movie" else pure.name
+                    import unicodedata
+                    if name!=folder and unicodedata.normalize('NFC',name).casefold()==unicodedata.normalize('NFC',folder).casefold():
+                        near_match=True
                     if name == folder:
                         matched.append((uid, item_id, path, tags, user_data))
                 start += len(items)
@@ -136,6 +140,7 @@ def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
             signals["protected"] |= tag_names["protected"] in normalized
         if signals["protected"]:
             signals["keep_all"] = True
+    absence_verified = blockers == ['jellyfin_title_unmatched'] and not near_match
     observation = {
         "media_key": media_key, "observed_at": now,
         "coverage_complete": not blockers, "request_succeeded": not blockers,
@@ -148,6 +153,7 @@ def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
         "blockers": blockers + contract["blockers"],
         "signals": contract["signals"] if not blockers else None,
         "identity": (matched[0][1], matched[0][2]) if not blockers else None,
+        "absence_verified": absence_verified,
         "authorization": "not_authorized",
         "production_activation": "disabled",
         "read_only": True,

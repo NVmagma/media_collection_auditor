@@ -5,6 +5,7 @@ on:
     paths:
       - 'app/**'
       - 'tests/test_json*'
+      - 'tests/test_orphan_cleanup.py'
       - 'scripts/json_execution_fixture.py'
       - 'scripts/json_worker_lab.sh'
       - 'docker/runtime.Dockerfile'
@@ -43,7 +44,7 @@ jobs:
           PYTHONPATH: .:app:tests
           WEB_SESSION_SECRET: synthetic-ci-json-session
           PYTHONDONTWRITEBYTECODE: '1'
-        run: python -B -m pytest -q tests/test_json_*.py tests/test_arr_title_transport.py tests/test_dashboard_scan_view.py tests/test_docker_runtime_context.py
+        run: python -B -m pytest -q tests/test_json_*.py tests/test_orphan_cleanup.py tests/test_arr_title_transport.py tests/test_dashboard_scan_view.py tests/test_docker_runtime_context.py
       - name: Check JSON host wrapper syntax
         run: bash -n scripts/json_worker_lab.sh
       - name: Build exact JSON candidate without publishing

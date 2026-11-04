@@ -54,6 +54,13 @@ def create_blueprint(is_admin,load_settings=settings_snapshot):
                 if not pending: raise RuntimeError('No selected operation')
                 read,send=adapters(values)
                 action=request.form.get('action')
+                if pending['kind']=='orphan_quarantine':
+                    from app.json_orphan_quarantine import review_pending_quarantine,reconcile_pending_quarantine
+                    if action=='review':review=review_pending_quarantine(store,settings=values)
+                    elif action in ('record_quarantine','cancel_unperformed_quarantine','restore_quarantine_source'):
+                        result=reconcile_pending_quarantine(store,settings=values,expected_fingerprint=request.form.get('fingerprint'),restore_source=action=='restore_quarantine_source')
+                    else:raise ValueError('Quarantine recovery never repeats the folder move')
+                    return render_template('json_recovery.html',pending=pending,review=review,result=result,error=None),200,{'Cache-Control':'no-store'}
                 if pending['kind']=='arr_delete':
                     def absent(req):
                         prefix='SONARR' if req.library=='TV' else 'RADARR'

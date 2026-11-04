@@ -289,3 +289,11 @@ def test_deletion_refuses_an_unverified_arr_path_alias(deletion):
         with pytest.raises(ValueError):execute(attempt,req,server)
         assert attempt.session.state[KEY]['journal'] is None
     assert not server.calls
+
+
+def test_effective_policy_comparison_accepts_unchanged_saved_consent(monkeypatch):
+    from app.json_worker_cycle import JSONMoveServices
+    values={'DRY_RUN':'false','ALLOW_PERMANENT_DELETE':'true',CONSENT_KEY:CONSENT_VERSION}
+    monkeypatch.setattr('app.json_worker_service.settings_snapshot',lambda:dict(values))
+    effective,_=validate_policy(values)
+    JSONMoveServices(effective).authorize_delete()

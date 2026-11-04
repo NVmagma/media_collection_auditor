@@ -336,6 +336,71 @@ with scan_attempt(JsonTrackingStore(sys.argv[1]),now=datetime(2026,1,20,12,tzinf
             stop(); session.close()
 
 
+    def test_packaged_orphan_quarantine_detects_sidecars_and_survives_controller_death(self):
+        from app.orphan_cleanup import CONSENT_KEY,CONSENT_VERSION,STATE_KEY
+        from app.json_orphan_quarantine import review_pending_quarantine,reconcile_pending_quarantine,LEAF
+        for library,req in self.requests.items():
+            folder=Path(req.source_root)/req.title
+            (folder/'video.mkv').unlink() # Disposable fixture setup only.
+            (folder/'.DS_Store').write_bytes(b'SYNTHETIC SIDECAR ONLY')
+            for stage in ('keep','removal'):(self.media_root/(library+'_'+stage)).mkdir()
+        self.server.rows={}
+        handler=self.server.RequestHandlerClass
+        original_get=handler.do_GET
+        def get(handler):
+            path=urlsplit(handler.path).path
+            if path=='/Users':return handler.respond([{'Id':'fixture-user'}])
+            if path.endswith('/Items'):return handler.respond({'Items':[],'TotalRecordCount':0,'StartIndex':0})
+            if path in ('/api/v3/movie','/api/v3/series'):return handler.respond([])
+            return original_get(handler)
+        handler.do_GET=get
+        remote='http://127.0.0.1:'+str(self.server.server_port)
+        config=self.state_root/'orphan-config.json'
+        config.write_text(json.dumps({'ORPHAN_CLEANUP_ENABLED':'true',CONSENT_KEY:CONSENT_VERSION}))
+        values=dict(MEDIA_PATH=str(self.media_root),STATE_FILE=str(self.store.path),WEB_CONFIG_FILE=str(config),
+            DRY_RUN='false',ENABLE_MOVIES='true',ENABLE_TV='true',MAX_ACTIONS_PER_RUN='10',
+            AUDITOR_STATE_BACKEND='json',AUDITOR_WORKER_MODE='json_serialized',
+            JELLYFIN_HOST_URL=remote,JELLYFIN_API_TOKEN='synthetic-fixture-token',
+            RADARR_URL=remote,RADARR_API_KEY='synthetic-fixture-token',SONARR_URL=remote,SONARR_API_KEY='synthetic-fixture-token',TZ='UTC')
+        code="""
+import json,os,signal
+from datetime import datetime,timedelta,timezone
+from app.json_worker_service import settings_snapshot
+from app.json_worker_cycle import run_cycle
+from app.json_tracking_store import JsonTrackingStore
+import app.json_orphan_quarantine as module
+now=datetime(2026,1,20,12,tzinfo=timezone.utc)
+store=JsonTrackingStore(os.environ['STATE_FILE'])
+first=run_cycle(store,settings=settings_snapshot(),trigger='manual',now=now)
+assert first['result']=='completed' and not first['completed_quarantines'],first.get('failure_stage')
+rename=module.rename_directory_noreplace_at
+def killed(source,name,destination,target):
+    rename(source,name,destination,target)
+    if name=='Movie':os.kill(os.getpid(),signal.SIGKILL)
+module.rename_directory_noreplace_at=killed
+run_cycle(store,settings=settings_snapshot(),trigger='manual',now=now+timedelta(hours=25))
+raise AssertionError('Expected fixture kill after metadata rename')
+"""
+        env={**os.environ,**values}
+        if os.environ.get('JSON_FIXTURE_PACKAGED_APP')=='true':env['PYTHONPATH']='/app/app:/app'
+        child=subprocess.run([sys.executable,'-B','-c',code],env=env,timeout=60,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        self.assertEqual(child.returncode,-9,child.stderr.decode()+child.stdout.decode())
+        state=json.loads(self.store.path.read_bytes())
+        self.assertEqual(state[KEY]['journal']['kind'],'orphan_quarantine')
+        self.assertFalse((Path(self.requests['Movies'].source_root)/'Movie').exists())
+        review=review_pending_quarantine(self.store,settings=values)
+        self.assertEqual(review['required_action'],'record_quarantine')
+        reconcile_pending_quarantine(self.store,settings=values,expected_fingerprint=review['review_fingerprint'])
+        current=json.loads(self.store.path.read_bytes())
+        self.assertIsNone(current[KEY]['journal'])
+        self.assertNotIn('Movie',current['first_seen'])
+        self.assertIn('TV/Show',current['first_seen'])
+        receipt=next(iter(current[STATE_KEY]['quarantined'].values()))
+        archive=self.media_root/LEAF/receipt['archive']
+        self.assertEqual((archive/'.DS_Store').read_bytes(),b'SYNTHETIC SIDECAR ONLY')
+        self.assertEqual(receipt['clocks'],{'first_seen':'2026-01-01T01:02:03'})
+        self.assertFalse(any(method!='GET' for method,_ in self.server.calls))
+
     def deletion_case(self):
         from app.json_delete_execution import DeleteRequest
         requests={}
@@ -451,7 +516,7 @@ def main():
     print(json.dumps({'status':'json_execution_fixture_verified','tests':result.testsRun,
         'fixture_only':True,'production_services_changed':False,'production_media_mounted':False,
         'external_requests_sent':False,'production_deletion_performed':False,'disposable_deletion_verified':True,
-        'sigkill_delete_recovery_verified':True,
+        'sigkill_delete_recovery_verified':True,'orphan_quarantine_and_sigkill_verified':True,
         'lost_ack_get_only_recovery_verified':True,'sigkill_move_recovery_verified':True,'actual_json_service_verified':True,'five_moves_per_library_verified':True,'packaged_entrypoint_verified':os.environ.get('JSON_FIXTURE_PACKAGED_APP') == 'true','movie_and_tv_moves_verified':True}))
     return 0
 
