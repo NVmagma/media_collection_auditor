@@ -414,3 +414,37 @@ Review receipts leave deployment authorization and stopped-writer freshness
 unverified. A later explicit handoff must repeat source validation after stopping
 the old worker before activating these prepared files. Partial reviews are kept
 and cannot be completed by replaying into the same output directory.
+
+## Explicit JSON activation and recovery
+
+`scripts/json_cutover_execute_host.sh` accepts `check`, `deploy` or `recover`, the
+immutable JSON image reference, preparation/review/backup directories and the
+backup fingerprint. `check` leaves existing services and templates unchanged and
+prints the review fingerprint. `deploy` and `recover` additionally require that
+exact review fingerprint; an uncertain container-create acknowledgement also
+requires the explicitly reviewed replacement container ID for recovery.
+
+The controller uses the local bound Docker daemon. Disposable helpers check the
+old source with its own packaged validator, and verify Docker-resolved prepared
+JSON files through read-only mounts. Helpers have no network, published ports,
+Docker socket or writable data mounts. Failed/uncertain helpers are retained;
+only an exactly identified successfully exited helper is removed. No helper
+retries a service action.
+
+Deployment journals each action, stops the exact old container, repeats full
+source freshness validation with the writer stopped, retains the old container,
+and creates the exact reviewed JSON replacement. Its two binds, entrypoint,
+settings and security are checked before start. Login readiness, unauthenticated
+API refusal, authenticated JSON status/counts, five moves per library, hourly
+cooldown and permanent-deletion refusal are verified before atomically installing
+the reviewed managed template. The worker is not asked to scan during cutover.
+The old control directory, old logs and backup are retained untouched.
+
+An acknowledgement loss or controller death stops the transaction without retry
+or automatic restoration. Explicit recovery verifies the hash-chained journal,
+exact old/new identities, source backup and actual replacement data before any
+service changes and again after stopping the replacement. If the JSON worker has
+admitted a scan, changed tracking/settings or recorded a pending operation,
+recovery refuses to restore the stale previous snapshot. Recovery is for an
+unchanged interrupted cutover; later migrations must retain the current JSON
+state instead.

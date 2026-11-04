@@ -248,7 +248,19 @@ with scan_attempt(JsonTrackingStore(sys.argv[1]),now=datetime(2026,1,20,12,tzinf
             self.assertEqual(response.status_code,302)
         headers={'Authorization':'Bearer '+token}
         try:
-            start(); login(); original=self.store.path.read_bytes()
+            start()
+            from scripts.json_cutover_execute import health_contract
+            self.assertEqual(session.get(base+'/login',timeout=5).status_code,200)
+            for route in ('/api/v1/summary','/api/v1/audit-status'):
+                self.assertEqual(session.get(base+route,timeout=5).status_code,401)
+            for _ in range(100):
+                initial_audit=session.get(base+'/api/v1/audit-status',headers=headers,timeout=5).json()
+                if initial_audit.get('next_run'): break
+                time.sleep(.02)
+            initial_state=json.loads(self.store.path.read_bytes())
+            health_contract(session.get(base+'/api/v1/summary',headers=headers,timeout=5).json(),initial_audit,
+                {key:len(initial_state.get(key,{})) for key in ('first_seen','queued','in_removal','keep_seen','arr_sync_pending')})
+            login(); original=self.store.path.read_bytes()
             page=session.get(base+'/settings',timeout=10)
             self.assertEqual(page.status_code,200); self.assertIn('Apply Requested Settings',page.text)
             self.assertNotIn('Type I UNDERSTAND',page.text)
