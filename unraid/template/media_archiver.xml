@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Container version="2">
   <Name>media_collection_auditor</Name>
-  <Repository>ghcr.io/nvmagma/media_collection_auditor@sha256:1088109aaef6d4a1f843c6e8a08ad942b23607f192c777c09a99e8f44f0ab098</Repository>
+  <Repository>ghcr.io/nvmagma/media_collection_auditor@sha256:4f22f25d217e492e5520e3671305840eed7f03c867dccc99562920791c176dd8</Repository>
   <Registry>https://ghcr.io/</Registry>
   <Project>https://github.com/NVmagma/media_collection_auditor</Project>
   <Overview>Media Collection Auditor moves unneeded movies and TV shows through a Waiting -&gt; Holding -&gt; Removal (or Keep) lifecycle using Jellyfin favorites/tags and optional Radarr/Sonarr integration. The web dashboard provides a visual view of activity and logs.</Overview>
