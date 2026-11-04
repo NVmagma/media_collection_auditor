@@ -12,7 +12,7 @@ exploit, credentials, tokens, or private media paths.**
 
 The supported deployment target is the current Unraid Docker release.
 Development branches are experimental. JSON is the
-production state authority, and permanent filesystem deletion remains disabled.
+production state authority. Removal-stage deletion through Arr is disabled by default and requires explicit acknowledgement; direct filesystem deletion and season pruning remain disabled.
 
 ## Review and remediation
 

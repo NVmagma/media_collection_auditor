@@ -51,11 +51,11 @@ class TitleDecision:
     outcome: str
 
 
-def plan_scan(*, snapshot, libraries, now, favorites_trigger_keep=True, maximum_titles=100000, per_library_action_limit=1):
+def plan_scan(*, snapshot, libraries, now, favorites_trigger_keep=True, maximum_titles=100000, per_library_action_limit=1, deletion_enabled=False):
     if (not isinstance(now, datetime) or now.tzinfo is not None
             or type(favorites_trigger_keep) is not bool or type(maximum_titles) is not int
             or not 1 <= maximum_titles <= 100000 or type(per_library_action_limit) is not int
-            or not 1 <= per_library_action_limit <= 5 or not isinstance(libraries, (tuple,list))
+            or type(deletion_enabled) is not bool or not 1 <= per_library_action_limit <= 5 or not isinstance(libraries, (tuple,list))
             or not 1 <= len(libraries) <= 2):
         raise ValueError('Explicit bounded scan policy required')
     state = deepcopy(snapshot)
@@ -93,7 +93,8 @@ def plan_scan(*, snapshot, libraries, now, favorites_trigger_keep=True, maximum_
                     or not SIGNALS <= title.signals.keys()
                     or any(type(value) is not bool for value in title.signals.values())):
                 raise ValueError('Incomplete protection signals')
-    decisions, moves = [], []
+    decisions, moves, deletions = [], [], []
+    deletion_used = {name:0 for name in names}
     used = {name:0 for name in names}
     for library in captured:
         for title in library.titles:
@@ -102,7 +103,17 @@ def plan_scan(*, snapshot, libraries, now, favorites_trigger_keep=True, maximum_
             elif not library.jellyfin_complete: reason = 'jellyfin_collection_incomplete'
             elif not library.arr_complete: reason = 'arr_catalog_unavailable'
             elif title.signals is None: reason = 'jellyfin_unavailable'
-            elif title.stage == 'Removal': reason = 'deletion_not_authorized'
+            elif title.stage == 'Removal':
+                from app.deletion_policy import protected
+                stamp = state['in_removal'].get(title.media_key)
+                if not deletion_enabled: reason = 'deletion_not_authorized'
+                elif protected(title.signals): reason = 'deletion_protected'
+                elif [section for section in CLOCKS.values() if title.media_key in state[section]] != ['in_removal']:
+                    reason = 'missing_or_conflicting_clock'
+                elif datetime.fromisoformat(stamp) > now: reason = 'future_observation'
+                elif title.threshold_days < 1 or (now-datetime.fromisoformat(stamp)).days < title.threshold_days:
+                    reason = 'removal_period'
+                else: reason = 'removal_expired'
             else:
                 clock = CLOCKS[title.stage]
                 matches = [section for section in CLOCKS.values() if title.media_key in state[section]]
@@ -116,20 +127,23 @@ def plan_scan(*, snapshot, libraries, now, favorites_trigger_keep=True, maximum_
                     reason = reason_code({'explanation':explanation})
                     destination = DESTINATIONS.get((title.stage, action))
             outcome = 'skipped'
-            if destination is not None:
+            deleting = title.stage == 'Removal' and reason == 'removal_expired'
+            if destination is not None or deleting:
                 if title.arr_status != 'exact_source_match':
                     reason = {'missing_record':'arr_record_missing', 'path_conflict':'arr_path_conflict',
                         'ambiguous_record':'arr_record_ambiguous', 'unavailable':'arr_catalog_unavailable'}[title.arr_status]
                     destination = None
-                elif used[library.library] >= per_library_action_limit:
+                elif used[library.library] >= per_library_action_limit or deleting and deletion_used[library.library] >= 1:
                     reason, outcome = 'action_cap', 'capped'
                 else:
                     used[library.library] += 1
-                    outcome = 'proposed'
+                    if deleting: deletion_used[library.library] += 1
+                    outcome = 'delete_proposed' if deleting else 'proposed'
             row = TitleDecision(library.library, title.media_key, title.stage, destination, reason, outcome)
             decisions.append(row)
             if outcome == 'proposed': moves.append(row)
+            if outcome == 'delete_proposed': deletions.append(row)
     return {'status':'advisory_only', 'read_only':True, 'media_actions_authorized':False,
         'scanned_titles':total, 'decisions':tuple(decisions), 'moves':tuple(moves),
         'maximum_actions':2*per_library_action_limit, 'per_library_action_limit':per_library_action_limit,
-        'permanent_deletion_authorized':False}
+        'permanent_deletion_authorized':False,'deletions':tuple(deletions)}

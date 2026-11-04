@@ -91,6 +91,20 @@ if (!prefix) throw Error('Pass the synthetic output prefix from tests/settings_w
     await page.locator('[data-tab=Lifecycle]').click();
     assert.equal(await page.locator('#field-DAILY_RUN_TIMEZONE').isEnabled(),true);
     assert.equal(await page.locator('#apply-settings-button').isEnabled(),true);
+    await page.locator('[data-tab=Safety]').click();
+    assert.equal(await page.locator('#removal-deletion-warning').isVisible(),false);
+    await page.locator('#field-ALLOW_PERMANENT_DELETE').selectOption('true');
+    assert.equal(await page.locator('#removal-deletion-warning').isVisible(),true);
+    assert.match(await page.locator('#removal-deletion-warning').innerText(),/cannot restore deleted files/);
+    assert.equal(await page.locator('#acknowledge-removal-deletion').isChecked(),false);
+    const beforeConsent = posts.length;
+    await page.locator('#apply-settings-button').click();
+    assert.equal(posts.length,beforeConsent);
+    await page.locator('#acknowledge-removal-deletion').check();
+    await page.locator('#field-ALLOW_PERMANENT_DELETE').selectOption('false');
+    assert.equal(await page.locator('#acknowledge-removal-deletion').isChecked(),false);
+    assert.equal(await page.locator('#removal-deletion-warning').isVisible(),false);
+    assert.equal(await page.locator('[name=ENABLE_SEASON_PRUNING]').inputValue(),'false');
     assert.deepEqual(errors,[]);
     if(process.env.DASHBOARD_SCREENSHOT_DIRECTORY) {
       await page.setViewportSize({width:1440,height:1000});

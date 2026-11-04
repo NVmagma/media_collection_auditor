@@ -108,7 +108,7 @@ def test_live_dashboard_discloses_independent_five_move_limits():
         'production_activation':'scheduled_moves', 'execution_mode':'scheduled_live_moves',
         'maximum_actions':10, 'per_library_action_limit':5})
     page = response.get_data(as_text=True)
-    assert 'up to five moves per library per scan' in page
+    assert 'up to five actions per library per scan' in page
     assert 'data-action-limit="10"' in page
     assert 'Up to five Movie and five TV actions per scan' in page
     assert 'Permanent deletion disabled' in page

@@ -18,13 +18,21 @@
 <div class="setting-description"><label for="field-{{ key }}">{{ help_text[key][0] }}</label><small>{{ help_text[key][1] }}</small><span class="source-indicator">{{ sources[key] }}</span></div>
 <div class="setting-control">
 
-{% if key in bools %}
+{% if key in ['ENABLE_SEASON_PRUNING','ALLOW_FILESYSTEM_DELETE','ALLOW_CROSS_FILESYSTEM_MOVES'] %}
+<input type="hidden" name="{{ key }}" value="false"><span>Unavailable in this release</span>
+{% elif key in bools %}
 <select id="field-{{ key }}" name="{{ key }}"><option value="true" {% if values[key]|lower == 'true' %}selected{% endif %}>Enabled</option><option value="false" {% if values[key]|lower == 'false' %}selected{% endif %}>Disabled</option></select>
 {% else %}
 <input id="field-{{ key }}" name="{{ key }}" type="{{ 'password' if key in secrets else 'text' }}" value="{{ values[key] }}" autocomplete="off" placeholder="{{ 'Leave blank to keep existing secret' if key in secrets else 'Unraid default if blank' }}">
 {% endif %}
 </div></div>
 {% endfor %}
+{% if group == 'Safety' %}
+<aside id="removal-deletion-warning" class="alert error" role="note" {% if values['ALLOW_PERMANENT_DELETE']|lower != 'true' %}hidden{% endif %}>
+<h3>Removal deletion can permanently erase media</h3><p>{{ deletion_warning }}</p>
+<label><input type="checkbox" name="acknowledge_removal_deletion" value="yes" id="acknowledge-removal-deletion"> I understand that live scans may delete eligible Removal titles and that the auditor cannot restore their files.</label>
+</aside>
+{% endif %}
 {% if group == 'Connections' %}
 <div class="connection-tests">
 <h3>Test saved connections</h3><p class="section-description">Tests use the saved configuration, not unsaved edits. Apply changes before testing.</p>

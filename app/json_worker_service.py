@@ -43,7 +43,8 @@ def settings_snapshot():
     try: selected={key:validate(key,str(value)) for key,value in saved.items() if key in KEYS}
     except Exception:
         raise ValueError('Stored settings are invalid; scans remain paused.') from None
-    return {**DEFAULTS,**initial_environment(),**selected}
+    from app.deletion_policy import CONSENT_KEY
+    return {**DEFAULTS,**initial_environment(),**selected,CONSENT_KEY:saved.get(CONSENT_KEY)}
 
 
 def next_daily(settings,now):
@@ -103,10 +104,12 @@ class JSONWorkerService:
                     self.execution_blocked=self.gate(values)['status'] == 'review_required'
             except Exception:
                 limit,dry=2,True
+                values={}
                 self.execution_blocked=True
             return dict(status='advisory_only',execution_mode='scheduled_preview' if dry else 'scheduled_live_moves',
                 maximum_actions=limit,per_library_action_limit=5,minimum_live_scan_interval_seconds=3600,
-                permanent_deletion_authorized=False,running=self.running,queued=self.queued,rescuing=False,
+                permanent_deletion_authorized=not dry and values.get('ALLOW_PERMANENT_DELETE')=='true',
+                per_library_deletion_limit=1, deletions_completed=latest.get('deletions_completed'),running=self.running,queued=self.queued,rescuing=False,
                 next_run=self.next_run.isoformat() if self.next_run else None,
                 execution_blocked=self.execution_blocked,last_started=latest.get('started_at'),
                 last_finished=None if self.running else latest.get('finished_at'),
@@ -151,11 +154,13 @@ class JSONWorkerService:
             decisions=result.get('decisions',())
             decisions=[row if isinstance(row,dict) else asdict(row) for row in decisions]
             completed=result.get('completed_moves',())
-            record.update(moves_completed=len(completed),arr_completed=len(completed),
+            deleted=result.get('completed_deletions',())
+            record.update(moves_completed=len(completed),deletions_completed=len(deleted),
+                deletions_proposed=sum(row['outcome']=='delete_proposed' for row in decisions),arr_completed=len(completed)+len(deleted),
                 moves_proposed=sum(row['outcome']=='proposed' for row in decisions),
                 discovery_changes=result.get('discovery_changes',result.get('clock_changes_applied')),
                 scanned_titles=result.get('scanned_titles'),json_decisions=decisions)
-            record['title_details']=_title_details(decisions,completed,result.get('result'),result.get('uncertain_media_key'))
+            record['title_details']=_title_details(decisions,completed,result.get('result'),result.get('uncertain_media_key'),deleted)
             with self.lock: self.execution_blocked=result.get('pending_operation_present') is True
         except Exception as error:
             record.update(result='failed',result_basis='blocked_or_uncertain',error_type=type(error).__name__)
@@ -183,17 +188,18 @@ class JSONWorkerService:
         return record
 
 
-def _title_details(decisions,completed,result,uncertain=None):
+def _title_details(decisions,completed,result,uncertain=None,deleted=()):
     from app.scan_details import REASONS,project_details
     finished={(row['library'],row['media_key']) for row in completed}
+    deleted_keys={(row['library'],row['media_key']) for row in deleted}
     # Keep all decisions in private persistent history; existing display shows a bounded page.
-    ordered=sorted(decisions,key=lambda row:row['outcome'] not in ('proposed','capped'))
+    ordered=sorted(decisions,key=lambda row:row['outcome'] not in ('proposed','delete_proposed','capped'))
     items=[]
     for row in ordered[:100]:
-        outcome=('completed' if (row['library'],row['media_key']) in finished else
+        outcome=('deleted' if (row['library'],row['media_key']) in deleted_keys else 'completed' if (row['library'],row['media_key']) in finished else
             'uncertain' if row['media_key']==uncertain else
-            'not_attempted' if row['outcome']=='proposed' and result != 'completed' else
-            'planned' if row['outcome']=='proposed' else row['outcome'])
+            'not_attempted' if row['outcome'] in ('proposed','delete_proposed') and result != 'completed' else
+            'planned' if row['outcome'] in ('proposed','delete_proposed') else row['outcome'])
         items.append(dict(library=row['library'],title=row['media_key'][3:] if row['library']=='TV' else row['media_key'],
             stage=row['stage'],destination=row['destination'],reason_code=row['reason'] if row['reason'] in REASONS else 'policy_review',outcome=outcome))
     details=project_details(dict(schema_version=1,total_records=len(decisions),items=items))

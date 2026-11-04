@@ -10,6 +10,8 @@ from app.json_scan_control import KEY
 from app.json_tracking_store import JsonTrackingStore
 from app.json_worker_service import enabled,settings_snapshot
 from app.arr_title_transport import ArrTitleUpdate
+from app.arr_delete_transport import ArrTitleDelete
+from app.json_delete_execution import review_pending_delete,acknowledge_pending_delete
 
 
 def create_blueprint(is_admin,load_settings=settings_snapshot):
@@ -52,6 +54,24 @@ def create_blueprint(is_admin,load_settings=settings_snapshot):
                 if not pending: raise RuntimeError('No selected operation')
                 read,send=adapters(values)
                 action=request.form.get('action')
+                if pending['kind']=='arr_delete':
+                    def absent(req):
+                        prefix='SONARR' if req.library=='TV' else 'RADARR'
+                        if values.get(prefix+'_URL','')!=req.arr_base_url: raise RuntimeError('Deletion Arr endpoint changed')
+                        transport=ArrTitleDelete(service=req.service,base_url=values.get(prefix+'_URL',''),
+                            token=values.get(prefix+'_API_KEY',''),source_path=req.arr_source_path,title_folder=req.title)
+                        return transport.read_absence(req.title_id)
+                    def present(req):
+                        prefix='SONARR' if req.library=='TV' else 'RADARR'
+                        if values.get(prefix+'_URL','')!=req.arr_base_url: raise RuntimeError('Deletion Arr endpoint changed')
+                        return ArrTitleDelete(service=req.service,base_url=values.get(prefix+'_URL',''),
+                            token=values.get(prefix+'_API_KEY',''),source_path=req.arr_source_path,title_folder=req.title).read(req.title_id)
+                    if action=='review': review=review_pending_delete(store,read_absence=absent,read_record=present)
+                    elif action in ('acknowledge_delete','cancel_unperformed_delete'):
+                        result=acknowledge_pending_delete(store,read_absence=absent,read_record=present,expected_fingerprint=request.form.get('fingerprint'),
+                            expected_outcome='absent' if action=='acknowledge_delete' else 'unchanged')
+                    else: raise ValueError('Deletion recovery cannot dispatch a delete')
+                    return render_template('json_recovery.html',pending=pending,review=review,result=result,error=None),200,{'Cache-Control':'no-store'}
                 if action=='review':
                     review=(review_pending_move if pending['kind']=='move' else review_pending_sync)(store,read_record=read)
                 else:

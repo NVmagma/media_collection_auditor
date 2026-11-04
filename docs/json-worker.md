@@ -17,7 +17,7 @@ or Keep. `keep-forever` protects the whole title; `keep` and configured favorite
 select retention. `not-at-all` selects early Holding. Each move repeats Jellyfin
 protection and Arr identity checks. Unknown protection blocks the affected title.
 A missing Arr record is skipped without consuming its library's action slot.
-Permanent deletion, cross-filesystem copy fallback and season pruning are disabled.
+Removal deletion is disabled by default and requires explicit warning acknowledgement. Cross-filesystem copy fallback and season pruning remain unavailable.
 
 ## Persistent state and recovery
 
@@ -62,3 +62,7 @@ New installations may run `python -B -m app.json_initialize` explicitly with an
 empty writable `/app/logs` directory. This creates empty tracking/settings and
 scan-control metadata only. It refuses any nonempty directory, including a partial
 initialization. The normal entrypoint never initializes tracking implicitly.
+
+## Optional Removal deletion
+
+Whole-title Removal deletion now has a separate warning and acknowledgement. It is disabled by default and initially limited to one deletion per library per scan. Read [Removal deletion](removal-deletion.md) before opting in. Season pruning and direct filesystem deletion remain unavailable.

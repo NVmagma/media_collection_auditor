@@ -909,6 +909,12 @@ def settings():
                 if key in SECRETS and not raw: continue
                 if not raw and key not in BOOLS: updated.pop(key,None)
                 else: updated[key]=validate(key,raw)
+            from app.deletion_policy import CONSENT_KEY,CONSENT_VERSION
+            if updated.get('ALLOW_PERMANENT_DELETE',initial_environment().get('ALLOW_PERMANENT_DELETE','false'))=='true':
+                if request.form.get('acknowledge_removal_deletion')!='yes':
+                    raise ValueError('Acknowledge the Removal deletion warning to apply settings with deletion enabled.')
+                updated[CONSENT_KEY]=CONSENT_VERSION
+            else: updated[CONSENT_KEY]=None
             validate_policy({**DEFAULTS,**initial_environment(),**updated})
             if request.form.get('settings_action')!='apply':
                 raise ValueError('Use Apply Requested Settings to apply your changes.')
@@ -924,7 +930,8 @@ def settings():
     sources={key:('Web override' if key in saved else 'Unraid' if key in baseline else 'Default') for key in KEYS}
     for key in SECRETS: values[key]=''
     groups={name:[key for key in keys if key!='RUN_INTERVAL_HOURS'] for name,keys in FIELDS.items()}
-    return render_template('settings.html',groups=groups,values=values,secrets=SECRETS,bools=BOOLS,sources=sources,
+    from app.deletion_policy import WARNING
+    return render_template('settings.html',deletion_warning=WARNING,groups=groups,values=values,secrets=SECRETS,bools=BOOLS,sources=sources,
         help_text=FIELD_HELP,error=error,success=request.args.get('saved')=='1',json_mode=True,
         preview_mode=False,live_mode=False,requested=False,unchanged=False,pending_settings={'status':'none'},
         settings_application={'status':'none'},locked_settings=(),settings_applied=False,

@@ -270,6 +270,8 @@ def _scan_entry(record, zone, *, title_details=True):
         'duration': duration, 'duration_display': duration_display, 'reason': reason,
         'moves_proposed': _scan_counter(record.get('moves_proposed')),
         'discovery_changes': _scan_counter(record.get('discovery_changes')),
+        'deletions_completed': _scan_counter(record.get('deletions_completed')),
+        'deletions_proposed': _scan_counter(record.get('deletions_proposed')),
         'moves_completed': _scan_counter(record.get('moves_completed')),
         'arr_completed': _scan_counter(record.get('arr_completed')),
         'title_details': project_details(record.get('title_details')) if title_details else None}

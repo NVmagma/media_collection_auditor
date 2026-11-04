@@ -22,6 +22,12 @@ REASONS = {
     'future_content_timestamp': 'TV content has a future modification date; this show was skipped and its clock was preserved.',
     'future_observation': 'The saved lifecycle date is in the future.',
     'jellyfin_unavailable': 'Jellyfin protection information is unavailable.',
+    'removal_content_changed': 'Removal contents are newer than the saved date; deletion was skipped.',
+    'deletion_protection_unavailable': 'Fresh Jellyfin protection is unavailable; deletion was skipped.',
+    'deletion_arr_changed': 'The exact unmonitored Arr record changed; deletion was skipped.',
+    'deletion_protected': 'Jellyfin retention or favorite protection blocks deletion.',
+    'removal_period': 'Still inside the Removal waiting period.',
+    'removal_expired': 'Removal waiting period elapsed; fresh deletion safeguards are required.',
     'deletion_not_authorized': 'Permanent deletion is disabled.',
     'unresolved_operation': 'An unresolved operation requires review.',
     'discovery_checkpoint_required': 'New or changed lifecycle dates need a checkpoint and fresh plan.',
@@ -41,7 +47,7 @@ _EXPLANATIONS = {
 }
 
 OUTCOMES = {'planned':'Proposed; not completed', 'skipped':'Skipped', 'capped':'Action limit',
-    'completed':'Move completed', 'uncertain':'Stopped / uncertain', 'not_attempted':'Not attempted'}
+    'deleted':'Arr deletion verified', 'completed':'Move completed', 'uncertain':'Stopped / uncertain', 'not_attempted':'Not attempted'}
 
 STAGES = ('Waiting','Holding','Keep','Removal')
 

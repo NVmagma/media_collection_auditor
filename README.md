@@ -16,7 +16,7 @@ appdata. The dashboard, settings, APIs and operation recovery share that state.
 `FAVORITES_TRIGGER_KEEP`. `keep-all-seasons` is retained for TV protection policy.
 Unknown Jellyfin protection blocks the affected title.
 
-Permanent deletion, season pruning and cross-filesystem copy fallback are disabled.
+Removal deletion is disabled by default and requires explicit warning acknowledgement. Season pruning and cross-filesystem copy fallback remain unavailable.
 Each live scan permits up to five Movie moves and five TV moves, with a total cap
 of ten. Live scans start at least one hour apart, and overlapping scans are blocked.
 Unlimited actions require a separate reviewed change.
@@ -106,3 +106,5 @@ See the [roadmap](docs/feature-roadmap.md) and [branch workflow](docs/branch-wor
 ## License
 
 See [LICENSE](LICENSE).
+
+Removal-stage whole-title deletion is an opt-in feature described in [Removal deletion](docs/removal-deletion.md). It stays off until explicitly acknowledged in Settings.

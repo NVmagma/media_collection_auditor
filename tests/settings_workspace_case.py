@@ -33,7 +33,8 @@ def render_settings_workspace(scenario='ready'):
         application = {'status':'resubmit_required'}
     with web.app.test_request_context('/settings'):
         g.user = {'name':'Synthetic administrator', 'admin':True}
-        return render_template('settings.html', groups=FIELDS, values=values, sources={key:'Default' for key in KEYS},
+        from app.deletion_policy import WARNING
+        return render_template('settings.html', deletion_warning=WARNING, groups=FIELDS, values=values, sources={key:'Default' for key in KEYS},
             secrets=SECRETS, bools=BOOLS, help_text=web.FIELD_HELP, preview_mode=False,json_mode=True,live_mode=False,
             locked_settings=(),
             pending_settings=pending, settings_application=application,

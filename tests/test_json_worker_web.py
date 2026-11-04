@@ -39,7 +39,7 @@ def test_integration_token_and_foreign_origin_cannot_queue(page,monkeypatch):
     assert not worker.report()['queued']
 
 
-def test_settings_use_apply_without_typed_phrase_but_refuse_deletion(page,monkeypatch):
+def test_settings_use_apply_without_typed_phrase_and_require_deletion_acknowledgement(page,monkeypatch):
     client,worker,case=page; values=case[1]
     monkeypatch.setattr(web,'load_config',lambda:values)
     from app import json_worker_service
@@ -55,7 +55,16 @@ def test_settings_use_apply_without_typed_phrase_but_refuse_deletion(page,monkey
     assert save.call_args.args[0]['unknown_extension']=={'retain':True}
     save.reset_mock(); form['ALLOW_PERMANENT_DELETE']='true'
     response=client.post('/settings',data=form,headers={'Origin':'http://localhost'})
-    assert response.status_code == 200 and 'Unsupported destructive policy' in response.text
+    assert response.status_code == 200 and 'Acknowledge the Removal deletion warning' in response.text
+    save.assert_not_called()
+    before=case[0].path.read_bytes()
+    form['acknowledge_removal_deletion']='yes'
+    assert client.post('/settings',data=form,headers={'Origin':'http://localhost'}).status_code==302
+    from app.deletion_policy import CONSENT_KEY,CONSENT_VERSION
+    assert save.call_args.args[0][CONSENT_KEY]==CONSENT_VERSION
+    assert case[0].path.read_bytes()==before and not worker.queued
+    form['ENABLE_SEASON_PRUNING']='true';save.reset_mock()
+    assert 'Unsupported destructive policy' in client.post('/settings',data=form,headers={'Origin':'http://localhost'}).text
     save.assert_not_called()
 
 

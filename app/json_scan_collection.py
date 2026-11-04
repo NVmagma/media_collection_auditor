@@ -142,6 +142,8 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
     check_deadline()
     result = plan_scan(snapshot=snapshot,libraries=observations,now=now,
         maximum_titles=maximum_titles,favorites_trigger_keep=favorites == 'true',
-        per_library_action_limit=per_library_limit)
+        per_library_action_limit=per_library_limit,
+        deletion_enabled=settings.get('ALLOW_PERMANENT_DELETE','false') == 'true' and
+            settings.get('REMOVAL_DELETION_CONSENT') == 'arr-removal-v1')
     return {**result,'library_status':tuple(collection_status),
         'inventory_independently_verified':False,'freshness_verified':False}

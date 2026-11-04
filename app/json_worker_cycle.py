@@ -25,7 +25,9 @@ from app.jellyfin_transport import ScheduledJellyfinGET
 def validate_policy(settings):
     values=deepcopy(settings)
     if not isinstance(values,dict): raise ValueError('Explicit settings required')
-    for flag in ('ALLOW_PERMANENT_DELETE','ALLOW_FILESYSTEM_DELETE',
+    from app.deletion_policy import validate_consent
+    validate_consent(values)
+    for flag in ('ALLOW_FILESYSTEM_DELETE',
                  'ALLOW_CROSS_FILESYSTEM_MOVES','ENABLE_SEASON_PRUNING'):
         if _bool(values,flag,'false'): raise ValueError('Unsupported destructive policy')
     limit=_days(values,'MAX_ACTIONS_PER_RUN','10')
@@ -81,6 +83,33 @@ class JSONMoveServices:
                 root=req.arr_destination_root,monitored=req.monitored))
         return request,preflight,complete
 
+    def prepare_delete(self,decision,session):
+        from app.json_delete_execution import DeleteRequest
+        from app.arr_delete_transport import ArrTitleDelete
+        library=decision.library; title=decision.media_key[3:] if library=='TV' else decision.media_key
+        prefix,service=('SONARR','sonarr') if library=='TV' else ('RADARR','radarr')
+        local,remote=stage_paths(self.values,library)
+        rows=ArrCatalogGET(service=service,base_url=self.values.get(prefix+'_URL',''),
+            token=self.values.get(prefix+'_API_KEY',''))()
+        _catalog(lambda:rows)
+        matches=[row for row in rows if PurePosixPath(canonical_arr_record_path(row['path'])).name==title]
+        if len(matches)!=1 or canonical_arr_record_path(matches[0]['path'])!=remote['Removal']+'/'+title: raise RuntimeError('Exact Removal Arr record required')
+        req=DeleteRequest(library,title,session.state['in_removal'][decision.media_key],
+            _days(self.values,'REMOVAL_DAYS','7'),local,service,matches[0]['id'],remote['Removal']+'/'+title,self.values.get(prefix+'_URL',''))
+        client=ArrTitleDelete(service=service,base_url=self.values.get(prefix+'_URL',''),
+            token=self.values.get(prefix+'_API_KEY',''),source_path=req.arr_source_path,
+            title_folder=title,verify_binding=session.verify)
+        return req,lambda req:client.read(req.title_id),lambda req:client.delete(req.title_id),lambda req:client.read_absence(req.title_id)
+
+    def authorize_delete(self):
+        from app.json_worker_service import settings_snapshot
+        # No stale queued settings may retain destructive authority after a change.
+        current=settings_snapshot()
+        validate_policy(current)
+        if _bool(current,'DRY_RUN','true') or not _bool(current,'ALLOW_PERMANENT_DELETE','false'):
+            raise RuntimeError('Live deletion consent was revoked')
+        if current != self.values: raise RuntimeError('Settings changed; request a fresh scan')
+
     def protection(self,request,now):
         values=self.values
         tags=validated_tag_names({name:values.get(key,default) for name,key,default in (
@@ -110,6 +139,7 @@ def run_cycle(store, *, settings, trigger, now=None, services=None, collect=coll
         return {**deepcopy(evidence),'result':'failed','failure_stage':'storage_revalidation',
             'error_type':type(error).__name__,'pending_operation_present':None,
             'completed_moves':tuple(evidence['completed_moves']),
+            'completed_deletions':tuple(evidence.get('completed_deletions',())),
             'permanent_deletion_authorized':False}
 
 
@@ -126,7 +156,7 @@ def _run_cycle(store, *, settings, trigger, now, services, collect, preview, evi
     with scan_attempt(store,now=now,trigger=trigger) as attempt:
         report=evidence
         report.update(execution_mode='live',scanned_titles=None,decisions=(),
-                completed_moves=[],discovery_changes=None,failure_stage=None)
+                completed_moves=[],completed_deletions=[],discovery_changes=None,failure_stage=None)
         phase='collection'
         try:
             plan=collect(attempt.session,settings=values,now=local_now)
@@ -148,6 +178,24 @@ def _run_cycle(store, *, settings, trigger, now, services, collect, preview, evi
                     favorites_trigger_keep=_bool(values,'FAVORITES_TRIGGER_KEEP','true'),
                     tv_reset=_bool(values,'TV_NEW_EPISODES_RESET_CLOCK','true'),timezone_info=zone,per_library_limit=5)
                 report['completed_moves'].append(asdict(decision))
+            for decision in plan.get('deletions',())[:max(0,limit-len(report['completed_moves']))]:
+                from app.json_delete_execution import execute_delete,DeletionPreflightBlocked
+                phase='deletion_preparation'
+                req,read,send,absent=adapter.prepare_delete(decision,attempt.session)
+                if (req.library,('TV/' if req.library=='TV' else '')+req.title,decision.stage) != (decision.library,decision.media_key,'Removal'):
+                    raise RuntimeError('Deletion request differs from plan')
+                phase='arr_deletion'
+                try:
+                    execute_delete(attempt,request=req,now=local_now,fetch_protection=lambda req:adapter.protection(req,local_now),
+                        read_record=read,send_delete=send,read_absence=absent,authorize=adapter.authorize_delete,timezone_info=zone)
+                except DeletionPreflightBlocked as error:
+                    attempt.session.verify()
+                    if attempt.session.state[KEY]['journal'] is not None: raise
+                    report['decisions']=tuple({**row,'outcome':'skipped','reason':error.reason} if
+                        (row['library'],row['media_key'])==(decision.library,decision.media_key) else row
+                        for row in report['decisions'])
+                    continue
+                report['completed_deletions'].append(asdict(decision))
             attempt.finish(result='completed')
             report['result']='completed'
         except Exception as error:
@@ -160,8 +208,9 @@ def _run_cycle(store, *, settings, trigger, now, services, collect, preview, evi
                 attempt.finish(result='failed')
         report['pending_operation_present']=attempt.session.state[KEY]['journal'] is not None
         report['completed_moves']=tuple(report['completed_moves'])
-        report['permanent_deletion_authorized']=False
+        report['completed_deletions']=tuple(report['completed_deletions'])
+        report['permanent_deletion_authorized']=_bool(values,'ALLOW_PERMANENT_DELETE','false')
         from app.jellyfin_refresh import refresh_after_moves
         report['jellyfin_refresh']=refresh_after_moves(settings=values,
-            completed=report['result']=='completed' and bool(report['completed_moves']))
+            completed=report['result']=='completed' and bool(report['completed_moves'] or report['completed_deletions']))
         return report

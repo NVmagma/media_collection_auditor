@@ -15,6 +15,7 @@ from time import monotonic
 import unittest
 import time
 import signal
+import shutil
 from urllib.parse import parse_qs
 from urllib.parse import urlsplit
 
@@ -58,7 +59,20 @@ class JSONExecutionFixtureTests(unittest.TestCase):
                 self.send_response(status); self.end_headers(); self.wfile.write(json.dumps(row).encode())
             def do_GET(self):
                 self.server.calls.append(('GET',self.path))
-                self.respond(self.server.rows[urlsplit(self.path).path])
+                record=self.server.rows.get(urlsplit(self.path).path)
+                self.respond(record,200 if record is not None else 404)
+            def do_DELETE(self):
+                self.server.calls.append(('DELETE',self.path))
+                resource=urlsplit(self.path).path;query=parse_qs(urlsplit(self.path).query)
+                expected='addImportExclusion' if resource.startswith('/api/v3/movie/') else 'addImportListExclusion'
+                if query!={'deleteFiles':['true'],expected:['true']}: return self.respond({},400)
+                row=self.server.rows.pop(resource)
+                target=Path(row['path'])
+                if self.server.media_root not in target.resolve().parents: raise RuntimeError('Fixture target outside disposable media')
+                shutil.rmtree(target)
+                if self.server.lost_ack:
+                    self.connection.shutdown(socket.SHUT_RDWR);self.connection.close();return
+                self.respond({},200)
             def do_PUT(self):
                 self.server.calls.append(('PUT',self.path))
                 if urlsplit(self.path).query != 'moveFiles=false': return self.respond({},400)
@@ -68,6 +82,7 @@ class JSONExecutionFixtureTests(unittest.TestCase):
                     self.connection.shutdown(socket.SHUT_RDWR); self.connection.close(); return
                 self.respond(row,202)
         self.server=ThreadingHTTPServer(('127.0.0.1',0),Handler)
+        self.server.media_root=self.media_root
         self.server.calls=[]; self.server.lost_ack=False
         self.server.rows={('/api/v3/movie/1' if library == 'Movies' else '/api/v3/series/2'):
             {'id':request.title_id,'path':request.arr_source_path,'monitored':True,
@@ -321,6 +336,93 @@ with scan_attempt(JsonTrackingStore(sys.argv[1]),now=datetime(2026,1,20,12,tzinf
             stop(); session.close()
 
 
+    def deletion_case(self):
+        from app.json_delete_execution import DeleteRequest
+        requests={}
+        for lib,old in self.requests.items():
+            roots={'Waiting':old.source_root,'Holding':old.destination_root}
+            for stage in ('Keep','Removal'):
+                path=self.media_root/(lib+'_'+stage.lower());path.mkdir();roots[stage]=str(path)
+            source=Path(old.source_root)/old.title;source.rename(Path(roots['Removal'])/old.title)
+            req=DeleteRequest(lib,old.title,(NOW-timedelta(days=10)).isoformat(),7,roots,old.service,
+                old.title_id,roots['Removal']+'/'+old.title,'http://127.0.0.1:'+str(self.server.server_port))
+            requests[lib]=req
+            row=self.server.rows['/api/v3/'+('movie' if lib=='Movies' else 'series')+'/'+str(req.title_id)]
+            row.update(path=req.arr_source_path,monitored=False)
+        with self.store.session() as session:
+            session.state['first_seen']={}
+            session.state['in_removal']={('TV/' if req.library=='TV' else '')+req.title:req.source_since for req in requests.values()}
+            session.checkpoint()
+        return requests
+
+    def deletion_client(self,req,verify=lambda:None):
+        from app.arr_delete_transport import ArrTitleDelete
+        return ArrTitleDelete(service=req.service,base_url=req.arr_base_url,
+            token='synthetic-fixture-token',source_path=req.arr_source_path,title_folder=req.title,verify_binding=verify)
+
+    def test_movie_and_tv_arr_deletion_and_lost_ack_recovery(self):
+        from app.json_delete_execution import execute_delete,review_pending_delete,acknowledge_pending_delete
+        requests=self.deletion_case()
+        self.server.lost_ack=True
+        req=requests['TV'];client=self.deletion_client(req)
+        with self.assertRaises(RuntimeError):
+            with scan_attempt(self.store,now=NOW.replace(tzinfo=timezone.utc),trigger='manual') as attempt:
+                execute_delete(attempt,request=req,now=NOW,fetch_protection=lambda _:dict(SIGNALS),
+                    read_record=lambda _:client.read(req.title_id),send_delete=lambda _:client.delete(req.title_id),
+                    read_absence=lambda _:client.read_absence(req.title_id),authorize=lambda:None)
+        self.assertEqual(json.loads(self.store.path.read_bytes())[KEY]['journal']['kind'],'arr_delete')
+        absent=lambda req:self.deletion_client(req).read_absence(req.title_id)
+        review=review_pending_delete(self.store,read_absence=absent)
+        acknowledge_pending_delete(self.store,read_absence=absent,expected_fingerprint=review['review_fingerprint'])
+        self.server.lost_ack=False
+        req=requests['Movies'];client=self.deletion_client(req)
+        with scan_attempt(self.store,now=(NOW+timedelta(hours=2)).replace(tzinfo=timezone.utc),trigger='manual') as attempt:
+            execute_delete(attempt,request=req,now=NOW+timedelta(hours=2),fetch_protection=lambda _:dict(SIGNALS),
+                read_record=lambda _:client.read(req.title_id),send_delete=lambda _:client.delete(req.title_id),
+                read_absence=lambda _:client.read_absence(req.title_id),authorize=lambda:None)
+            attempt.finish(result='completed')
+        current=json.loads(self.store.path.read_bytes())
+        self.assertEqual(current['in_removal'],{})
+        self.assertEqual(current['fixture_extension'],{'retained':'synthetic-only'})
+        self.assertEqual(sum(method=='DELETE' for method,_ in self.server.calls),2)
+
+    def test_sigkill_after_arr_delete_never_replays_delete(self):
+        from app.json_delete_execution import review_pending_delete,acknowledge_pending_delete
+        req=self.deletion_case()['TV']
+        code="""
+import os,signal,json,sys
+from datetime import datetime,timezone
+from app.json_delete_execution import execute_delete,DeleteRequest
+from app.arr_delete_transport import ArrTitleDelete
+from app.json_tracking_store import JsonTrackingStore
+from app.json_scan_control import scan_attempt
+req=DeleteRequest(**json.loads(sys.argv[2]))
+client=ArrTitleDelete(service=req.service,base_url=req.arr_base_url,token='synthetic-fixture-token',source_path=req.arr_source_path,title_folder=req.title)
+def send(_):
+    client.delete(req.title_id)
+    os.kill(os.getpid(),signal.SIGKILL)
+with scan_attempt(JsonTrackingStore(sys.argv[1]),now=datetime(2026,1,20,12,tzinfo=timezone.utc),trigger='manual') as attempt:
+    execute_delete(attempt,request=req,now=datetime(2026,1,20,12),
+        fetch_protection=lambda _:dict(played=True,favorite=False,disliked=True,keep=False,keep_all=False,protected=False),
+        read_record=lambda _:client.read(req.title_id),send_delete=send,
+        read_absence=lambda _:client.read_absence(req.title_id),authorize=lambda:None)
+"""
+        env=dict(os.environ)
+        if os.environ.get('JSON_FIXTURE_PACKAGED_APP')=='true': env['PYTHONPATH']='/app/app:/app'
+        child=subprocess.run([sys.executable,'-B','-c',code,str(self.store.path),json.dumps(asdict(req))],
+            env=env,timeout=20,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        self.assertEqual(child.returncode,-9,child.stderr.decode())
+        before=json.loads(self.store.path.read_bytes())
+        self.assertEqual(before[KEY]['journal']['kind'],'arr_delete')
+        with self.assertRaises(RuntimeError):
+            with scan_attempt(self.store,now=(NOW+timedelta(hours=2)).replace(tzinfo=timezone.utc),trigger='manual'):pass
+        absent=lambda req:self.deletion_client(req).read_absence(req.title_id)
+        review=review_pending_delete(self.store,read_absence=absent)
+        acknowledge_pending_delete(self.store,read_absence=absent,expected_fingerprint=review['review_fingerprint'])
+        self.assertEqual(sum(method=='DELETE' for method,_ in self.server.calls),1)
+        self.assertNotIn('TV/Show',json.loads(self.store.path.read_bytes())['in_removal'])
+        self.assertEqual(json.loads(self.store.path.read_bytes())[KEY]['last_started_at'],before[KEY]['last_started_at'])
+
     def test_new_favorite_blocks_disliked_move_before_intent(self):
         request=self.requests['Movies']
         with scan_attempt(self.store,now=NOW.replace(tzinfo=timezone.utc),trigger='manual') as attempt:
@@ -348,7 +450,8 @@ def main():
     if not result.wasSuccessful(): return 1
     print(json.dumps({'status':'json_execution_fixture_verified','tests':result.testsRun,
         'fixture_only':True,'production_services_changed':False,'production_media_mounted':False,
-        'external_requests_sent':False,'permanent_deletion_performed':False,
+        'external_requests_sent':False,'production_deletion_performed':False,'disposable_deletion_verified':True,
+        'sigkill_delete_recovery_verified':True,
         'lost_ack_get_only_recovery_verified':True,'sigkill_move_recovery_verified':True,'actual_json_service_verified':True,'five_moves_per_library_verified':True,'packaged_entrypoint_verified':os.environ.get('JSON_FIXTURE_PACKAGED_APP') == 'true','movie_and_tv_moves_verified':True}))
     return 0
 

@@ -31,7 +31,7 @@ def project_activity(records,limit=1000):
         completed=(result=='completed' and record.get('result_basis')=='worker_return' and _time(record.get('finished_at')) is not None)
         status='completed' if completed else 'failed' if result=='failed' else 'unknown'
         detail=('Recorded scan result. ' if completed else 'Blocked, uncertain or incomplete scan result. ')
-        detail+='Verified moves: '+_count(record.get('moves_completed'))+'. Tracking date changes: '+_count(record.get('discovery_changes'))+'.'
+        detail+='Verified moves: '+_count(record.get('moves_completed'))+'. Verified deletions: '+_count(record.get('deletions_completed'))+'. Tracking date changes: '+_count(record.get('discovery_changes'))+'.'
         events.append(dict(time=when,library='All',action='scan',status=status,folder='-',detail=detail))
         details=project_details(record.get('title_details'))
         if details:

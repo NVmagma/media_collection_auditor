@@ -54,3 +54,26 @@ if (editor && draftStatus) {
   });
   updateDraft();
 }
+
+// A visible, unchecked acknowledgement is required for every apply with deletion on.
+const deletionSwitch = document.getElementById('field-ALLOW_PERMANENT_DELETE');
+const deletionWarning = document.getElementById('removal-deletion-warning');
+const deletionAck = document.getElementById('acknowledge-removal-deletion');
+if (deletionSwitch && deletionWarning && deletionAck) {
+  function updateDeletionWarning() {
+    const on = deletionSwitch.value === 'true';
+    deletionWarning.hidden = !on;
+    deletionAck.required = on;
+    if (!on) deletionAck.checked = false;
+  }
+  deletionSwitch.addEventListener('change', () => { deletionAck.checked = false; updateDeletionWarning(); });
+  editor.addEventListener('submit', event => {
+    if (deletionSwitch.value === 'true' && !deletionAck.checked) {
+      event.preventDefault(); showTab('Safety'); deletionAck.focus();
+    }
+  });
+  editor.addEventListener('invalid', event => {
+    if (event.target === deletionAck) { showTab('Safety'); deletionAck.focus(); }
+  }, true);
+  updateDeletionWarning();
+}

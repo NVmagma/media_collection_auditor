@@ -19,6 +19,6 @@
 4. Validate configured notifications and backup/restore operations end to end.
 5. Consider lifting move caps only after a separate reviewed rollout.
 
-Permanent deletion and season pruning remain disabled. Neither source cleanup nor
+Removal deletion is opt-in with an explicit warning; season pruning remains unavailable. Neither source cleanup nor
 successful moves authorize enabling them. Any future deletion feature needs fresh
 protection checks, clear previews, disposable testing and explicit approval.

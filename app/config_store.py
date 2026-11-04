@@ -135,7 +135,7 @@ FIELD_HELP = {
   ],
   "ENABLE_SEASON_PRUNING": [
     "Prune Older TV Seasons",
-    "Potentially deletes older seasons of eligible kept shows."
+    "Unavailable in this release. Whole-title Removal deletion is a separate opt-in."
   ],
   "KEEP_ALL_SEASONS_TAG": [
     "Keep All Seasons Tag",
@@ -177,7 +177,7 @@ FIELD_HELP = {
     "Maximum Destructive Actions",
     "Limit hold, delete and season-prune operations per audit."
   ],
-  "ALLOW_PERMANENT_DELETE": ["Allow Permanent Deletion (Master Switch)", "Default off. Must be enabled before any permanent deletion via Radarr, Sonarr, direct filesystem deletion, or TV season pruning. DRY_RUN and other safeguards still apply."],
+  "ALLOW_PERMANENT_DELETE": ["Allow Permanent Deletion (Master Switch)", "Default off. Allows Arr-managed deletion of whole titles after the Removal waiting period, with an explicit warning acknowledgement. At most one deletion per library per scan; dry run remains a preview. Season pruning is unavailable."],
   "ALLOW_FILESYSTEM_DELETE": [
     "Allow Direct File Deletion",
     "Permit deletion without Radarr or Sonarr; use with extreme care."
