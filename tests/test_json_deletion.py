@@ -280,3 +280,12 @@ def test_async_arr_file_removal_is_observed_without_resending_delete(deletion):
     assert not Path(req.arr_source_path).exists()
     assert sum(m=='DELETE' for m,_ in server.calls)==1
     assert json.loads(store.path.read_bytes())[KEY]['journal'] is None
+
+
+def test_deletion_refuses_an_unverified_arr_path_alias(deletion):
+    store,reqs,server=deletion
+    req=replace(reqs['Movies'],arr_source_path='/different-mount/'+reqs['Movies'].title)
+    with scan_attempt(store,now=NOW.replace(tzinfo=timezone.utc),trigger='manual') as attempt:
+        with pytest.raises(ValueError):execute(attempt,req,server)
+        assert attempt.session.state[KEY]['journal'] is None
+    assert not server.calls

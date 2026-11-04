@@ -3,7 +3,7 @@
 ## Verified baseline
 
 - Primary JSON tracking with preserved lifecycle clocks and unknown fields.
-- Serialized daily/manual scans with one-hour cooldown and five moves per library.
+- Serialized daily/manual scans with one-hour cooldown and five actions per library.
 - Fresh Jellyfin protection checks and verified Radarr/Sonarr updates.
 - Durable move/import intents and explicit GET-only recovery.
 - Modern left navigation, separate Review page, persistent Activity and History.
@@ -20,5 +20,5 @@
 5. Consider lifting move caps only after a separate reviewed rollout.
 
 Removal deletion is opt-in with an explicit warning; season pruning remains unavailable. Neither source cleanup nor
-successful moves authorize enabling them. Any future deletion feature needs fresh
-protection checks, clear previews, disposable testing and explicit approval.
+successful moves enable destructive options. Season pruning will require its own
+protection checks, previews, disposable testing and explicit approval.

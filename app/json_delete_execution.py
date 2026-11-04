@@ -52,8 +52,8 @@ def _validate(req):
     if any(p==Path('/') or p==q or p in q.parents or q in p.parents
            for i,p in enumerate(paths) for q in paths[i+1:]): raise ValueError('Disjoint stage roots required')
     if any(p==Path('/') for p in paths): raise ValueError('Dedicated stage roots required')
-    if canonical_arr_record_path(req.arr_source_path).rsplit('/',1)[-1]!=req.title:
-        raise ValueError('Exact Arr title required')
+    if canonical_arr_record_path(req.arr_source_path)!=req.roots['Removal']+'/'+req.title:
+        raise ValueError('Deletion requires identical local and Arr Removal paths; aliases are not approved')
     return ('TV/' if req.library=='TV' else '')+req.title
 
 

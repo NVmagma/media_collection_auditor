@@ -17,7 +17,7 @@ appdata. The dashboard, settings, APIs and operation recovery share that state.
 Unknown Jellyfin protection blocks the affected title.
 
 Removal deletion is disabled by default and requires explicit warning acknowledgement. Season pruning and cross-filesystem copy fallback remain unavailable.
-Each live scan permits up to five Movie moves and five TV moves, with a total cap
+Each live scan permits up to five Movie actions and five TV actions, with a total cap
 of ten. Live scans start at least one hour apart, and overlapping scans are blocked.
 Unlimited actions require a separate reviewed change.
 

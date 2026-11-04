@@ -8,7 +8,7 @@ appdata. Ordinary valid settings changes do not require release bindings.
 
 Daily scans start at `DAILY_RUN_TIME` in `DAILY_RUN_TIMEZONE` (or `TZ`). Manual
 live scans require explicit confirmation and share the one-hour cooldown.
-Only one scan can run at a time. The initial limits are five moves per library
+Only one scan can run at a time. The initial limits are five actions per library
 and ten total per scan; a lower total limit can be configured. The five-per-library
 limit remains enforced. Removing limits requires a separate reviewed change.
 

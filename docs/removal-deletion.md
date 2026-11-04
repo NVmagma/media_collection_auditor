@@ -40,7 +40,7 @@ exclusion prevents normal list re-import; it is not a universal download ban.
 - Complete fresh Jellyfin data, with no favorite, keep, keep-forever or
   keep-all-seasons protection. Favorites block deletion even when the legacy
   favorite-to-Keep move preference is disabled.
-- One exact Arr record at the configured Removal path, unmonitored.
+- One exact Arr record at the configured Removal path, unmonitored. This first release requires identical local and Arr Removal paths; alternate APP_REMOVAL path aliases are refused because their physical equivalence is not verified.
 - An unambiguous Removal clock and no copy of that title in another stage.
 - Stable descriptor-checked stage and title identities, complete contents,
   and no content newer than the Removal clock.
