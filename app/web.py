@@ -393,6 +393,9 @@ def integration_audit_status():
 
 
 def load_actions(limit=250):
+    if os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized':
+        from app.json_activity import project_activity
+        return project_activity(read_history(100),limit=min(limit,1000))
     path = Path(ACTION_LOG_FILE)
     if not path.exists():
         return []
@@ -860,7 +863,7 @@ def export_diagnostics():
         # Only export the last 2 MiB of activity to avoid excessive memory use.
         path = Path(ACTION_LOG_FILE)
         raw = b""
-        if path.is_file():
+        if os.environ.get('AUDITOR_WORKER_MODE') != 'json_serialized' and path.is_file():
             with path.open("rb") as handle:
                 handle.seek(0, os.SEEK_END)
                 length = handle.tell()
@@ -868,6 +871,11 @@ def export_diagnostics():
                 raw = handle.read()
             if length > 2 * 1024 * 1024:
                 raw = raw.partition(b"\\n")[2]  # omit truncated first record
+        if os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized':
+            from app.json_activity import export_activity
+            raw=export_activity(read_history(100))
+            report['log_format']='JSON Lines (recorded scan and title observations)'
+            report['activity_source']='persistent_json_scan_history'
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             archive.writestr("diagnostics.json", json.dumps(report, indent=2))
@@ -884,6 +892,12 @@ def export_logs():
     """Download persisted structured activity only; never expose arbitrary server paths."""
     if not getattr(g, "user", None) or not g.user["admin"]:
         return Response("Administrator access required.", 403)
+    if os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized':
+        from app.json_activity import export_activity
+        response=Response(export_activity(read_history(100)),mimetype='application/x-ndjson')
+        response.headers['Content-Disposition']='attachment; filename="auditor_actions.jsonl"'
+        response.headers['Cache-Control']='no-store'
+        return response
     path = Path(ACTION_LOG_FILE)
     try:
         if not path.is_file():

@@ -448,3 +448,14 @@ admitted a scan, changed tracking/settings or recorded a pending operation,
 recovery refuses to restore the stale previous snapshot. Recovery is for an
 unchanged interrupted cutover; later migrations must retain the current JSON
 state instead.
+
+## Persistent activity display
+
+The serialized JSON worker records scan summaries and per-title outcomes in the
+persistent audit history. Activity Logs, JSONL downloads and diagnostics project
+that same history through an allowlist. They do not depend on the legacy action
+file. Scan summaries retain unknown counts as unknown, and title rows distinguish
+verified completion from proposal, skipped and uncertain outcomes. Private request
+payloads, raw decision dictionaries and exception messages are not exported.
+Existing persisted scans appear after this display update without running another
+scan or rewriting tracking state.
