@@ -81,6 +81,7 @@ def test_live_observation_then_movie_tv_quarantine_preserves_metadata_clocks_and
         assert (archive/'.DS_Store').read_bytes()==b'synthetic metadata'
         assert not folders[folder['library']].exists()
         assert receipt['clocks']=={'first_seen':old['first_seen'][folder['media_key']]}
+        assert receipt['quarantine_path']==values['MEDIA_PATH']+'/'+LEAF
     assert all(method=='GET' for method,_ in server.calls)
     assert 'synthetic-token' not in store.path.read_text()
 

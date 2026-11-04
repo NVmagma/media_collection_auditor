@@ -108,7 +108,7 @@ def held_locations(session,*,row,settings,create=False):
                     raise RuntimeError('Metadata changed or video appeared; nothing was deleted')
             finally:os.close(title_fd)
         yield {'source':source,'quarantine':quarantine,'verify':verify,
-            'media_identity':media_identity,'quarantine_identity':quarantine_identity,
+            'quarantine_path':quarantine_path,'media_identity':media_identity,'quarantine_identity':quarantine_identity,
             'stage_identities':{key:value[2] for key,value in stages.items()}}
 
 
@@ -128,7 +128,7 @@ def execute_quarantine(attempt,*,row,settings,now,fresh_absence,authorize):
         held['verify']();authorize()
         archive=secrets.token_hex(16)
         details={'folder':folder,'archive':archive,'clocks':clocks,'observed_at':now.isoformat(),
-            **{key:held[key] for key in ('media_identity','quarantine_identity','stage_identities')}}
+            **{key:held[key] for key in ('quarantine_path','media_identity','quarantine_identity','stage_identities')}}
         identifier=attempt.record_intent(kind='orphan_quarantine',library=folder['library'],title=folder['title'],details=details)
         held['verify']();authorize()
         rename_directory_noreplace_at(held['source'],folder['title'],held['quarantine'],archive)
@@ -161,6 +161,7 @@ def _review(session,settings):
             or re.fullmatch('[0-9a-f]{32}',archive) is None):raise RuntimeError('Exact quarantine journal required')
     before=deepcopy(session.state)
     with held_locations(session,row=folder,settings=settings) as held:
+        if details.get('quarantine_path',held['quarantine_path'])!=held['quarantine_path']:raise RuntimeError('Recorded quarantine path changed')
         if any(held[key]!=details[key] for key in ('media_identity','quarantine_identity','stage_identities')):
             raise RuntimeError('Quarantine roots changed')
         try:os.stat(archive,dir_fd=held['quarantine'],follow_symlinks=False);moved=True
@@ -225,7 +226,7 @@ def main():
             print(json.dumps({'status':'recorded_quarantine_receipt','read_only':True,
                 'quarantine_id':archive,'library':folder['library'],'title':folder['title'],
                 'original_stage':folder['stage'],'original_path':folder['source_root']+'/'+folder['title'],
-                'quarantine_path':values.get('MEDIA_PATH','/media')+'/'+LEAF+'/'+archive,
+                'quarantine_path':receipt.get('quarantine_path')+'/'+archive if isinstance(receipt.get('quarantine_path'),str) else None,
                 'current_inventory_verified':False}))
     return 0
 
