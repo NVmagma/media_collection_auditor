@@ -62,6 +62,7 @@ def inspect_fd(fd):
                 raise RuntimeError('Unsupported metadata entry')
             if stat.S_ISREG(item.st_mode):
                 resource_fork=apple_double(directory,name,item)
+                if name.startswith('._') and not resource_fork:unknown=True
                 # A validated resource-fork sidecar is metadata, not its .mkv data file.
                 if not resource_fork and Path(name).suffix.lower() in VIDEO_SUFFIXES:
                     return {'status':'video_present','identity':[root.st_dev,root.st_ino]}

@@ -245,3 +245,9 @@ def test_computed_policy_fields_do_not_falsely_revoke_matching_consent(orphan):
 def test_common_video_headers_are_preserved_even_when_named_like_metadata(orphan,name,header):
     _,_,folders,_=orphan;(folders['Movies']/name).write_bytes(header)
     assert inspect_title(str(folders['Movies']))['status']=='video_present'
+
+
+def test_invalid_appledouble_is_not_accepted_by_a_sidecar_extension(orphan):
+    _,_,folders,_=orphan;folder=folders['Movies']
+    (folder/'._movie.nfo').write_bytes(b'invalid AppleDouble')
+    assert inspect_title(str(folder))['status']=='unknown_files'
