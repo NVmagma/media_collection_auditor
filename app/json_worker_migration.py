@@ -6,7 +6,7 @@ import re
 from zoneinfo import ZoneInfo
 
 from app.json_scan_control import initialize_control
-from app.sqlite_json import parse_unique_json
+from app.json_validation import parse_unique_json
 
 
 def latest_archived_start(archive, *, timezone_name):

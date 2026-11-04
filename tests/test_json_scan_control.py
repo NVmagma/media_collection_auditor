@@ -43,7 +43,7 @@ def test_other_process_cannot_begin_during_active_scan(initialized):
 from datetime import datetime
 from app.json_tracking_store import JsonTrackingStore
 from app.json_scan_control import scan_attempt
-from app.sqlite_lock import StateLockBusy
+from app.state_lock import StateLockBusy
 try:
  with scan_attempt(JsonTrackingStore(sys.argv[1]), now=datetime.fromisoformat(sys.argv[2]), trigger="manual"):
   raise SystemExit(9)

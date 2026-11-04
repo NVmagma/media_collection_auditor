@@ -15,10 +15,10 @@ import stat
 from app.arr_import_service import media_fingerprint
 from app.json_move_execution import MoveRequest, TRANSITIONS
 from app.json_scan_control import KEY, _control
-from app.sqlite_arr_catalog import canonical_arr_record_path
-from app.sqlite_lifecycle_checkpoint_plan import CLOCKS
-from app.sqlite_scheduled_paths import _canonical, _open_directory
-from app.sqlite_title_identity import validate_title_folder
+from app.arr_catalog import canonical_arr_record_path
+from app.lifecycle_stages import CLOCKS
+from app.filesystem_paths import _canonical, _open_directory
+from app.title_identity import validate_title_folder
 
 
 def _inspect(session, read_record, *, kind='arr_sync', durable=False):

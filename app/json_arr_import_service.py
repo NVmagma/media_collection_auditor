@@ -19,8 +19,8 @@ from app.json_tracking_store import JsonTrackingStore
 from app.json_worker_cycle import stage_paths,validate_policy
 from app.json_worker_service import settings_snapshot
 from app.json_readonly_scan import _bool
-from app.sqlite_scheduled_paths import _open_directory
-from app.sqlite_title_identity import validate_title_folder
+from app.filesystem_paths import _open_directory
+from app.title_identity import validate_title_folder
 
 
 def values(settings=None):

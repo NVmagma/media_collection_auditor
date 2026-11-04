@@ -10,11 +10,11 @@ from time import monotonic
 import math
 
 from app.json_lifecycle_plan import LibraryObservation, TitleObservation, plan_scan
-from app.sqlite_arr_catalog import ArrCatalogGET, canonical_arr_record_path
-from app.sqlite_jellyfin_collection import collect_title_observation, validated_tag_names
-from app.sqlite_scheduled_jellyfin import _ScanCatalog
-from app.sqlite_scheduled_paths import _canonical
-from app.sqlite_scheduled_transport import ScheduledJellyfinGET
+from app.arr_catalog import ArrCatalogGET, canonical_arr_record_path
+from app.jellyfin_collection import collect_title_observation, validated_tag_names
+from app.jellyfin_scan_cache import _ScanCatalog
+from app.filesystem_paths import _canonical
+from app.jellyfin_transport import ScheduledJellyfinGET
 
 
 @dataclass(frozen=True)

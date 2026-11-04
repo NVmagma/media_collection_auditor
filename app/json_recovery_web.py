@@ -9,7 +9,7 @@ from app.json_operation_recovery import (review_pending_move,reconcile_pending_m
 from app.json_scan_control import KEY
 from app.json_tracking_store import JsonTrackingStore
 from app.json_worker_service import enabled,settings_snapshot
-from app.sqlite_arr_title_transport import ArrTitleUpdate
+from app.arr_title_transport import ArrTitleUpdate
 
 
 def create_blueprint(is_admin,load_settings=settings_snapshot):

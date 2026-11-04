@@ -6,11 +6,11 @@ from pathlib import Path
 from typing import Callable
 
 if __package__:
-    from .sqlite_json import parse_unique_json
-    from .sqlite_state import SECTIONS, validate_snapshot
+    from .json_validation import parse_unique_json
+    from .tracking_schema import SECTIONS, validate_snapshot
 else:  # Production web.py also runs with app/ as its import root.
-    from sqlite_json import parse_unique_json
-    from sqlite_state import SECTIONS, validate_snapshot
+    from json_validation import parse_unique_json
+    from tracking_schema import SECTIONS, validate_snapshot
 
 
 @dataclass(frozen=True)
@@ -82,7 +82,7 @@ def compare_dashboard_snapshots(*, json_path, database, build_inventory):
         raise ValueError("Read-only dashboard inventory callback required")
     authoritative = read_json_dashboard_snapshot(json_path)
     experimental = read_experimental_sqlite_dashboard_snapshot(database)
-    json_state, sqlite_state = authoritative.state, experimental.state
+    json_state, tracking_schema = authoritative.state, experimental.state
     normalized = dict(json_state)
     for section in SECTIONS:
         normalized.setdefault(section, {})
@@ -92,8 +92,8 @@ def compare_dashboard_snapshots(*, json_path, database, build_inventory):
     if read_json_dashboard_snapshot(json_path).state != json_state:
         raise RuntimeError("Dashboard JSON changed during parity rehearsal")
     from app.sqlite_operation_coordinator import INTENTS_KEY
-    pending = INTENTS_KEY in json_state or INTENTS_KEY in sqlite_state
-    states_match = normalized == sqlite_state
+    pending = INTENTS_KEY in json_state or INTENTS_KEY in tracking_schema
+    states_match = normalized == tracking_schema
     inventories_match = json_inventory == sqlite_inventory
     return {"status": "matching_advisory_only" if states_match and inventories_match and not pending else "blocked",
             "state_parity": states_match, "inventory_parity": inventories_match,
@@ -266,9 +266,9 @@ def _scan_time(value):
 def _scan_entry(record, zone, *, title_details=True):
     """Project fixed scalar fields and bounded title decisions; never raw errors/payloads."""
     if __package__:
-        from .sqlite_scan_details import project_details
+        from .scan_details import project_details
     else:
-        from sqlite_scan_details import project_details
+        from scan_details import project_details
     start, finish = _scan_time(record.get('started_at')), _scan_time(record.get('finished_at'))
     duration = None
     if start is not None and finish is not None:

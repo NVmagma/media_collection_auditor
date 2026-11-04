@@ -6,7 +6,7 @@ from datetime import datetime
 import pytest
 from app.json_lifecycle_plan import LibraryObservation, TitleObservation, plan_scan
 from app.sqlite_lifecycle_decision_bridge import review_decision
-from app.sqlite_scan_details import reason_code
+from app.scan_details import reason_code
 from test_json_tracking_store import state
 
 NOW = datetime(2026,1,20,12)

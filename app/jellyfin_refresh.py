@@ -1,7 +1,7 @@
 """Best-effort library refresh after a completed live batch; never replay moves."""
 from urllib.request import Request
 from urllib.error import HTTPError
-from app.sqlite_scheduled_transport import ScheduledJellyfinGET
+from app.jellyfin_transport import ScheduledJellyfinGET
 
 
 def refresh_after_moves(*, settings, completed, maximum_seconds=10):

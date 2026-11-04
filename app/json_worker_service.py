@@ -21,9 +21,9 @@ def enabled():
 def read_saved_settings():
     """A missing/corrupt file pauses this worker; never reactivate live defaults."""
     from config_store import CONFIG_FILE
-    from app.sqlite_scheduled_paths import _open_directory
-    from app.sqlite_release_recovery import _local
-    from app.sqlite_json import parse_unique_json
+    from app.filesystem_paths import _open_directory
+    from app.private_files import _local
+    from app.json_validation import parse_unique_json
     try:
         parent=_open_directory(str(CONFIG_FILE.parent))
         try: raw=_local(parent,CONFIG_FILE.name)[0]
@@ -176,7 +176,7 @@ class JSONWorkerService:
 
 
 def _title_details(decisions,completed,result,uncertain=None):
-    from app.sqlite_scan_details import REASONS,project_details
+    from app.scan_details import REASONS,project_details
     finished={(row['library'],row['media_key']) for row in completed}
     # Keep all decisions in private persistent history; existing display shows a bounded page.
     ordered=sorted(decisions,key=lambda row:row['outcome'] not in ('proposed','capped'))

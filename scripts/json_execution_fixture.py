@@ -23,7 +23,7 @@ from app.json_operation_recovery import (review_pending_sync, acknowledge_pendin
     review_pending_move, reconcile_pending_move, finish_pending_sync)
 from app.json_scan_control import KEY, initialize_control, scan_attempt
 from app.json_tracking_store import JsonTrackingStore
-from app.sqlite_arr_title_transport import ArrTitleUpdate, ArrTitleTransportError
+from app.arr_title_transport import ArrTitleUpdate, ArrTitleTransportError
 
 NOW = datetime(2026,1,20,12)
 SIGNALS = dict(played=True,favorite=False,disliked=True,keep=False,keep_all=False,protected=False)

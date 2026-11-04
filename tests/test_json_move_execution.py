@@ -17,7 +17,7 @@ import pytest
 from app.json_move_execution import MoveRequest, execute_move
 from app.json_scan_control import KEY, initialize_control, scan_attempt
 from app.json_tracking_store import JsonTrackingStore
-from app.sqlite_arr_title_transport import ArrTitleUpdate, ArrTitleTransportError
+from app.arr_title_transport import ArrTitleUpdate, ArrTitleTransportError
 from test_json_tracking_store import state
 
 NOW = datetime(2026,1,20,12)

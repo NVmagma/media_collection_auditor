@@ -5,7 +5,7 @@ proposals; only the worker's verified completion observations say completed.
 """
 from datetime import datetime
 import json
-from app.sqlite_scan_details import project_details
+from app.scan_details import project_details
 
 
 def _time(value):

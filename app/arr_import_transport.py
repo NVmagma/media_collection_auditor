@@ -5,10 +5,10 @@ from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request
 
-from app.sqlite_arr_catalog import ArrCatalogGET
-from app.sqlite_scheduled_paths import _canonical
+from app.arr_catalog import ArrCatalogGET
+from app.filesystem_paths import _canonical
 from pathlib import PurePosixPath
-from app.sqlite_scheduled_transport import _object
+from app.jellyfin_transport import _object
 
 
 class ArrImportError(RuntimeError):

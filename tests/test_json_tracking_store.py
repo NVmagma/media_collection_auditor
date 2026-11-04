@@ -8,7 +8,7 @@ import sys
 
 import pytest
 from app.json_tracking_store import JsonTrackingStore
-from app.sqlite_lock import StateLockBusy
+from app.state_lock import StateLockBusy
 
 
 def state():
@@ -87,7 +87,7 @@ def test_external_replacement_is_not_overwritten(store, identical):
 def test_other_process_is_blocked_for_entire_session(store):
     code = '''import sys
 from app.json_tracking_store import JsonTrackingStore
-from app.sqlite_lock import StateLockBusy
+from app.state_lock import StateLockBusy
 try:
  with JsonTrackingStore(sys.argv[1]).session(): raise SystemExit(9)
 except StateLockBusy: raise SystemExit(0)

@@ -152,7 +152,7 @@ def test_pending_operation_refuses_review_before_any_remote_request(case):
 
 def test_worker_lock_blocks_import_before_get_or_post(case):
     from concurrent.futures import ThreadPoolExecutor
-    from app.sqlite_lock import StateLockBusy
+    from app.state_lock import StateLockBusy
     with case['store'].session():
         with ThreadPoolExecutor(max_workers=1) as pool:
             future=pool.submit(review,case)

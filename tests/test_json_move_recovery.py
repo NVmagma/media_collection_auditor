@@ -60,7 +60,7 @@ def test_after_rename_records_original_move_clock_then_requires_explicit_sync(mo
     with pytest.raises(RuntimeError):
         acknowledge_pending_sync(store,read_record=reader(server),expected_fingerprint=sync['review_fingerprint'])
     # The explicit reviewed action sends one update; it never renames the folder again.
-    from app.sqlite_arr_title_transport import ArrTitleUpdate
+    from app.arr_title_transport import ArrTitleUpdate
     from time import monotonic
     client=ArrTitleUpdate(service='radarr',base_url='http://127.0.0.1:'+str(server.server_port),
         token='synthetic-token',source_path=request.arr_source_path,title_folder=request.title)

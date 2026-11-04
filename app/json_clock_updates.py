@@ -8,8 +8,8 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from app.json_scan_control import KEY, _control
-from app.sqlite_lifecycle_checkpoint_plan import CLOCKS
-from app.sqlite_title_identity import validate_title_folder
+from app.lifecycle_stages import CLOCKS
+from app.title_identity import validate_title_folder
 
 
 @dataclass(frozen=True)

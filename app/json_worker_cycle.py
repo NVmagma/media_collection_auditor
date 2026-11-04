@@ -14,12 +14,12 @@ from app.json_move_execution import MoveRequest, execute_move
 from app.json_readonly_scan import collect_worker_scan, rehearse_scan, _bool, _days
 from app.json_scan_control import KEY, scan_attempt, ScanAdmissionBlocked
 from app.json_scan_collection import _catalog
-from app.sqlite_arr_catalog import ArrCatalogGET, canonical_arr_record_path
-from app.sqlite_arr_title_transport import ArrTitleUpdate
-from app.sqlite_jellyfin_collection import collect_title_observation, validated_tag_names
-from app.sqlite_lifecycle_checkpoint_plan import CLOCKS
-from app.sqlite_scheduled_paths import _canonical
-from app.sqlite_scheduled_transport import ScheduledJellyfinGET
+from app.arr_catalog import ArrCatalogGET, canonical_arr_record_path
+from app.arr_title_transport import ArrTitleUpdate
+from app.jellyfin_collection import collect_title_observation, validated_tag_names
+from app.lifecycle_stages import CLOCKS
+from app.filesystem_paths import _canonical
+from app.jellyfin_transport import ScheduledJellyfinGET
 
 
 def validate_policy(settings):

@@ -162,7 +162,7 @@ def test_new_scan_does_not_reuse_prior_favorite_signals(services):
 
 
 def test_settings_are_detached_before_first_request(services):
-    from app.sqlite_scheduled_transport import ScheduledJellyfinGET
+    from app.jellyfin_transport import ScheduledJellyfinGET
     server,snapshot,inventory,settings = services
     def factory(**kwargs):
         settings['FAVORITES_TRIGGER_KEEP'] = 'false'

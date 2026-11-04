@@ -9,10 +9,10 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from app.lifecycle_decisions import decide
-from app.sqlite_lifecycle_checkpoint_plan import CLOCKS
-from app.sqlite_scan_details import reason_code
-from app.sqlite_state import validate_snapshot
-from app.sqlite_title_identity import validate_title_folder
+from app.lifecycle_stages import CLOCKS
+from app.scan_details import reason_code
+from app.tracking_schema import validate_snapshot
+from app.title_identity import validate_title_folder
 from app.json_scan_control import KEY, _control
 
 SIGNALS = {'played', 'favorite', 'disliked', 'keep', 'keep_all', 'protected'}
