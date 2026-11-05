@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Archive tracking clock · Media Collection Auditor</title><link rel="stylesheet" href="/static/style.css"></head>
+<body class="app-shell logs-app">
+{% set sidebar_page = 'tracking' %}{% include '_sidebar.html' %}
+<div class="app-content">
+<header class="settings-header"><div><h1>Archive tracking clock</h1><p>{{ title }} · {{ library }}</p></div></header>
+<main id="main-content"><section class="panel">
+<p>Archiving preserves the saved date in JSON and removes it from active tracking. If this folder returns, the scanner will start a new clock. This action only edits tracking data.</p>
+{% if archived %}
+<p role="status">Archived the {{ preview.stage }} clock ({{ preview.timestamp }}).</p>
+{% else %}
+{% if blocked %}<p class="notice warning" role="alert">Archival could not be confirmed. Check Tracking Review for the current state. An active scan, pending operation, existing archive, changed clock, or matching folder can block archival.</p>{% endif %}
+{% if preview %}
+<p role="status">All four lifecycle directories were readable and no exact or case/Unicode variant was observed. The saved {{ preview.stage }} clock is {{ preview.timestamp }}.</p>
+<form method="post"><input type="hidden" name="fingerprint" value="{{ preview.fingerprint }}"><button name="action" value="archive">Archive this clock</button></form>
+{% else %}
+<form method="post"><button name="action" value="review">Check folders and saved clock</button></form>
+{% endif %}
+{% endif %}
+<p><a href="{{ url_for('tracking_review',library=library,q=title) }}">Return to Tracking Review</a></p>
+</section></main></div></body></html>

@@ -54,7 +54,7 @@ def require_login():
     if g.user is None:
         if request.path.startswith('/api/'): return {'ok':False,'message':'Please sign in.'},401
         return redirect(url_for('login'))
-    if request.endpoint in ('settings','test_connection','test_notification','run_now','rescue','integration_setup','cleanup_review','tracking_review','arr_coverage_review') and not g.user['admin']:
+    if request.endpoint in ('settings','test_connection','test_notification','run_now','rescue','integration_setup','cleanup_review','tracking_review','arr_coverage_review','tracking_archive') and not g.user['admin']:
         if request.path.startswith('/api/'): return {'ok':False,'message':'Administrator access required.'},403
         return Response('Administrator access required.',403)
 
@@ -1157,6 +1157,48 @@ def tracking_review():
     return Response(render_template('tracking_review.html',result=result,unavailable=unavailable,
         labels=LABELS,page_url=page_url,
         display_time=lambda value:observation_datetime(value,config.get('DAILY_RUN_TIMEZONE') or os.environ.get('TZ'))),status=503 if unavailable else 200),{'Cache-Control':'no-store'}
+
+
+@app.route('/tracking-review/archive', methods=['GET', 'POST'])
+def tracking_archive():
+    from app.json_worker_service import settings_snapshot
+    from app.tracking_archive import review_clock
+    from app.tracking_review import _title
+
+    library = request.args.get('library', '')
+    title = request.args.get('title', '')
+    try:
+        if library not in ('Movies', 'TV') or _title(title).startswith('.'):
+            raise ValueError()
+    except ValueError:
+        return Response('Invalid tracking selection.', 400)
+    preview = None
+    archived = False
+    blocked = False
+    if request.method == 'POST':
+        try:
+            origin = urlsplit(request.headers.get('Origin', ''))
+            same_origin = origin.scheme in ('http', 'https') and origin.netloc == request.host
+        except ValueError:
+            same_origin = False
+        if not same_origin:
+            return Response('Invalid review request.', 403)
+        action = request.form.get('action')
+        expected = request.form.get('fingerprint', '') if action == 'archive' else None
+        if action not in ('review', 'archive') or (expected is not None and not re.fullmatch('[0-9a-f]{64}', expected)):
+            return Response('Invalid archive request.', 400)
+        signing_key = app.secret_key
+        if isinstance(signing_key, str):
+            signing_key = signing_key.encode()
+        try:
+            preview = review_clock(library=library, title=title, settings=settings_snapshot,
+                                   signing_key=signing_key, expected=expected)
+            archived = action == 'archive'
+        except (OSError, RuntimeError, ValueError):
+            blocked = True
+    return (render_template('tracking_archive.html', library=library, title=title, preview=preview,
+                            archived=archived, blocked=blocked), 409 if blocked else 200,
+            {'Cache-Control': 'no-store'})
 
 
 @app.route('/tracking-review/arr', methods=['GET', 'POST'])

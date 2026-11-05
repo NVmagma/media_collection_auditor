@@ -28,3 +28,11 @@ stages against its saved Radarr or Sonarr catalog. Each submission reads one
 catalog. Results distinguish exact paths, similar folder names at different
 paths, multiple matches and unmatched folder names. Review provider identity
 through the separate import flow.
+
+For a record without an exact folder, **Review clock for archival** checks all
+four stages for the selected library. An administrator can then archive a single
+clock after a fresh check under the scan lock. The original date and stage stay
+in the JSON state archive. A returning folder starts a new active clock.
+Existing archived entries, conflicting clocks, unreadable directories, name
+variants and pending operations require separate review. Archival makes no
+media changes or Arr requests.
