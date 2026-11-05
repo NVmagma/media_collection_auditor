@@ -41,7 +41,9 @@ def _deliver(kind,url,token,payload):
     if kind=='discord':
         options={'json':{'content':payload['message'],'allowed_mentions':{'parse':[]}}}
     elif kind=='ntfy':
-        headers={'Title':'Media Auditor needs review'}
+        headers = {'Title': ('Media Auditor notification test'
+                             if payload.get('event') == 'notification_test'
+                             else 'Media Auditor needs review')}
         if token:headers['Authorization']='Bearer '+token
         options={'data':payload['message'].encode('utf-8'),'headers':headers}
     # No environment proxies, redirects, redirects carrying credentials or retries.
@@ -49,6 +51,28 @@ def _deliver(kind,url,token,payload):
         client.trust_env=False
         with client.post(url,timeout=(2,3),allow_redirects=False,**options) as response:
             return 200 <= response.status_code < 300
+
+
+def test_destination(settings, kind):
+    """Send one explicitly requested test, independently of alert policy."""
+    url = _text(settings.get(dict(_TARGETS)[kind]))
+    if not url:
+        return False, 'Save a destination for this service before testing.'
+    token = _text(settings.get('NOTIFY_NTFY_TOKEN')) if kind == 'ntfy' else ''
+    payload = {
+        'schema_version': 1,
+        'event': 'notification_test',
+        'message': 'Media Collection Auditor notification test.',
+        'observed_at': datetime.now(timezone.utc).isoformat(),
+        'preview': _text(settings.get('DRY_RUN', 'true')).strip().lower() != 'false',
+        'media_actions_authorized': False,
+    }
+    try:
+        if _deliver(kind, url, token, payload):
+            return True, 'Destination accepted the test. Check your channel or receiver.'
+    except Exception:
+        pass
+    return False, 'Delivery could not be confirmed. Check the saved destination and receiver.'
 
 
 class OperationalNotifications:

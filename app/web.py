@@ -54,7 +54,7 @@ def require_login():
     if g.user is None:
         if request.path.startswith('/api/'): return {'ok':False,'message':'Please sign in.'},401
         return redirect(url_for('login'))
-    if request.endpoint in ('settings','test_connection','run_now','rescue','integration_setup','cleanup_review','tracking_review') and not g.user['admin']:
+    if request.endpoint in ('settings','test_connection','test_notification','run_now','rescue','integration_setup','cleanup_review','tracking_review') and not g.user['admin']:
         if request.path.startswith('/api/'): return {'ok':False,'message':'Administrator access required.'},403
         return Response('Administrator access required.',403)
 
@@ -974,6 +974,30 @@ def test_connection(service):
 
 
 
+
+
+@app.post('/api/test-notification/<kind>')
+def test_notification(kind):
+    if not admin_authorized():
+        return {'ok': False, 'message': 'Administrator access required.'}, 403
+    try:
+        origin = urlsplit(request.headers.get('Origin', ''))
+        same_origin = origin.scheme in ('http', 'https') and origin.netloc == request.host
+    except ValueError:
+        same_origin = False
+    if not same_origin or request.headers.get('X-Auditor-Action') != 'test-notification':
+        return {'ok': False, 'message': 'Invalid test request.'}, 403
+    if kind not in ('discord', 'ntfy', 'webhook'):
+        return {'ok': False, 'message': 'Unknown notification service.'}, 404
+    from app.json_worker_service import settings_snapshot
+    from app.operational_notifications import test_destination
+
+    try:
+        saved = settings_snapshot()
+    except ValueError:
+        return {'ok': False, 'message': 'Saved settings require review before testing.'}, 409
+    ok, message = test_destination(saved, kind)
+    return {'ok': ok, 'message': message}, 200, {'Cache-Control': 'no-store'}
 
 
 @app.get('/api/run-status')

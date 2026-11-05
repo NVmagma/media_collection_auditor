@@ -45,6 +45,15 @@
 {% endfor %}
 </div>
 {% endif %}
+{% if group == 'Notifications' %}
+<div class="connection-tests">
+<h3>Test saved notification delivery</h3>
+<p class="section-description">Apply changes before testing. Each button sends one test message to the saved destination, including when automatic alerts are disabled.</p>
+{% for service, label in [('discord', 'Discord'), ('ntfy', 'ntfy'), ('webhook', 'Webhook')] %}
+<div class="connection-test-row"><span>{{ label }}</span><button type="button" class="test-button" data-test-service="{{ service }}" data-test-notification>Send {{ label }} test</button><span class="test-result" data-test-result="{{ service }}" role="status" aria-live="polite"></span></div>
+{% endfor %}
+</div>
+{% endif %}
 </section>
 {% endfor %}
 <div class="save-panel"><div><strong>Apply configuration</strong><p>Changes apply together to the next scan. A running scan keeps its captured settings. Applying settings does not start a scan.</p></div><button class="save-button" id="apply-settings-button" type="submit">Apply Requested Settings</button></div>

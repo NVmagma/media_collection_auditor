@@ -4,7 +4,7 @@ from threading import Thread
 import unittest
 from flask import Flask,request
 from werkzeug.serving import make_server
-from app.operational_notifications import OperationalNotifications
+from app.operational_notifications import OperationalNotifications, test_destination
 
 
 class NotificationFixtureTests(unittest.TestCase):
@@ -47,6 +47,17 @@ class NotificationFixtureTests(unittest.TestCase):
         self.assertFalse(generic['media_actions_authorized']);self.assertTrue(generic['preview'])
         self.assertEqual(self.alerts.emit(self.settings,'scan_blocked_or_uncertain')['status'],'suppressed')
         self.assertEqual(len(self.received),3)
+
+    def test_manual_test_sends_only_to_selected_receiver(self):
+        self.settings.update(NOTIFY_OPERATIONAL_FAILURES='false',
+            NOTIFY_DISCORD_WEBHOOK_URL=self.base+'/discord')
+        ok, _ = test_destination(self.settings, 'webhook')
+        self.assertTrue(ok)
+        self.assertEqual(len(self.received), 1)
+        kind, method, body, _ = self.received[0]
+        self.assertEqual((kind, method), ('webhook', 'POST'))
+        self.assertEqual(json.loads(body)['event'], 'notification_test')
+        self.assertNotIn('fixture-private-never-output', body)
 
     def test_failed_delivery_has_no_automatic_retry(self):
         self.settings['NOTIFY_WEBHOOK_URL']=self.base+'/failed'

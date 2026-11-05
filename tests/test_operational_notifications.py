@@ -2,6 +2,7 @@
 import json
 from unittest.mock import Mock
 import pytest
+from test_integration_api import api
 from app.operational_notifications import OperationalNotifications,_deliver
 
 
@@ -72,3 +73,40 @@ def test_transport_no_proxy_redirect_or_retry_and_secret_free_body(monkeypatch):
     assert client.post.call_args.kwargs['timeout']==(2,3)
     assert client.post.call_args.kwargs['json']['allowed_mentions']=={'parse':[]}
     client.post.assert_called_once()
+
+
+def test_admin_notification_request_uses_saved_destination(api, monkeypatch):
+    import web
+    from app import operational_notifications, json_worker_service
+
+    client, _ = api
+    send = Mock(return_value=True)
+    monkeypatch.setattr(operational_notifications, '_deliver', send)
+    snapshot = Mock(return_value=settings(NOTIFY_OPERATIONAL_FAILURES='false'))
+    monkeypatch.setattr(json_worker_service, 'settings_snapshot', snapshot)
+    path = '/api/test-notification/webhook'
+    headers = {'Origin': 'http://localhost', 'X-Auditor-Action': 'test-notification'}
+    assert client.post(path, headers=headers).status_code == 401
+    monkeypatch.setattr(web, 'current_user', lambda: {'admin': False})
+    assert client.post(path, headers=headers).status_code == 403
+    monkeypatch.setattr(web, 'current_user', lambda: {'admin': True})
+    assert client.post(path, headers={'Origin': 'http://localhost'}).status_code == 403
+    assert client.post(path, headers={**headers, 'Origin': 'http://other.invalid'}).status_code == 403
+    snapshot.assert_not_called()
+    send.assert_not_called()
+
+    response = client.post(path, headers=headers, json={'url': 'http://other.invalid'})
+    assert response.status_code == 200 and response.json['ok']
+    send.assert_called_once()
+    kind, url, token, payload = send.call_args.args
+    assert (kind, url, token) == ('webhook', 'http://fixture.invalid/private-hook', '')
+    assert payload['event'] == 'notification_test'
+    assert payload['media_actions_authorized'] is False
+    assert 'private-' not in json.dumps(payload)
+    assert 'private-' not in response.text
+
+    send.side_effect = RuntimeError('private-transport-error')
+    failure = client.post(path, headers=headers)
+    assert failure.json['ok'] is False
+    assert 'private-' not in failure.text
+    assert send.call_count == 2

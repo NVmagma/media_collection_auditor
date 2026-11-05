@@ -18,6 +18,10 @@ if (!prefix) throw Error('Pass the synthetic output prefix from tests/settings_w
         posts.push({path:url.pathname,body:req.postData()});
         if(url.hostname==='fixture.invalid' && url.pathname==='/api/test-connection/jellyfin')
           return route.fulfill({contentType:'application/json',body:JSON.stringify({ok:true,message:'Synthetic active connection response'})});
+        if(url.hostname==='fixture.invalid' && url.pathname==='/api/test-notification/ntfy') {
+          assert.equal(req.headers()['x-auditor-action'],'test-notification');
+          return route.fulfill({contentType:'application/json',body:JSON.stringify({ok:true,message:'Synthetic notification accepted'})});
+        }
         return route.fulfill({status:405,body:'Synthetic preview: no submissions'});
       }
       const assets={'/static/style.css':['app/static/style.css','text/css'],
@@ -116,6 +120,11 @@ if (!prefix) throw Error('Pass the synthetic output prefix from tests/settings_w
     await page.locator('#field-ORPHAN_CLEANUP_ENABLED').selectOption('false');
     assert.equal(await page.locator('#acknowledge-orphan-quarantine').isChecked(),false);
     assert.equal(await page.locator('#orphan-quarantine-warning').isVisible(),false);
+    await page.locator('[data-tab="Notifications"]').click();
+    await page.locator('#field-NOTIFY_NTFY_URL').fill('https://draft.invalid/topic');
+    await page.getByRole('button',{name:'Send ntfy test'}).click();
+    await page.getByText('Synthetic notification accepted',{exact:true}).waitFor();
+    assert.deepEqual(posts.at(-1),{path:'/api/test-notification/ntfy',body:null});
     assert.deepEqual(errors,[]);
     if(process.env.DASHBOARD_SCREENSHOT_DIRECTORY) {
       await page.setViewportSize({width:1440,height:1000});

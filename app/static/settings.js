@@ -14,9 +14,13 @@ document.querySelectorAll('[data-test-service]').forEach(button => {
     result.textContent = 'Testing…';
     result.className = 'test-result';
     try {
-      const response = await fetch('/api/test-connection/' + service, {
+      const notification = button.hasAttribute('data-test-notification');
+      const endpoint = notification ? '/api/test-notification/' : '/api/test-connection/';
+      const headers = {'Accept': 'application/json'};
+      if (notification) headers['X-Auditor-Action'] = 'test-notification';
+      const response = await fetch(endpoint + service, {
         method: 'POST',
-        headers: {'Accept': 'application/json'},
+        headers,
         credentials: 'same-origin'
       });
       const data = await response.json();

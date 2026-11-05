@@ -47,6 +47,14 @@ clear intents, change replay claims, retry scans, initialize state or restore
 settings/services. Notifications can themselves fail; use Scans/Settings and
 redacted worker status for authoritative operator review.
 
+## Test saved delivery
+
+In Settings → Notifications, apply your changes, then select the test button for
+the destination you want to check. Each click sends one labelled test to that
+saved destination. Manual tests work in dry run and with automatic alerts
+disabled. The delivery result reports whether the receiver accepted the request.
+Check your channel or receiver to confirm the message arrived.
+
 ## Disposable Tower acceptance
 
 Run `bash scripts/operational_notifications_lab.sh EXISTING_LAB_PARENT` from the
