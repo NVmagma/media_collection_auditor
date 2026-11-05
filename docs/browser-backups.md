@@ -35,3 +35,8 @@ control. Up to 100 browser packets and 100 test copies are retained, with no
 automatic retention deletion; reaching the bound requires manual review. Plan an
 actual production restore separately, with services stopped and current media/
 Arr outcomes reviewed before adopting any historical state.
+
+A packet copied to another directory or disk has a new directory identity. Keep
+its original receipt/fingerprint; adoption at the new location requires explicit
+verification during the separate recovery plan. The browser does not silently
+rebind relocated snapshots or start a worker from them.
