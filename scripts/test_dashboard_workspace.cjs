@@ -161,6 +161,7 @@ if (!file) throw Error('Pass the synthetic page rendered by tests/dashboard_work
       await page.setViewportSize({width, height: 1000});
       for (const workspace of ['Overview', 'Library', 'Audit Preview', 'Activity', 'History', 'Review']) {
         await page.locator(`[data-workspace="${workspace}"]`).click();
+        if (workspace === 'Review') await section('Review');
         if (workspace === 'Library') {
           await page.locator('[data-stage-panel="Movies:Waiting"] tbody .inspect-title').first().click();
           assert.equal(await page.locator('#title-inspector').isVisible(), true);

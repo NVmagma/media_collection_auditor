@@ -50,7 +50,7 @@ counts, restored settings and the saved scan cooldown. A separate history path
 reflects the scope of the backup. The fixture compares the original and copied
 files after shutdown and checks the mock services for any additional requests.
 
-For the same rehearsal on Tower, use the [isolated JSON worker lab](json-worker.md)
+For the same rehearsal on Tower, use the [isolated JSON worker lab](../scripts/json_worker_lab.sh)
 with an image built from the fixture checkout's revision. The lab uses new state
 and media directories and runs in a container with networking disabled except
 for internal loopback.
