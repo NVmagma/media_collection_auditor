@@ -54,7 +54,7 @@ def require_login():
     if g.user is None:
         if request.path.startswith('/api/'): return {'ok':False,'message':'Please sign in.'},401
         return redirect(url_for('login'))
-    if request.endpoint in ('settings','test_connection','run_now','rescue','integration_setup','cleanup_review') and not g.user['admin']:
+    if request.endpoint in ('settings','test_connection','run_now','rescue','integration_setup','cleanup_review','tracking_review') and not g.user['admin']:
         if request.path.startswith('/api/'): return {'ok':False,'message':'Administrator access required.'},403
         return Response('Administrator access required.',403)
 
@@ -466,7 +466,7 @@ def filesystem_stages(state, config, *, max_entries=None):
             continue
         for label, dirname in defaults.items():
             kind = "TRANSIENT" if label == "Waiting" else label.upper()
-            directory = os.environ.get(f"{prefix}_{kind}_PATH") or os.path.join(media_root, dirname)
+            directory = config.get(f"{prefix}_{kind}_PATH") or os.environ.get(f"{prefix}_{kind}_PATH") or os.path.join(media_root, dirname)
             try:
                 with os.scandir(directory) as entries:
                     names = []
@@ -1089,6 +1089,38 @@ def cleanup_review():
         display_time=lambda value:observation_datetime(value,zone)),status=503 if unavailable else 200)
     response.headers['Cache-Control']='no-store'
     return response
+
+
+@app.get('/tracking-review')
+def tracking_review():
+    """Read local directories and saved records only; never change clocks or Arr."""
+    from app.tracking_review import review,LABELS
+    allowed={'kind','q','library','page'}
+    if any(key not in allowed or len(request.args.getlist(key))!=1 for key in request.args):
+        return Response('Invalid tracking review filters.',400)
+    try:
+        page_text=request.args.get('page','1')
+        if not re.fullmatch('[1-9][0-9]{0,5}',page_text):raise ValueError()
+        args=dict(kind=request.args.get('kind','all'),query=request.args.get('q',''),
+                  library=request.args.get('library','all'),page=int(page_text))
+        review({}, {}, [], [], libraries=[], **args)
+    except ValueError:return Response('Invalid tracking review filters.',400)
+    result=None;unavailable=False;config={}
+    try:
+        config=load_config();state=load_state()
+        libraries=[name for name,key,default in (('Movies','ENABLE_MOVIES','true'),('TV','ENABLE_TV','false'))
+                   if str(config.get(key,os.environ.get(key,default))).lower()=='true']
+        stages,warnings=filesystem_stages(state,config,max_entries=10000)
+        result=review(state,stages,warnings,read_history(100),libraries=libraries,**args)
+        repeated,repeated_warnings=filesystem_stages(state,config,max_entries=10000)
+        if (load_state()!=state or load_config()!=config or repeated!=stages or repeated_warnings!=warnings):
+            raise RuntimeError('Source changed during comparison')
+    except Exception:unavailable=True
+    def page_url(page):
+        return url_for('tracking_review',kind=args['kind'],q=args['query'],library=args['library'],page=page)
+    return Response(render_template('tracking_review.html',result=result,unavailable=unavailable,
+        labels=LABELS,page_url=page_url,
+        display_time=lambda value:observation_datetime(value,config.get('DAILY_RUN_TIMEZONE') or os.environ.get('TZ'))),status=503 if unavailable else 200),{'Cache-Control':'no-store'}
 
 
 if __name__ == "__main__":

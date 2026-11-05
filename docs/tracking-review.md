@@ -1,0 +1,24 @@
+# Tracking Review
+
+Administrators can open **Tracking Review** from the shared sidebar or the Review
+coverage section. It compares local Movie/TV stage folders with saved JSON clocks.
+Search, library/issue filters and 25-row pages make individual discrepancies visible.
+
+The page distinguishes folders without their own stage clock, records whose exact
+folder is in another stage, records without an exact match in readable directories,
+duplicate stage folders, conflicting clocks, and possible case/Unicode name variants.
+Possible variants are never adopted or merged. A missing match does not prove a
+file was deleted. Unknown directories suppress absence claims rather than becoming
+empty folders. Disabled libraries are excluded.
+
+The saved settings' stage paths take precedence over stale environment defaults.
+Local listings are bounded and repeated, and settings/tracking are reread for
+consistency. Changes during observation show an unavailable comparison. This is
+an advisory observation, not proof that external writers were excluded.
+
+Arr rows are historical reasons recorded for selected lifecycle actions in the
+latest retained scan. They are not a complete or current catalog of unmanaged
+folders. Missing history is labelled unknown. Opening or filtering this page sends
+no Arr/Jellyfin requests, edits no timestamps, and performs no import or recovery.
+Links lead to the existing import and recovery flows, which require their own fresh
+checks and explicit actions. No dates are reset, records pruned or media moved.

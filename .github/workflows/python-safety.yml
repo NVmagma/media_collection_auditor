@@ -55,6 +55,8 @@ jobs:
           node scripts/test_arr_import_workspace.cjs "$RUNNER_TEMP/arr-imports.html"
           python -B tests/cleanup_review_case.py "$RUNNER_TEMP/cleanup-review"
           node scripts/test_cleanup_review.cjs "$RUNNER_TEMP/cleanup-review"
+          python -B tests/tracking_review_case.py "$RUNNER_TEMP/tracking-review.html"
+          node scripts/test_tracking_review.cjs "$RUNNER_TEMP/tracking-review.html"
       - name: Compile all Python files
         run: python -m compileall -q app tests
       - name: Install pytest
