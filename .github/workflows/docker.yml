@@ -6,12 +6,57 @@ on:
         description: Publish an accepted versioned JSON image
         type: boolean
         default: false
+      promote_stable:
+        description: Tag the digest pinned in the main Unraid template as stable
+        type: boolean
+        default: false
 permissions:
   contents: read
   packages: write
 jobs:
   validated-json:
+    if: ${{ !inputs.promote_stable }}
     uses: ./.github/workflows/json-worker.yml
     with:
       publish: ${{ inputs.publish }}
     secrets: inherit
+  stable:
+    if: ${{ inputs.promote_stable && !inputs.publish }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ghcr-stable-promotion
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Read pinned release reference
+        id: release
+        run: |
+          python3 - <<'PY_RELEASE'
+          import os
+          import re
+          import xml.etree.ElementTree as ET
+
+          reference = ET.parse('unraid/template/media_archiver.xml').findtext('Repository', '')
+          if not re.fullmatch(r'ghcr[.]io/nvmagma/media_collection_auditor@sha256:[0-9a-f]{64}', reference):
+              raise SystemExit('Main template must pin a published release digest')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              print(f'reference={reference}', file=output)
+          PY_RELEASE
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Tag the pinned release and verify its digest
+        env:
+          RELEASE_REFERENCE: ${{ steps.release.outputs.reference }}
+        run: |
+          set -euo pipefail
+          stable="${RELEASE_REFERENCE%@*}:stable"
+          digest="${RELEASE_REFERENCE#*@}"
+          docker buildx imagetools create --prefer-index=false --tag "$stable" "$RELEASE_REFERENCE"
+          resolved=$(docker buildx imagetools inspect "$stable" --format '{{json .Manifest}}' | jq -er '.digest')
+          test "$resolved" = "$digest"
+          printf '%s resolves to %s\n' "$stable" "$digest"
