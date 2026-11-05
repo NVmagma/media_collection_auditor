@@ -10,15 +10,16 @@
 - Authenticated integration APIs, Movie/TV Homarr widgets and artwork links.
 - Explicit existing-folder Arr imports, unmonitored with no download searches.
 - Atomic settings application without typed confirmation phrases.
+- Searchable, paginated complete scan decisions with explicit partial-history notices.
+- Live scan phases, checked-title counts and elapsed time with no overlapping scans.
 - Recursive video detection and opt-in metadata-only orphan quarantine with a 24-hour observation period.
 
 ## Next priorities
 
 1. Observe successful scheduled and manual Movie/TV scans under the current caps.
 2. Resolve stale tracking records and unmanaged folders through explicit review.
-3. Improve complete decision browsing, filtering and progress visibility.
-4. Validate configured notifications and backup/restore operations end to end.
-5. Consider lifting move caps only after a separate reviewed rollout.
+3. Validate configured notifications and backup/restore operations end to end.
+4. Consider lifting move caps only after a separate reviewed rollout.
 
 Removal deletion is opt-in with an explicit warning; season pruning remains unavailable. Neither source cleanup nor
 successful moves enable destructive options. Season pruning will require its own
