@@ -12,6 +12,7 @@
 - Atomic settings application without typed confirmation phrases.
 - Searchable, paginated complete scan decisions with explicit partial-history notices.
 - Live scan phases, checked-title counts and elapsed time with no overlapping scans.
+- Dedicated admin Cleanup Review with recorded observation intervals, blocker reasons and quarantine locations.
 - Recursive video detection and opt-in metadata-only orphan quarantine with a 24-hour observation period.
 
 ## Next priorities
