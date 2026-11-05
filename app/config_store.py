@@ -7,17 +7,29 @@ CONFIG_FILE = Path(os.environ.get("WEB_CONFIG_FILE", "/app/logs/auditor_config.j
 FIELDS = {
     "Connections": ["JELLYFIN_HOST_URL", "JELLYFIN_API_TOKEN", "RADARR_URL", "RADARR_API_KEY", "SONARR_URL", "SONARR_API_KEY"],
     "Libraries": ["ENABLE_MOVIES", "ENABLE_TV", "MEDIA_PATH", "DISLIKE_TAG", "PROTECT_TAG", "KEEP_TAG", "FAVORITES_TRIGGER_KEEP", "JELLYFIN_REFRESH_AFTER_AUDIT", "TV_NEW_EPISODES_RESET_CLOCK", "ENABLE_SEASON_PRUNING", "KEEP_ALL_SEASONS_TAG", "SEASON_PRUNE_GRACE_DAYS", "SEASON_PRUNE_AFTER_NEW_SEASON_DAYS"],
-    "Lifecycle": ["MOVIE_WAIT_DAYS", "TV_WAIT_DAYS", "HOLDING_DAYS", "REMOVAL_DAYS", "RUN_INTERVAL_HOURS"],
-    "Safety": ["ALLOW_PERMANENT_DELETE", "DRY_RUN", "MAX_ACTIONS_PER_RUN", "ALLOW_FILESYSTEM_DELETE", "ALLOW_CROSS_FILESYSTEM_MOVES"],
-    "Notifications": ["NOTIFY_DISCORD_WEBHOOK_URL", "NOTIFY_NTFY_URL", "NOTIFY_NTFY_TOKEN", "NOTIFY_WEBHOOK_URL", "NOTIFY_ON_DRY_RUN", "NOTIFY_LEAVING_SOON_DIGEST"],
+    "Lifecycle": ["MOVIE_WAIT_DAYS", "TV_WAIT_DAYS", "HOLDING_DAYS", "REMOVAL_DAYS", "RUN_INTERVAL_HOURS", "DAILY_RUN_TIME", "DAILY_RUN_TIMEZONE"],
+    "Safety": ["ORPHAN_CLEANUP_ENABLED", "ALLOW_PERMANENT_DELETE", "DRY_RUN", "MAX_ACTIONS_PER_RUN", "ALLOW_FILESYSTEM_DELETE", "ALLOW_CROSS_FILESYSTEM_MOVES"],
+    "Notifications": ["NOTIFY_DISCORD_WEBHOOK_URL", "NOTIFY_NTFY_URL", "NOTIFY_NTFY_TOKEN", "NOTIFY_WEBHOOK_URL", "NOTIFY_ON_DRY_RUN", "NOTIFY_OPERATIONAL_FAILURES", "NOTIFY_LEAVING_SOON_DIGEST"],
 }
 KEYS = set(sum(FIELDS.values(), []))
+# Presentation and application share one fixed initial-live policy field list.
+LIVE_CANARY_LOCKED_KEYS = frozenset(('DRY_RUN','MAX_ACTIONS_PER_RUN','MEDIA_PATH','DAILY_RUN_TIMEZONE',
+    'ALLOW_PERMANENT_DELETE','ALLOW_FILESYSTEM_DELETE','ALLOW_CROSS_FILESYSTEM_MOVES','ENABLE_SEASON_PRUNING'))
 SECRETS = {"JELLYFIN_API_TOKEN", "RADARR_API_KEY", "SONARR_API_KEY", "NOTIFY_DISCORD_WEBHOOK_URL", "NOTIFY_NTFY_TOKEN", "NOTIFY_WEBHOOK_URL"}
-BOOLS = {"ALLOW_PERMANENT_DELETE", "ENABLE_MOVIES", "ENABLE_TV", "FAVORITES_TRIGGER_KEEP", "JELLYFIN_REFRESH_AFTER_AUDIT", "TV_NEW_EPISODES_RESET_CLOCK", "ENABLE_SEASON_PRUNING", "DRY_RUN", "ALLOW_FILESYSTEM_DELETE", "ALLOW_CROSS_FILESYSTEM_MOVES", "NOTIFY_ON_DRY_RUN", "NOTIFY_LEAVING_SOON_DIGEST"}
+BOOLS = {"ORPHAN_CLEANUP_ENABLED", "ALLOW_PERMANENT_DELETE", "ENABLE_MOVIES", "ENABLE_TV", "FAVORITES_TRIGGER_KEEP", "JELLYFIN_REFRESH_AFTER_AUDIT", "TV_NEW_EPISODES_RESET_CLOCK", "ENABLE_SEASON_PRUNING", "DRY_RUN", "ALLOW_FILESYSTEM_DELETE", "ALLOW_CROSS_FILESYSTEM_MOVES", "NOTIFY_ON_DRY_RUN", "NOTIFY_OPERATIONAL_FAILURES", "NOTIFY_LEAVING_SOON_DIGEST"}
 INTS = {"MOVIE_WAIT_DAYS", "TV_WAIT_DAYS", "HOLDING_DAYS", "REMOVAL_DAYS", "MAX_ACTIONS_PER_RUN", "SEASON_PRUNE_GRACE_DAYS", "SEASON_PRUNE_AFTER_NEW_SEASON_DAYS"}
 FLOATS = {"RUN_INTERVAL_HOURS"}
 MINIMUM_ONE = {"HOLDING_DAYS", "REMOVAL_DAYS"}
-DEFAULTS = {"ALLOW_PERMANENT_DELETE":"false","DRY_RUN":"true","ENABLE_MOVIES":"true","ENABLE_TV":"false","MOVIE_WAIT_DAYS":"30","TV_WAIT_DAYS":"60","HOLDING_DAYS":"7","REMOVAL_DAYS":"7","RUN_INTERVAL_HOURS":"0","MAX_ACTIONS_PER_RUN":"10","DISLIKE_TAG":"not-at-all","PROTECT_TAG":"keep-forever","KEEP_TAG":"keep","FAVORITES_TRIGGER_KEEP":"true","JELLYFIN_REFRESH_AFTER_AUDIT":"false","TV_NEW_EPISODES_RESET_CLOCK":"true","ENABLE_SEASON_PRUNING":"false","KEEP_ALL_SEASONS_TAG":"keep-all-seasons","SEASON_PRUNE_GRACE_DAYS":"30","SEASON_PRUNE_AFTER_NEW_SEASON_DAYS":"7","NOTIFY_ON_DRY_RUN":"false","NOTIFY_LEAVING_SOON_DIGEST":"true","ALLOW_FILESYSTEM_DELETE":"false","ALLOW_CROSS_FILESYSTEM_MOVES":"false","MEDIA_PATH":"/media"}
+DEFAULTS = {"ORPHAN_CLEANUP_ENABLED":"false", "ALLOW_PERMANENT_DELETE":"false","DRY_RUN":"true","ENABLE_MOVIES":"true","ENABLE_TV":"false","MOVIE_WAIT_DAYS":"30","TV_WAIT_DAYS":"60","HOLDING_DAYS":"7","REMOVAL_DAYS":"7","RUN_INTERVAL_HOURS":"0","MAX_ACTIONS_PER_RUN":"10","DISLIKE_TAG":"not-at-all","PROTECT_TAG":"keep-forever","KEEP_TAG":"keep","FAVORITES_TRIGGER_KEEP":"true","JELLYFIN_REFRESH_AFTER_AUDIT":"false","TV_NEW_EPISODES_RESET_CLOCK":"true","ENABLE_SEASON_PRUNING":"false","KEEP_ALL_SEASONS_TAG":"keep-all-seasons","SEASON_PRUNE_GRACE_DAYS":"30","SEASON_PRUNE_AFTER_NEW_SEASON_DAYS":"7","NOTIFY_ON_DRY_RUN":"false","NOTIFY_OPERATIONAL_FAILURES":"false","NOTIFY_LEAVING_SOON_DIGEST":"true","ALLOW_FILESYSTEM_DELETE":"false","ALLOW_CROSS_FILESYSTEM_MOVES":"false","MEDIA_PATH":"/media"}
+
+# Captured before the worker overlays saved settings onto os.environ. A settings
+# request that removes an override must fall back to Docker's original value.
+_INITIAL_ENVIRONMENT = dict(os.environ)
+
+
+def initial_environment():
+    return dict(_INITIAL_ENVIRONMENT)
+
 
 def load_config():
     try:
@@ -28,6 +40,16 @@ def load_config():
 
 def validate(key, value):
     value = value.strip()
+    if key == "DAILY_RUN_TIME" and value:
+        import re
+        if not re.fullmatch(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]", value):
+            raise ValueError("DAILY_RUN_TIME: enter HH:MM in 24-hour format")
+    if key == "DAILY_RUN_TIMEZONE" and value:
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise ValueError("DAILY_RUN_TIMEZONE: enter an available IANA time zone") from None
     if key in BOOLS and value.lower() not in ("true", "false"):
         raise ValueError(f"{key}: select true or false")
     if key in INTS or key in FLOATS:
@@ -57,6 +79,9 @@ def save_config(values):
     os.replace(temp, CONFIG_FILE)
 
 FIELD_HELP = {
+  "ORPHAN_CLEANUP_ENABLED": ["Quarantine Orphan Metadata Folders", "Default off. After 24 hours of unchanged observations, quarantine known sidecars only when no video exists and fresh Arr/Jellyfin checks confirm absence. Keep and unknown files are preserved; nothing is permanently deleted."],
+  "DAILY_RUN_TIME": ["Daily Scan Time", "Daily start in HH:MM. Manual scans share the one-hour cooldown; overlapping scans are blocked."],
+  "DAILY_RUN_TIMEZONE": ["Scan Time Zone", "IANA time zone for daily scans and lifecycle dates, such as America/Los_Angeles."],
   "JELLYFIN_REFRESH_AFTER_AUDIT": ["Refresh Jellyfin After Audit", "Request a Jellyfin library scan once after an audit that successfully moved media. Disabled for dry runs and audits with no moves."],
   "JELLYFIN_HOST_URL": [
     "Jellyfin Server URL",
@@ -110,7 +135,7 @@ FIELD_HELP = {
   ],
   "ENABLE_SEASON_PRUNING": [
     "Prune Older TV Seasons",
-    "Potentially deletes older seasons of eligible kept shows."
+    "Unavailable in this release. Whole-title Removal deletion is a separate opt-in."
   ],
   "KEEP_ALL_SEASONS_TAG": [
     "Keep All Seasons Tag",
@@ -152,7 +177,7 @@ FIELD_HELP = {
     "Maximum Destructive Actions",
     "Limit hold, delete and season-prune operations per audit."
   ],
-  "ALLOW_PERMANENT_DELETE": ["Allow Permanent Deletion (Master Switch)", "Default off. Must be enabled before any permanent deletion via Radarr, Sonarr, direct filesystem deletion, or TV season pruning. DRY_RUN and other safeguards still apply."],
+  "ALLOW_PERMANENT_DELETE": ["Allow Permanent Deletion (Master Switch)", "Default off. Allows Arr-managed deletion of whole titles after the Removal waiting period, with an explicit warning acknowledgement. At most one deletion per library per scan; dry run remains a preview. Season pruning is unavailable."],
   "ALLOW_FILESYSTEM_DELETE": [
     "Allow Direct File Deletion",
     "Permit deletion without Radarr or Sonarr; use with extreme care."
@@ -177,6 +202,10 @@ FIELD_HELP = {
     "Custom Webhook URL",
     "Optional endpoint receiving audit event notifications."
   ],
+  "NOTIFY_OPERATIONAL_FAILURES": [
+    "Notify on Operational Failures",
+    "Opt in to redacted scan/settings alerts using the destinations above. Preview alerts also require Notify During Dry Runs. One delivery attempt per incident and destination in this process; no automatic retry."
+  ],
   "NOTIFY_ON_DRY_RUN": [
     "Notify During Dry Runs",
     "Send notifications for previews as well as real audits."
@@ -190,7 +219,7 @@ FIELD_HELP = {
 
 def redacted_config(config):
     """Return a shareable allowlisted settings snapshot; never export credentials or URLs."""
-    safe = ("DRY_RUN", "ALLOW_PERMANENT_DELETE", "ALLOW_FILESYSTEM_DELETE",
+    safe = ("ORPHAN_CLEANUP_ENABLED", "DRY_RUN", "ALLOW_PERMANENT_DELETE", "ALLOW_FILESYSTEM_DELETE",
             "ALLOW_CROSS_FILESYSTEM_MOVES", "ENABLE_MOVIES", "ENABLE_TV",
             "ENABLE_SEASON_PRUNING", "FAVORITES_TRIGGER_KEEP",
             "JELLYFIN_REFRESH_AFTER_AUDIT", "TV_NEW_EPISODES_RESET_CLOCK",

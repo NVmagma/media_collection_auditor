@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Import existing media · Media Collection Auditor</title><link rel="stylesheet" href="/static/style.css"></head>
+<body class="app-shell settings-app integrations-app arr-import-app">
+{% set sidebar_page = 'integrations' %}{% include '_sidebar.html' %}
+<div class="app-content"><header class="settings-header"><div><h1>Import existing media</h1><p>Add an existing library folder to Radarr or Sonarr. Imports start unmonitored with download searches disabled.</p></div></header>
+<main class="settings-main import-workspace" id="main-content" data-import-csrf="{{ csrf }}">
+<section class="panel"><h2>Select existing media</h2>
+<p>Choose the correct provider match and quality profile, then review the existing path. Importing does not perform a lifecycle move or reset its clock. Later lifecycle policy or your changes in Arr may change monitoring.</p>
+<label for="import-library">Library</label><select id="import-library"><option value="Movies">Movies · Radarr</option><option value="TV">TV · Sonarr</option></select>
+<button type="button" id="import-load">Load folders and quality profiles</button>
+<label for="import-folder">Existing library folder</label><input id="import-folder" list="import-folders" maxlength="255" autocomplete="off"><datalist id="import-folders"></datalist>
+<p id="import-folder-hint">Enter the exact folder name, without its parent path.</p>
+<label for="import-search">Find the movie or series</label><input id="import-search" maxlength="200" autocomplete="off"><button type="button" id="import-find">Find provider matches</button>
+<label for="import-match">Provider match</label><select id="import-match"><option value="">Choose a match</option></select>
+<label for="import-profile">Quality profile</label><select id="import-profile"><option value="">Choose a profile</option></select>
+<button type="button" id="import-review">Review import</button>
+</section>
+<div class="import-review-column">
+<section class="panel" id="import-summary" hidden><h2>Review import</h2><p id="import-description"></p><p id="import-path"></p><p id="import-quality"></p><p>Monitoring: Off · Download searches: Disabled</p><button type="button" id="import-apply" disabled>Import existing title</button></section>
+<p class="panel" id="import-status" role="status" aria-live="polite">No import has been requested.</p>
+<details class="panel"><summary>Verify a pending import</summary><p>If an import was interrupted, verify the Arr record before acknowledging its retained intent. Verification never sends another creation request. Pending moves and other operation types require their own recovery procedure.</p>
+<button type="button" id="import-recovery-review">Verify pending import</button>
+<button type="button" id="import-recovery-apply" disabled>Acknowledge verified import</button>
+</details>
+<p><a href="/integrations">Back to API &amp; integrations</a></p>
+</div>
+</main></div><script src="/static/arr-imports.js" defer></script></body></html>

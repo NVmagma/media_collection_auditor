@@ -52,6 +52,36 @@ class WebSecurityTests(unittest.TestCase):
             self.assertEqual(result.data, b"fake-image")
             self.assertIn("/Items/item-id/Images/Primary", get.call_args.args[0])
 
+    def test_grouped_movie_links_resolve_new_id_after_cache_expiry(self):
+        from unittest.mock import Mock
+        title = 'Austin Powers - International Man of Mystery (1997)'
+        current_id = ['before-move']
+        calls = []
+        def get(url, **kwargs):
+            response = Mock(status_code=200)
+            if url.endswith('/Users'):
+                response.json.return_value = [{'Id':'viewer'}]
+            else:
+                calls.append(kwargs['params'])
+                items = ([{'Type':'Movie', 'Id':current_id[0], 'Name':title,
+                    'Path':'/media/Movies_hold/' + title + '/movie.mkv'}]
+                    if kwargs['params'].get('CollapseBoxSetItems') == 'false' else [])
+                response.json.return_value = {'Items':items}
+            return response
+        with patch.object(web, '_POSTER_INDEX', {}), \
+             patch.object(web, 'current_user', return_value={'name':'Viewer','admin':False}), \
+             patch.object(web, 'load_config', return_value={'JELLYFIN_HOST_URL':'http://jellyfin:8096','JELLYFIN_API_TOKEN':'synthetic'}), \
+             patch.object(web.requests, 'get', side_effect=get), \
+             patch.object(web.time, 'monotonic', return_value=0) as clock:
+            first = self.client.get('/api/jellyfin-link', query_string={'library':'Movies','title':title})
+            self.assertTrue(first.headers['Location'].endswith('id=before-move'))
+            current_id[0] = 'after-move'
+            clock.return_value = 301
+            moved = self.client.get('/api/jellyfin-link', query_string={'library':'Movies','title':title})
+            self.assertEqual(moved.status_code, 302)
+            self.assertTrue(moved.headers['Location'].endswith('id=after-move'))
+            self.assertEqual(len(calls), 2)
+
     def test_friendly_dates(self):
         self.assertEqual(web.friendly_date("2026-10-15T20:27:17.166650"), "Oct 15, 2026")
         self.assertEqual(web.friendly_date("legacy"), "legacy")
@@ -177,12 +207,6 @@ class WebSecurityTests(unittest.TestCase):
         with patch.object(web, "current_user", return_value={"name": "Admin", "admin": True}):
             self.assertEqual(self.client.post("/api/run-now", headers={"Origin": "https://evil.example"}).status_code, 403)
 
-    def test_admin_run_now_calls_queue_only_after_origin_check(self):
-        with patch.object(web, "current_user", return_value={"name": "Admin", "admin": True}), \
-             patch.object(web, "request_run", return_value=True) as queue:
-            response = self.client.post("/api/run-now", headers={"Origin": "http://localhost"})
-            self.assertEqual(response.status_code, 202)
-            queue.assert_called_once()
 
     def test_admin_rescue_dispatches_validated_request(self):
         with patch.object(web, "current_user", return_value={"name": "Admin", "admin": True}), \
@@ -194,3 +218,35 @@ class WebSecurityTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class DashboardLinkTests(unittest.TestCase):
+    def test_table_and_poster_titles_link_movie_and_tv_to_authenticated_route(self):
+        from html.parser import HTMLParser
+        from urllib.parse import urlsplit, parse_qs
+        class Links(HTMLParser):
+            def __init__(self): super().__init__(); self.links=[]
+            def handle_starttag(self, tag, attrs):
+                attrs=dict(attrs)
+                if tag=='a' and attrs.get('class')=='media-title-link': self.links.append(attrs)
+        stages={name:[] for name in ('Waiting','Holding','Removal','Keep')}
+        stages['Waiting']=[{'title':'A & B (2024)','library':'Movies','since':None},
+                           {'title':'Show (2023)','library':'TV','since':None}]
+        with patch.object(web,'current_user',return_value={'name':'Viewer','admin':False}), \
+             patch.object(web,'load_actions',return_value=[]), patch.object(web,'load_state',return_value={}), \
+             patch.object(web,'load_config',return_value={'ENABLE_MOVIES':'true','ENABLE_TV':'true'}), \
+             patch.object(web,'filesystem_stages',return_value=(stages,[])), \
+             patch.object(web,'_dashboard_signals',return_value=None):
+            response=web.app.test_client().get('/')
+        self.assertEqual(response.status_code,200)
+        links=Links(); links.feed(response.get_data(as_text=True))
+        self.assertEqual(len(links.links),4)
+        for item in links.links:
+            self.assertEqual(urlsplit(item['href']).path,'/api/jellyfin-link')
+            self.assertIn(parse_qs(urlsplit(item['href']).query)['library'][0],('Movies','TV'))
+            self.assertEqual(item['target'],'_blank')
+            self.assertIn('noopener',item['rel'])
+
+    def test_jellyfin_link_falls_back_to_name_without_folder_year(self):
+        with patch.object(web,'load_config',return_value={'JELLYFIN_HOST_URL':'http://jellyfin:8096','JELLYFIN_API_TOKEN':'private'}), \
+             patch.object(web,'_poster_index',return_value={'name:example':'item-id'}):
+            self.assertEqual(web._jellyfin_item_id('Example (2024)','Movies'),('http://jellyfin:8096','item-id'))

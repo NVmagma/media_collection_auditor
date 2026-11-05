@@ -1,0 +1,31 @@
+{# Shared navigation: keep routes and permission checks identical on every page. #}
+<a class="skip-navigation" href="#main-content">Skip to content</a>
+<aside class="sidebar" aria-label="Application sidebar">
+  <a class="sidebar-brand" href="/" aria-label="Media Auditor home"><img class="brand-icon" src="/static/auditor-badge.png" alt=""><span>Media<br>Auditor</span></a>
+  <div class="sidebar-scroll">
+    <nav class="side-nav" aria-label="Main navigation">
+      <a href="/" aria-label="Dashboard" {% if sidebar_page == 'dashboard' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">▦</span><span class="nav-label">Dashboard</span></a>
+    </nav>
+    <nav class="workspace-nav sidebar-workspaces" aria-label="Dashboard workspace">
+      {% for name, label, icon, href in [('Overview','Overview','◈','/#Overview'),('Library','Library','▤','/#Library'),('Review','Review','◇','/review'),('Audit Preview','Scans','▷','/#Audit%20Preview'),('Activity','Activity','≋','/#Activity'),('History','History','◷','/#History')] %}
+      <a href="{{ href }}" aria-label="{{ label }}" {% if sidebar_page == 'dashboard' %}data-workspace="{{ name }}"{% endif %}><span class="nav-icon" aria-hidden="true">{{ icon }}</span><span class="nav-label">{{ label }}</span></a>
+      {% endfor %}
+    </nav>
+    <nav class="side-nav sidebar-tools" aria-label="Application tools">
+      <a href="/logs" aria-label="Activity Logs" {% if sidebar_page == 'logs' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">☷</span><span class="nav-label">Activity Logs</span></a>
+      {% if viewer.admin %}
+      <a href="/backups" aria-label="Backups" {% if sidebar_page == 'backups' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">▣</span><span class="nav-label">Backups</span></a>
+      <a href="/tracking-review" aria-label="Tracking Review" {% if sidebar_page == 'tracking' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">≠</span><span class="nav-label">Tracking Review</span></a>
+      <a href="/cleanup-review" aria-label="Cleanup Review" {% if sidebar_page == 'cleanup' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">♧</span><span class="nav-label">Cleanup Review</span></a>
+      <a href="/settings" aria-label="Settings" {% if sidebar_page == 'settings' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-label">Settings</span></a>
+      <a href="/integrations" aria-label="API setup" {% if sidebar_page == 'integrations' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">↗</span><span class="nav-label">API setup</span></a>
+      {% endif %}
+    </nav>
+    {% if sidebar_page == 'settings' %}
+    <nav class="settings-tabs sidebar-categories" aria-label="Settings categories">
+      {% for group in groups %}<button type="button" aria-label="{{ group }} settings" class="tab-button{% if loop.first %} selected{% endif %}" data-tab="{{ group }}" aria-pressed="{{ 'true' if loop.first else 'false' }}"><span class="nav-icon" aria-hidden="true">{{ loop.index }}</span><span class="nav-label">{{ group }}</span></button>{% endfor %}
+    </nav>
+    {% endif %}
+  </div>
+  <div class="sidebar-footer"><span class="viewer-indicator" title="Signed in as {{ viewer.name }}">{{ viewer.name }} <span class="viewer-role">{{ "Administrator" if viewer.admin else "Read only" }}</span></span><form method="post" action="/logout"><button type="submit" aria-label="Sign out"><span aria-hidden="true">⇥</span><span class="nav-label"> Sign out</span></button></form></div>
+</aside>

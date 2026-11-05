@@ -6,53 +6,97 @@
   <title>Media Collection Auditor</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
-<body>
-  <header class="topbar">
-    <div>
-      <h1><img class="brand-icon" src="/static/auditor-badge.png" alt="Auditor logo"> Media Collection Auditor</h1>
-      <p>Keep your library clean, organized &amp; complete.</p>
-    </div>
-    <nav><a href="/">Dashboard</a><a href="/logs">Logs</a>{% if viewer.admin %}<a href="/settings">Settings</a>{% endif %} <span class="viewer-indicator" title="Signed in as {{ viewer.name }}">{{ viewer.name }} <span class="viewer-role">{{ "Administrator" if viewer.admin else "Read only" }}</span></span> <form method="post" action="/logout" style="display:inline"><button type="submit">Sign out</button></form></nav>
-  </header>
-  <main>
+<body class="app-shell dashboard-app" data-initial-workspace="{{ initial_workspace }}">
+  {% set sidebar_page = 'dashboard' %}{% include '_sidebar.html' %}
+  <div class="app-content">
+  <header class="settings-header"><div><h1>Collection workspace</h1><p>Library tracking &amp; lifecycle review</p></div></header>
+  <main id="main-content">
+    <div class="workspace-heading"><div><p class="workspace-eyebrow">COLLECTION WORKSPACE</p><h2 id="workspace-title">{{ 'Review' if initial_workspace == 'Review' else 'Overview' }}</h2><p id="workspace-description" class="muted">Review library coverage, tracking gaps and scheduler observations.</p></div></div>
     {% if state_error %}<section role="alert" class="notice warning"><strong>Tracking state unavailable:</strong> {{ state_error }}. Dashboard lifecycle ages and predictions may be inaccurate. Do not rely on this display for media removal decisions.</section>{% endif %}
+    <div class="dashboard-status">
     <section class="hero">
-      <div><span class="status-dot"></span> Auditor is running</div>
-      <strong>Current configuration: {{ 'Dry Run (preview only)' if dry_run else 'LIVE MODE — changes to media are enabled' }}</strong>
-      {% if viewer.admin %}<div class="run-controls"><button id="run-now" type="button">Run Now</button><span id="run-result" role="status" aria-live="polite">Administrator access required.</span></div>{% endif %}
+      <div class="scheduler-label">Daily schedule and manual scans</div>
+      <strong>{{ "Live · up to five actions per library per scan · 60-minute cooldown" if run.get("execution_mode")=="scheduled_live_moves" else "Preview · media changes disabled" }} · {{ 'Removal deletion enabled: one title per library' if run.get('permanent_deletion_authorized') else 'permanent deletion disabled' }}</strong>
+      {% if viewer.admin %}{% set manual_preview = run.get("execution_mode") == "scheduled_preview" %}{% set manual_live = run.get("execution_mode") == "scheduled_live_moves" %}{% if run.get("worker_mode") == "json_serialized" and run.get("execution_blocked") %}<a href="/operation-recovery">Review retained operation</a>{% endif %}<div class="run-controls"><button id="run-now" type="button" data-preview="{{ 'true' if manual_preview else 'false' }}" data-action-limit="{{ run.get('maximum_actions',1) }}" data-library-limit="{{ run.get('per_library_action_limit',1) }}" data-orphan-cleanup="{{ 'true' if run.get('orphan_cleanup_enabled') else 'false' }}" data-deletion="{{ 'true' if run.get('permanent_deletion_authorized') else 'false' }}" data-live="{{ 'true' if manual_live else 'false' }}" {% if run.get("running") or run.get("queued") %}disabled{% endif %}>{% if manual_preview %}Run Preview Now{% elif manual_live %}Run Live Scan Now{% else %}Run Now{% endif %}</button><span id="run-result" role="status" aria-live="polite">{% if manual_preview %}Read-only scan; daily schedule unchanged.{% elif manual_live %}{% if run.get('per_library_action_limit') == 5 %}Up to five Movie and five TV actions per scan; at least{% elif run.get('maximum_actions') == 2 %}One Movie and one TV action per scan; at least{% else %}One action per scan; at least{% endif %} 60 minutes between live scans. {{ 'Removal deletion enabled: up to one title per library can be deleted.' if run.get('permanent_deletion_authorized') else 'Permanent deletion disabled.' }}{% else %}Administrator access required.{% endif %}</span></div>{% endif %}
     </section>
-    <section class="cards run-cards">
-      <article><span>Audit status</span><strong>{{ 'Running' if run.running else 'Queued' if run.queued else run.last_result|capitalize if run.last_result else 'Waiting' }}</strong></article>
-      <article><span>Last audit</span><strong class="small-metric">{{ run.last_finished or 'Not yet recorded' }}</strong></article>
-      <article><span>Next scheduled audit</span><strong class="small-metric">{{ run.next_run or 'Manual only / pending' }}</strong></article>
-      <article><span>Mode</span><strong>{{ 'Dry Run' if dry_run else 'Live' }}</strong></article>
-      <article><span>Movies processed (last run)</span><strong>{{ run.movies_processed if run.movies_processed is not none else '—' }}</strong></article>
-      <article><span>TV folders processed (last run)</span><strong>{{ run.tv_processed if run.tv_processed is not none else '—' }}</strong></article>
+    <section class="cards run-cards" data-workspace-context="Overview">
+      <article><span>Audit status</span><strong>{{ "Blocked" if run.get("execution_blocked") else "Running" if run.running else "Queued" if run.queued else run.last_result|capitalize if run.last_result else "Waiting" }}</strong></article>
+      <article><span>Last finished attempt</span><strong class="small-metric">{{ run.last_finished|observation_datetime(dashboard_timezone) }}</strong></article>
+      <article><span>Next scheduled audit</span><strong class="small-metric">{{ run.next_run|observation_datetime(dashboard_timezone) if run.next_run else "Unavailable" }}</strong></article>
     </section>
-    <section class="cards">
-      <article><span>Recent actions</span><strong>{{ actions|length }}</strong></article>
-      <article><span>Transient records</span><strong>{{ state.get('first_seen', {})|length }}</strong></article>
-      <article><span>Holding records</span><strong>{{ state.get('queued', {})|length }}</strong></article>
-      <article><span>Removal records</span><strong>{{ state.get('in_removal', {})|length }}</strong></article>
-    </section>
-    <div class="dashboard-view-switch" role="group" aria-label="Media display style">
-      <span class="muted">Media display</span>
-      <button type="button" class="view-switch-button selected" data-view="table" aria-pressed="true">Table</button>
-      <button type="button" class="view-switch-button" data-view="posters" aria-pressed="false">Posters</button>
     </div>
-    <nav class="settings-tabs" aria-label="Dashboard sections">
-      {% for tab in ['Overview','Movies','TV Shows','Audit Preview','Activity','History'] %}
-      <button type="button" class="tab-button{% if loop.first %} selected{% endif %}" data-tab="{{ tab }}" aria-selected="{{ 'true' if loop.first else 'false' }}">{{ tab }}</button>
+    <section class="library-toolbar hidden-section" id="library-toolbar" aria-label="Library controls">
+      <div class="library-picker" role="group" aria-label="Media library">
+        <button type="button" data-tab="Movies" aria-pressed="true">Movies</button>
+        <button type="button" data-tab="TV Shows" aria-pressed="false">TV Shows</button>
+      </div>
+      <div class="dashboard-view-switch" role="group" aria-label="Media display style">
+        <span class="muted">Display</span>
+        <button type="button" class="view-switch-button selected" data-view="table" aria-pressed="true">Table</button>
+        <button type="button" class="view-switch-button" data-view="posters" aria-pressed="false">Posters</button>
+      </div>
+    </section>
+    <section class="dashboard-section overview-workspace{% if initial_workspace == 'Review' %} hidden-section{% endif %}" data-panel="Overview">
+    <div class="panel overview-totals">
+      <div class="overview-count-heading"><h2>Saved tracking records</h2><p class="muted">These totals can differ from the folders currently present.</p></div>
+      <div class="cards tracking-cards">
+        {% for section, label in [('first_seen','Waiting'),('queued','Holding'),('keep_seen','Keep'),('in_removal','Removal')] %}
+        <article><span>{{ label }}</span><strong>{{ state.get(section, {})|length if not state_error else '—' }}</strong><small>{{ 'Tracking unavailable' if state_error else 'Tracking records' }}</small></article>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="overview-grid">
+    <section class="panel overview-attention" aria-labelledby="attention-title">
+      <div class="panel-heading"><h2 id="attention-title">Needs attention</h2><span class="muted">Read-only findings</span></div>
+      {% if overview.attention %}<ul class="overview-finding-summary">{% for finding in overview.attention %}<li>{{ finding.title }}</li>{% endfor %}</ul>
+      {% elif not health_issues %}<p class="muted">No known discrepancies in readable inputs.</p>{% endif %}
+
+      <a class="overview-review-link" href="{{ url_for('dashboard_review') }}#clock-coverage">Review coverage</a>
+      {% if health_issues %}<a class="overview-review-link" href="{{ url_for('dashboard_review') }}#health-findings">Review findings ({{ health_issues|length }})</a>{% endif %}
+      {% if run.get('scheduler_state') == 'blocked' or run.get('last_result') == 'failed' %}<p class="overview-partial">Latest scheduler observation needs review. <button type="button" data-open-workspace="History">History</button></p>{% endif %}
+      {% if run.get('status') == 'unavailable' %}<p class="muted">Scheduler observations are unavailable in this process.</p>{% endif %}
+    </section>
+    <section class="panel overview-context" aria-labelledby="overview-context-title">
+      <div class="panel-heading"><h2 id="overview-context-title">Latest attempt</h2><span class="muted">{% if run.running %}In progress{% elif run.last_result %}{{ run.last_result|capitalize }}{% else %}No result recorded{% endif %}</span></div>
+      <dl class="overview-attempt-metrics"><div><dt>Proposed moves</dt><dd>{{ run.get('moves_proposed') if run.get('moves_proposed') is not none else '—' }}</dd></div><div><dt>Discovery changes</dt><dd>{{ run.get('discovery_changes') if run.get('discovery_changes') is not none else '—' }}</dd></div></dl>
+      <p class="muted">— means not reported. Proposals are not completed media actions.</p>
+      <button type="button" data-open-workspace="History">Review History</button>
+    </section>
+    </div>
+    <div class="overview-grid overview-title-lists">
+      {% for name, heading in [('leaving_soon','Leaving soon'),('oldest_waiting','Oldest waiting')] %}
+      {% set listing = overview.lists[name] %}
+      <section class="panel overview-title-list" aria-label="{{ heading }}">
+        <div class="panel-heading"><h2>{{ heading }}</h2><span class="muted">Movies + TV</span></div>
+        <p class="overview-list-basis muted">{% if name == 'leaving_soon' %}Estimated calendar dates, not deletion dates.{% else %}Ordered by recorded days in stage, then title.{% endif %}</p>
+        {% if listing.status == 'unavailable' %}<p class="empty">Tracking unavailable; this list cannot be verified.</p>
+        {% else %}
+        {% if listing.status == 'partial' %}<p role="status" class="overview-partial">Directory coverage is incomplete; this list may omit titles.</p>{% endif %}
+        {% for item in listing['items'] %}
+        <article class="overview-media-row">
+          <a class="overview-poster" href="{{ url_for('jellyfin_link', library=item.library, title=item.title) }}" target="_blank" rel="noopener noreferrer" aria-label="Open {{ item.title }} in Jellyfin"><span>{{ 'TV' if item.library == 'TV' else 'FILM' }}</span><img loading="lazy" src="{{ url_for('poster', library=item.library, title=item.title) }}" alt="" onerror="this.remove()"></a>
+          <div class="overview-media-copy"><button type="button" class="overview-title-button" data-open-title="{{ item.title }}" data-library="{{ item.library }}" data-stage="{{ item.stage }}">{{ item.title }}</button><p><span class="overview-stage stage-{{ item.stage|lower }}">{{ item.stage }}</span> <span class="muted">{{ 'TV show' if item.library == 'TV' else 'Movie' }}</span></p>
+            <p class="muted">{% if name == 'leaving_soon' %}Est. removal stage: {{ item.next_review_display or 'Unknown' }}{% else %}Tracked since: <span title="{{ item.since_basis }}">{{ item.since_display }}</span>{% endif %}</p>
+          </div>
+        </article>
+        {% else %}<p class="empty">{% if listing.status == 'partial' %}No folders observed in the readable directories.{% else %}No {{ 'Holding' if name == 'leaving_soon' else 'Waiting' }} folders observed in enabled libraries.{% endif %}</p>{% endfor %}
+        {% if listing.more %}<p class="muted">{{ listing.more }} more observed folders · open Library to browse.</p>{% endif %}
+
+        {% endif %}
+      </section>
       {% endfor %}
-    </nav>
-    <section class="panel dashboard-section" data-panel="Overview">
-      <h2>Library overview</h2>
+    </div>
+    <div class="overview-browse-links"><button type="button" data-open-library="Movies">Browse Movies</button><button type="button" data-open-library="TV Shows">Browse TV Shows</button></div>
+    </section>
+    {% if initial_workspace == 'Review' %}
+    <section class="panel dashboard-section overview-diagnostics" data-panel="Review" aria-label="Collection diagnostics">
+      <h2>Coverage &amp; collection review</h2>
       {% if inventory_warnings %}
       <p role="alert"><strong>Filesystem inventory incomplete:</strong> counts for unavailable directories are not reliable.</p>
       {% for warning in inventory_warnings %}<p class="muted">{{ warning }}</p>{% endfor %}
       {% endif %}
       <p class="muted">Choose Movies or TV Shows to see their individual lifecycle stages. Activity and History cover both libraries.</p>
-      <details>
+      <details id="health-findings" open>
         <summary>Collection health · {{ health_issues|length }} item(s) needing review</summary>
         <p class="muted">Read-only comparison of media folders, tracking timestamps, and pending Arr updates. A newly moved title may appear here until the next audit.</p>
         {% if health_issues %}
@@ -60,6 +104,20 @@
           <li><strong>{{ issue.library }} · {{ issue.title }}</strong>: {{ issue.detail }}</li>
         {% endfor %}</ul>
         {% else %}<p class="muted">No discrepancies found in readable directories.</p>{% endif %}
+      </details>
+      {% if viewer.admin %}<p><a href="/tracking-review">Browse individual tracking mismatches</a></p>{% endif %}
+      <details class="clock-coverage" id="clock-coverage" open>
+        <summary>Saved date coverage · {{ clock_coverage.missing_dates }} folders without a stage date · {{ clock_coverage.records_without_stage_folder }} records without a matching stage folder{% if not clock_coverage.complete %} · incomplete{% endif %}</summary>
+        <p class="muted">These are observed tracking gaps. Missing dates remain untracked; folder dates and dates from other stages are not substituted. Records without a matching stage folder need review, not automatic removal.</p>
+        {% if not clock_coverage.complete %}<p role="status">Coverage is incomplete. Unavailable counts are shown as —.</p>{% endif %}
+        <div class="table-wrap"><table><thead><tr><th>Library</th><th>Stage</th><th>Folders</th><th>Missing dates</th><th>Invalid / future dates</th><th>Records without stage folder</th></tr></thead><tbody>
+        {% for row in clock_coverage.rows %}<tr>
+          <td>{{ row.library }}</td><td>{{ row.stage }}{% if row.status != 'observed' %}<br><small>{{ 'Directory unavailable' if row.status == 'directory_unavailable' else 'Tracking unavailable' }}</small>{% endif %}</td>
+          <td>{{ row.folders if row.folders is not none else '—' }}</td>
+          <td>{{ row.missing_dates if row.missing_dates is not none else '—' }}</td>
+          <td>{% if row.invalid_dates is not none %}{{ row.invalid_dates }} / {{ row.future_dates }}{% else %}—{% endif %}</td>
+          <td>{{ row.records_without_stage_folder if row.records_without_stage_folder is not none else '—' }}</td>
+        </tr>{% endfor %}</tbody></table></div>
       </details>
       <div class="library-overview">
         {% for library, label in [('Movies', 'Movies'), ('TV', 'TV Shows')] %}
@@ -71,6 +129,14 @@
         {% endfor %}
       </div>
     </section>
+    {% endif %}
+    <div class="library-layout hidden-section" id="library-layout">
+    <div class="library-browser">
+      <div class="library-search-tools">
+        <label>Search titles<input id="library-search" type="search" placeholder="Search this library…" autocomplete="off"></label>
+        <label>Sort titles<select id="library-sort"><option value="asc">Title A–Z</option><option value="desc">Title Z–A</option></select></label>
+      </div>
+      <p id="library-results" class="muted" role="status" aria-live="polite"></p>
     {% for library, label in [('Movies','Movies'), ('TV','TV Shows')] %}
     <section class="panel dashboard-section hidden-section" data-panel="{{ label }}">
       <div class="panel-heading"><h2>{{ label }} lifecycle</h2></div>
@@ -88,7 +154,7 @@
         {% if items %}
         <div class="table-wrap"><table><thead><tr><th>Title</th><th>Tracked since</th>{% if stage == 'Removal' %}<th>Days left</th>{% if viewer.admin %}<th>Rescue</th>{% endif %}{% endif %}</tr></thead><tbody>
           {% for item in items %}
-          <tr><td><strong>{{ item.title }}</strong><details><summary>Why this stage?</summary><p>{{ item.reason }}</p><p><strong>Jellyfin:</strong> {% if item.jellyfin_signals is none %}Unknown / not matched{% else %}{% set sig = item.jellyfin_signals %}{% if sig.protected %}<strong>keep-forever (all seasons protected)</strong> {% endif %}{% if sig.keep %}keep {% endif %}{% if sig.keep_all and not sig.protected %}keep-all-seasons {% endif %}{% if sig.disliked %}not-at-all {% endif %}{% if sig.favorite %}Favorited {% endif %}{% if not sig.protected and not sig.keep and not sig.keep_all and not sig.disliked and not sig.favorite %}No lifecycle tags{% endif %}{% endif %}</p><p><strong>Decision:</strong> {{ item.decision_reason }} {% if item.decision == "unknown" %}(Jellyfin signals are not loaded on this dashboard.){% endif %}</p><p>Tracked: {{ item.elapsed_days if item.elapsed_days is not none else "Unknown" }} days{% if item.next_review_date %} · Next timer review: {{ item.next_review_date }}{% endif %}{% if item.deadline_days is not none %} · {{ item.deadline_days }} days remaining{% endif %}</p></details></td><td>{{ item.since|friendly_date }}</td>
+          <tr data-media-title="{{ item.title }}"><td><a class="media-title-link" href="{{ url_for('jellyfin_link', library=item.library, title=item.title) }}" target="_blank" rel="noopener noreferrer"><strong>{{ item.title }}</strong></a><button type="button" class="inspect-title" aria-expanded="false" aria-controls="title-inspector">Details</button><details class="media-detail-source"><summary>Why this stage?</summary><p>{{ item.reason }}</p><p><strong>Jellyfin:</strong> {% if item.jellyfin_signals is none %}Unknown / not matched{% else %}{% set sig = item.jellyfin_signals %}{% if sig.protected %}<strong>keep-forever (all seasons protected)</strong> {% endif %}{% if sig.keep %}keep {% endif %}{% if sig.keep_all and not sig.protected %}keep-all-seasons {% endif %}{% if sig.disliked %}not-at-all {% endif %}{% if sig.favorite %}Favorited {% endif %}{% if not sig.protected and not sig.keep and not sig.keep_all and not sig.disliked and not sig.favorite %}No lifecycle tags{% endif %}{% endif %}</p><p><strong>Decision:</strong> {{ item.decision_reason }} {% if item.decision == "unknown" %}(Jellyfin signals are not loaded on this dashboard.){% endif %}</p><p>Tracked: {{ item.elapsed_days if item.elapsed_days is not none else "Unknown" }} days{% if item.next_review_date %} · Next timer review: {{ item.next_review_display }}{% endif %}{% if item.deadline_days is not none %} · {{ item.deadline_days }} days remaining{% endif %}</p></details></td><td><span title="{{ item.since_basis }}">{{ item.since_display }}</span></td>
             {% if stage == 'Removal' %}<td>{{ item.days_left if item.days_left is not none else 'Unknown' }}</td>
             {% if viewer.admin %}<td><select class="rescue-choice" data-library="{{ item.library }}" data-title="{{ item.title }}"><option value="">Choose action…</option><option value="keep">Move to Keep</option><option value="holding">Return to Holding</option></select></td>{% endif %}{% endif %}
           </tr>
@@ -96,12 +162,12 @@
         </tbody></table></div>
         <div class="media-poster-list hidden-section" aria-label="{{ label }} {{ stage }} poster view">
           {% for item in items %}
-          <article class="media-poster-row">
+          <article class="media-poster-row" data-media-title="{{ item.title }}">
             <a class="media-poster-placeholder media-poster-link" href="{{ url_for('jellyfin_link', library=item.library, title=item.title) }}" target="_blank" rel="noopener noreferrer" title="Open {{ item.title }} in Jellyfin"><span>{{ 'TV' if item.library == 'TV' else 'MOVIE' }}</span><img loading="lazy" alt="" src="{{ url_for('poster', library=item.library, title=item.title) }}" onerror="this.remove()"></a>
             <div class="media-poster-info">
-              <h4>{{ item.title }}</h4>
-              <span class="media-stage-label">{{ stage }}</span><details><summary>Why this stage?</summary><p>{{ item.reason }}</p><p><strong>Jellyfin:</strong> {% if item.jellyfin_signals is none %}Unknown / not matched{% else %}{% set sig = item.jellyfin_signals %}{% if sig.protected %}<strong>keep-forever (all seasons protected)</strong> {% endif %}{% if sig.keep %}keep {% endif %}{% if sig.keep_all and not sig.protected %}keep-all-seasons {% endif %}{% if sig.disliked %}not-at-all {% endif %}{% if sig.favorite %}Favorited {% endif %}{% if not sig.protected and not sig.keep and not sig.keep_all and not sig.disliked and not sig.favorite %}No lifecycle tags{% endif %}{% endif %}</p><p><strong>Decision:</strong> {{ item.decision_reason }} {% if item.decision == "unknown" %}(Jellyfin signals are not loaded on this dashboard.){% endif %}</p><p>Tracked: {{ item.elapsed_days if item.elapsed_days is not none else "Unknown" }} days{% if item.deadline_days is not none %} · {{ item.deadline_days }} days until stage deadline{% endif %}</p></details>
-              <p>Tracked since: {{ item.since|friendly_date }}</p>
+              <h4><a class="media-title-link" href="{{ url_for('jellyfin_link', library=item.library, title=item.title) }}" target="_blank" rel="noopener noreferrer">{{ item.title }}</a></h4>
+              <span class="media-stage-label">{{ stage }}</span><button type="button" class="inspect-title" aria-expanded="false" aria-controls="title-inspector">Details</button><details class="media-detail-source"><summary>Why this stage?</summary><p>{{ item.reason }}</p><p><strong>Jellyfin:</strong> {% if item.jellyfin_signals is none %}Unknown / not matched{% else %}{% set sig = item.jellyfin_signals %}{% if sig.protected %}<strong>keep-forever (all seasons protected)</strong> {% endif %}{% if sig.keep %}keep {% endif %}{% if sig.keep_all and not sig.protected %}keep-all-seasons {% endif %}{% if sig.disliked %}not-at-all {% endif %}{% if sig.favorite %}Favorited {% endif %}{% if not sig.protected and not sig.keep and not sig.keep_all and not sig.disliked and not sig.favorite %}No lifecycle tags{% endif %}{% endif %}</p><p><strong>Decision:</strong> {{ item.decision_reason }} {% if item.decision == "unknown" %}(Jellyfin signals are not loaded on this dashboard.){% endif %}</p><p>Tracked: {{ item.elapsed_days if item.elapsed_days is not none else "Unknown" }} days{% if item.deadline_days is not none %} · {{ item.deadline_days }} days until stage deadline{% endif %}</p></details>
+              <p>Tracked since: <span title="{{ item.since_basis }}">{{ item.since_display }}</span></p>
               {% if stage == 'Removal' %}
               <p>Days left: {{ item.days_left if item.days_left is not none else 'Unknown' }}</p>
               {% if viewer.admin %}<label>Rescue
@@ -117,8 +183,36 @@
       {% endfor %}
     </section>
     {% endfor %}
+      <p id="library-no-matches" class="empty hidden-section">No titles match your search in this stage.</p>
+    </div>
+    <aside id="title-inspector" class="panel title-inspector hidden-section" aria-labelledby="inspector-title">
+      <div class="panel-heading"><span class="muted">Title details</span><button id="close-inspector" type="button">Close</button></div>
+      <h3 id="inspector-title"></h3>
+      <p id="inspector-library" class="muted"></p>
+      <p><strong>Tracked since:</strong> <span id="inspector-since"></span></p>
+      <div id="inspector-explanation"></div>
+      <p class="muted">These observations do not authorize a move or deletion.</p>
+    </aside>
+    </div>
     <section class="panel dashboard-section hidden-section" data-panel="Audit Preview">
-      <h2>Audit preview · deadline candidates</h2>
+      <div class="panel-heading"><h2>Scan workspace</h2><span class="scan-outcome outcome-{{ 'review' if scan_view.current_state == 'Blocked' else 'unknown' }}">{{ scan_view.current_state }}</span></div>
+      <p class="muted">{{ scan_view.current_detail }}</p>
+
+      <div class="scan-summary-grid">
+        <section class="scan-summary"><h3>Latest recorded attempt</h3>
+        {% if not scan_view.history_available %}<p class="empty">History observations are unavailable.</p>
+        {% elif scan_view.latest %}{% set attempt = scan_view.latest %}
+        <p><span class="scan-outcome outcome-{{ attempt.group }}">{{ attempt.label }}</span> <span class="muted">{{ attempt.trigger }} · {{ attempt.mode }}</span></p>
+        <p class="muted">Finished: {{ attempt.finished }}</p>
+        <dl class="scan-metrics"><div><dt>Proposed moves</dt><dd>{{ attempt.moves_proposed if attempt.moves_proposed is not none else '—' }}</dd></div><div><dt>Discovery changes</dt><dd>{{ attempt.discovery_changes if attempt.discovery_changes is not none else '—' }}</dd></div></dl>
+        <p>{{ attempt.reason }}</p>{% include '_scan_details.html' %}<button type="button" class="scan-secondary" data-open-workspace="History">Open attempt history</button>
+        {% else %}<p class="empty">No finished attempts recorded yet.</p>{% endif %}
+        </section>
+        <section class="scan-summary"><h3>What is recorded</h3><p>Preview counts describe proposals. Completed moves and Arr updates are separate observations.</p><p class="muted">Per-title decisions are shown when recorded by this worker. Earlier attempts may have counts only. — means not reported, not zero.</p><p class="muted">History is retained in appdata across restarts. It does not establish live inventory freshness.</p></section>
+      </div>
+
+      <div class="deadline-estimates">
+      <h3>Timer estimates · not scan results</h3>
       <p class="muted">Read-only estimate from saved lifecycle dates, not a simulation of the auditor. These are titles whose stage timers have expired. Jellyfin playback, favorites, protection tags, filesystem checks, action limits, and service availability are NOT checked here. Nothing on this page moves or deletes files.</p>
       {% if preview %}
       <p><strong>{{ preview|length }} candidates</strong> for review on a future audit. These actions are not guaranteed.</p>
@@ -126,6 +220,7 @@
       {% for item in preview %}<tr><td>{{ item.library }}</td><td>{{ item.title }}</td><td>{{ item.stage }}</td><td>{{ item.action }}</td></tr>{% endfor %}
       </tbody></table></div>
       {% else %}<p class="empty">No tracked stage deadlines have expired. This does not guarantee the next audit will take no action.</p>{% endif %}
+      </div>
     </section>
     <section class="panel dashboard-section hidden-section" data-panel="Activity">
       <div class="panel-heading"><h2>Recent activity</h2><a href="/logs">View all logs →</a></div>
@@ -136,95 +231,26 @@
       {% else %}<p class="empty">No action log entries yet.</p>{% endif %}
     </section>
     <section class="panel dashboard-section hidden-section" data-panel="History">
-      <div class="panel-heading"><h2>Audit history</h2><span class="muted">Last {{ history|length }} runs · stored in appdata</span></div>
-      <p class="muted">Movie and TV counts reflect titles appearing in action logs, not every title scanned. Times are UTC.</p>
-      {% if history %}
-      <div class="table-wrap"><table><thead><tr><th>Started (UTC)</th><th>Duration</th><th>Trigger</th><th>Mode</th><th>Result</th><th>Movies</th><th>TV</th><th>Details</th></tr></thead><tbody>
-      {% for entry in history %}
-      <tr><td>{{ entry.get('started_at','') }}</td><td>{{ entry.get('duration_seconds','—') }}s</td><td>{{ entry.get('trigger','') }}</td><td>{{ 'Dry run' if entry.get('dry_run') else 'Live' }}</td><td>{{ entry.get('result','') }}</td><td>{{ entry.get('movies_processed',0) }}</td><td>{{ entry.get('tv_processed',0) }}</td><td>
-        <details><summary>View</summary>
-        {% if entry.get('error') %}<p class="history-error">Error: {{ entry.error }}</p>{% endif %}
-        <p>Actions: {% for action, count in entry.get('action_counts',{}).items() %}{{ action }} ({{ count }}){% if not loop.last %}, {% endif %}{% else %}None logged{% endfor %}</p>
-        <p>Statuses: {% for status, count in entry.get('status_counts',{}).items() %}{{ status }} ({{ count }}){% if not loop.last %}, {% endif %}{% else %}None logged{% endfor %}</p>
-        {% if entry.get('actions') %}
-        <div class="history-actions">{% for action in entry.actions %}<div>{{ action.get('library','') }} · {{ action.get('folder','') }} — {{ action.get('action','') }} ({{ action.get('status','') }})</div>{% endfor %}</div>
-        {% endif %}</details>
-      </td></tr>
-      {% endfor %}</tbody></table></div>
-      {% else %}<p class="empty">No recorded audits yet. New runs will appear here after completion.</p>{% endif %}
+
+      <div class="panel-heading"><h2>Attempt history</h2><span class="muted">Persistent scan history</span></div>
+      <p class="muted">Preview completion means the worker returned a preview result. It does not mean media moved. Recent attempts are retained in appdata across restarts.</p>
+      {% if not scan_view.history_available %}<p class="empty" role="status">History observations are unavailable; an empty history cannot be confirmed.</p>
+      {% elif not scan_view.rows %}<p class="empty">No finished attempts recorded in this process. A queued or running request appears here only after it finishes.</p>
+      {% else %}
+      {% if scan_view.history_partial %}<p role="status">Some history records could not be read.</p>{% endif %}
+      <div class="history-controls"><label>Result<select id="history-filter"><option value="all">All attempts</option><option value="completed">Completed</option><option value="review">Needs review</option><option value="unknown">Unreported outcome</option></select></label><span id="history-page-status" role="status" aria-live="polite"></span><div><button type="button" id="history-previous">Previous</button><button type="button" id="history-next">Next</button></div></div>
+      <div id="attempt-history">
+      {% for attempt in scan_view.rows %}
+      <article class="history-entry" data-history-result="{{ attempt.group }}">
+        <div class="history-entry-heading"><span class="scan-outcome outcome-{{ attempt.group }}">{{ attempt.label }}</span><strong>{{ attempt.trigger }}</strong><span class="muted">{{ attempt.mode }}</span><span class="muted history-entry-time">{{ attempt.started }} · {{ attempt.duration_display }}</span></div>
+        <dl class="scan-metrics"><div><dt>Proposed moves</dt><dd>{{ attempt.moves_proposed if attempt.moves_proposed is not none else '—' }}</dd></div><div><dt>Discovery changes</dt><dd>{{ attempt.discovery_changes if attempt.discovery_changes is not none else '—' }}</dd></div><div><dt>Completed moves</dt><dd>{{ attempt.moves_completed if attempt.moves_completed is not none else '—' }}</dd></div><div><dt>Verified deletions</dt><dd>{{ attempt.deletions_completed if attempt.deletions_completed is not none else '—' }}</dd></div><div><dt>Metadata quarantines</dt><dd>{{ attempt.metadata_quarantines_completed if attempt.metadata_quarantines_completed is not none else '—' }}</dd></div><div><dt>Arr updates</dt><dd>{{ attempt.arr_completed if attempt.arr_completed is not none else '—' }}</dd></div></dl>
+        <details><summary>Recorded outcome details</summary><p>{{ attempt.reason }}</p><p>Started: {{ attempt.started }}<br>Finished: {{ attempt.finished }}</p></details>{% include '_scan_details.html' %}
+      </article>
+      {% endfor %}
+      </div><p id="history-no-results" class="empty" hidden>No attempts match this result filter.</p>
+      {% endif %}
+
     </section>
-  </main>
-<script>
-const mediaViewButtons = document.querySelectorAll('[data-view]');
-function setMediaView(view) {
-  const selectedView = view === 'posters' ? 'posters' : 'table';
-  document.querySelectorAll('.lifecycle-panel .table-wrap').forEach(table =>
-    table.classList.toggle('hidden-section', selectedView !== 'table'));
-  document.querySelectorAll('.media-poster-list').forEach(list =>
-    list.classList.toggle('hidden-section', selectedView !== 'posters'));
-  mediaViewButtons.forEach(button => {
-    const selected = button.dataset.view === selectedView;
-    button.classList.toggle('selected', selected);
-    button.setAttribute('aria-pressed', String(selected));
-  });
-  try { localStorage.setItem('auditor-media-view', selectedView); } catch (_) {}
-}
-mediaViewButtons.forEach(button => button.addEventListener('click', () => setMediaView(button.dataset.view)));
-try { setMediaView(localStorage.getItem('auditor-media-view') || 'table'); }
-catch (_) { setMediaView('table'); }
-const tabs = document.querySelectorAll('[data-tab]');
-const panels = document.querySelectorAll('[data-panel]');
-function openSection(name) {
-  tabs.forEach(tab => {
-    const selected = tab.dataset.tab === name;
-    tab.classList.toggle('selected', selected);
-    tab.setAttribute('aria-selected', String(selected));
-  });
-  panels.forEach(panel => panel.classList.toggle('hidden-section', panel.dataset.panel !== name));
-}
-tabs.forEach(tab => tab.addEventListener('click', () => openSection(tab.dataset.tab)));
-document.querySelectorAll('[data-open-library]').forEach(button =>
-  button.addEventListener('click', () => openSection(button.dataset.openLibrary)));
-document.querySelectorAll('[data-stage-tab]').forEach(tab => tab.addEventListener('click', () => {
-  const section = tab.closest('[data-panel]');
-  section.querySelectorAll('[data-stage-tab]').forEach(item => {
-    const selected = item === tab;
-    item.classList.toggle('selected', selected);
-    item.setAttribute('aria-selected', String(selected));
-  });
-  section.querySelectorAll('[data-stage-panel]').forEach(panel =>
-    panel.classList.toggle('hidden-section', panel.dataset.stagePanel !== tab.dataset.stageTab));
-}));
-document.querySelectorAll('.rescue-choice').forEach(choice => choice.addEventListener('change', async () => {
-  const destination = choice.value;
-  if (!destination) return;
-  const title = choice.dataset.title;
-  const library = choice.dataset.library;
-  if (!confirm('Rescue ' + title + ' (' + library + ') to ' + destination + '? Live mode moves media.')) { choice.value = ''; return; }
-  choice.disabled = true;
-  try {
-    const response = await fetch('/api/rescue', {method:'POST', credentials:'same-origin',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({title, library, destination})});
-    const data = await response.json();
-    alert(data.message || 'Request failed.');
-    if (data.ok) location.reload();
-  } catch (error) { alert('Unable to request rescue.'); }
-  finally { choice.disabled = false; choice.value = ''; }
-}));
-const button = document.getElementById('run-now');
-button?.addEventListener('click', async () => {
-  if (!confirm('Start an audit using your saved configuration? In Live Mode this may move or delete media.')) return;
-  button.disabled = true;
-  const output = document.getElementById('run-result');
-  output.textContent = 'Requesting audit…';
-  try {
-    const response = await fetch('/api/run-now', {method:'POST', credentials:'same-origin'});
-    const data = await response.json();
-    output.textContent = data.message || 'Request failed.';
-    if (response.status === 401) output.textContent = 'Please open Settings to sign in, then try again.';
-  } catch (error) { output.textContent = 'Unable to request an audit.'; }
-  finally { button.disabled = false; }
-});
-</script></body>
+  </main></div>
+<script src="{{ url_for('static', filename='dashboard.js') }}" defer></script></body>
 </html>

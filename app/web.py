@@ -16,36 +16,51 @@ from pathlib import Path
 from flask import Flask, render_template, request, Response, redirect, url_for, session, g, send_file
 
 from lifecycle_decisions import decide
+from dashboard_tracking_snapshot import lifecycle_clock, observation_datetime, summarize_dashboard_clocks, dashboard_overview, build_scan_view
 from connection_tests import check_connection, SERVICES
 from audit_history import read_history
 from manual_rescue import rescue_title
 from auth import session_key, jellyfin_login, current_user, store_token, discard_token, verify_user
 from run_control import snapshot, request_run
 from config_store import FIELDS, KEYS, SECRETS, BOOLS, DEFAULTS, FIELD_HELP, load_config, save_config, validate, redacted_config
+from integration_api import authorize_summary, read_only_service_enabled
+from integration_status import (selected_backup_status, selected_scan_capture, project_scan_capture, read_selected_coverage, selected_run_snapshot, selected_run_history, selected_audit_status_report, audit_status_report, collect_widget_media_index, widget_media_urls, widget_media_base,
+    read_selected_tracking_status as read_tracking_status,
+    read_selected_tracking_titles as read_tracking_titles,
+    read_selected_dashboard_state as read_dashboard_state)
 
 app = Flask(__name__)
-app.secret_key = session_key()
+app.secret_key = os.urandom(32).hex() if read_only_service_enabled() else session_key()
 app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
                   SESSION_COOKIE_SECURE=os.environ.get("WEB_SECURE_COOKIE", "false").lower() == "true",
                   PERMANENT_SESSION_LIFETIME=timedelta(hours=12))
 
+
+
 @app.before_request
 def require_login():
-    if request.endpoint in ("login", "login_background", "health", "static"):
+    if read_only_service_enabled() and request.endpoint not in (
+        'integration_summary','integration_audit_status','integration_titles','integration_readiness',
+        'integration_coverage','integration_scan_history','integration_proposals','integration_backup_status','health'):
+        return {'status':'read_only_service'},404
+    if request.path.startswith('/api/v1/'):
+        failure=authorize_summary(request.headers.get('Authorization'))
+        if failure is not None: return failure
+        if request.endpoint is None and getattr(request.routing_exception,'code',None)==404:
+            return {'status':'route_not_found','schema_version':1,'message':'Unknown integration route. See /api/v1/readiness for supported routes.'},404
         return None
-    g.user = current_user()
+    if request.endpoint in ('login','login_background','health','static'): return None
+    g.user=current_user()
     if g.user is None:
-        if request.path.startswith("/api/"):
-            return {"ok": False, "message": "Please sign in."}, 401
-        return redirect(url_for("login"))
-    if request.endpoint in ("settings", "test_connection", "run_now", "rescue") and not g.user["admin"]:
-        if request.path.startswith("/api/"):
-            return {"ok": False, "message": "Administrator access required."}, 403
-        return Response("Administrator access required.", 403)
+        if request.path.startswith('/api/'): return {'ok':False,'message':'Please sign in.'},401
+        return redirect(url_for('login'))
+    if request.endpoint in ('settings','test_connection','test_notification','run_now','rescue','integration_setup','cleanup_review','tracking_review') and not g.user['admin']:
+        if request.path.startswith('/api/'): return {'ok':False,'message':'Administrator access required.'},403
+        return Response('Administrator access required.',403)
 
 @app.context_processor
 def user_context():
-    return {"viewer": getattr(g, "user", None)}
+    return {'viewer':getattr(g,'user',None)}
 
 @app.get("/login-background")
 def login_background():
@@ -98,7 +113,248 @@ ACTION_LOG_FILE = os.environ.get("ACTION_LOG_FILE", "/app/logs/auditor_actions.j
 STATE_FILE = os.environ.get("STATE_FILE", "/app/logs/auditor_state.json")
 
 
+@app.after_request
+def integration_response_headers(response):
+    if request.path.startswith("/api/v1/") or request.endpoint == "integration_setup":
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Vary"] = "Authorization"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+def _integration_readiness():
+    """Selected tracking readiness; no remote collection or credential projection."""
+    binding='not_required'
+    report=read_tracking_status(STATE_FILE)
+    selected=selected_run_snapshot(snapshot) if not read_only_service_enabled() else {}
+    available = isinstance(report, dict) and report.get('status') == 'advisory_only'
+    return {
+        'schema_version': 1, 'api_version': 'v1',
+        'status': 'ready' if available else 'unavailable',
+        'tracking_available': available, 'binding_status': binding,
+        'storage_authority': os.environ.get('AUDITOR_STATE_BACKEND', 'json') if os.environ.get('AUDITOR_STATE_BACKEND', 'json') == 'json' else 'unavailable',
+        'freshness_verified': False, 'read_only': True,
+        'media_actions_authorized': False,
+        'execution_mode': selected.get('execution_mode','read_only_integration'),
+        'title_details_enabled': os.environ.get('INTEGRATION_API_TITLE_DETAILS', 'false').lower() == 'true',
+        'poster_lookup_enabled': os.environ.get('INTEGRATION_API_MEDIA', 'false').lower() == 'true',
+        'coordinator_scope': 'unavailable' if read_only_service_enabled() else 'current_process',
+        'routes': ['/api/v1/readiness', '/api/v1/summary', '/api/v1/audit-status',
+                   '/api/v1/titles/oldest-waiting', '/api/v1/titles/leaving-soon', '/api/v1/coverage', '/api/v1/scan-history', '/api/v1/proposals', '/api/v1/backup-status'],
+        'libraries': ['Movies', 'TV'], 'title_limit': 10,
+        'backup_selection_configured': all(os.environ.get(key) for key in ('INTEGRATION_API_BACKUP_DIRECTORY', 'INTEGRATION_API_BACKUP_IDENTITY', 'INTEGRATION_API_BACKUP_FINGERPRINT')),
+        'coverage_enabled': os.environ.get('INTEGRATION_API_COVERAGE', 'false').lower() == 'true',
+    }
+
+
+@app.get('/api/v1/readiness')
+def integration_readiness():
+    report = _integration_readiness()
+    return report, 200 if report['status'] == 'ready' else 503
+
+
+@app.get('/integrations')
+def integration_setup():
+    # Browser administrator only; integration credentials do not grant access.
+    configured = authorize_summary(None)
+    token_ready = configured is not None and configured[1] == 401
+    return render_template('integrations.html', readiness=_integration_readiness(), token_ready=token_ready)
+
+
+@app.get('/api/v1/backup-status')
+def integration_backup_status():
+    if request.args:
+        return {'status':'invalid_query'}, 400
+    report = selected_backup_status()
+    return report, 200 if report['packet_verified'] else 503
+
+
+def _scan_api_report():
+    capture = None if read_only_service_enabled() else selected_scan_capture()
+    return project_scan_capture(capture)
+
+
+@app.get('/api/v1/scan-history')
+def integration_scan_history():
+    values = {}
+    for key, default, maximum in (('page', '1', 100), ('page_size', '5', 20)):
+        raw = request.args.get(key, default)
+        if len(request.args.getlist(key)) > 1 or not re.fullmatch(r'[1-9][0-9]{0,2}', raw) or int(raw) > maximum:
+            return {'status':'invalid_pagination'}, 400
+        values[key] = int(raw)
+    outcome = request.args.get('outcome', 'all')
+    if outcome not in ('all','completed','review','unknown') or len(request.args.getlist('outcome')) > 1:
+        return {'status':'invalid_outcome'}, 400
+    report = _scan_api_report()
+    rows = report.pop('rows')
+    base = {**report, **values, 'outcome':outcome, 'pagination_scope':'current_capture',
+            'retained_limit':100}
+    if rows is None:
+        return {**base, 'items':None, 'total_records':None, 'has_more':False}, 503
+    rows = [row for row in rows if outcome == 'all' or row['group'] == outcome]
+    start = (values['page'] - 1) * values['page_size']
+    return {**base, 'items':rows[start:start+values['page_size']], 'total_records':len(rows),
+            'has_more':start+values['page_size'] < len(rows)}, 200
+
+
+@app.get('/api/v1/proposals')
+def integration_proposals():
+    report = _scan_api_report()
+    rows = report.pop('rows')
+    latest = rows[0] if rows else None
+    verified = bool(latest and latest['group'] == 'completed' and latest['mode'] == 'Preview')
+    return {**report, 'proposal_scope':'latest_recorded_attempt',
+            'proposal_kind':'counts_only', 'latest_attempt':latest,
+            'preview_completed':verified,
+            'moves_proposed':latest['moves_proposed'] if verified else None,
+            'discovery_changes':latest['discovery_changes'] if verified else None}, 503 if rows is None else 200
+
+
+@app.get('/api/v1/coverage')
+def integration_coverage():
+    if os.environ.get('INTEGRATION_API_COVERAGE', 'false').lower() != 'true':
+        return {'status':'disabled'}, 404
+    library = request.args.get('library')
+    if library not in (None, 'Movies', 'TV') or len(request.args.getlist('library')) > 1:
+        return {'status':'invalid_library'}, 400
+    base = {'schema_version':1, 'read_only':True, 'automatic_action':'none',
+            'freshness_verified':False, 'media_actions_authorized':False,
+            'observation_scope':'local_inventory_and_selected_tracking',
+            'filesystem_snapshot_atomic':False}
+    try:
+        config = load_config()
+        enabled = [name for name,key,fallback in (('Movies','ENABLE_MOVIES','true'),('TV','ENABLE_TV','false'))
+                   if str(config.get(key,os.environ.get(key,fallback))).lower() == 'true']
+        if library is not None and library not in enabled:
+            return {**base, 'status':'library_disabled'}, 400
+        if library is not None:
+            enabled = [library]
+        if not enabled:
+            return {**base, 'status':'no_enabled_libraries', 'rows':[], 'complete':False}, 503
+        inventory_config = {**config, 'ENABLE_MOVIES':str('Movies' in enabled).lower(),
+                            'ENABLE_TV':str('TV' in enabled).lower()}
+        def build(state):
+            stages, warnings = filesystem_stages(state, inventory_config, max_entries=10000)
+            result = summarize_dashboard_clocks(state, stages, warnings, libraries=enabled)
+            # Incomplete aggregates are unknown; do not present partial totals as full coverage.
+            if not result['complete']:
+                for key in ('missing_dates','invalid_dates','future_dates','records_without_stage_folder'):
+                    result[key] = None
+            return result
+        result = read_selected_coverage(STATE_FILE, build)
+        if load_config() != config:
+            raise RuntimeError('Settings changed during observation')
+        return {**base, **result, 'status':'advisory_only' if result['complete'] else 'unavailable'}, 200 if result['complete'] else 503
+    except (OSError, RuntimeError, ValueError, TypeError, KeyError, AttributeError):
+        return {**base, 'status':'unavailable', 'rows':None, 'complete':False,
+                'storage_authority':'unavailable', 'state_revision':None}, 503
+
+
+@app.get("/api/v1/summary")
+def integration_summary():
+    report = read_tracking_status(STATE_FILE)
+    return report, 503 if report["status"] == "unavailable" else 200
+
+
+_WIDGET_MEDIA_CACHE = {}
+_WIDGET_MEDIA_LOCK = threading.Lock()
+
+
+def _widget_media_index(base, token, media_type):
+    """Five-minute presentation cache; never used for lifecycle decisions."""
+    if not widget_media_base(base) or not token:
+        raise ValueError("Invalid media transport")
+    key = (base, token, media_type)
+    with _WIDGET_MEDIA_LOCK:
+        cached = _WIDGET_MEDIA_CACHE.get(key)
+        if cached and time.monotonic() - cached[0] < 300:
+            return cached[1], "cached"
+    deadline = time.monotonic() + 8
+
+    def fetch(path, params):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise ValueError("Media lookup deadline exceeded")
+        response = requests.get(base + path, params=params, headers=_poster_headers(token),
+                                timeout=(min(2, remaining), min(4, remaining)), allow_redirects=False)
+        if response.status_code != 200:
+            raise ValueError("Media lookup unavailable")
+        data = response.json()
+        if time.monotonic() > deadline:
+            raise ValueError("Media lookup deadline exceeded")
+        return data
+
+    index = collect_widget_media_index(fetch, media_type)
+    with _WIDGET_MEDIA_LOCK:
+        if len(_WIDGET_MEDIA_CACHE) >= 4:
+            _WIDGET_MEDIA_CACHE.clear()
+        _WIDGET_MEDIA_CACHE[key] = (time.monotonic(), index)
+    return index, "collected"
+
+
+def _integration_title_media(report):
+    if not isinstance(report.get("items"), list):
+        return report
+    enabled = os.environ.get("INTEGRATION_API_MEDIA", "false").lower() == "true"
+    report["media_lookup_status"] = "disabled" if not enabled else "available"
+    config = load_config() if enabled else {}
+    base = config.get("JELLYFIN_HOST_URL", os.environ.get("JELLYFIN_HOST_URL", "")).rstrip("/")
+    # Saved Settings wins for both transport and browser navigation by default.
+    # An explicit override supports internal-only Docker names/reverse proxies.
+    public = widget_media_base(os.environ.get("JELLYFIN_PUBLIC_URL", base))
+    if enabled and not public:
+        report["media_lookup_status"] = "unavailable"
+    report["media_cache_max_age_seconds"] = 300 if enabled else None
+    token = config.get("JELLYFIN_API_TOKEN", os.environ.get("JELLYFIN_API_TOKEN", ""))
+    indexes = {}
+    for item in report["items"]:
+        library = item["library"]
+        if enabled and public and library not in indexes:
+            try:
+                indexes[library], _ = _widget_media_index(base, token, "Movie" if library == "Movies" else "Series")
+            except (requests.RequestException, ValueError, TypeError, KeyError, AttributeError):
+                indexes[library] = None
+                report["media_lookup_status"] = "unavailable"
+        item.update(widget_media_urls(item, indexes.get(library), public))
+        if not enabled:
+            item["match_status"] = "disabled"
+    return report
+
+
+@app.get("/api/v1/titles/oldest-waiting", defaults={"view": "oldest-waiting"})
+@app.get("/api/v1/titles/leaving-soon", defaults={"view": "leaving-soon"})
+def integration_titles(view):
+    if os.environ.get("INTEGRATION_API_TITLE_DETAILS", "false").lower() != "true":
+        return {"status": "disabled"}, 404
+    library = request.args.get('library')
+    if library not in (None, 'Movies', 'TV') or len(request.args.getlist('library')) > 1:
+        return {'status': 'invalid_library'}, 400
+    options = {} if library is None else {'library': library}
+    days = 7
+    if view == "leaving-soon":
+        config = load_config()
+        try:
+            days = max(1, int(config.get("HOLDING_DAYS", os.environ.get("HOLDING_DAYS", "7"))))
+        except (ValueError, TypeError):
+            days = 0
+    report = _integration_title_media(read_tracking_titles(STATE_FILE, view, holding_days=days, **options))
+    return report, 503 if report["status"] == "unavailable" else 200
+
+
+@app.get("/api/v1/audit-status")
+def integration_audit_status():
+    if read_only_service_enabled():
+        report = audit_status_report(None)
+        report["source"] = "coordinator_unavailable_in_read_only_service"
+        return report, 503
+    report = selected_audit_status_report(snapshot)
+    return report, 503 if report["status"] == "unavailable" else 200
+
+
 def load_actions(limit=250):
+    if os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized':
+        from app.json_activity import project_activity
+        return project_activity(read_history(100),limit=min(limit,1000))
     path = Path(ACTION_LOG_FILE)
     if not path.exists():
         return []
@@ -116,14 +372,7 @@ def load_actions(limit=250):
 
 
 def load_state():
-    path = Path(STATE_FILE)
-    if not path.exists():
-        return {}
-    try:
-        with path.open() as handle:
-            return json.load(handle)
-    except (OSError, json.JSONDecodeError, UnicodeError) as exc:
-        raise RuntimeError("Dashboard tracking state is unreadable; displayed lifecycle dates may be incomplete") from exc
+    return read_dashboard_state(STATE_FILE)
 
 
 
@@ -197,7 +446,7 @@ def _dashboard_signals(config):
 _SIGNAL_LOCK = threading.Lock()
 _SIGNAL_CACHE = {}
 
-def filesystem_stages(state, config):
+def filesystem_stages(state, config, *, max_entries=None):
     """Read-only lifecycle inventory. Missing mounts are reported, not counted as empty."""
     stages = {label: [] for label in ("Waiting", "Holding", "Removal", "Keep")}
     warnings = []
@@ -217,11 +466,16 @@ def filesystem_stages(state, config):
             continue
         for label, dirname in defaults.items():
             kind = "TRANSIENT" if label == "Waiting" else label.upper()
-            directory = os.environ.get(f"{prefix}_{kind}_PATH") or os.path.join(media_root, dirname)
+            directory = config.get(f"{prefix}_{kind}_PATH") or os.environ.get(f"{prefix}_{kind}_PATH") or os.path.join(media_root, dirname)
             try:
                 with os.scandir(directory) as entries:
-                    names = sorted((entry.name for entry in entries
-                                    if entry.is_dir(follow_symlinks=False)), key=str.casefold)
+                    names = []
+                    for count, entry in enumerate(entries, 1):
+                        if max_entries is not None and count > max_entries:
+                            raise OSError('Inventory observation bound exceeded')
+                        if entry.is_dir(follow_symlinks=False):
+                            names.append(entry.name)
+                    names.sort(key=str.casefold)
             except OSError:
                 warnings.append(f"{library} {label}: directory unavailable ({directory})")
                 continue
@@ -304,7 +558,7 @@ def collection_health(state, stages, warnings, config=None):
 
 
 @app.get("/")
-def dashboard():
+def dashboard(initial_workspace="Overview"):
     actions = load_actions()
     state_error = None
     try:
@@ -315,19 +569,19 @@ def dashboard():
     config = load_config()
     stages, inventory_warnings = filesystem_stages(state, config)
     health_issues = collection_health(state, stages, inventory_warnings, config)
-    removal_days = int(config.get("REMOVAL_DAYS", os.environ.get("REMOVAL_DAYS", "7")))
-    for item in stages["Removal"]:
-        try:
-            age = (datetime.now() - datetime.fromisoformat(item["since"])).days
-            item["days_left"] = max(0, removal_days - age)
-        except (ValueError, TypeError):
-            item["days_left"] = None
+    enabled_libraries=[library for library,key,fallback in (('Movies','ENABLE_MOVIES','true'),('TV','ENABLE_TV','false'))
+        if str(config.get(key,os.environ.get(key,fallback))).lower()=='true']
+    clock_coverage=summarize_dashboard_clocks(state,stages,inventory_warnings,libraries=enabled_libraries,
+        tracking_available=state_error is None)
     def setting_days(key, fallback):
         try:
-            return max(1, int(config.get(key, os.environ.get(key, str(fallback)))))
+            value=int(config.get(key, os.environ.get(key, str(fallback))))
+            minimum=1 if key in ('HOLDING_DAYS','REMOVAL_DAYS') else 0
+            return value if minimum <= value <= 100000 else None
         except (ValueError, TypeError):
-            return fallback
+            return None
 
+    removal_days=setting_days('REMOVAL_DAYS',7)
     deadlines = {"Waiting": {"Movies": setting_days("MOVIE_WAIT_DAYS", 30),
                               "TV": setting_days("TV_WAIT_DAYS", 60)},
                  "Holding": {"Movies": setting_days("HOLDING_DAYS", 7),
@@ -346,27 +600,15 @@ def dashboard():
     for stage, items in stages.items():
         for item in items:
             item["reason"] = stage_explanations[stage]
-            item["elapsed_days"] = None
-            item["deadline_days"] = None
-            item["due"] = False
-            item["next_review_date"] = None
-            try:
-                start = datetime.fromisoformat(str(item["since"]))
-                now = datetime.now(start.tzinfo) if start.tzinfo else datetime.now()
-                elapsed = max(0, (now - start).days)
-                item["elapsed_days"] = elapsed
-                if stage in deadlines:
-                    limit = deadlines[stage][item["library"]]
-                    item["deadline_days"] = max(0, limit - elapsed)
-                    item["due"] = elapsed >= limit
-                    item["next_review_date"] = (start + timedelta(days=limit)).date().isoformat()
-            except (ValueError, TypeError, OverflowError):
-                pass
+            item.update(lifecycle_clock(item['since'],limit=deadlines.get(stage,{}).get(item['library'])))
+            if stage=='Removal':item['days_left']=item['deadline_days']
             sig = live_signals.get(item["library"], {}).get(item["title"].casefold()) if live_signals is not None else None
             item["jellyfin_signals"] = sig
-            decision, explanation = decide(stage, item["elapsed_days"],
-                                           deadlines.get(stage, {}).get(item["library"], 0), sig,
-                                           favorites_trigger_keep)
+            limit=deadlines.get(stage,{}).get(item['library'])
+            if stage!='Keep' and limit is None:
+                decision,explanation='unknown','Lifecycle duration unavailable; review saved settings.'
+            else:
+                decision, explanation = decide(stage, item["elapsed_days"],limit or 0,sig,favorites_trigger_keep)
             if stage == "Removal" and (sig is None or sig.get("protected") or sig.get("keep") or (favorites_trigger_keep and sig.get("favorite"))):
                 decision, explanation = "blocked", "Deletion blocked: Jellyfin status unknown or title protected. Manual rescue may be needed."
             if stage == "Removal" and not deletion_enabled:
@@ -381,8 +623,17 @@ def dashboard():
                     preview.append({"title": item["title"], "library": item["library"],
                                     "stage": stage, "action": action})
     preview.sort(key=lambda item: (item["library"], item["stage"], item["title"].casefold()))
-    return render_template("dashboard.html", actions=actions, state=state, state_error=state_error, stages=stages, inventory_warnings=inventory_warnings, health_issues=health_issues, run=snapshot(), history=read_history(100),
+    display_zone=config.get('DAILY_RUN_TIMEZONE') or os.environ.get('DAILY_RUN_TIMEZONE') or os.environ.get('TZ')
+    run = selected_run_snapshot(snapshot)
+    history = selected_run_history(read_history, 100)
+    return render_template("dashboard.html", scan_view=build_scan_view(run, history, timezone_name=display_zone), initial_workspace=initial_workspace, overview=dashboard_overview(stages, clock_coverage, libraries=enabled_libraries, tracking_available=state_error is None, limit=3), dashboard_timezone=display_zone, clock_coverage=clock_coverage, actions=actions, state=state, state_error=state_error, stages=stages, inventory_warnings=inventory_warnings, health_issues=health_issues, run=run, history=history,
                            preview=preview, dry_run=load_config().get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "true")
+
+
+@app.get("/review")
+def dashboard_review():
+    """Separate read-only diagnostics page using the same dashboard capture path."""
+    return dashboard(initial_workspace="Review")
 
 
 # Cache Jellyfin's folder-to-image mapping to avoid a library scan per poster.
@@ -428,7 +679,8 @@ def _poster_index(base, token, media_type):
             continue
         response = requests.get(base + "/Users/" + user_id + "/Items",
                                 params={"Recursive": "true", "IncludeItemTypes": media_type,
-                                        "Fields": "Path", "EnableImages": "true"},
+                                        "Fields": "Path", "EnableImages": "true",
+                                        "CollapseBoxSetItems": "false"},
                                 headers=headers, timeout=(3, 15), allow_redirects=False)
         response.raise_for_status()
         for item in response.json().get("Items", []):
@@ -444,6 +696,11 @@ def _poster_index(base, token, media_type):
     with _POSTER_LOCK:
         _POSTER_INDEX[key] = (time.monotonic(), index)
     return index
+
+
+@app.template_filter('observation_datetime')
+def format_observation_datetime(value,timezone_name=None):
+    return observation_datetime(value,timezone_name)
 
 
 @app.template_filter("friendly_date")
@@ -468,7 +725,7 @@ def _jellyfin_item_id(title, library):
     media_type = "Movie" if library == "Movies" else "Series"
     index = _poster_index(base, token, media_type)
     normalized = title.casefold()
-    display_name = re.sub(r"\\s*\\(\\d{4}\\)\\s*$", "", title).strip().casefold()
+    display_name = re.sub(r"\s*\(\d{4}\)\s*$", "", title).strip().casefold()
     item_id = (index.get(normalized) or index.get("name:" + normalized)
                or index.get("name:" + display_name))
     return base, item_id
@@ -565,7 +822,7 @@ def export_diagnostics():
         # Only export the last 2 MiB of activity to avoid excessive memory use.
         path = Path(ACTION_LOG_FILE)
         raw = b""
-        if path.is_file():
+        if os.environ.get('AUDITOR_WORKER_MODE') != 'json_serialized' and path.is_file():
             with path.open("rb") as handle:
                 handle.seek(0, os.SEEK_END)
                 length = handle.tell()
@@ -573,6 +830,11 @@ def export_diagnostics():
                 raw = handle.read()
             if length > 2 * 1024 * 1024:
                 raw = raw.partition(b"\\n")[2]  # omit truncated first record
+        if os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized':
+            from app.json_activity import export_activity
+            raw=export_activity(read_history(100))
+            report['log_format']='JSON Lines (recorded scan and title observations)'
+            report['activity_source']='persistent_json_scan_history'
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             archive.writestr("diagnostics.json", json.dumps(report, indent=2))
@@ -589,6 +851,12 @@ def export_logs():
     """Download persisted structured activity only; never expose arbitrary server paths."""
     if not getattr(g, "user", None) or not g.user["admin"]:
         return Response("Administrator access required.", 403)
+    if os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized':
+        from app.json_activity import export_activity
+        response=Response(export_activity(read_history(100)),mimetype='application/x-ndjson')
+        response.headers['Content-Disposition']='attachment; filename="auditor_actions.jsonl"'
+        response.headers['Cache-Control']='no-store'
+        return response
     path = Path(ACTION_LOG_FILE)
     try:
         if not path.is_file():
@@ -608,49 +876,85 @@ def admin_authorized():
     return bool(getattr(g, "user", None) and g.user["admin"])
 
 
-@app.route("/settings", methods=["GET", "POST"])
+try:
+    from app.arr_import_web import create_blueprint as _create_arr_import_blueprint
+except ModuleNotFoundError as error:
+    if error.name not in ('app', 'app.arr_import_web'):
+        raise
+else:
+    app.register_blueprint(_create_arr_import_blueprint(is_admin=admin_authorized))
+
+
+from app.backup_web import create_blueprint as _create_backup_blueprint
+
+def _backup_paths():
+    from config_store import CONFIG_FILE
+    return STATE_FILE,CONFIG_FILE
+
+def _backup_display_time(value):
+    config=load_config()
+    return observation_datetime(value,config.get('DAILY_RUN_TIMEZONE') or os.environ.get('TZ'))
+
+app.register_blueprint(_create_backup_blueprint(is_admin=admin_authorized,paths=_backup_paths,display_time=_backup_display_time))
+
+
+if os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized':
+    from app.json_recovery_web import create_blueprint as create_json_recovery_blueprint
+    app.register_blueprint(create_json_recovery_blueprint(admin_authorized))
+
+
+@app.route('/settings',methods=['GET','POST'])
 def settings():
     if not admin_authorized():
-        return Response("Settings require WEB_ADMIN_PASSWORD (and HTTP Basic authentication).",
-                        401, {"WWW-Authenticate": 'Basic realm="Auditor settings"'})
-    saved = load_config()
-    error = None
-    success = request.args.get("saved") == "1"
-    if request.method == "POST":
-        # Reject cross-origin browser submissions; don't accept unauthenticated writes.
-        origin = request.headers.get("Origin") or request.headers.get("Referer")
-        if not origin or urlsplit(origin).netloc != request.host:
-            return Response("Invalid request origin", 403)
-        updated = dict(saved)
+        return Response('Administrator access required.',403)
+    from app.json_worker_service import read_saved_settings
+    from app.json_worker_cycle import validate_policy
+    from config_store import initial_environment
+    saved=load_config(); error=None
+    if request.method=='POST':
+        origin=request.headers.get('Origin') or request.headers.get('Referer')
+        if not origin or urlsplit(origin).netloc!=request.host: return Response('Invalid request origin',403)
+        updated=dict(saved)
         try:
             for key in KEYS:
-                raw = request.form.get(key, "").strip()
-                if key in SECRETS and not raw:
-                    continue  # Empty password field preserves existing secret.
-                if not raw and key not in BOOLS:
-                    updated.pop(key, None)  # Fall back to Unraid environment.
-                else:
-                    updated[key] = validate(key, raw)
-            if (updated.get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "false"
-                    or updated.get("ALLOW_PERMANENT_DELETE", "false") == "true"
-                    or updated.get("ALLOW_FILESYSTEM_DELETE", "false") == "true"
-                    or updated.get("ALLOW_CROSS_FILESYSTEM_MOVES", "false") == "true"
-                    or updated.get("ENABLE_SEASON_PRUNING", "false") == "true"):
-                if request.form.get("safety_confirmation") != "I UNDERSTAND":
-                    raise ValueError("Type I UNDERSTAND to confirm potentially destructive settings.")
+                raw=request.form.get(key,'').strip()
+                if key in SECRETS and not raw: continue
+                if not raw and key not in BOOLS: updated.pop(key,None)
+                else: updated[key]=validate(key,raw)
+            from app.deletion_policy import CONSENT_KEY,CONSENT_VERSION
+            if updated.get('ALLOW_PERMANENT_DELETE',initial_environment().get('ALLOW_PERMANENT_DELETE','false'))=='true':
+                if request.form.get('acknowledge_removal_deletion')!='yes':
+                    raise ValueError('Acknowledge the Removal deletion warning to apply settings with deletion enabled.')
+                updated[CONSENT_KEY]=CONSENT_VERSION
+            else: updated[CONSENT_KEY]=None
+            from app.orphan_cleanup import CONSENT_KEY as ORPHAN_CONSENT, CONSENT_VERSION as ORPHAN_VERSION
+            if updated.get('ORPHAN_CLEANUP_ENABLED','false')=='true':
+                if request.form.get('acknowledge_orphan_quarantine')!='yes':
+                    raise ValueError('Acknowledge the orphan metadata quarantine warning to enable cleanup.')
+                updated[ORPHAN_CONSENT]=ORPHAN_VERSION
+            else: updated[ORPHAN_CONSENT]=None
+            validate_policy({**DEFAULTS,**initial_environment(),**updated})
+            if request.form.get('settings_action')!='apply':
+                raise ValueError('Use Apply Requested Settings to apply your changes.')
+            retained=read_saved_settings()
+            updated={**{key:value for key,value in retained.items() if key not in KEYS},**updated}
             save_config(updated)
-            return redirect(url_for("settings", saved=1))
-        except (ValueError, OSError) as exc:
-            error = str(exc)
-    values = {key: saved.get(key, os.environ.get(key, DEFAULTS.get(key, "")))
-              for key in KEYS}
-    sources = {key: ("Web override" if key in saved else
-                     "Unraid" if key in os.environ else "Default") for key in KEYS}
-    for key in SECRETS:
-        values[key] = ""  # Never send stored tokens to the browser.
-    return render_template("settings.html", groups=FIELDS, values=values,
-                           secrets=SECRETS, bools=BOOLS, sources=sources, help_text=FIELD_HELP, error=error,
-                           success=success)
+            return redirect(url_for('settings',saved='1'))
+        except (ValueError,OSError) as exc: error=str(exc)
+    try: read_saved_settings()
+    except ValueError as exc: error=error or str(exc)
+    baseline=initial_environment()
+    values={key:saved.get(key,baseline.get(key,DEFAULTS.get(key,''))) for key in KEYS}
+    sources={key:('Web override' if key in saved else 'Unraid' if key in baseline else 'Default') for key in KEYS}
+    for key in SECRETS: values[key]=''
+    groups={name:[key for key in keys if key!='RUN_INTERVAL_HOURS'] for name,keys in FIELDS.items()}
+    from app.deletion_policy import WARNING
+    from app.orphan_cleanup import WARNING as ORPHAN_WARNING
+    return render_template('settings.html',deletion_warning=WARNING,orphan_warning=ORPHAN_WARNING,groups=groups,values=values,secrets=SECRETS,bools=BOOLS,sources=sources,
+        help_text=FIELD_HELP,error=error,success=request.args.get('saved')=='1',json_mode=True,
+        preview_mode=False,live_mode=False,requested=False,unchanged=False,pending_settings={'status':'none'},
+        settings_application={'status':'none'},locked_settings=(),settings_applied=False,
+        settings_restored=False,settings_apply_error=False,settings_apply_busy=False)
 
 
 @app.post("/api/test-connection/<service>")
@@ -665,6 +969,48 @@ def test_connection(service):
     return check_connection(service)
 
 
+
+
+
+
+
+
+@app.post('/api/test-notification/<kind>')
+def test_notification(kind):
+    if not admin_authorized():
+        return {'ok': False, 'message': 'Administrator access required.'}, 403
+    try:
+        origin = urlsplit(request.headers.get('Origin', ''))
+        same_origin = origin.scheme in ('http', 'https') and origin.netloc == request.host
+    except ValueError:
+        same_origin = False
+    if not same_origin or request.headers.get('X-Auditor-Action') != 'test-notification':
+        return {'ok': False, 'message': 'Invalid test request.'}, 403
+    if kind not in ('discord', 'ntfy', 'webhook'):
+        return {'ok': False, 'message': 'Unknown notification service.'}, 404
+    from app.json_worker_service import settings_snapshot
+    from app.operational_notifications import test_destination
+
+    try:
+        saved = settings_snapshot()
+    except ValueError:
+        return {'ok': False, 'message': 'Saved settings require review before testing.'}, 409
+    ok, message = test_destination(saved, kind)
+    return {'ok': ok, 'message': message}, 200, {'Cache-Control': 'no-store'}
+
+
+@app.get('/api/run-status')
+def run_button_status():
+    if not admin_authorized(): return {'ok':False},401
+    report=selected_run_snapshot(snapshot)
+    result={'ok':True,'running':report.get('running') is True,'queued':report.get('queued') is True,
+        'blocked':report.get('execution_blocked') is True}
+    if result['running'] and os.environ.get('AUDITOR_WORKER_MODE')=='json_serialized':
+        from app.json_worker_service import SERVICE
+        result['progress']=SERVICE.progress_report()
+    return result,200,{'Cache-Control':'no-store'}
+
+
 @app.post("/api/run-now")
 def run_now():
     if not admin_authorized():
@@ -672,13 +1018,31 @@ def run_now():
     origin = request.headers.get("Origin") or request.headers.get("Referer")
     if not origin or urlsplit(origin).netloc != request.host:
         return {"ok": False, "message": "Invalid request origin."}, 403
-    if request_run():
-        return {"ok": True, "message": "Audit queued. Refresh the dashboard for results."}, 202
-    return {"ok": False, "message": "An audit is already running or queued."}, 409
+    backend = os.environ.get('AUDITOR_STATE_BACKEND', 'json')
+    if os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized':
+        from app.json_worker_service import SERVICE
+        if backend != 'json': return {'ok':False,'message':'Worker configuration requires review.'},409
+        from app.json_readonly_scan import _bool
+        try: live=not _bool(SERVICE.load_settings(),'DRY_RUN','true')
+        except Exception: return {'ok':False,'message':'Settings require review.'},409
+        if live and request.get_json(silent=True) != {'run_live_scan':True}:
+            return {'ok':False,'message':'Confirm this live scan before queuing it.'},409
+        result=SERVICE.request(expected_dry_run=not live)
+        if result['status']=='queued':
+            return {'ok':True,'message':'Scan queued. Active settings are captured when it starts.'},202
+        if result['status']=='settings_changed':
+            return {'ok':False,'message':'Settings changed during this request. Review them and request a fresh scan.'},409
+        if result['status']=='cooldown':
+            return {'ok':False,'message':'Live scans must start at least 60 minutes apart.',
+                'next_allowed_at':result['next_allowed_at']},429,{'Retry-After':str(result['retry_after_seconds'])}
+        return {'ok':False,'message':'A scan is active or the retained operation needs review.'},409
+    return {'ok':False,'message':'Serialized worker configuration is required.'},409
 
 
 @app.post("/api/rescue")
 def rescue():
+    if os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized':
+        return {'ok':False,'message':'Use reviewed operation recovery; legacy rescue is unavailable in this worker.'},409
     if not admin_authorized():
         return {"ok": False, "message": "Sign in through Settings first."}, 401
     origin = request.headers.get("Origin") or request.headers.get("Referer")
@@ -694,6 +1058,105 @@ def rescue():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+
+
+@app.get('/scan-results')
+def scan_results():
+    """Session-authenticated history browsing; never requests a scan or service call."""
+    from app.scan_results import browse
+    from app.scan_details import OUTCOMES
+    allowed={'attempt','q','library','outcome','page'}
+    if any(key not in allowed or len(request.args.getlist(key))!=1 for key in request.args):
+        return Response('Invalid result filters.',400)
+    records=[row for row in read_history(100) if isinstance(row,dict)
+             and row.get('worker_mode')=='json_serialized' and isinstance(row.get('id'),str)
+             and re.fullmatch('[0-9a-f]{32}',row['id'])]
+    selected=request.args.get('attempt',records[0]['id'] if records else '')
+    if selected and not re.fullmatch('[0-9a-f]{32}',selected):
+        return Response('Invalid attempt.',400)
+    record=next((row for row in records if row['id']==selected),None)
+    if selected and record is None:return Response('Recorded attempt not found.',404)
+    try:
+        page_text=request.args.get('page','1')
+        if not re.fullmatch('[1-9][0-9]{0,3}',page_text):raise ValueError()
+        result=browse(record or {},query=request.args.get('q',''),library=request.args.get('library','all'),
+                      outcome=request.args.get('outcome','all'),page=int(page_text))
+    except ValueError:return Response('Recorded results or filters are invalid.',400)
+    def page_url(page):
+        return url_for('scan_results',attempt=selected,q=result['query'],library=result['library'],outcome=result['outcome'],page=page)
+    config=load_config()
+    zone=config.get('DAILY_RUN_TIMEZONE') or os.environ.get('DAILY_RUN_TIMEZONE') or os.environ.get('TZ')
+    attempts=[dict(id=row['id'], started=observation_datetime(row.get('started_at'),zone) or 'Time not recorded',
+                   mode='Preview' if row.get('dry_run') is True else 'Live' if row.get('dry_run') is False else 'Mode unknown',
+                   result=row.get('result') if row.get('result') in ('completed','failed','stopped') else 'Outcome unknown')
+              for row in records]
+    response=Response(render_template('scan_results.html',result=result,records=attempts,selected=selected,
+                                     outcomes=OUTCOMES,page_url=page_url))
+    response.headers['Cache-Control']='no-store'
+    return response
+
+
+@app.get('/cleanup-review')
+def cleanup_review():
+    """Admin-only recorded observations; no scan, filesystem inventory or Arr calls."""
+    from app.cleanup_review import review
+    allowed={'view','q','library','page'}
+    if any(key not in allowed or len(request.args.getlist(key))!=1 for key in request.args):
+        return Response('Invalid review filters.',400)
+    try:
+        page_text=request.args.get('page','1')
+        if not re.fullmatch('[1-9][0-9]{0,3}',page_text):raise ValueError()
+        args=dict(view=request.args.get('view','observing'),query=request.args.get('q',''),
+                  library=request.args.get('library','all'),page=int(page_text))
+        # Reject invalid filters independently of stored-state availability.
+        review({},[],**args)
+    except ValueError:return Response('Invalid review filters.',400)
+    config=load_config()
+    result=None;unavailable=False
+    try:result=review(load_state(),read_history(100),**args)
+    except Exception:unavailable=True
+    zone=config.get('DAILY_RUN_TIMEZONE') or os.environ.get('DAILY_RUN_TIMEZONE') or os.environ.get('TZ')
+    def page_url(page):
+        return url_for('cleanup_review',view=args['view'],q=args['query'],library=args['library'],page=page)
+    response=Response(render_template('cleanup_review.html',result=result,unavailable=unavailable,
+        enabled=config.get('ORPHAN_CLEANUP_ENABLED','false')=='true',page_url=page_url,
+        display_time=lambda value:observation_datetime(value,zone)),status=503 if unavailable else 200)
+    response.headers['Cache-Control']='no-store'
+    return response
+
+
+@app.get('/tracking-review')
+def tracking_review():
+    """Read local directories and saved records only; never change clocks or Arr."""
+    from app.tracking_review import review,LABELS
+    allowed={'kind','q','library','page'}
+    if any(key not in allowed or len(request.args.getlist(key))!=1 for key in request.args):
+        return Response('Invalid tracking review filters.',400)
+    try:
+        page_text=request.args.get('page','1')
+        if not re.fullmatch('[1-9][0-9]{0,5}',page_text):raise ValueError()
+        args=dict(kind=request.args.get('kind','all'),query=request.args.get('q',''),
+                  library=request.args.get('library','all'),page=int(page_text))
+        review({}, {}, [], [], libraries=[], **args)
+    except ValueError:return Response('Invalid tracking review filters.',400)
+    result=None;unavailable=False;config={}
+    try:
+        config=load_config();state=load_state()
+        libraries=[name for name,key,default in (('Movies','ENABLE_MOVIES','true'),('TV','ENABLE_TV','false'))
+                   if str(config.get(key,os.environ.get(key,default))).lower()=='true']
+        stages,warnings=filesystem_stages(state,config,max_entries=10000)
+        result=review(state,stages,warnings,read_history(100),libraries=libraries,**args)
+        repeated,repeated_warnings=filesystem_stages(state,config,max_entries=10000)
+        if (load_state()!=state or load_config()!=config or repeated!=stages or repeated_warnings!=warnings):
+            raise RuntimeError('Source changed during comparison')
+    except Exception:unavailable=True
+    def page_url(page):
+        return url_for('tracking_review',kind=args['kind'],q=args['query'],library=args['library'],page=page)
+    return Response(render_template('tracking_review.html',result=result,unavailable=unavailable,
+        labels=LABELS,page_url=page_url,
+        display_time=lambda value:observation_datetime(value,config.get('DAILY_RUN_TIMEZONE') or os.environ.get('TZ'))),status=503 if unavailable else 200),{'Cache-Control':'no-store'}
 
 
 if __name__ == "__main__":

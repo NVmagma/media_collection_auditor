@@ -1,0 +1,52 @@
+# Merge into services.yaml only after deploying an image containing the API.
+# Replace auditor.example.invalid with a URL reachable from Homepage's container.
+# Set HOMEPAGE_VAR_AUDITOR_TOKEN privately in Homepage's environment.
+- Media:
+    - Auditor tracking records:
+        href: https://auditor.example.invalid/
+        description: Tracking records; freshness unverified
+        widget:
+          type: customapi
+          url: https://auditor.example.invalid/api/v1/summary
+          method: GET
+          refreshInterval: 60000
+          display: list
+          headers:
+            Authorization: "Bearer {{HOMEPAGE_VAR_AUDITOR_TOKEN}}"
+          mappings:
+            - field: status
+              label: API observation
+              format: text
+            - field: storage_authority
+              label: State source
+              format: text
+            - field: tracking_counts.waiting
+              label: Waiting records
+              format: text
+              remap:
+                - value: null
+                  to: Unavailable
+            - field: tracking_counts.holding
+              label: Holding records
+              format: text
+              remap:
+                - value: null
+                  to: Unavailable
+            - field: tracking_counts.keep
+              label: Keep records
+              format: text
+              remap:
+                - value: null
+                  to: Unavailable
+            - field: tracking_counts.removal
+              label: Removal records
+              format: text
+              remap:
+                - value: null
+                  to: Unavailable
+            - field: tracking_counts.arr_sync_pending
+              label: Arr pending records
+              format: text
+              remap:
+                - value: null
+                  to: Unavailable

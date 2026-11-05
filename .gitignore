@@ -13,3 +13,11 @@ auditor_state.json
 __pycache__/
 *.pyc
 .venv/
+
+# Development-only JSX template compiler
+/tests/homarr-render/node_modules/
+/tests/dashboard-browser/node_modules/
+
+# Local retired recipes may contain existing user edits; builds use docker/runtime.Dockerfile.
+/Dockerfile
+/dockerfile

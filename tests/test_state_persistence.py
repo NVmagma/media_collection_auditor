@@ -106,7 +106,7 @@ class StatePersistenceTests(unittest.TestCase):
                     with self.assertRaisesRegex(RuntimeError, "Failed to persist auditor state"):
                         auditor.save_state(replacement)
                 self.assertEqual(auditor.load_state()["first_seen"], previous["first_seen"])
-            self.assertEqual(sorted(os.listdir(directory)), ["state.json"])
+            self.assertEqual(sorted(os.listdir(directory)), ["state.json", "state.json.migration.lock"])
 
     def test_failed_serialization_keeps_previous_state_and_cleans_temporary_file(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -119,7 +119,7 @@ class StatePersistenceTests(unittest.TestCase):
                     with self.assertRaisesRegex(RuntimeError, "Failed to persist auditor state"):
                         auditor.save_state(previous)
                 self.assertEqual(auditor.load_state()["first_seen"], previous["first_seen"])
-            self.assertEqual(sorted(os.listdir(directory)), ["state.json"])
+            self.assertEqual(sorted(os.listdir(directory)), ["state.json", "state.json.migration.lock"])
 
     def test_restart_preserves_all_lifecycle_timestamps(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -200,7 +200,7 @@ class StatePersistenceTests(unittest.TestCase):
                     with self.assertRaisesRegex(RuntimeError, "Failed to persist auditor state"):
                         auditor.save_state(state)
                 self.assertEqual(auditor.load_state(), state)
-            self.assertEqual(sorted(os.listdir(directory)), ["state.json"])
+            self.assertEqual(sorted(os.listdir(directory)), ["state.json", "state.json.migration.lock"])
 
 if __name__ == "__main__":
     unittest.main()

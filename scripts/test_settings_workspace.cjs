@@ -1,0 +1,139 @@
+/* Synthetic Settings browser checks; no actual settings application or service access. */
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const {chromium} = require('../tests/dashboard-browser/node_modules/playwright');
+const root = path.resolve(__dirname, '..');
+const prefix = process.argv[2];
+if (!prefix) throw Error('Pass the synthetic output prefix from tests/settings_workspace_case.py');
+(async () => {
+  const browser = await chromium.launch({headless:true});
+  try {
+    const page = await browser.newPage({viewport:{width:1440,height:1000}});
+    const errors=[],posts=[];
+    page.on('pageerror', error => errors.push(error.message));
+    await page.route('**/*', route => {
+      const req=route.request(),url=new URL(req.url());
+      if(req.method()!=='GET') {
+        posts.push({path:url.pathname,body:req.postData()});
+        if(url.hostname==='fixture.invalid' && url.pathname==='/api/test-connection/jellyfin')
+          return route.fulfill({contentType:'application/json',body:JSON.stringify({ok:true,message:'Synthetic active connection response'})});
+        if(url.hostname==='fixture.invalid' && url.pathname==='/api/test-notification/ntfy') {
+          assert.equal(req.headers()['x-auditor-action'],'test-notification');
+          return route.fulfill({contentType:'application/json',body:JSON.stringify({ok:true,message:'Synthetic notification accepted'})});
+        }
+        return route.fulfill({status:405,body:'Synthetic preview: no submissions'});
+      }
+      const assets={'/static/style.css':['app/static/style.css','text/css'],
+        '/static/settings.js':['app/static/settings.js','text/javascript'],
+        '/static/auditor-badge.png':['unraid/assets/Media_Collection_Auditor_Badge.png','image/png']};
+      if(url.hostname!=='fixture.invalid') return route.abort();
+      if(url.pathname==='/settings') {
+        const scenario=url.searchParams.get('scenario') || 'ready';
+        if(!['ready','recovery','stale','clean','review','resubmit','live'].includes(scenario)) return route.fulfill({status:400});
+        return route.fulfill({contentType:'text/html',body:fs.readFileSync(prefix+'.'+scenario+'.html')});
+      }
+      const asset=assets[url.pathname];
+      return asset ? route.fulfill({contentType:asset[1],body:fs.readFileSync(path.join(root,asset[0]))}) : route.fulfill({status:404});
+    });
+    await page.goto('http://fixture.invalid/settings');
+    assert.equal(await page.locator('.sidebar [data-tab]').count(),5);
+    assert.equal(await page.locator('main [data-tab]').count(),0);
+    assert.equal(await page.locator('#settings-draft-status').textContent(),'No unsaved field edits');
+    assert.equal(await page.locator('form[action="/settings/apply"]').count(),0);
+    assert.equal(await page.locator('#apply-settings-button').evaluate(button=>button.form.id),'settings-form');
+    assert.equal(await page.locator('#safety_confirmation').count(),0);
+    assert.equal(await page.getByText('Save Requested Changes',{exact:true}).count(),0);
+    await page.locator('#field-JELLYFIN_HOST_URL').fill('https://edited.example.invalid');
+    assert.match(await page.locator('#settings-draft-status').textContent(),/1 unsaved field edit/);
+    await page.locator('#field-JELLYFIN_HOST_URL').fill('https://jellyfin.example.invalid');
+    assert.equal(await page.locator('.draft-changed').count(),0);
+    await page.locator('#field-JELLYFIN_API_TOKEN').fill('typed-test-secret-only');
+    assert.equal(await page.locator('body').innerText().then(s=>s.includes('typed-test-secret-only')),false);
+    assert.equal(await page.evaluate(()=>JSON.stringify({...localStorage}).includes('typed-test-secret-only')),false);
+    await page.locator('[data-tab="Lifecycle"]').click();
+    await page.locator('#field-HOLDING_DAYS').fill('11');
+    assert.match(await page.locator('#settings-draft-status').textContent(),/2 unsaved field edits/);
+    assert.equal(await page.locator('.draft-changed').count(),2);
+    await page.locator('#field-HOLDING_DAYS').fill('7');
+    await page.locator('[data-tab="Connections"]').click();
+    await page.locator('#field-JELLYFIN_API_TOKEN').fill('');
+    assert.equal(await page.locator('.draft-changed').count(),0);
+    assert.deepEqual(posts,[]);
+    await page.locator('[data-test-service="jellyfin"]').click();
+    await page.getByText('Synthetic active connection response',{exact:true}).waitFor();
+    assert.deepEqual(posts,[{path:'/api/test-connection/jellyfin',body:null}]);
+    for(const width of [1440,900,390,320]) {
+      await page.setViewportSize({width,height:1000});
+      for(const group of ['Connections','Libraries','Lifecycle','Safety','Notifications']) {
+        await page.locator(`[data-tab="${group}"]`).click();
+        assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,
+          `Settings overflow at ${width}px in ${group}`);
+      }
+    }
+    for(const scenario of ['stale','clean','review','resubmit']) {
+      await page.goto('http://fixture.invalid/settings?scenario='+scenario);
+      assert.equal(await page.locator('form[action="/settings/apply"]').count(),0);
+      assert.equal(await page.locator('form[action="/settings/restore"]').count(),0);
+      assert.equal(await page.locator('#field-JELLYFIN_API_TOKEN').inputValue(),'');
+      assert.equal(await page.locator('input[name="request_sha256"]').count(),0);
+    }
+    await page.goto('http://fixture.invalid/settings');
+    await page.locator('[data-tab="Lifecycle"]').click();
+    await page.locator('#field-HOLDING_DAYS').fill('11');
+    await page.locator('#apply-settings-button').click();
+    assert.equal(posts.length,2);
+    assert.equal(posts[1].path,'/settings');
+    const submitted=new URLSearchParams(posts[1].body);
+    assert.equal(submitted.get('settings_action'),'apply');
+    assert.equal(submitted.get('HOLDING_DAYS'),'11');
+    assert.equal(submitted.has('request_sha256'),false);
+    assert.equal(submitted.has('safety_confirmation'),false);
+    await page.goto('http://fixture.invalid/settings?scenario=live');
+    await page.locator('[data-tab=Safety]').click();
+    assert.equal(await page.locator('#field-MAX_ACTIONS_PER_RUN').isEnabled(),true);
+    await page.locator('[data-tab=Lifecycle]').click();
+    assert.equal(await page.locator('#field-DAILY_RUN_TIMEZONE').isEnabled(),true);
+    assert.equal(await page.locator('#apply-settings-button').isEnabled(),true);
+    await page.locator('[data-tab=Safety]').click();
+    assert.equal(await page.locator('#removal-deletion-warning').isVisible(),false);
+    await page.locator('#field-ALLOW_PERMANENT_DELETE').selectOption('true');
+    assert.equal(await page.locator('#removal-deletion-warning').isVisible(),true);
+    assert.match(await page.locator('#removal-deletion-warning').innerText(),/cannot restore deleted files/);
+    assert.equal(await page.locator('#acknowledge-removal-deletion').isChecked(),false);
+    const beforeConsent = posts.length;
+    await page.locator('#apply-settings-button').click();
+    assert.equal(posts.length,beforeConsent);
+    await page.locator('#acknowledge-removal-deletion').check();
+    await page.locator('#field-ALLOW_PERMANENT_DELETE').selectOption('false');
+    assert.equal(await page.locator('#acknowledge-removal-deletion').isChecked(),false);
+    assert.equal(await page.locator('#removal-deletion-warning').isVisible(),false);
+    assert.equal(await page.locator('[name=ENABLE_SEASON_PRUNING]').inputValue(),'false');
+    assert.equal(await page.locator('#orphan-quarantine-warning').isVisible(),false);
+    await page.locator('#field-ORPHAN_CLEANUP_ENABLED').selectOption('true');
+    assert.equal(await page.locator('#orphan-quarantine-warning').isVisible(),true);
+    assert.match(await page.locator('#orphan-quarantine-warning').innerText(),/does not permanently delete/);
+    const beforeOrphanConsent = posts.length;
+    await page.locator('#apply-settings-button').click();
+    assert.equal(posts.length,beforeOrphanConsent);
+    await page.locator('#acknowledge-orphan-quarantine').check();
+    await page.locator('#field-ORPHAN_CLEANUP_ENABLED').selectOption('false');
+    assert.equal(await page.locator('#acknowledge-orphan-quarantine').isChecked(),false);
+    assert.equal(await page.locator('#orphan-quarantine-warning').isVisible(),false);
+    await page.locator('[data-tab="Notifications"]').click();
+    await page.locator('#field-NOTIFY_NTFY_URL').fill('https://draft.invalid/topic');
+    await page.getByRole('button',{name:'Send ntfy test'}).click();
+    await page.getByText('Synthetic notification accepted',{exact:true}).waitFor();
+    assert.deepEqual(posts.at(-1),{path:'/api/test-notification/ntfy',body:null});
+    assert.deepEqual(errors,[]);
+    if(process.env.DASHBOARD_SCREENSHOT_DIRECTORY) {
+      await page.setViewportSize({width:1440,height:1000});
+      await page.screenshot({path:path.join(process.env.DASHBOARD_SCREENSHOT_DIRECTORY,'settings-recovery.png'),fullPage:true});
+      await page.goto('http://fixture.invalid/settings');
+      await page.screenshot({path:path.join(process.env.DASHBOARD_SCREENSHOT_DIRECTORY,'settings-ready.png'),fullPage:true});
+    }
+    console.log(JSON.stringify({status:'settings_workspace_browser_verified',draft_edits_local_only:true,
+      apply_only_form_and_secret_privacy_verified:true,actual_settings_application_performed:false,
+      production_services_changed:false}));
+  } finally {await browser.close();}
+})().catch(error=>{console.error(error);process.exitCode=1;});

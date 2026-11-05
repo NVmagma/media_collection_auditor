@@ -2,9 +2,9 @@ name: Python safety checks
 
 on:
   push:
-    branches: [feature/unraid]
+    branches: [main, feature/unraid, feature/interface-api]
   pull_request:
-    branches: [feature/unraid]
+    branches: [main, feature/unraid, feature/interface-api]
   workflow_dispatch:
 
 permissions:
@@ -24,9 +24,47 @@ jobs:
           cache: pip
       - name: Install runtime dependencies
         run: python -m pip install -r requirements.txt
-      - name: Compile all Python files
-        run: python -m compileall -q app tests
-      - name: Run isolated safety tests
+      - name: Set up JSX test compiler
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            tests/homarr-render/package-lock.json
+            tests/dashboard-browser/package-lock.json
+      - name: Verify compact Homarr examples
+        run: |
+          python -B scripts/build_homarr_compact_examples.py --check
+          npm ci --prefix tests/homarr-render --ignore-scripts --no-audit --no-fund
+          npm test --prefix tests/homarr-render
+      - name: Verify dashboard workspace in Chromium
         env:
           WEB_SESSION_SECRET: ci-only-session-secret
-        run: python -m unittest discover -s tests -p 'test_*.py' -v
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/app:${{ github.workspace }}/tests
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/dashboard-browsers
+        run: |
+          npm ci --prefix tests/dashboard-browser --ignore-scripts --no-audit --no-fund
+          tests/dashboard-browser/node_modules/.bin/playwright install --with-deps chromium --only-shell
+          python -B tests/dashboard_workspace_case.py "$RUNNER_TEMP/dashboard-workspace.html"
+          npm test --prefix tests/dashboard-browser -- "$RUNNER_TEMP/dashboard-workspace.html"
+          python -B tests/settings_workspace_case.py "$RUNNER_TEMP/settings-workspace"
+          npm run test:settings --prefix tests/dashboard-browser -- "$RUNNER_TEMP/settings-workspace"
+          python -B -c 'import os; from pathlib import Path; from settings_workspace_case import render_integration_workspace; Path(os.environ["RUNNER_TEMP"],"integration-setup.html").write_text(render_integration_workspace())'
+          npm run test:integrations --prefix tests/dashboard-browser -- "$RUNNER_TEMP/integration-setup.html"
+          python -B tests/arr_import_workspace_case.py "$RUNNER_TEMP/arr-imports.html"
+          node scripts/test_arr_import_workspace.cjs "$RUNNER_TEMP/arr-imports.html"
+          python -B tests/cleanup_review_case.py "$RUNNER_TEMP/cleanup-review"
+          node scripts/test_cleanup_review.cjs "$RUNNER_TEMP/cleanup-review"
+          python -B tests/tracking_review_case.py "$RUNNER_TEMP/tracking-review.html"
+          node scripts/test_tracking_review.cjs "$RUNNER_TEMP/tracking-review.html"
+          python -B tests/backup_workspace_case.py "$RUNNER_TEMP/backup-workspace.html"
+          node scripts/test_backup_workspace.cjs "$RUNNER_TEMP/backup-workspace.html"
+      - name: Compile all Python files
+        run: python -m compileall -q app tests
+      - name: Install pytest
+        run: python -m pip install pytest
+      - name: Run JSON, interface, integration and safety regressions
+        env:
+          WEB_SESSION_SECRET: ci-only-session-secret
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/app:${{ github.workspace }}/tests
+        run: python -B -m pytest -q tests
