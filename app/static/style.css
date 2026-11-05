@@ -332,3 +332,14 @@
 @media(max-width:520px){.app-shell .sidebar{flex-basis:52px}.app-shell .sidebar-brand .brand-icon{margin-right:0}.app-shell main,.app-shell.viewing-overview main{margin:12px}.app-shell .settings-header{padding:16px 12px}}
 
 .run-controls button:disabled{background:#435064;color:#aeb8c5;opacity:.65;cursor:not-allowed;box-shadow:none}
+
+/* Recorded scan browsing uses the same sidebar and field styling as Settings. */
+.scan-results-app .history-controls{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin-bottom:20px}
+.scan-results-app .history-controls label{display:flex;flex:1 1 180px;min-width:0;flex-direction:column;gap:6px}
+.scan-results-app .history-controls select,.scan-results-app .history-controls input{width:100%;min-width:0;max-width:100%;padding:9px 12px;background:#162538;color:#e9eef7;border:1px solid #405875;border-radius:7px;font:inherit}
+.scan-results-app .history-controls button{padding:10px 16px;background:#203450;border:1px solid #3c5676;color:#b9d8ff;border-radius:7px;font:inherit}
+.scan-results-app nav[aria-label="Result pages"]{display:flex;gap:20px;margin:20px 0}
+.scan-results-app .table-wrap{max-height:60vh;overflow:auto}
+@media(max-width:600px){.scan-results-app .history-controls{flex-direction:column;align-items:stretch}.scan-results-app .history-controls label{flex:auto}}
+
+.scan-results-app .panel a{color:#8bbfff}

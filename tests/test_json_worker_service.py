@@ -59,6 +59,9 @@ def test_history_survives_coordinator_restart_without_fabricating_new_completion
     assert report['history_persistent'] and report['last_result'] == 'completed'
     assert not report['running'] and len(saved) == 1
     assert len(saved[0]['json_decisions']) == 2
+    from app.scan_results import browse
+    assert browse(restarted.history()[0])['total'] == 2
+    assert not browse(restarted.history()[0])['partial']
 
 
 def test_pending_operation_blocks_restart_request_without_replay(cycle_case):

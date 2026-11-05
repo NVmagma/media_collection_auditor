@@ -2,6 +2,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 import json
+import re
 from pathlib import Path
 from typing import Callable
 
@@ -264,7 +265,8 @@ def _scan_entry(record, zone, *, title_details=True):
     if duration is not None:
         minutes, seconds = divmod(duration, 60)
         duration_display = f'{int(minutes)}m {seconds:g}s' if minutes else f'{seconds:g}s'
-    return {'label': label, 'group': group, 'mode': mode, 'trigger': trigger_label,
+    return {'attempt_id': record.get('id') if isinstance(record.get('id'),str) and re.fullmatch('[0-9a-f]{32}',record['id']) else None,
+        'label': label, 'group': group, 'mode': mode, 'trigger': trigger_label,
         'started': observation_datetime(start.isoformat(), zone) if start else 'Not recorded',
         'finished': observation_datetime(finish.isoformat(), zone) if finish else 'Not recorded',
         'duration': duration, 'duration_display': duration_display, 'reason': reason,

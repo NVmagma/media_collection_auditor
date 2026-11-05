@@ -1020,5 +1020,43 @@ def health():
     return {"status": "ok"}
 
 
+
+
+@app.get('/scan-results')
+def scan_results():
+    """Session-authenticated history browsing; never requests a scan or service call."""
+    from app.scan_results import browse
+    from app.scan_details import OUTCOMES
+    allowed={'attempt','q','library','outcome','page'}
+    if any(key not in allowed or len(request.args.getlist(key))!=1 for key in request.args):
+        return Response('Invalid result filters.',400)
+    records=[row for row in read_history(100) if isinstance(row,dict)
+             and row.get('worker_mode')=='json_serialized' and isinstance(row.get('id'),str)
+             and re.fullmatch('[0-9a-f]{32}',row['id'])]
+    selected=request.args.get('attempt',records[0]['id'] if records else '')
+    if selected and not re.fullmatch('[0-9a-f]{32}',selected):
+        return Response('Invalid attempt.',400)
+    record=next((row for row in records if row['id']==selected),None)
+    if selected and record is None:return Response('Recorded attempt not found.',404)
+    try:
+        page_text=request.args.get('page','1')
+        if not re.fullmatch('[1-9][0-9]{0,3}',page_text):raise ValueError()
+        result=browse(record or {},query=request.args.get('q',''),library=request.args.get('library','all'),
+                      outcome=request.args.get('outcome','all'),page=int(page_text))
+    except ValueError:return Response('Recorded results or filters are invalid.',400)
+    def page_url(page):
+        return url_for('scan_results',attempt=selected,q=result['query'],library=result['library'],outcome=result['outcome'],page=page)
+    config=load_config()
+    zone=config.get('DAILY_RUN_TIMEZONE') or os.environ.get('DAILY_RUN_TIMEZONE') or os.environ.get('TZ')
+    attempts=[dict(id=row['id'], started=observation_datetime(row.get('started_at'),zone) or 'Time not recorded',
+                   mode='Preview' if row.get('dry_run') is True else 'Live' if row.get('dry_run') is False else 'Mode unknown',
+                   result=row.get('result') if row.get('result') in ('completed','failed','stopped') else 'Outcome unknown')
+              for row in records]
+    response=Response(render_template('scan_results.html',result=result,records=attempts,selected=selected,
+                                     outcomes=OUTCOMES,page_url=page_url))
+    response.headers['Cache-Control']='no-store'
+    return response
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("WEB_PORT", "8080")))

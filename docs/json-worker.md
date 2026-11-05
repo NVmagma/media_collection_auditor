@@ -70,3 +70,19 @@ Whole-title Removal deletion now has a separate warning and acknowledgement. It 
 ## Metadata-only leftovers
 
 Recursive video detection preserves real, hidden, partial and unknown content. [Orphan metadata quarantine](orphan-metadata-quarantine.md) is a separate opt-in: it requires complete service absence checks and 24 hours of stable observations, retains files recoverably, and never enables permanent deletion.
+
+### Browse complete scan results
+
+Open **Activity Logs → Browse scan results**, or the recorded-decisions link in
+Dashboard History. Select a recent attempt, search its titles, and filter by
+Movies/TV and recorded outcome. Results use 25-row pages; filtering resets the
+page. Browsing never queues a scan, collects current service data, or changes
+tracking. A proposal remains distinct from a verified move, deletion, or
+recoverable quarantine.
+
+New attempts retain all redacted title decisions in bounded 100-row chunks in
+persistent appdata history. Older attempts may retain only the first 100 display
+rows: these show a partial-history notice. Raw proposals and aggregate completion
+counts are never used to invent missing per-title completion outcomes. The page
+covers the most recent 100 retained attempts and does not certify current inventory
+freshness. It requires the same signed-in session as the dashboard.

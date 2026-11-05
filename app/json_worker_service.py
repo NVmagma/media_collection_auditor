@@ -166,6 +166,7 @@ class JSONWorkerService:
                 discovery_changes=result.get('discovery_changes',result.get('clock_changes_applied')),
                 scanned_titles=result.get('scanned_titles'),json_decisions=decisions)
             record['title_details']=_title_details(decisions,completed,result.get('result'),result.get('uncertain_media_key'),deleted,quarantined)
+            record['title_detail_pages']=[_title_details(decisions,completed,result.get('result'),result.get('uncertain_media_key'),deleted,quarantined,offset=offset) for offset in range(0,len(decisions),100)]
             with self.lock: self.execution_blocked=result.get('pending_operation_present') is True
         except Exception as error:
             record.update(result='failed',result_basis='blocked_or_uncertain',error_type=type(error).__name__)
@@ -193,7 +194,7 @@ class JSONWorkerService:
         return record
 
 
-def _title_details(decisions,completed,result,uncertain=None,deleted=(),quarantined=()):
+def _title_details(decisions,completed,result,uncertain=None,deleted=(),quarantined=(),*,offset=0):
     from app.scan_details import REASONS,project_details
     finished={(row['library'],row['media_key']) for row in completed}
     quarantine_keys={(row['library'],row['media_key']) for row in quarantined}
@@ -201,7 +202,7 @@ def _title_details(decisions,completed,result,uncertain=None,deleted=(),quaranti
     # Keep all decisions in private persistent history; existing display shows a bounded page.
     ordered=sorted(decisions,key=lambda row:row['outcome'] not in ('proposed','delete_proposed','quarantine_proposed','capped'))
     items=[]
-    for row in ordered[:100]:
+    for row in ordered[offset:offset+100]:
         outcome=('quarantined' if (row['library'],row['media_key']) in quarantine_keys else 'deleted' if (row['library'],row['media_key']) in deleted_keys else 'completed' if (row['library'],row['media_key']) in finished else
             'uncertain' if row['media_key']==uncertain else
             'not_attempted' if row['outcome'] in ('proposed','delete_proposed','quarantine_proposed') and result != 'completed' else
