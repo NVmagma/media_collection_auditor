@@ -40,3 +40,17 @@ A packet copied to another directory or disk has a new directory identity. Keep
 its original receipt/fingerprint; adoption at the new location requires explicit
 verification during the separate recovery plan. The browser does not silently
 rebind relocated snapshots or start a worker from them.
+
+## Packaged recovery rehearsal
+
+The JSON worker acceptance workflow creates a backup and a test copy through
+the administrator interface using synthetic settings and media. It starts the
+packaged service against that disposable copy and checks authenticated tracking
+counts, restored settings and the saved scan cooldown. A separate history path
+reflects the scope of the backup. The fixture compares the original and copied
+files after shutdown and checks the mock services for any additional requests.
+
+For the same rehearsal on Tower, use the [isolated JSON worker lab](json-worker.md)
+with an image built from the fixture checkout's revision. The lab uses new state
+and media directories and runs in a container with networking disabled except
+for internal loopback.

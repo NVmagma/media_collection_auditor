@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
+import re
 from pathlib import Path
 import socket
 import subprocess
@@ -225,7 +226,7 @@ with scan_attempt(JsonTrackingStore(sys.argv[1]),now=datetime(2026,1,20,12,tzinf
         token='synthetic-json-service-integration-token'
         values=dict(STATE_FILE=str(self.store.path),AUDITOR_STATE_BACKEND='json',AUDITOR_WORKER_MODE='json_serialized',
             DRY_RUN='false',MAX_ACTIONS_PER_RUN='10',ENABLE_MOVIES='true',ENABLE_TV='true',TZ='UTC',
-            DAILY_RUN_TIME=(datetime.now(timezone.utc)+timedelta(minutes=2)).strftime('%H:%M'),
+            DAILY_RUN_TIME=(datetime.now(timezone.utc)+timedelta(hours=1)).strftime('%H:%M'),
             DAILY_RUN_TIMEZONE='UTC',WEB_PORT=str(port),WEB_SESSION_SECRET='synthetic-json-fixture-session',
             WEB_ADMIN_USER='fixture-admin',WEB_ADMIN_PASSWORD='fixture-password',INTEGRATION_API_TOKEN=token,
             WEB_CONFIG_FILE=str(self.state_root/'config.json'),AUDIT_HISTORY_FILE=str(self.state_root/'history.jsonl'),
@@ -332,6 +333,61 @@ with scan_attempt(JsonTrackingStore(sys.argv[1]),now=datetime(2026,1,20,12,tzinf
             config_path.write_bytes(valid_config); config_path.chmod(0o600)
             self.assertEqual(self.store.path.read_bytes(),unchanged)
             self.assertEqual(sum(method=='PUT' for method,_ in self.server.calls),10)
+            # Exercise the browser backup workflow, then boot the disposable copy.
+            source_history = Path(values['AUDIT_HISTORY_FILE'])
+            original_history = source_history.read_bytes()
+            calls_before_recovery = list(self.server.calls)
+            backup_page = session.get(base + '/backups', timeout=5)
+            self.assertEqual(backup_page.status_code, 200)
+            csrf = re.search(r'name="csrf" value="([A-Za-z0-9_-]+)"', backup_page.text)
+            self.assertIsNotNone(csrf)
+            form = {'csrf': csrf.group(1)}
+            origin = {'Origin': base}
+            created = session.post(base + '/backups', data={**form, 'action': 'create'},
+                                   headers=origin, timeout=10)
+            self.assertEqual(created.status_code, 200)
+            self.assertIn('backup created and verified', created.text)
+            packet = re.search(r'name="identifier" value="([0-9a-f]{32})"', created.text)
+            self.assertIsNotNone(packet)
+            copied = session.post(base + '/backups', data={**form, 'action': 'test_restore',
+                                  'identifier': packet.group(1)}, headers=origin, timeout=10)
+            self.assertEqual(copied.status_code, 200)
+            test_copy = re.search(r'Reference: ([0-9a-f]{32})', copied.text)
+            self.assertIsNotNone(test_copy)
+            restored = self.state_root / '.auditor-backups' / '.restore-tests' / test_copy.group(1)
+            restored_state = restored / 'auditor_state.json'
+            restored_config = restored / 'saved-config.json'
+            self.assertEqual(restored_state.read_bytes(), unchanged)
+            self.assertEqual(restored_config.read_bytes(), valid_config)
+
+            stop()
+            values.update(STATE_FILE=str(restored_state), WEB_CONFIG_FILE=str(restored_config),
+                          AUDIT_HISTORY_FILE=str(restored / 'history.jsonl'))
+            start()
+            login()
+            for _ in range(100):
+                audit = session.get(base + '/api/v1/audit-status', headers=headers, timeout=5).json()
+                if audit.get('next_run'):
+                    break
+                time.sleep(.02)
+            summary = session.get(base + '/api/v1/summary', headers=headers, timeout=5)
+            self.assertEqual(summary.status_code, 200)
+            health_contract(summary.json(), audit, {key: len(state[key]) for key in
+                            ('first_seen', 'queued', 'in_removal', 'keep_seen', 'arr_sync_pending')})
+            self.assertIsNone(audit.get('last_result'))
+            settings_page = session.get(base + '/settings', timeout=5)
+            self.assertEqual(settings_page.status_code, 200)
+            self.assertRegex(settings_page.text, r'name="HOLDING_DAYS"[^>]*value="8"')
+            cooldown = session.post(base + '/api/run-now', json={'run_live_scan': True},
+                                    headers=origin, timeout=5)
+            self.assertEqual(cooldown.status_code, 429)
+            stop()
+            self.assertEqual(restored_state.read_bytes(), unchanged)
+            self.assertEqual(restored_config.read_bytes(), valid_config)
+            self.assertEqual(self.store.path.read_bytes(), unchanged)
+            self.assertEqual(config_path.read_bytes(), valid_config)
+            self.assertEqual(source_history.read_bytes(), original_history)
+            self.assertEqual(self.server.calls, calls_before_recovery)
         finally:
             stop(); session.close()
 
@@ -517,7 +573,7 @@ def main():
         'fixture_only':True,'production_services_changed':False,'production_media_mounted':False,
         'external_requests_sent':False,'production_deletion_performed':False,'disposable_deletion_verified':True,
         'sigkill_delete_recovery_verified':True,'orphan_quarantine_and_sigkill_verified':True,
-        'lost_ack_get_only_recovery_verified':True,'sigkill_move_recovery_verified':True,'actual_json_service_verified':True,'five_moves_per_library_verified':True,'packaged_entrypoint_verified':os.environ.get('JSON_FIXTURE_PACKAGED_APP') == 'true','movie_and_tv_moves_verified':True}))
+        'lost_ack_get_only_recovery_verified':True,'sigkill_move_recovery_verified':True,'actual_json_service_verified':True,'backup_recovery_boot_verified':True,'five_moves_per_library_verified':True,'packaged_entrypoint_verified':os.environ.get('JSON_FIXTURE_PACKAGED_APP') == 'true','movie_and_tv_moves_verified':True}))
     return 0
 
 
