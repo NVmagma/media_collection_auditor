@@ -8,7 +8,7 @@
 <main id="main-content"><section class="panel">
 <p>Archiving preserves the saved date in JSON and removes it from active tracking. If this folder returns, the scanner will start a new clock. This action only edits tracking data.</p>
 {% if archived %}
-<p role="status">Archived the {{ preview.stage }} clock ({{ preview.timestamp }}).</p>
+<p role="status">Archived the {{ preview.stage }} clock ({{ preview.timestamp }}). <a href="{{ url_for('tracking_archive_history', library=library, q=title) }}">View archived clock</a></p>
 {% else %}
 {% if blocked %}<p class="notice warning" role="alert">Archival could not be confirmed. Check Tracking Review for the current state. An active scan, pending operation, existing archive, changed clock, or matching folder can block archival.</p>{% endif %}
 {% if preview %}

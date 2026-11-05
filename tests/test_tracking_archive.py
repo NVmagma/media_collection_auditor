@@ -85,3 +85,44 @@ def test_pending_operation_blocks_review(archive_page):
     before = path.read_bytes()
     assert post('review').status_code == 409
     assert path.read_bytes() == before
+
+
+def test_archive_history_filters_pages_and_preserves_state(archive_page, monkeypatch):
+    client, path, state, _, _ = archive_page
+    url = '/tracking-review/archive/history'
+    assert 'No archived clocks' in client.get(url).text
+    state['archived_tracking_clocks'] = {
+        f'Movie {index:02}': {'stage': 'Holding', 'timestamp': '2020-01-01T01:02:03',
+                             'archived_at': f'2026-01-{index:02}T02:00:00+02:00'}
+        for index in range(1, 27)
+    }
+    state['archived_tracking_clocks']['TV/Example Show'] = {
+        'stage': 'Keep', 'timestamp': '2020-02-01T01:02:03',
+        'archived_at': '2026-01-27T00:00:00+00:00', 'private': 'hidden-value',
+    }
+    path.write_text(json.dumps(state))
+    before = path.read_bytes()
+    response = client.get(url + '?library=Movies')
+    assert response.status_code == 200
+    assert '26 matching clocks · Page 1 of 2' in response.text
+    assert response.text.index('Movie 26') < response.text.index('Movie 25')
+    assert '2026-01-26 00:00:00' in response.text
+    assert 'Movie 01' not in response.text and 'Example Show' not in response.text
+    assert 'Movie 01' in client.get(url + '?library=Movies&page=2').text
+    response = client.get(url + '?library=TV&q=example')
+    assert 'Example Show' in response.text and '2020-02-01T01:02:03' in response.text
+    assert 'hidden-value' not in response.text
+    assert response.headers['Cache-Control'] == 'no-store'
+    assert client.get(url + '?page=1&page=2').status_code == 400
+    assert path.read_bytes() == before
+    monkeypatch.setattr(web, 'current_user', lambda: {'name': 'Viewer', 'admin': False})
+    assert client.get(url).status_code == 403
+
+
+def test_invalid_archive_is_unavailable(archive_page):
+    client, path, state, _, _ = archive_page
+    state['archived_tracking_clocks'] = {'Private malformed entry': {'stage': 'Keep'}}
+    path.write_text(json.dumps(state))
+    response = client.get('/tracking-review/archive/history')
+    assert response.status_code == 503
+    assert 'Private malformed entry' not in response.text

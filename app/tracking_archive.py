@@ -9,7 +9,7 @@ from app.filesystem_paths import _open_directory, scan_held_directory
 from app.json_scan_control import _control
 from app.json_tracking_store import JsonTrackingStore
 from app.json_worker_cycle import stage_paths
-from app.tracking_review import SECTIONS, _fold, _title
+from app.tracking_review import SECTIONS, _fold, _identity, _title
 from app.tracking_schema import has_pending_extension
 
 ARCHIVE = 'archived_tracking_clocks'
@@ -82,3 +82,29 @@ def review_clock(*, library, title, settings, signing_key, expected=None):
             del state[section][key]
             session.checkpoint()
         return {'stage': stage, 'timestamp': timestamp, 'fingerprint': fingerprint}
+
+
+def archive_history(state, library, query, page):
+    archive = state.get(ARCHIVE, {})
+    if not isinstance(archive, dict):
+        raise ValueError('Invalid clock archive')
+    rows = []
+    for key, entry in archive.items():
+        name, title = _identity(key)
+        if (not isinstance(entry, dict) or not isinstance(entry.get('stage'), str)
+                or entry['stage'] not in SECTIONS
+                or not all(isinstance(entry.get(field), str) for field in ('timestamp', 'archived_at'))):
+            raise ValueError('Invalid archived clock')
+        timestamp = datetime.fromisoformat(entry['timestamp'])
+        archived_at = datetime.fromisoformat(entry['archived_at'])
+        if timestamp.tzinfo is not None or archived_at.tzinfo is None:
+            raise ValueError('Invalid archived timestamp')
+        if (library == 'all' or name == library) and _fold(query) in _fold(title):
+            rows.append({'library': name, 'title': title, 'stage': entry['stage'],
+                         'timestamp': entry['timestamp'], 'archived_at': archived_at.astimezone(timezone.utc)})
+    rows.sort(key=lambda row: (row['library'], _fold(row['title']), row['title']))
+    rows.sort(key=lambda row: row['archived_at'], reverse=True)
+    pages = max(1, (len(rows) + 24) // 25)
+    page = min(page, pages)
+    return {'rows': rows[(page - 1) * 25:page * 25], 'page': page, 'pages': pages,
+            'matched': len(rows)}

@@ -36,3 +36,6 @@ in the JSON state archive. A returning folder starts a new active clock.
 Existing archived entries, conflicting clocks, unreadable directories, name
 variants and pending operations require separate review. Archival makes no
 media changes or Arr requests.
+
+**Archived tracking clocks** lists preserved records by title and library.
+It shows the original saved lifecycle date and the time of archival in UTC.
