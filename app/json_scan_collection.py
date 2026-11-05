@@ -4,6 +4,7 @@ Inventory is supplied by a trusted local adapter; this module does not verify
 filesystem inventory or grant move permission. No claims or state saves.
 """
 from copy import deepcopy
+from app.scan_progress import emit
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 from time import monotonic
@@ -90,6 +91,8 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
     favorites = settings.get('FAVORITES_TRIGGER_KEEP','true')
     if isinstance(favorites,str): favorites = favorites.strip().lower()
     if favorites not in ('true','false'): raise ValueError('Explicit favorites policy required')
+    total_titles=sum(len(inventory.titles) for inventory in inventories)
+    checked=0
     observations, collection_status = [], []
     for inventory, preliminary in zip(inventories,prelim,strict=True):
         check_deadline()
@@ -97,6 +100,7 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
         signals = {}
         absence = {}
         catalog = {}
+        emit('jellyfin',checked=checked,total=total_titles,library=inventory.library)
         if inventory.complete and inventory.titles:
             try:
                 fetch = jellyfin_factory(base_url=settings.get('JELLYFIN_HOST_URL',''),
@@ -106,7 +110,10 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
                 jf_checked = False
                 for title, initial in zip(inventory.titles,preliminary.titles,strict=True):
                     check_deadline()
+                    emit('jellyfin',checked=checked,total=total_titles,library=inventory.library)
                     if title.blocker is not None and title.blocker!='no_video':
+                        checked+=1
+                        emit('jellyfin',checked=checked,total=total_titles,library=inventory.library)
                         continue
                     jf_checked = True
                     result = collect_title_observation(fetch=cached,
@@ -115,12 +122,15 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
                     if 'jellyfin_collection_incomplete' in result['blockers']:
                         jf_complete = False
                         break
+                    checked+=1
+                    emit('jellyfin',checked=checked,total=total_titles,library=inventory.library)
                     absence[initial.media_key] = result.get('absence_verified') is True
                     signals[initial.media_key] = result['signals'] if result['status'] == 'shape_valid_untrusted' else None
                 jf_complete = jf_complete and jf_checked
             except Exception:
                 jf_complete = False  # Fixed status only; no remote exception/payload retained.
             check_deadline()
+            emit('arr',checked=checked,total=total_titles,library=inventory.library)
             try:
                 prefix, service = ('SONARR','sonarr') if inventory.library == 'TV' else ('RADARR','radarr')
                 catalog = _catalog(arr_factory(service=service,
@@ -142,6 +152,7 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
         collection_status.append({'library':inventory.library,'inventory_complete':inventory.complete,
             'jellyfin_complete':jf_complete,'arr_complete':arr_complete,'titles':len(titles) if inventory.complete else None})
     check_deadline()
+    emit('planning',checked=checked,total=total_titles)
     result = plan_scan(snapshot=snapshot,libraries=observations,now=now,
         maximum_titles=maximum_titles,favorites_trigger_keep=favorites == 'true',
         per_library_action_limit=per_library_limit,

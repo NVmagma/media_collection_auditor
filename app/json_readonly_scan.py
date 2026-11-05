@@ -65,6 +65,8 @@ def collect_worker_scan(session, *, settings, **kwargs):
 def _scan(*, state_file, settings, now=None, maximum_titles=100000,
                    collect=collect_readonly_plan, timer=monotonic, maximum_seconds=3600, observer=lambda stage: None,
                    _session=None, _save_clocks=False):
+    from app.scan_progress import emit
+    emit('inventory')
     values = deepcopy(settings)
     zone_name = values.get('DAILY_RUN_TIMEZONE') or values.get('TZ') or 'UTC'
     zone = ZoneInfo(zone_name)
@@ -250,6 +252,7 @@ def _scan(*, state_file, settings, now=None, maximum_titles=100000,
         observer('service_collection')
         result = collect(snapshot=snapshot,inventories=tuple(inventories),settings=values,
             now=now,maximum_titles=maximum_titles,maximum_seconds=remaining(),timer=timer)
+        emit('revalidation')
         observer('inventory_revalidation')
         verify_inventory()
         result={**result,'metadata_observations':tuple(metadata_observations)}

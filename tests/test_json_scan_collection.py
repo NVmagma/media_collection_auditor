@@ -184,3 +184,15 @@ def test_invalid_collection_deadline_refuses_before_requests(services,limit):
     server,*_ = services
     with pytest.raises(ValueError): collect(services,maximum_seconds=limit)
     assert not server.calls
+
+
+def test_progress_counts_collection_without_private_title_data(services):
+    from app.scan_progress import observe
+    rows=[]
+    with observe(rows.append):
+        result=collect(services)
+    assert result['scanned_titles']==131
+    assert rows[-1]['phase']=='planning'
+    assert rows[-1]['checked']==rows[-1]['total']==131
+    assert {row['library'] for row in rows} >= {'Movies','TV'}
+    assert all(set(row)=={'phase','label','checked','total','library'} for row in rows)

@@ -967,8 +967,12 @@ def test_connection(service):
 def run_button_status():
     if not admin_authorized(): return {'ok':False},401
     report=selected_run_snapshot(snapshot)
-    return {'ok':True,'running':report.get('running') is True,'queued':report.get('queued') is True,
-        'blocked':report.get('execution_blocked') is True},200,{'Cache-Control':'no-store'}
+    result={'ok':True,'running':report.get('running') is True,'queued':report.get('queued') is True,
+        'blocked':report.get('execution_blocked') is True}
+    if result['running'] and os.environ.get('AUDITOR_WORKER_MODE')=='json_serialized':
+        from app.json_worker_service import SERVICE
+        result['progress']=SERVICE.progress_report()
+    return result,200,{'Cache-Control':'no-store'}
 
 
 @app.post("/api/run-now")

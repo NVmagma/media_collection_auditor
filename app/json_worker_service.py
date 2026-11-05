@@ -6,6 +6,8 @@ import os
 import re
 from threading import Event,Lock
 from uuid import uuid4
+from time import monotonic
+from app.scan_progress import observe,emit
 from zoneinfo import ZoneInfo
 
 from app.json_readonly_scan import _bool
@@ -71,7 +73,25 @@ class JSONWorkerService:
         self.clock,self.execute,self.load_settings=clock,execute,load_settings
         self.record,self.read_records=record,read_records
         self.lock=Lock(); self.wake=Event(); self.running=False; self.queued=False; self.queued_settings=None
+        self.progress=None; self.progress_started=None
         self.latest=None; self.records=[]; self.next_run=None; self.execution_blocked=False
+
+    def _observe_progress(self, value):
+        with self.lock:
+            if self.running:
+                previous=self.progress or {}
+                self.progress=deepcopy(value)
+                if value.get('checked') is None:
+                    self.progress['checked']=previous.get('checked')
+                    self.progress['total']=previous.get('total')
+
+    def progress_report(self):
+        with self.lock:
+            if not self.running or self.progress_started is None:
+                return None
+            return {**deepcopy(self.progress or {}),
+                    'elapsed_seconds':max(0,int(monotonic()-self.progress_started)),
+                    'scope':'current_process','freshness_verified':False}
 
     def gate(self,values):
         validate_policy(values)
@@ -139,6 +159,8 @@ class JSONWorkerService:
             queued_settings=deepcopy(self.queued_settings)
             self.queued_settings=None
             self.running=True; self.queued=False; self.wake.clear()
+            self.progress_started=monotonic()
+            self.progress=dict(phase='starting',label='Starting scan',checked=None,total=None,library=None)
             record=dict(id=uuid4().hex,trigger=trigger,started_at=self.clock().isoformat(),finished_at=None,
                 result=None,worker_mode='json_serialized',freshness_verified=False,
                 result_basis='worker_return',moves_completed=None,arr_completed=None,moves_proposed=None,
@@ -150,8 +172,10 @@ class JSONWorkerService:
             if trigger=='manual' and values!=queued_settings:
                 raise ValueError('Queued settings changed; request a fresh scan')
             record['dry_run']=_bool(values,'DRY_RUN','true')
-            result=self.execute(JsonTrackingStore(values.get('STATE_FILE','/app/logs/auditor_state.json')),
-                settings=values,trigger=trigger,now=self.clock())
+            with observe(self._observe_progress):
+                result=self.execute(JsonTrackingStore(values.get('STATE_FILE','/app/logs/auditor_state.json')),
+                    settings=values,trigger=trigger,now=self.clock())
+                emit('saving')
             record['result']=result['result']
             record['result_basis']='worker_return' if result['result']=='completed' else 'blocked_or_uncertain'
             decisions=result.get('decisions',())
@@ -179,7 +203,7 @@ class JSONWorkerService:
                 record['history_write_failed']=True
                 print('[JSON WORKER] History could not be saved; tracking and operation journal were retained.',flush=True)
             with self.lock:
-                self.running=False; self.latest=deepcopy(record)
+                self.running=False; self.progress=None; self.progress_started=None; self.latest=deepcopy(record)
                 self.records.append(deepcopy(record)); self.records=self.records[-100:]
         if isinstance(values,dict):
             try:

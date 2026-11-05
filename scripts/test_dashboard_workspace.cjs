@@ -16,7 +16,7 @@ if (!file) throw Error('Pass the synthetic page rendered by tests/dashboard_work
     page.on('pageerror', error => errors.push(error.message));
     await page.route('**/*', route => {
       const request = route.request(), url = new URL(request.url());
-      if (url.pathname === '/api/run-status') return route.fulfill({contentType:'application/json',body:JSON.stringify({ok:true,running:scanRunning,queued:false,blocked:scanBlocked})});
+      if (url.pathname === '/api/run-status') return route.fulfill({contentType:'application/json',body:JSON.stringify({ok:true,running:scanRunning,queued:false,blocked:scanBlocked,progress:scanRunning?{phase:'jellyfin',checked:128,total:541,library:'Movies',elapsed_seconds:83}:null})});
       if (request.method() !== 'GET') {
         posts.push(request.method());
         if (url.hostname==='fixture.invalid' && url.pathname==='/api/run-now') {
@@ -190,6 +190,7 @@ if (!file) throw Error('Pass the synthetic page rendered by tests/dashboard_work
     assert.match(confirmation.message(),/60 minutes apart/);
     await confirmation.accept();await click;
     await page.waitForFunction(() => document.getElementById('run-now').textContent === 'Scan running…');
+    assert.match(await page.locator('#run-result').textContent(), /Checking Jellyfin protection.*128 of 541.*Elapsed 1m 23s/);
     assert.equal(await page.locator('#run-now').isDisabled(),true);
     scanRunning = false;
     scanBlocked = true;

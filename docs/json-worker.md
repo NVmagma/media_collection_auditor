@@ -86,3 +86,18 @@ rows: these show a partial-history notice. Raw proposals and aggregate completio
 counts are never used to invent missing per-title completion outcomes. The page
 covers the most recent 100 retained attempts and does not certify current inventory
 freshness. It requires the same signed-in session as the dashboard.
+
+### Live scan progress
+
+The dashboard polls its session-authenticated run status every five seconds while
+open. During a running scan it shows the current phase, Movies/TV during service
+collection, finished title checks, total inventoried titles, and elapsed time.
+Folder inspection has no title total until inventory is collected. A slow service
+request can leave the count unchanged while elapsed time grows; no estimated
+completion time or successful action is inferred. Checks skipped because local
+content is unavailable count as processed checks, not successful protection reads.
+
+Progress is process-local, contains no title names, service payloads or paths, and
+never changes tracking, admission, action limits or recovery. It disappears when
+the scan finishes or the worker restarts; persistent results remain in History.
+Failed polling retains the last busy state and marks completion unverified.

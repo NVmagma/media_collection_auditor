@@ -178,6 +178,7 @@ def run_cycle(store, *, settings, trigger, now=None, services=None, collect=coll
 
 
 def _run_cycle(store, *, settings, trigger, now, services, collect, preview, evidence):
+    from app.scan_progress import emit
     values,limit=validate_policy(settings)
     now=datetime.now(timezone.utc) if now is None else now
     if not isinstance(now,datetime) or now.tzinfo is None: raise ValueError('Aware cycle time required')
@@ -200,6 +201,7 @@ def _run_cycle(store, *, settings, trigger, now, services, collect, preview, evi
             report.update(scanned_titles=plan['scanned_titles'],
                 decisions=orphan_decisions(plan,cleanup),
                 discovery_changes=plan['clock_changes_applied'])
+            emit('execution')
             for decision in plan['moves'][:limit]:
                 phase='candidate_preparation'
                 request,preflight,complete=adapter.prepare(decision,attempt.session)

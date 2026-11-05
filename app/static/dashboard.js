@@ -167,6 +167,25 @@ let runRequestPending = false;
 let runStatusPending = false;
 const runButtonLabel = button?.textContent;
 const runDefaultHint = document.getElementById('run-result')?.textContent;
+function scanProgressText(progress) {
+  const labels={starting:'Starting scan',inventory:'Inspecting media folders',
+    jellyfin:'Checking Jellyfin protection',arr:'Checking Radarr / Sonarr records',
+    planning:'Evaluating lifecycle decisions',revalidation:'Rechecking inventory',
+    execution:'Applying verified actions',saving:'Saving recorded results'};
+  if (!progress || !Object.hasOwn(labels,progress.phase)) return 'A scan is in progress. Another scan cannot start yet.';
+  let text=labels[progress.phase];
+  if (progress.library === 'Movies' || progress.library === 'TV') text+=' · '+progress.library;
+  if (Number.isInteger(progress.checked) && Number.isInteger(progress.total) &&
+      progress.checked >= 0 && progress.total >= progress.checked && progress.total <= 100000) {
+    text+=' · '+progress.checked+' of '+progress.total+' title checks finished';
+  }
+  if (Number.isInteger(progress.elapsed_seconds) && progress.elapsed_seconds >= 0) {
+    const seconds=progress.elapsed_seconds;
+    text+=' · Elapsed '+Math.floor(seconds/60)+'m '+(seconds%60)+'s';
+  }
+  return text+'. Progress is observational; completed actions appear in results.';
+}
+
 async function refreshRunButton() {
   if (!button || runButtonLabel === 'Daily schedule only' || runStatusPending || runRequestPending) return;
   runStatusPending = true;
@@ -183,11 +202,13 @@ async function refreshRunButton() {
     if (blocked && !state.running) document.getElementById('run-result').textContent =
       'The scheduler is blocked or has an uncertain outcome. Review the retained operation and settings before another scan. The previous attempt is historical.';
     else if (state.running || state.queued) document.getElementById('run-result').textContent =
-      state.running ? 'A scan is in progress. Another scan cannot start yet.' : 'A scan is queued.';
+      state.running ? scanProgressText(state.progress) : 'A scan is queued.';
     else if (button.dataset.wasBusy === 'true') document.getElementById('run-result').textContent = runDefaultHint;
     button.dataset.wasBusy = String(state.running || state.queued || blocked);
   } catch (error) {
     // Preserve the existing disabled state until a successful observation.
+    if (button.dataset.wasBusy === 'true') document.getElementById('run-result').textContent =
+      'Scan status could not be refreshed. The last observed busy state is retained; completion is unverified.';
   } finally { runStatusPending = false; }
 }
 if (button) {
