@@ -13,8 +13,7 @@ from zoneinfo import ZoneInfo
 from app.json_move_execution import MoveRequest, execute_move
 from app.json_readonly_scan import collect_worker_scan, rehearse_scan, _bool, _days
 from app.json_scan_control import KEY, scan_attempt, ScanAdmissionBlocked
-from app.json_scan_collection import _catalog
-from app.arr_catalog import ArrCatalogGET, canonical_arr_record_path
+from app.arr_catalog import ArrCatalogGET, canonical_arr_record_path, catalog_paths_by_folder
 from app.arr_title_transport import ArrTitleUpdate
 from app.jellyfin_collection import collect_title_observation, validated_tag_names
 from app.lifecycle_stages import CLOCKS
@@ -61,7 +60,7 @@ class JSONMoveServices:
         local,remote=stage_paths(values,library)
         rows=ArrCatalogGET(service=service,base_url=values.get(prefix+'_URL',''),
             token=values.get(prefix+'_API_KEY',''))()
-        _catalog(lambda:rows)  # Reject malformed/duplicate identities before selection.
+        catalog_paths_by_folder(lambda: rows)  # Reject malformed/duplicate identities before selection.
         matches=[row for row in rows if PurePosixPath(canonical_arr_record_path(row['path'])).name == title]
         if len(matches) != 1 or canonical_arr_record_path(matches[0]['path']) != remote[decision.stage]+'/'+title:
             raise RuntimeError('Selected Arr source changed')
@@ -93,7 +92,7 @@ class JSONMoveServices:
         local,remote=stage_paths(self.values,library)
         rows=ArrCatalogGET(service=service,base_url=self.values.get(prefix+'_URL',''),
             token=self.values.get(prefix+'_API_KEY',''))()
-        _catalog(lambda:rows)
+        catalog_paths_by_folder(lambda: rows)
         matches=[row for row in rows if PurePosixPath(canonical_arr_record_path(row['path'])).name==title]
         if len(matches)!=1 or canonical_arr_record_path(matches[0]['path'])!=remote['Removal']+'/'+title: raise RuntimeError('Exact Removal Arr record required')
         req=DeleteRequest(library,title,session.state['in_removal'][decision.media_key],
@@ -128,7 +127,7 @@ class JSONMoveServices:
         try:
             def absent():
                 rows=ArrCatalogGET(service=service,base_url=values.get(prefix+'_URL',''),token=values.get(prefix+'_API_KEY',''))()
-                _catalog(lambda:rows)
+                catalog_paths_by_folder(lambda: rows)
                 for row in rows:
                     path=canonical_arr_record_path(row['path'])
                     if fold(PurePosixPath(path).name)==fold(title) or any(path==p or path.startswith(p+'/') or p.startswith(path+'/') for p in expected):return False

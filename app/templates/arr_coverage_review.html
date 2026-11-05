@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Arr Coverage · Media Collection Auditor</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="app-shell logs-app scan-results-app">
+{% set sidebar_page = 'tracking' %}{% include '_sidebar.html' %}
+<div class="app-content">
+  <header class="settings-header"><div><h1>Arr Coverage</h1><p>Compare local title folders with the current Radarr or Sonarr catalog.</p></div></header>
+  <main id="main-content"><section class="panel">
+    <p><a href="{{ url_for('tracking_review') }}">Back to Tracking Review</a></p>
+    <p>Each check reads one saved Arr destination and all four lifecycle stages for the selected library. Matches use folder paths and names. Use the separate import review to confirm a title’s provider identity.</p>
+    <form method="post" class="history-controls">
+      <label>Library<select name="library">
+        {% for name in ['Movies', 'TV'] %}<option {% if name == library %}selected{% endif %}>{{ name }}</option>{% endfor %}
+      </select></label>
+      <label>Match<select name="status">
+        <option value="all">All matches</option>
+        {% for key, label in labels.items() %}<option value="{{ key }}" {% if key == status %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select></label>
+      <label>Title search<input name="q" type="search" maxlength="255" value="{{ query }}"></label>
+      <button type="submit" name="page" value="1">Check coverage</button>
+    </form>
+    {% if error %}<p class="notice warning" role="alert">{{ error }}</p>{% endif %}
+    {% if results %}
+      <p role="status">{{ results.total }} folders compared · {{ results.matched }} match the filters</p>
+      <ul>{% for key, label in labels.items() %}<li>{{ label }} · {{ results.counts[key] }}</li>{% endfor %}</ul>
+      {% if results.rows %}
+        <div class="table-wrap">
+          <table><thead><tr><th>Title</th><th>Stage</th><th>Arr observation</th></tr></thead>
+            <tbody>{% for row in results.rows %}<tr><td>{{ row.title }}</td><td>{{ row.stage }}</td><td>{{ labels[row.status] }}</td></tr>{% endfor %}</tbody>
+          </table>
+        </div>
+        {% if results.pages > 1 %}
+          <form method="post" class="history-controls" aria-label="Result pages">
+            <input type="hidden" name="library" value="{{ library }}">
+            <input type="hidden" name="status" value="{{ status }}">
+            <input type="hidden" name="q" value="{{ query }}">
+            {% if page > 1 %}<button name="page" value="{{ page - 1 }}">Recheck previous page</button>{% endif %}
+            <span>Page {{ page }} of {{ results.pages }}</span>
+            {% if page < results.pages %}<button name="page" value="{{ page + 1 }}">Recheck next page</button>{% endif %}
+          </form>
+        {% endif %}
+      {% else %}<p>No folders match these filters.</p>{% endif %}
+    {% endif %}
+  </section></main>
+</div>
+</body>
+</html>

@@ -54,7 +54,7 @@ def require_login():
     if g.user is None:
         if request.path.startswith('/api/'): return {'ok':False,'message':'Please sign in.'},401
         return redirect(url_for('login'))
-    if request.endpoint in ('settings','test_connection','test_notification','run_now','rescue','integration_setup','cleanup_review','tracking_review') and not g.user['admin']:
+    if request.endpoint in ('settings','test_connection','test_notification','run_now','rescue','integration_setup','cleanup_review','tracking_review','arr_coverage_review') and not g.user['admin']:
         if request.path.startswith('/api/'): return {'ok':False,'message':'Administrator access required.'},403
         return Response('Administrator access required.',403)
 
@@ -1157,6 +1157,73 @@ def tracking_review():
     return Response(render_template('tracking_review.html',result=result,unavailable=unavailable,
         labels=LABELS,page_url=page_url,
         display_time=lambda value:observation_datetime(value,config.get('DAILY_RUN_TIMEZONE') or os.environ.get('TZ'))),status=503 if unavailable else 200),{'Cache-Control':'no-store'}
+
+
+@app.route('/tracking-review/arr', methods=['GET', 'POST'])
+def arr_coverage_review():
+    """Fetch a saved Arr destination only when an administrator requests a comparison."""
+    from app.arr_catalog import ArrCatalogGET, catalog_paths_by_folder
+    from app.arr_coverage_review import LABELS, compare_folders
+    from app.json_worker_cycle import stage_paths
+    from app.json_worker_service import settings_snapshot
+
+    library, status, query, page = 'Movies', 'all', '', 1
+    results = None
+    error = None
+    response_status = 200
+    if request.method == 'POST':
+        try:
+            origin = urlsplit(request.headers.get('Origin', ''))
+            same_origin = origin.scheme in ('http', 'https') and origin.netloc == request.host
+        except ValueError:
+            same_origin = False
+        if not same_origin:
+            return Response('Invalid review request.', 403)
+        library = request.form.get('library', '')
+        status = request.form.get('status', 'all')
+        query = request.form.get('q', '').strip()
+        page_text = request.form.get('page', '1')
+        if (library not in ('Movies', 'TV') or status not in ('all', *LABELS)
+                or len(query) > 255 or not re.fullmatch('[1-9][0-9]{0,3}', page_text)):
+            return Response('Invalid review filters.', 400)
+        page = int(page_text)
+        prefix, service, enabled = ('RADARR', 'radarr', 'ENABLE_MOVIES') if library == 'Movies' else ('SONARR', 'sonarr', 'ENABLE_TV')
+        try:
+            settings = settings_snapshot()
+            if settings.get(enabled, 'true' if library == 'Movies' else 'false') != 'true':
+                raise ValueError('Library disabled')
+            local_roots, remote_roots = stage_paths(settings, library)
+            if len(set(local_roots.values())) != 4 or len(set(remote_roots.values())) != 4:
+                raise ValueError('Stage roots must be distinct')
+            inventory_settings = {
+                **settings,
+                'ENABLE_MOVIES': str(library == 'Movies').lower(),
+                'ENABLE_TV': str(library == 'TV').lower(),
+                **{prefix + '_' + ('TRANSIENT' if stage == 'Waiting' else stage.upper()) + '_PATH': path
+                   for stage, path in local_roots.items()},
+            }
+            stages, warnings = filesystem_stages({}, inventory_settings, max_entries=10000)
+            if warnings:
+                raise RuntimeError('Inventory unavailable')
+            fetch = ArrCatalogGET(service=service, base_url=settings.get(prefix + '_URL', ''),
+                                  token=settings.get(prefix + '_API_KEY', ''))
+            rows, counts = compare_folders(stages, remote_roots, catalog_paths_by_folder(fetch))
+            if (filesystem_stages({}, inventory_settings, max_entries=10000) != (stages, warnings)
+                    or settings_snapshot() != settings):
+                raise RuntimeError('Comparison sources changed')
+            matching = [row for row in rows if (status == 'all' or row['status'] == status)
+                        and query.casefold() in row['title'].casefold()]
+            pages = max(1, (len(matching) + 24) // 25)
+            page = min(page, pages)
+            results = {'total': len(rows), 'counts': counts, 'matched': len(matching), 'pages': pages,
+                       'rows': matching[(page - 1) * 25:page * 25]}
+        except (OSError, RuntimeError, ValueError):
+            error = 'Coverage is unknown. Check that the library is enabled, all four stage folders are readable, and the saved Arr connection works. If a scan was active, try again after it finishes.'
+            response_status = 503
+
+    return (render_template('arr_coverage_review.html', results=results, error=error,
+                            labels=LABELS, library=library, status=status, query=query, page=page),
+            response_status, {'Cache-Control': 'no-store'})
 
 
 if __name__ == "__main__":

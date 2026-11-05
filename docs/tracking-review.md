@@ -22,3 +22,9 @@ folders. Missing history is labelled unknown. Opening or filtering this page sen
 no Arr/Jellyfin requests, edits no timestamps, and performs no import or recovery.
 Links lead to the existing import and recovery flows, which require their own fresh
 checks and explicit actions. No dates are reset, records pruned or media moved.
+
+Use **Check current Arr coverage** to compare a library’s four local lifecycle
+stages against its saved Radarr or Sonarr catalog. Each submission reads one
+catalog. Results distinguish exact paths, similar folder names at different
+paths, multiple matches and unmatched folder names. Review provider identity
+through the separate import flow.

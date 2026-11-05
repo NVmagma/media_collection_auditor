@@ -6,12 +6,11 @@ filesystem inventory or grant move permission. No claims or state saves.
 from copy import deepcopy
 from app.scan_progress import emit
 from dataclasses import dataclass
-from pathlib import PurePosixPath
 from time import monotonic
 import math
 
 from app.json_lifecycle_plan import LibraryObservation, TitleObservation, plan_scan
-from app.arr_catalog import ArrCatalogGET, canonical_arr_record_path
+from app.arr_catalog import ArrCatalogGET, catalog_paths_by_folder
 from app.jellyfin_collection import collect_title_observation, validated_tag_names
 from app.jellyfin_scan_cache import _ScanCatalog
 from app.filesystem_paths import _canonical
@@ -32,20 +31,6 @@ class LibraryInventory:
     roots: tuple  # Explicit Arr-visible stage paths, with configured aliases applied.
     titles: tuple
     complete: bool
-
-
-def _catalog(fetch):
-    rows = fetch()
-    if not isinstance(rows, list) or len(rows) > 100000: raise ValueError('Invalid Arr catalog')
-    folders, ids = {}, set()
-    for row in rows:
-        if (not isinstance(row, dict) or type(row.get('id')) is not int or row['id'] <= 0
-                or row['id'] in ids or type(row.get('monitored')) is not bool):
-            raise ValueError('Invalid Arr identity')
-        path = canonical_arr_record_path(row.get('path'))
-        ids.add(row['id'])
-        folders.setdefault(PurePosixPath(path).name, []).append(path)
-    return folders
 
 
 def collect_readonly_plan(*, snapshot, inventories, settings, now,
@@ -133,7 +118,7 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
             emit('arr',checked=checked,total=total_titles,library=inventory.library)
             try:
                 prefix, service = ('SONARR','sonarr') if inventory.library == 'TV' else ('RADARR','radarr')
-                catalog = _catalog(arr_factory(service=service,
+                catalog = catalog_paths_by_folder(arr_factory(service=service,
                     base_url=settings.get(prefix+'_URL',''),token=settings.get(prefix+'_API_KEY','')))
                 arr_complete = True
             except Exception:
