@@ -14,6 +14,7 @@
     <nav class="side-nav sidebar-tools" aria-label="Application tools">
       <a href="/logs" aria-label="Activity Logs" {% if sidebar_page == 'logs' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">☷</span><span class="nav-label">Activity Logs</span></a>
       {% if viewer.admin %}
+      <a href="/backups" aria-label="Backups" {% if sidebar_page == 'backups' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">▣</span><span class="nav-label">Backups</span></a>
       <a href="/tracking-review" aria-label="Tracking Review" {% if sidebar_page == 'tracking' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">≠</span><span class="nav-label">Tracking Review</span></a>
       <a href="/cleanup-review" aria-label="Cleanup Review" {% if sidebar_page == 'cleanup' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">♧</span><span class="nav-label">Cleanup Review</span></a>
       <a href="/settings" aria-label="Settings" {% if sidebar_page == 'settings' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-label">Settings</span></a>

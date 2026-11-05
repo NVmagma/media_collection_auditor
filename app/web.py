@@ -885,6 +885,19 @@ else:
     app.register_blueprint(_create_arr_import_blueprint(is_admin=admin_authorized))
 
 
+from app.backup_web import create_blueprint as _create_backup_blueprint
+
+def _backup_paths():
+    from config_store import CONFIG_FILE
+    return STATE_FILE,CONFIG_FILE
+
+def _backup_display_time(value):
+    config=load_config()
+    return observation_datetime(value,config.get('DAILY_RUN_TIMEZONE') or os.environ.get('TZ'))
+
+app.register_blueprint(_create_backup_blueprint(is_admin=admin_authorized,paths=_backup_paths,display_time=_backup_display_time))
+
+
 if os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized':
     from app.json_recovery_web import create_blueprint as create_json_recovery_blueprint
     app.register_blueprint(create_json_recovery_blueprint(admin_authorized))
