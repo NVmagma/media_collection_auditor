@@ -54,7 +54,7 @@ def require_login():
     if g.user is None:
         if request.path.startswith('/api/'): return {'ok':False,'message':'Please sign in.'},401
         return redirect(url_for('login'))
-    if request.endpoint in ('settings','test_connection','run_now','rescue','integration_setup') and not g.user['admin']:
+    if request.endpoint in ('settings','test_connection','run_now','rescue','integration_setup','cleanup_review') and not g.user['admin']:
         if request.path.startswith('/api/'): return {'ok':False,'message':'Administrator access required.'},403
         return Response('Administrator access required.',403)
 
@@ -1058,6 +1058,35 @@ def scan_results():
               for row in records]
     response=Response(render_template('scan_results.html',result=result,records=attempts,selected=selected,
                                      outcomes=OUTCOMES,page_url=page_url))
+    response.headers['Cache-Control']='no-store'
+    return response
+
+
+@app.get('/cleanup-review')
+def cleanup_review():
+    """Admin-only recorded observations; no scan, filesystem inventory or Arr calls."""
+    from app.cleanup_review import review
+    allowed={'view','q','library','page'}
+    if any(key not in allowed or len(request.args.getlist(key))!=1 for key in request.args):
+        return Response('Invalid review filters.',400)
+    try:
+        page_text=request.args.get('page','1')
+        if not re.fullmatch('[1-9][0-9]{0,3}',page_text):raise ValueError()
+        args=dict(view=request.args.get('view','observing'),query=request.args.get('q',''),
+                  library=request.args.get('library','all'),page=int(page_text))
+        # Reject invalid filters independently of stored-state availability.
+        review({},[],**args)
+    except ValueError:return Response('Invalid review filters.',400)
+    config=load_config()
+    result=None;unavailable=False
+    try:result=review(load_state(),read_history(100),**args)
+    except Exception:unavailable=True
+    zone=config.get('DAILY_RUN_TIMEZONE') or os.environ.get('DAILY_RUN_TIMEZONE') or os.environ.get('TZ')
+    def page_url(page):
+        return url_for('cleanup_review',view=args['view'],q=args['query'],library=args['library'],page=page)
+    response=Response(render_template('cleanup_review.html',result=result,unavailable=unavailable,
+        enabled=config.get('ORPHAN_CLEANUP_ENABLED','false')=='true',page_url=page_url,
+        display_time=lambda value:observation_datetime(value,zone)),status=503 if unavailable else 200)
     response.headers['Cache-Control']='no-store'
     return response
 

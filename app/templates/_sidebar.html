@@ -14,6 +14,7 @@
     <nav class="side-nav sidebar-tools" aria-label="Application tools">
       <a href="/logs" aria-label="Activity Logs" {% if sidebar_page == 'logs' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">☷</span><span class="nav-label">Activity Logs</span></a>
       {% if viewer.admin %}
+      <a href="/cleanup-review" aria-label="Cleanup Review" {% if sidebar_page == 'cleanup' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">♧</span><span class="nav-label">Cleanup Review</span></a>
       <a href="/settings" aria-label="Settings" {% if sidebar_page == 'settings' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-label">Settings</span></a>
       <a href="/integrations" aria-label="API setup" {% if sidebar_page == 'integrations' %}class="active" aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">↗</span><span class="nav-label">API setup</span></a>
       {% endif %}

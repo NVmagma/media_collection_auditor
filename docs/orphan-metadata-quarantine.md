@@ -94,3 +94,25 @@ empty location instead of declaring cleanup complete. Restoration uses atomic
 no-overwrite rename. If another directory has appeared, it refuses to overwrite
 it and retains the journal for investigation. Controller-death tests exercise this
 recovery; no permanent deletion is used.
+
+## Cleanup Review page
+
+Administrators can open **Cleanup Review** from the shared left sidebar. The page
+reads saved tracking and the latest retained scan results only; opening it does
+not contact Arr/Jellyfin, inspect media, save observations, move files, or clear
+operations. Search, library filtering and 25-row pagination are available.
+
+- **Under observation:** saved first/last unchanged observations and the interval
+  recorded between them. Wall time since the last scan does not advance this
+  display. Even 24 recorded hours requires fresh checks in a live scan.
+- **Other no-video decisions:** reasons such as unknown files, managed Arr records,
+  Keep preservation or unavailable protection, from the latest retained attempt.
+  Older incomplete results are explicitly labelled partial.
+- **Quarantined:** historical receipt locations, original destinations and recovery
+  IDs. Current settings never replace missing historical locations. These entries
+  do not prove files are still present. Restoration remains explicit and manual;
+  the page offers no purge or move controls.
+
+Invalid/unreadable tracking shows an unavailable message rather than an apparently
+clean empty list. No private settings, fingerprints, raw service payloads or
+archived lifecycle clocks are included in the page.

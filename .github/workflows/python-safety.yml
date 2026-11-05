@@ -53,6 +53,8 @@ jobs:
           npm run test:integrations --prefix tests/dashboard-browser -- "$RUNNER_TEMP/integration-setup.html"
           python -B tests/arr_import_workspace_case.py "$RUNNER_TEMP/arr-imports.html"
           node scripts/test_arr_import_workspace.cjs "$RUNNER_TEMP/arr-imports.html"
+          python -B tests/cleanup_review_case.py "$RUNNER_TEMP/cleanup-review"
+          node scripts/test_cleanup_review.cjs "$RUNNER_TEMP/cleanup-review"
       - name: Compile all Python files
         run: python -m compileall -q app tests
       - name: Install pytest
