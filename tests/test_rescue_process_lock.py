@@ -81,7 +81,7 @@ with getattr(state_lock, sys.argv[3])(sys.argv[2]):
         pass
 
 
-@pytest.mark.parametrize("backend", ["sqlite", "unknown", ""])
+@pytest.mark.parametrize("backend", ["unsupported", "unknown", ""])
 def test_unsupported_backend_stops_before_claim_import_or_lock(rescue, monkeypatch, backend):
     root, state_file, source, auditor, library = rescue
     monkeypatch.setenv("AUDITOR_STATE_BACKEND", backend)

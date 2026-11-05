@@ -85,8 +85,8 @@ move/sync outcomes. Repository cleanup does not delete retained host data or con
 
 ## Development
 
-Work on `feature/interface-api` for the current changes; `feature/unraid` is the
-project-default branch. Do not change `main` without explicit approval. Preserve
+Releases land on `main`. Use `feature/unraid` for default development work.
+Do not change `main` without explicit approval. Preserve
 unknown tracking fields, protection checks and disabled deletion safeguards.
 
 ```bash

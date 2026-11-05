@@ -6,7 +6,7 @@
   <Project>https://github.com/NVmagma/media_collection_auditor</Project>
   <Overview>Media Collection Auditor moves unneeded movies and TV shows through a Waiting -&gt; Holding -&gt; Removal (or Keep) lifecycle using Jellyfin favorites/tags and optional Radarr/Sonarr integration. The web dashboard provides a visual view of activity and logs.</Overview>
   <Category>MediaServer:Tools</Category>
-  <Icon>https://raw.githubusercontent.com/NVmagma/media_collection_auditor/feature/interface-api/unraid/assets/Media_Collection_Auditor_Badge.png</Icon>
+  <Icon>https://raw.githubusercontent.com/NVmagma/media_collection_auditor/main/unraid/assets/Media_Collection_Auditor_Badge.png</Icon>
   <WebUI>http://[IP]:[PORT:8080]/</WebUI>
   <Support>https://github.com/NVmagma/media_collection_auditor/issues</Support>
   <Privileged>false</Privileged>

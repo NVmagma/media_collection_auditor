@@ -124,9 +124,9 @@ def test_changed_settings_invalidates_whole_report(coverage_api,monkeypatch):
 
 
 
-def test_unapproved_sqlite_never_uses_json(coverage_api,monkeypatch):
+def test_unsupported_backend_never_uses_json(coverage_api,monkeypatch):
     client,state,*_=coverage_api
-    monkeypatch.setenv('AUDITOR_STATE_BACKEND','sqlite')
+    monkeypatch.setenv('AUDITOR_STATE_BACKEND','unsupported')
     monkeypatch.setattr(web,'filesystem_stages',lambda *a,**k:pytest.fail('No unbound scan'))
     response=client.get('/api/v1/coverage',headers=AUTH)
     assert response.status_code==503 and response.json['rows'] is None

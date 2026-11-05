@@ -1,7 +1,7 @@
 name: JSON worker candidate acceptance
 on:
   push:
-    branches: [feature/interface-api, feature/unraid]
+    branches: [main, feature/unraid, feature/interface-api]
     paths:
       - 'app/**'
       - 'tests/test_json*'

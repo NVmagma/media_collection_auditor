@@ -2,13 +2,13 @@ name: Security audit (advisory)
 
 on:
   push:
-    branches: [feature/unraid, feature/interface-api]
+    branches: [main, feature/unraid, feature/interface-api]
     paths:
       - requirements.txt
       - docker/runtime.Dockerfile
       - .github/workflows/security-audit.yml
   pull_request:
-    branches: [feature/unraid, feature/interface-api]
+    branches: [main, feature/unraid, feature/interface-api]
   schedule:
     - cron: '17 10 * * 1'
   workflow_dispatch:

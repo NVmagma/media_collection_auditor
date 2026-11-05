@@ -7,7 +7,6 @@ base=$1
 [[ "$base" = /* && ! "$base" =~ [[:cntrl:],] && -d "$base" ]] || exit 2
 [ "$(cd -P -- "$base" && pwd -P)" = "$base" ] || exit 2
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
-[ "$(git branch --show-current)" = feature/interface-api ] || exit 2
 revision=$(git rev-parse HEAD)
 image=$(docker inspect --format '{{.Image}}' media_collection_auditor)
 [[ "$image" =~ ^sha256:[0-9a-f]{64}$ ]] || exit 2

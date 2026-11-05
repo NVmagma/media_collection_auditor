@@ -127,7 +127,7 @@ def test_one_snapshot_and_stable_ties(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize('view', ['oldest-waiting', 'leaving-soon'])
-def test_unapproved_sqlite_titles_never_fall_back_to_json(api, monkeypatch, view):
+def test_unsupported_backend_titles_never_fall_back_to_json(api, monkeypatch, view):
     client, path = api
     original = path.read_bytes()
     monkeypatch.setenv('AUDITOR_STATE_BACKEND', 'unsupported')

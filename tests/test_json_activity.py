@@ -38,7 +38,7 @@ def test_failed_unknown_counts_are_not_zero_or_verified_success():
 def test_limit_and_old_worker_isolation():
     row=record()
     assert len(project_activity([row]*100,limit=12))==12
-    row['worker_mode']='sqlite'
+    row['worker_mode']='unsupported'
     assert project_activity([row])==[]
 
 

@@ -1,6 +1,6 @@
 # Hybrid dashboard redesign
 
-Development branch: `feature/interface-api`. Production is unchanged.
+The dashboard design is part of the JSON release on `main`.
 
 ## Implemented increments
 

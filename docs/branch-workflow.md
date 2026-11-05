@@ -1,8 +1,7 @@
 # Branch workflow
 
-The active development branch is `feature/interface-api`. The project-default
-branch remains `feature/unraid`; do not modify `main` or other protected branches
-without explicit approval. Keep changes incremental and verify automated tests
+The release branch is `main` and the default development branch is
+`feature/unraid`. Changes to protected branches require explicit approval. Keep changes incremental and verify automated tests
 and Actions before recommending a container update.
 
 `json-cutover-verified-2026-11-04` preserves the accepted pre-cleanup source in Git.

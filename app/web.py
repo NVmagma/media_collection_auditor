@@ -910,7 +910,6 @@ def settings():
     from app.json_worker_service import read_saved_settings
     from app.json_worker_cycle import validate_policy
     from config_store import initial_environment
-    from app.legacy_settings import SCHEDULE_ALIASES
     saved=load_config(); error=None
     if request.method=='POST':
         origin=request.headers.get('Origin') or request.headers.get('Referer')
@@ -938,7 +937,7 @@ def settings():
             if request.form.get('settings_action')!='apply':
                 raise ValueError('Use Apply Requested Settings to apply your changes.')
             retained=read_saved_settings()
-            updated={**{key:value for key,value in retained.items() if key not in KEYS and key not in SCHEDULE_ALIASES},**updated}
+            updated={**{key:value for key,value in retained.items() if key not in KEYS},**updated}
             save_config(updated)
             return redirect(url_for('settings',saved='1'))
         except (ValueError,OSError) as exc: error=str(exc)

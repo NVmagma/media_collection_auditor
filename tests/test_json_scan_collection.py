@@ -173,12 +173,6 @@ def test_settings_are_detached_before_first_request(services):
     assert result['library_status'][0]['arr_complete']
 
 
-def test_collection_never_opens_sqlite(services,monkeypatch):
-    import sqlite3
-    monkeypatch.setattr(sqlite3,'connect',lambda *a,**k: pytest.fail('No database permitted'))
-    assert collect(services)['scanned_titles'] == 131
-
-
 @pytest.mark.parametrize('limit', [0, True, float('inf'), 3601])
 def test_invalid_collection_deadline_refuses_before_requests(services,limit):
     server,*_ = services

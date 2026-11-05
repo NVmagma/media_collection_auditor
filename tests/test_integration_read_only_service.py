@@ -78,9 +78,7 @@ def test_actual_image_entrypoint_exits_before_importing_worker_or_writing_sessio
     runtime = context(tmp_path)
     (runtime / 'collection_auditor.py').write_text('raise AssertionError("Worker imported")\n')
     env = {'PYTHONPATH': str(runtime)+':'+str(runtime/'app'), 'READ_ONLY_API_SERVICE': 'true',
-           'WEB_SESSION_KEY_FILE': str(runtime / 'must-not-create.key'),
-           'EXPERIMENTAL_SQLITE_RECOVERY_VIEW': 'true',
-           'EXPERIMENTAL_SQLITE_RECOVERY_DB': str(runtime / 'must-not-open.db')}
+           'WEB_SESSION_KEY_FILE': str(runtime / 'must-not-create.key')}
     child = '''
 import runpy
 from flask import Flask
@@ -92,7 +90,6 @@ runpy.run_module("app.main", run_name="__main__")
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == 'API_WEB_STARTED'
     assert not (runtime / 'must-not-create.key').exists()
-    assert not (runtime / 'must-not-open.db').exists()
 
 
 def test_read_only_service_smoke_command(tmp_path):

@@ -1,4 +1,4 @@
-"""One captured source, detached consumers and explicit SQLite comparisons."""
+"""One captured source, detached consumers and read-only tracking comparisons."""
 import json
 import pytest
 from app.dashboard_tracking_snapshot import read_json_dashboard_snapshot

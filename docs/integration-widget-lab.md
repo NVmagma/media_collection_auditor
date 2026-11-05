@@ -59,8 +59,8 @@ requests; it need not be reachable from the Mac browser.
 (
   set -eu
   cd /mnt/user/auditor_checkout
-  [ "$(git branch --show-current)" = "feature/interface-api" ]
-  git pull --ff-only origin feature/interface-api
+  [ "$(git branch --show-current)" = "main" ]
+  git pull --ff-only origin main
   bash scripts/integration_widget_lab.sh sample
 )
 ```

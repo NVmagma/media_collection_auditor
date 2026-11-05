@@ -58,6 +58,10 @@ same digest and paths as the running container. Never initialize an existing log
 directory during an update. A retained old container must remain stopped while
 its replacement is running.
 
+Check the saved daily schedule before updating an older installation. The release
+reads `DAILY_RUN_TIME` and `DAILY_RUN_TIMEZONE` from saved settings or the container
+environment. You can review and apply both values in Settings → Lifecycle.
+
 New installations may run `python -B -m app.json_initialize` explicitly with an
 empty writable `/app/logs` directory. This creates empty tracking/settings and
 scan-control metadata only. It refuses any nonempty directory, including a partial

@@ -173,7 +173,7 @@ There is no nested scroll container, image request, browser fetch or navigation
 link. Size each board widget to fit its rows; actual no-scroll acceptance depends
 on the installed renderer, board height and viewport, especially on mobile.
 
-For a synthetic ten-row preview, update only the checkout on `feature/interface-api`
+For a synthetic ten-row preview, update only the checkout on `main`
 and run `bash scripts/integration_widget_lab.sh titles`. This uses the existing
 expiring isolated fixture launcher, not production state. It exposes both title
 routes with twelve synthetic records each, capped at ten with a truncation note.

@@ -1,6 +1,5 @@
 """Persisted web settings. Container environment remains the fallback."""
 import json
-from app.legacy_settings import normalize_schedule
 import os
 from pathlib import Path
 
@@ -29,13 +28,13 @@ _INITIAL_ENVIRONMENT = dict(os.environ)
 
 
 def initial_environment():
-    return normalize_schedule(_INITIAL_ENVIRONMENT)
+    return dict(_INITIAL_ENVIRONMENT)
 
 
 def load_config():
     try:
         data = json.loads(CONFIG_FILE.read_text())
-        return {k: str(v) for k, v in normalize_schedule(data).items() if k in KEYS} if isinstance(data, dict) else {}
+        return {k: str(v) for k, v in data.items() if k in KEYS} if isinstance(data, dict) else {}
     except (OSError, ValueError, TypeError):
         return {}
 

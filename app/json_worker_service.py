@@ -40,8 +40,7 @@ def read_saved_settings():
 
 def settings_snapshot():
     from config_store import DEFAULTS,KEYS,initial_environment,validate
-    from app.legacy_settings import normalize_schedule
-    saved=normalize_schedule(read_saved_settings())
+    saved=read_saved_settings()
     try: selected={key:validate(key,str(value)) for key,value in saved.items() if key in KEYS}
     except Exception:
         raise ValueError('Stored settings are invalid; scans remain paused.') from None

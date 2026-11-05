@@ -2,9 +2,9 @@ name: Python safety checks
 
 on:
   push:
-    branches: [feature/unraid, feature/interface-api]
+    branches: [main, feature/unraid, feature/interface-api]
   pull_request:
-    branches: [feature/unraid, feature/interface-api]
+    branches: [main, feature/unraid, feature/interface-api]
   workflow_dispatch:
 
 permissions:
