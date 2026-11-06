@@ -130,7 +130,10 @@ if (!file) throw Error('Pass the synthetic page rendered by tests/dashboard_work
     await section('TV Shows');
     await page.locator('[data-stage-tab="TV:Holding"]').click();
     assert.equal(await page.locator('[data-stage-panel="TV:Holding"]').isVisible(), true);
+    const staged = page.getByRole('region', {name: 'TV seasons leaving soon'});
+    assert.match(await staged.locator('tbody').innerText(), /Lantern House/);
     await page.locator('[data-view="posters"]').click();
+    assert.equal(await staged.getByRole('table').isVisible(), true);
     await page.locator('[data-stage-tab="TV:Waiting"]').click();
     const waiting = page.locator('[data-stage-panel="TV:Waiting"]');
     assert.equal(await waiting.locator('.media-poster-list').isVisible(), true);

@@ -12,7 +12,9 @@ def render_workspace(*, admin=False, tracking_available=True, run_updates=None, 
                             'TV/Lantern House (2026)': '2026-10-02T11:30:00',
                             'A & B <Moon> (2026)': '2026-10-03T11:30:00'},
              'queued': {'Summer Frontier (2026)': '2026-10-20T11:30:00'},
-             'keep_seen': {}, 'in_removal': {}}
+             'keep_seen': {}, 'in_removal': {},
+             'tv_leaving_soon_seasons': {'TV/Lantern House (2026)/1': {
+                 'name': 'Season 01', 'staged_at': '2026-10-20T11:30:00+00:00'}}}
     stages = {name: [] for name in ('Waiting', 'Holding', 'Keep', 'Removal')}
     stages['Waiting'] = [{'library': 'Movies', 'title': 'The Quiet Orbit (2026)', 'since': state['first_seen']['The Quiet Orbit (2026)']},
                          {'library': 'TV', 'title': 'Lantern House (2026)', 'since': state['first_seen']['TV/Lantern House (2026)']}]
