@@ -46,6 +46,7 @@ def season_move(tmp_path):
                         active_parent=str(active), holding_parent=str(holding), restore=restore,
                         read_plan=lambda: plan,
                         monitoring=SimpleNamespace(season=1, series_id=17, source_path='/media/TV/Example',
+                                                   endpoint_identity='a' * 64,
                                                    read=lambda: monitoring[0], set=set_monitoring))
 
     return active, holding, state_file, updates, execute
@@ -95,3 +96,49 @@ def test_interrupted_rename_retains_intent_and_blocks_scan(season_move, monkeypa
     assert updates == [False]
     assert not (active / 'Season 01').exists()
     assert (holding / 'Season 01' / 'episode.mkv').is_file()
+
+
+
+@pytest.mark.parametrize('restore', [False, True])
+def test_completed_interruption_can_be_acknowledged_without_replay(season_move, monkeypatch, restore):
+    from app.tv_season_recovery import recover_season
+
+    active, holding, state_file, updates, execute = season_move
+    if restore:
+        execute()
+    original_finish = ScanAttempt.finish_operation
+
+    def interrupted(*args, **kwargs):
+        raise OSError('simulated crash before the final checkpoint')
+
+    monkeypatch.setattr(ScanAttempt, 'finish_operation', interrupted)
+    with pytest.raises(OSError, match='simulated crash'):
+        execute(restore=restore)
+    monkeypatch.setattr(ScanAttempt, 'finish_operation', original_finish)
+    before = state_file.read_bytes()
+    calls = []
+
+    def factory(**kwargs):
+        assert kwargs['series_id'] == 17 and kwargs['season'] == 1
+        def read():
+            calls.append('GET')
+            return updates[-1]
+        return SimpleNamespace(endpoint_identity='a' * 64, read=read)
+
+    store = JsonTrackingStore(state_file)
+    kwargs = {'settings': {}, 'monitoring_factory': factory}
+    review = recover_season(store, **kwargs)
+    assert review['required_action'] == 'acknowledge_season_move'
+    assert state_file.read_bytes() == before
+    with pytest.raises(RuntimeError, match='review changed'):
+        recover_season(store, expected='0' * 64, **kwargs)
+    assert state_file.read_bytes() == before
+    result = recover_season(store, expected=review['review_fingerprint'], **kwargs)
+    assert result['restored'] is restore
+    state = json.loads(state_file.read_bytes())
+    assert state[KEY]['journal'] is None
+    assert ('TV/Example/1' in state[ARCHIVE]) is not restore
+    assert calls == ['GET'] * 6
+    assert updates == ([False, True] if restore else [False])
+    destination = active if restore else holding
+    assert (destination / 'Season 01' / 'episode.mkv').read_bytes() == b'fixture'

@@ -14,17 +14,29 @@ from app.mount_identity import assert_rename_mount_binding, capture_rename_mount
 from app.title_identity import validate_title_folder
 
 ARCHIVE = 'tv_leaving_soon_seasons'
+SEASON_FOLDER = re.compile(r'Season ([0-9]{1,4})', re.IGNORECASE)
 
 
 def _identity(info):
     return [info.st_dev, info.st_ino]
 
 
+
+def verify_season_location(present, absent, name, season, identity):
+    item = os.stat(name, dir_fd=present, follow_symlinks=False)
+    if not stat.S_ISDIR(item.st_mode) or _identity(item) != identity:
+        raise RuntimeError('Season identity changed')
+    with scan_held_directory(absent) as entries:
+        for count, entry in enumerate(entries, 1):
+            alternate = SEASON_FOLDER.fullmatch(entry.name)
+            if count > 1000 or (alternate and int(alternate[1]) == season):
+                raise RuntimeError('Season destination is occupied or could not be verified')
+
 def move_season(attempt, *, title, season, name, active_parent, holding_parent, restore,
                 read_plan, monitoring):
     """Stage or restore one directory. A failure after intent requires review."""
     validate_title_folder(title)
-    match = re.fullmatch(r'Season ([0-9]{1,4})', name, re.IGNORECASE)
+    match = SEASON_FOLDER.fullmatch(name)
     if (not match or type(season) is not int or season < 1
             or int(match[1]) != season or type(restore) is not bool
             or monitoring.season != season
@@ -70,14 +82,7 @@ def move_season(attempt, *, title, season, name, active_parent, holding_parent, 
                     os.close(reopened)
             assert_rename_mount_binding(binding, source, destination, witness)
             present, absent = (destination, source) if moved else (source, destination)
-            item = os.stat(name, dir_fd=present, follow_symlinks=False)
-            if not stat.S_ISDIR(item.st_mode) or _identity(item) != identity:
-                raise RuntimeError('Season identity changed')
-            with scan_held_directory(absent) as entries:
-                for count, entry in enumerate(entries, 1):
-                    alternate = re.fullmatch(r'Season ([0-9]{1,4})', entry.name, re.IGNORECASE)
-                    if count > 1000 or (alternate and int(alternate[1]) == season):
-                        raise RuntimeError('Season destination is occupied or could not be verified')
+            verify_season_location(present, absent, name, season, identity)
             if media_fingerprint(witness) != (fingerprint, file_count):
                 raise RuntimeError('Season contents changed')
 
@@ -90,7 +95,8 @@ def move_season(attempt, *, title, season, name, active_parent, holding_parent, 
             raise RuntimeError('Sonarr season monitoring unavailable')
         record = {'name': name, 'active_parent': str(active), 'holding_parent': str(holding),
                   'identity': identity, 'previous_monitoring': previous,
-                  'sonarr_series_id': monitoring.series_id, 'sonarr_path': monitoring.source_path}
+                  'sonarr_series_id': monitoring.series_id, 'sonarr_path': monitoring.source_path,
+                  'sonarr_endpoint': monitoring.endpoint_identity}
         if restore:
             record = archive[key]
             if (not isinstance(record, dict) or type(record.get('previous_monitoring')) is not bool
@@ -98,13 +104,15 @@ def move_season(attempt, *, title, season, name, active_parent, holding_parent, 
                     or record.get('active_parent') != str(active)
                     or record.get('holding_parent') != str(holding)
                     or record.get('sonarr_series_id') != monitoring.series_id
-                    or record.get('sonarr_path') != monitoring.source_path or previous):
+                    or record.get('sonarr_path') != monitoring.source_path
+                    or record.get('sonarr_endpoint') != monitoring.endpoint_identity or previous):
                 raise RuntimeError('Staged season identity or monitoring changed')
         wanted = record['previous_monitoring'] if restore else False
         verify()
         identifier = attempt.record_intent(kind='tv_season_move', library='TV', title=title,
             details={'key': key, 'record': record, 'restore': restore,
                      'fingerprint': fingerprint, 'file_count': file_count,
+                     'parent_identities': [parent[2] for parent in parents],
                      'staged_at': datetime.now(timezone.utc).isoformat()})
         journal = session.state[KEY]['journal']
         if not restore and previous:

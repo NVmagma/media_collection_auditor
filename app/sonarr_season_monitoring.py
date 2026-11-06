@@ -1,4 +1,5 @@
 """Bound, single-write monitoring updates for one Sonarr season."""
+from hashlib import sha256
 import json
 from time import monotonic
 
@@ -17,6 +18,7 @@ class SonarrSeasonMonitoring:
                                          verify_binding=verify_binding, deadline_tick=deadline_tick)
         self.source_path = self._transport._source
         self._url = self._transport._url + '/' + str(series_id)
+        self.endpoint_identity = sha256(self._url.encode()).hexdigest()
         self._used = False
 
     def _deadline(self):
