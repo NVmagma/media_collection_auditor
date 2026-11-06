@@ -137,6 +137,17 @@ def test_opt_in_live_scan_stages_and_restores_season(cycle_case, monkeypatch):
     series = server.records['/api/v3/series/2']
     series['seasons'] = [{'seasonNumber': 1, 'monitored': True}, {'seasonNumber': 2, 'monitored': True}]
     tags = ['one-season']
+    handler = server.RequestHandlerClass
+    original_get = handler.do_GET
+
+    def get_with_episode_monitoring(request):
+        if request.path == '/api/v3/episode?seriesId=2':
+            current = server.records['/api/v3/series/2']['seasons']
+            return request.respond([{'id': index, 'seriesId': 2, **season}
+                                    for index, season in enumerate(current, 1)])
+        return original_get(request)
+
+    monkeypatch.setattr(handler, 'do_GET', get_with_episode_monitoring)
 
     def jf_get(path, params):
         if path == '/Users':

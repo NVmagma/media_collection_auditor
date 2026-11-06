@@ -22,6 +22,10 @@ def record():
                         {'seasonNumber': 2, 'monitored': True}]}
 
 
+def episodes(monitored):
+    return [{'id': 31, 'seriesId': 17, 'seasonNumber': 1, 'monitored': monitored}]
+
+
 def response(value, status):
     result = BytesIO(json.dumps(value).encode())
     result.status = status
@@ -33,14 +37,15 @@ def test_sonarr_updates_only_one_season_and_reads_back_twice():
     original = record()
     updated = deepcopy(original)
     updated['seasons'][1]['monitored'] = False
-    replies = [response(original, 200), response(updated, 202),
-               response(updated, 200), response(updated, 200)]
+    replies = [response(original, 200), response(episodes(True), 200), response(updated, 202),
+               response(updated, 200), response(episodes(False), 200),
+               response(updated, 200), response(episodes(False), 200)]
     with patch.object(monitor._transport._opener, 'open', side_effect=replies) as opened:
         monitor.set(False, expected=True)
         requests = [call.args[0] for call in opened.call_args_list]
-        assert [request.get_method() for request in requests] == ['GET', 'PUT', 'GET', 'GET']
-        assert requests[1].full_url.endswith('/api/v3/series/17?moveFiles=false')
-        assert json.loads(requests[1].data) == updated
+        assert [request.get_method() for request in requests] == ['GET', 'GET', 'PUT', 'GET', 'GET', 'GET', 'GET']
+        assert requests[2].full_url.endswith('/api/v3/series/17?moveFiles=false')
+        assert json.loads(requests[2].data) == updated
         with pytest.raises(ArrTitleTransportError, match='no retry'):
             monitor.set(False, expected=True)
 
@@ -67,7 +72,18 @@ def test_other_season_change_leaves_outcome_unresolved():
     changed = deepcopy(original)
     changed['seasons'][1]['monitored'] = False
     changed['seasons'][2]['monitored'] = False
-    replies = [response(original, 200), response({'id': 17}, 202), response(changed, 200)]
+    replies = [response(original, 200), response(episodes(True), 200),
+               response({'id': 17}, 202), response(changed, 200)]
     with patch.object(monitor._transport._opener, 'open', side_effect=replies):
         with pytest.raises(ArrTitleTransportError, match='readback mismatch'):
             monitor.set(False, expected=True)
+
+
+
+def test_individual_episode_override_blocks_before_put():
+    monitor = client()
+    replies = [response(record(), 200), response(episodes(False), 200)]
+    with patch.object(monitor._transport._opener, 'open', side_effect=replies) as opened:
+        with pytest.raises(ArrTitleTransportError, match='individual episode monitoring'):
+            monitor.set(False, expected=True)
+        assert [call.args[0].get_method() for call in opened.call_args_list] == ['GET', 'GET']

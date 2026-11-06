@@ -49,7 +49,7 @@ class ArrTitleUpdate:
     def __repr__(self):
         return '<ArrTitleUpdate redacted>'
 
-    def _request(self, method, url, deadline, body=None):
+    def _request(self, method, url, deadline, body=None, *, response_type=dict):
         self._verify()
         try:
             remaining = deadline - monotonic()
@@ -77,7 +77,7 @@ class ArrTitleUpdate:
             def invalid(value):
                 raise ValueError('nonfinite')
             record = json.loads(raw, object_pairs_hook=_object, parse_constant=invalid)
-            if not isinstance(record, dict):
+            if not isinstance(record, response_type):
                 raise ValueError('shape')
             self._verify()
             return record
