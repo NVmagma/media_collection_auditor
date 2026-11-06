@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 import stat
 
-from app.arr_catalog import ArrCatalogGET, catalog_paths_by_folder
+from app.arr_catalog import ArrCatalogGET, canonical_arr_record_path, catalog_paths_by_folder
 from app.filesystem_paths import _canonical, _open_directory, scan_held_directory
 from app.jellyfin_collection import collect_title_observation
 from app.jellyfin_transport import ScheduledJellyfinGET
@@ -103,7 +103,7 @@ def _staged_inventory(holding, title, active, state):
             raise RuntimeError('Tracked staged season identity changed')
     return identity, seasons
 
-def review_show(title, settings, load_state):
+def inspect_show(title, settings, load_state):
     validate_title_folder(title)
     if title.startswith('.') or len(title) > 255:
         raise ValueError('Invalid TV show folder')
@@ -125,8 +125,10 @@ def review_show(title, settings, load_state):
     expected_path = remote[stage] + '/' + title
     sonarr = ArrCatalogGET(service='sonarr', base_url=captured.get('SONARR_URL', ''),
                            token=captured.get('SONARR_API_KEY', ''))
-    if catalog_paths_by_folder(sonarr).get(title) != [expected_path]:
+    catalog = sonarr()
+    if catalog_paths_by_folder(lambda: catalog).get(title) != [expected_path]:
         raise RuntimeError('Sonarr show path could not be verified')
+    series_id = next(row['id'] for row in catalog if canonical_arr_record_path(row['path']) == expected_path)
     jellyfin = ScheduledJellyfinGET(base_url=captured.get('JELLYFIN_HOST_URL', ''),
                                   token=captured.get('JELLYFIN_API_TOKEN', ''), maximum_requests=200)
     result = collect_title_observation(fetch=jellyfin, jellyfin_type='Series', folder=title,
@@ -142,7 +144,14 @@ def review_show(title, settings, load_state):
     tags = set(result['observed_tags'])
     if captured.get('PROTECT_TAG', 'keep-forever').casefold() in tags:
         tags.add('keep-forever')
-    return plan_seasons(tags=tags,
+    plan = plan_seasons(tags=tags,
                         active=[number for number, item in seasons.items() if item['status'] == 'video_present'],
                         leaving_soon=staged.keys(), verified=True,
                         keep_all_tag=captured.get('KEEP_ALL_SEASONS_TAG', 'keep-all-seasons'))
+
+    return {'plan': plan, 'active_parent': active, 'holding_parent': holding / title,
+            'active': seasons, 'staged': staged, 'series_id': series_id, 'sonarr_path': expected_path}
+
+
+def review_show(title, settings, load_state):
+    return inspect_show(title, settings, load_state)['plan']

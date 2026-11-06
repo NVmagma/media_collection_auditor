@@ -143,7 +143,9 @@ def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
             signals["favorite"] |= data["IsFavorite"]
             signals["keep"] |= tag_names["keep"] in normalized
             signals["disliked"] |= tag_names["disliked"] in normalized
-            signals["keep_all"] |= tag_names["keep_all"] in normalized
+            keep_all_tv = jellyfin_type == 'Series' and 'keep-all' in normalized
+            signals["keep"] |= keep_all_tv
+            signals["keep_all"] |= tag_names["keep_all"] in normalized or keep_all_tv
             signals["protected"] |= tag_names["protected"] in normalized
         if signals["protected"]:
             signals["keep_all"] = True

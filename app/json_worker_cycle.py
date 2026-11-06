@@ -173,6 +173,7 @@ def run_cycle(store, *, settings, trigger, now=None, services=None, collect=coll
             'completed_moves':tuple(evidence['completed_moves']),
             'completed_deletions':tuple(evidence.get('completed_deletions',())),
             'completed_quarantines':tuple(evidence.get('completed_quarantines',())),
+            'completed_season_moves':tuple(evidence.get('completed_season_moves',())),
             'permanent_deletion_authorized':False}
 
 
@@ -190,7 +191,7 @@ def _run_cycle(store, *, settings, trigger, now, services, collect, preview, evi
     with scan_attempt(store,now=now,trigger=trigger) as attempt:
         report=evidence
         report.update(execution_mode='live',scanned_titles=None,decisions=(),
-                completed_moves=[],completed_deletions=[],completed_quarantines=[],discovery_changes=None,failure_stage=None)
+                completed_moves=[],completed_deletions=[],completed_quarantines=[],completed_season_moves=[],discovery_changes=None,failure_stage=None)
         phase='collection'
         try:
             plan=collect(attempt.session,settings=values,now=local_now)
@@ -254,6 +255,17 @@ def _run_cycle(store, *, settings, trigger, now, services, collect, preview, evi
                     update_orphan('orphan_recheck_blocked','skipped');continue
                 report['completed_quarantines'].append({**{key:folder[key] for key in ('library','media_key','stage')},
                     'quarantine_id':outcome['quarantine_id']})
+            if _bool(values, 'ENABLE_TV_SEASON_RETENTION', 'false') and plan.get('season_titles'):
+                from app.json_worker_service import settings_snapshot
+                from app.tv_season_worker import apply_season_plans
+                phase = 'tv_season_retention'
+                completed_actions = (report['completed_moves'] + report['completed_deletions']
+                                     + report['completed_quarantines'])
+                tv_used = sum(action['library'] == 'TV' for action in completed_actions)
+                apply_season_plans(attempt, titles=plan['season_titles'],
+                    slots=min(limit - len(completed_actions), 5 - tv_used), settings=values,
+                    read_settings=lambda: validate_policy(settings_snapshot())[0],
+                    completed=report['completed_season_moves'])
             attempt.finish(result='completed')
             report['result']='completed'
         except Exception as error:
@@ -268,8 +280,9 @@ def _run_cycle(store, *, settings, trigger, now, services, collect, preview, evi
         report['completed_moves']=tuple(report['completed_moves'])
         report['completed_deletions']=tuple(report['completed_deletions'])
         report['completed_quarantines']=tuple(report['completed_quarantines'])
+        report['completed_season_moves']=tuple(report['completed_season_moves'])
         report['permanent_deletion_authorized']=_bool(values,'ALLOW_PERMANENT_DELETE','false')
         from app.jellyfin_refresh import refresh_after_moves
         report['jellyfin_refresh']=refresh_after_moves(settings=values,
-            completed=report['result']=='completed' and bool(report['completed_moves'] or report['completed_deletions']))
+            completed=report['result']=='completed' and bool(report['completed_moves'] or report['completed_deletions'] or report['completed_season_moves']))
         return report

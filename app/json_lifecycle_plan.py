@@ -18,7 +18,7 @@ from app.json_scan_control import KEY, _control
 from app.tv_season_policy import ARCHIVE
 
 SIGNALS = {'played', 'favorite', 'disliked', 'keep', 'keep_all', 'protected'}
-BLOCKERS = {'future_content_timestamp', 'content_unavailable', 'content_reset_required', 'discovery_required','no_video','no_video_unknown_files'}
+BLOCKERS = {'future_content_timestamp', 'content_unavailable', 'content_reset_required', 'discovery_required','no_video','no_video_unknown_files','tv_season_policy'}
 ARR = {'exact_source_match', 'missing_record', 'path_conflict', 'ambiguous_record', 'unavailable'}
 DESTINATIONS = {('Waiting','hold'):'Holding', ('Waiting','keep'):'Keep',
     ('Holding','rescue'):'Keep', ('Holding','to_removal'):'Removal'}

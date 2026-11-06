@@ -181,8 +181,10 @@ class JSONWorkerService:
             decisions=[row if isinstance(row,dict) else asdict(row) for row in decisions]
             completed=result.get('completed_moves',())
             deleted=result.get('completed_deletions',())
+            season_moves=result.get('completed_season_moves',())
             quarantined=result.get('completed_quarantines',())
             record.update(moves_completed=len(completed),deletions_completed=len(deleted),
+                season_moves_completed=len(season_moves),
                 metadata_quarantines_completed=len(quarantined),quarantine_receipts=quarantined,
                 deletions_proposed=sum(row['outcome']=='delete_proposed' for row in decisions),arr_completed=len(completed)+len(deleted),
                 moves_proposed=sum(row['outcome']=='proposed' for row in decisions),

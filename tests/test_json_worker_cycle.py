@@ -118,3 +118,54 @@ def test_storage_failure_keeps_verified_movie_result_and_leaves_tv_outcome_unkno
     state=json.loads(store.path.read_bytes())
     assert state[KEY]['journal']['kind']=='move' and state[KEY]['journal']['library']=='TV'
     assert sum(method=='PUT' for method,_ in server.calls)==1
+
+
+def test_opt_in_live_scan_stages_and_restores_season(cycle_case, monkeypatch):
+    from app import json_worker_service, tv_season_review
+    from app.tv_season_policy import ARCHIVE
+
+    store, values, requests, server, _ = cycle_case
+    show = Path(requests['TV'].source_root) / 'Show'
+    for season in (1, 2):
+        folder = show / f'Season {season}'
+        folder.mkdir()
+        (folder / 'episode.mkv').write_bytes(b'disposable video')
+    (show / 'video.mkv').unlink()
+    holding = show.parents[1] / 'TV_seasons_leaving_soon'
+    holding.mkdir()
+    values.update(ENABLE_TV_SEASON_RETENTION='true', TV_SEASON_HOLDING_PATH=str(holding))
+    series = server.records['/api/v3/series/2']
+    series['seasons'] = [{'seasonNumber': 1, 'monitored': True}, {'seasonNumber': 2, 'monitored': True}]
+    tags = ['one-season']
+
+    def jf_get(path, params):
+        if path == '/Users':
+            return [{'Id': 'viewer'}]
+        return {'TotalRecordCount': 1, 'Items': [{'Id': 'show', 'Type': 'Series',
+                'Path': str(show), 'Tags': tags, 'UserData': {'Played': False, 'PlayCount': 0, 'IsFavorite': False}}]}
+
+    monkeypatch.setattr(tv_season_review, 'ScheduledJellyfinGET', lambda **kwargs: jf_get)
+    monkeypatch.setattr(json_worker_service, 'settings_snapshot', lambda: values)
+
+    def collect_seasons(session, **kwargs):
+        return {'scanned_titles': 1, 'moves': (), 'clock_changes_applied': 0, 'decisions': (),
+                'season_titles': ('Show',)}
+
+    now = NOW.replace(tzinfo=timezone.utc)
+    options = dict(settings=values, collect=collect_seasons)
+    result = run_cycle(store, trigger='manual', now=now, **options)
+    assert result['result'] == 'completed'
+    assert result['completed_season_moves'] == ({'title': 'Show', 'season': 1, 'restored': False},)
+    assert (holding / 'Show' / 'Season 1' / 'episode.mkv').is_file()
+    assert (show / 'Season 2' / 'episode.mkv').is_file()
+    assert json.loads(store.path.read_bytes())[ARCHIVE]['TV/Show/1']['previous_monitoring'] is True
+    assert server.records['/api/v3/series/2']['seasons'][0]['monitored'] is False
+
+    tags.append('keep-all')
+    result = run_cycle(store, trigger='scheduled', now=now + timedelta(hours=2), **options)
+    assert result['result'] == 'completed'
+    assert result['completed_season_moves'] == ({'title': 'Show', 'season': 1, 'restored': True},)
+    assert (show / 'Season 1' / 'episode.mkv').is_file()
+    assert not json.loads(store.path.read_bytes())[ARCHIVE]
+    assert server.records['/api/v3/series/2']['seasons'][0]['monitored'] is True
+    assert sum(method == 'PUT' for method, _ in server.calls) == 2
