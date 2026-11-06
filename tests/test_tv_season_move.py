@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 import json
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -33,7 +34,8 @@ def season_move(tmp_path):
     monitoring = [True]
     updates = []
 
-    def set_monitoring(value):
+    def set_monitoring(value, *, expected):
+        assert monitoring[0] is expected
         updates.append(value)
         monitoring[0] = value
 
@@ -42,8 +44,9 @@ def season_move(tmp_path):
         with store.session() as session:
             move_season(ScanAttempt(session), title='Example', season=1, name='Season 01',
                         active_parent=str(active), holding_parent=str(holding), restore=restore,
-                        read_plan=lambda: plan, read_monitoring=lambda: monitoring[0],
-                        set_monitoring=set_monitoring)
+                        read_plan=lambda: plan,
+                        monitoring=SimpleNamespace(season=1, series_id=17, source_path='/media/TV/Example',
+                                                   read=lambda: monitoring[0], set=set_monitoring))
 
     return active, holding, state_file, updates, execute
 

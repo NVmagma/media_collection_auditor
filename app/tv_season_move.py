@@ -21,12 +21,15 @@ def _identity(info):
 
 
 def move_season(attempt, *, title, season, name, active_parent, holding_parent, restore,
-                read_plan, read_monitoring, set_monitoring):
+                read_plan, monitoring):
     """Stage or restore one directory. A failure after intent requires review."""
     validate_title_folder(title)
     match = re.fullmatch(r'Season ([0-9]{1,4})', name, re.IGNORECASE)
     if (not match or type(season) is not int or season < 1
-            or int(match[1]) != season or type(restore) is not bool):
+            or int(match[1]) != season or type(restore) is not bool
+            or monitoring.season != season
+            or type(monitoring.series_id) is not int or monitoring.series_id <= 0
+            or Path(_canonical(monitoring.source_path)).name != title):
         raise ValueError('Regular season required')
     active, holding = (Path(_canonical(path)) for path in (active_parent, holding_parent))
     if (active.name != title or holding.name != title or active == holding
@@ -82,17 +85,20 @@ def move_season(attempt, *, title, season, name, active_parent, holding_parent, 
         plan = read_plan()
         if plan.blocked or season not in (plan.restore if restore else plan.stage):
             raise RuntimeError('Season policy changed')
-        previous = read_monitoring()
+        previous = monitoring.read()
         if type(previous) is not bool:
             raise RuntimeError('Sonarr season monitoring unavailable')
         record = {'name': name, 'active_parent': str(active), 'holding_parent': str(holding),
-                  'identity': identity, 'previous_monitoring': previous}
+                  'identity': identity, 'previous_monitoring': previous,
+                  'sonarr_series_id': monitoring.series_id, 'sonarr_path': monitoring.source_path}
         if restore:
             record = archive[key]
             if (not isinstance(record, dict) or type(record.get('previous_monitoring')) is not bool
                     or record.get('identity') != identity or record.get('name') != name
                     or record.get('active_parent') != str(active)
-                    or record.get('holding_parent') != str(holding) or previous):
+                    or record.get('holding_parent') != str(holding)
+                    or record.get('sonarr_series_id') != monitoring.series_id
+                    or record.get('sonarr_path') != monitoring.source_path or previous):
                 raise RuntimeError('Staged season identity or monitoring changed')
         wanted = record['previous_monitoring'] if restore else False
         verify()
@@ -102,8 +108,8 @@ def move_season(attempt, *, title, season, name, active_parent, holding_parent, 
                      'staged_at': datetime.now(timezone.utc).isoformat()})
         journal = session.state[KEY]['journal']
         if not restore and previous:
-            set_monitoring(False)
-            if read_monitoring() is not False:
+            monitoring.set(False, expected=True)
+            if monitoring.read() is not False:
                 raise RuntimeError('Sonarr did not verify unmonitoring')
         plan = read_plan()
         if plan.blocked or season not in (plan.restore if restore else plan.stage):
@@ -114,8 +120,8 @@ def move_season(attempt, *, title, season, name, active_parent, holding_parent, 
         os.fsync(destination)
         verify(moved=True)
         if restore and wanted:
-            set_monitoring(True)
-        if read_monitoring() is not wanted or read_monitoring() is not wanted:
+            monitoring.set(True, expected=False)
+        if monitoring.read() is not wanted or monitoring.read() is not wanted:
             raise RuntimeError('Sonarr did not verify final monitoring')
         verify(moved=True)
         if restore:
