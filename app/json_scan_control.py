@@ -13,7 +13,7 @@ import re
 import secrets
 
 KEY = 'json_worker_control'
-OPERATION_KINDS = frozenset(('move', 'arr_sync', 'arr_import', 'arr_delete', 'orphan_quarantine', 'tv_season_move'))
+OPERATION_KINDS = frozenset(('move', 'arr_sync', 'arr_import', 'arr_delete', 'orphan_quarantine', 'tv_season_move', 'tv_season_delete'))
 INTERVAL_SECONDS = 3600
 
 

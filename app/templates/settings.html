@@ -28,6 +28,10 @@
 </div></div>
 {% endfor %}
 {% if group == 'Safety' %}
+<aside id="season-deletion-warning" class="alert error" role="note" {% if values['ALLOW_TV_SEASON_DELETE']|lower != 'true' %}hidden{% endif %}>
+<h3>Season deletion permanently erases staged episodes</h3><p>{{ season_deletion_warning }}</p>
+<label><input type="checkbox" name="acknowledge_season_deletion" value="yes" id="acknowledge-season-deletion"> I understand that eligible staged seasons may be permanently deleted.</label>
+</aside>
 <aside id="orphan-quarantine-warning" class="alert" role="note" {% if values['ORPHAN_CLEANUP_ENABLED']|lower != 'true' %}hidden{% endif %}>
 <h3>Recoverable metadata quarantine</h3><p>{{ orphan_warning }}</p>
 <label><input type="checkbox" name="acknowledge_orphan_quarantine" value="yes" id="acknowledge-orphan-quarantine"> I understand that verified metadata-only orphan folders will be moved into recoverable quarantine.</label>

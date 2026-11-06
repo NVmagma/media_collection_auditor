@@ -137,5 +137,6 @@ def move_season(attempt, *, title, season, name, active_parent, holding_parent, 
         else:
             session.state.setdefault(ARCHIVE, {})[key] = {
                 **record, 'staged_at': journal['details']['staged_at'],
+                'media_fingerprint': fingerprint, 'media_files': file_count,
             }
         attempt.finish_operation(identifier=identifier, verify_outcome=lambda _: True)

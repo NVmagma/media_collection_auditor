@@ -34,6 +34,8 @@ def project_activity(records,limit=1000):
         detail+='Verified moves: '+_count(record.get('moves_completed'))+'. Verified deletions: '+_count(record.get('deletions_completed'))+'. Metadata quarantines: '+_count(record.get('metadata_quarantines_completed'))+'. Tracking date changes: '+_count(record.get('discovery_changes'))+'.'
         if record.get('season_moves_completed'):
             detail += ' Verified season moves: ' + _count(record['season_moves_completed']) + '.'
+        if record.get('season_deletions_completed'):
+            detail += ' Verified season deletions: ' + _count(record['season_deletions_completed']) + '.'
         events.append(dict(time=when,library='All',action='scan',status=status,folder='-',detail=detail))
         details=project_details(record.get('title_details'))
         if details:

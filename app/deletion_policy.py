@@ -9,7 +9,7 @@ WARNING = ('Enabling Removal deletion allows scheduled and manual live scans to 
     'may retain files, so immediate space recovery is not guaranteed. Keep, keep-forever, '
     'keep-all-seasons and favorites block deletion. Missing protection information blocks deletion. '
     'Initially at most one title per library per scan can be deleted, within the existing action limits. '
-    'Dry run only previews. Season pruning and direct filesystem deletion remain unavailable.')
+    'Dry run only previews. Season deletion has separate consent. Direct filesystem deletion of whole titles remains unavailable.')
 
 
 def enabled(settings):

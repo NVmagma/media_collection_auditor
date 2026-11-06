@@ -816,7 +816,7 @@ def export_diagnostics():
     }
     config = load_config()
     safe_keys = ("DRY_RUN", "ALLOW_PERMANENT_DELETE", "ALLOW_FILESYSTEM_DELETE",
-                 "ENABLE_SEASON_PRUNING", "MAX_ACTIONS_PER_RUN", "ENABLE_MOVIES", "ENABLE_TV")
+                 "ENABLE_SEASON_PRUNING", "ALLOW_TV_SEASON_DELETE", "MAX_ACTIONS_PER_RUN", "ENABLE_MOVIES", "ENABLE_TV")
     report["safety_settings"] = {
         key: config.get(key, os.environ.get(key, DEFAULTS.get(key, "unset")))
         for key in safe_keys
@@ -936,6 +936,13 @@ def settings():
                     raise ValueError('Acknowledge the orphan metadata quarantine warning to enable cleanup.')
                 updated[ORPHAN_CONSENT]=ORPHAN_VERSION
             else: updated[ORPHAN_CONSENT]=None
+            from app.tv_season_deletion_policy import FLAG, CONSENT_KEY as SEASON_CONSENT, CONSENT_VERSION as SEASON_VERSION
+            if updated.get(FLAG, 'false') == 'true':
+                if request.form.get('acknowledge_season_deletion') != 'yes':
+                    raise ValueError('Acknowledge the season deletion warning before enabling it.')
+                updated[SEASON_CONSENT] = SEASON_VERSION
+            else:
+                updated[SEASON_CONSENT] = None
             validate_policy({**DEFAULTS,**initial_environment(),**updated})
             if request.form.get('settings_action')!='apply':
                 raise ValueError('Use Apply Requested Settings to apply your changes.')
@@ -953,7 +960,8 @@ def settings():
     groups={name:[key for key in keys if key!='RUN_INTERVAL_HOURS'] for name,keys in FIELDS.items()}
     from app.deletion_policy import WARNING
     from app.orphan_cleanup import WARNING as ORPHAN_WARNING
-    return render_template('settings.html',deletion_warning=WARNING,orphan_warning=ORPHAN_WARNING,groups=groups,values=values,secrets=SECRETS,bools=BOOLS,sources=sources,
+    from app.tv_season_deletion_policy import WARNING as SEASON_WARNING
+    return render_template('settings.html',season_deletion_warning=SEASON_WARNING,deletion_warning=WARNING,orphan_warning=ORPHAN_WARNING,groups=groups,values=values,secrets=SECRETS,bools=BOOLS,sources=sources,
         help_text=FIELD_HELP,error=error,success=request.args.get('saved')=='1',json_mode=True,
         preview_mode=False,live_mode=False,requested=False,unchanged=False,pending_settings={'status':'none'},
         settings_application={'status':'none'},locked_settings=(),settings_applied=False,

@@ -105,3 +105,27 @@ Progress is process-local, contains no title names, service payloads or paths, a
 never changes tracking, admission, action limits or recovery. It disappears when
 the scan finishes or the worker restarts; persistent results remain in History.
 Failed polling retains the last busy state and marks completion unverified.
+
+
+## TV season retention
+
+Enable **Stage Older TV Seasons** under Libraries to opt into reversible
+season staging. Create a dedicated writable `TV_seasons_leaving_soon`
+directory under the native media mount. It must share the active TV folder's
+mount and stay separate from the whole-show lifecycle roots. Jellyfin can
+index this directory as part of a Leaving Soon library.
+
+A show's `one-season` tag stages older regular seasons with files while
+retaining the latest regular season and Specials. `keep-all`,
+`keep-all-seasons`, and `keep-forever` take priority and return staged
+seasons. The TV Holding dashboard separates full shows and staged seasons.
+
+**Permanently Delete Expired TV Seasons** defaults to off and requires its
+own acknowledgment under Safety. In live mode it can delete at most one
+expired season per scan within the existing action caps. Fresh Jellyfin and
+Sonarr checks must confirm the show still uses `one-season`, has no keep
+protection or favorite, and has the latest season in the active library.
+The staged season must retain its recorded identity and media fingerprint
+and stay unmonitored in Sonarr. Records from early staging builds lack that
+fingerprint and can be restored with `keep-all` before being staged again.
+Interrupted deletions retain their journal and require manual review.

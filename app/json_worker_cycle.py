@@ -26,6 +26,8 @@ def validate_policy(settings):
     if not isinstance(values,dict): raise ValueError('Explicit settings required')
     from app.deletion_policy import validate_consent
     validate_consent(values)
+    from app.tv_season_deletion_policy import validate_season_deletion
+    validate_season_deletion(values)
     from app.orphan_cleanup import validate_consent as validate_orphan_consent
     validate_orphan_consent(values)
     for flag in ('ALLOW_FILESYSTEM_DELETE',
@@ -174,6 +176,7 @@ def run_cycle(store, *, settings, trigger, now=None, services=None, collect=coll
             'completed_deletions':tuple(evidence.get('completed_deletions',())),
             'completed_quarantines':tuple(evidence.get('completed_quarantines',())),
             'completed_season_moves':tuple(evidence.get('completed_season_moves',())),
+            'completed_season_deletions':tuple(evidence.get('completed_season_deletions',())),
             'permanent_deletion_authorized':False}
 
 
@@ -191,7 +194,7 @@ def _run_cycle(store, *, settings, trigger, now, services, collect, preview, evi
     with scan_attempt(store,now=now,trigger=trigger) as attempt:
         report=evidence
         report.update(execution_mode='live',scanned_titles=None,decisions=(),
-                completed_moves=[],completed_deletions=[],completed_quarantines=[],completed_season_moves=[],discovery_changes=None,failure_stage=None)
+                completed_moves=[],completed_deletions=[],completed_quarantines=[],completed_season_moves=[],completed_season_deletions=[],discovery_changes=None,failure_stage=None)
         phase='collection'
         try:
             plan=collect(attempt.session,settings=values,now=local_now)
@@ -265,7 +268,7 @@ def _run_cycle(store, *, settings, trigger, now, services, collect, preview, evi
                 apply_season_plans(attempt, titles=plan['season_titles'],
                     slots=min(limit - len(completed_actions), 5 - tv_used), settings=values,
                     read_settings=lambda: validate_policy(settings_snapshot())[0],
-                    completed=report['completed_season_moves'])
+                    completed=report['completed_season_moves'], deleted=report['completed_season_deletions'], now=now)
             attempt.finish(result='completed')
             report['result']='completed'
         except Exception as error:
@@ -281,8 +284,9 @@ def _run_cycle(store, *, settings, trigger, now, services, collect, preview, evi
         report['completed_deletions']=tuple(report['completed_deletions'])
         report['completed_quarantines']=tuple(report['completed_quarantines'])
         report['completed_season_moves']=tuple(report['completed_season_moves'])
+        report['completed_season_deletions']=tuple(report['completed_season_deletions'])
         report['permanent_deletion_authorized']=_bool(values,'ALLOW_PERMANENT_DELETE','false')
         from app.jellyfin_refresh import refresh_after_moves
         report['jellyfin_refresh']=refresh_after_moves(settings=values,
-            completed=report['result']=='completed' and bool(report['completed_moves'] or report['completed_deletions'] or report['completed_season_moves']))
+            completed=report['result']=='completed' and bool(report['completed_moves'] or report['completed_deletions'] or report['completed_season_moves'] or report['completed_season_deletions']))
         return report

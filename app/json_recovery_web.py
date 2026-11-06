@@ -54,6 +54,8 @@ def create_blueprint(is_admin,load_settings=settings_snapshot):
                 if not pending: raise RuntimeError('No selected operation')
                 read,send=adapters(values)
                 action=request.form.get('action')
+                if pending['kind']=='tv_season_delete':
+                    raise RuntimeError('Interrupted season deletion requires manual review')
                 if pending['kind']=='tv_season_move':
                     from app.tv_season_recovery import recover_season
                     if action == 'review':

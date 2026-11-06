@@ -131,8 +131,12 @@ def inspect_show(title, settings, load_state):
     series_id = next(row['id'] for row in catalog if canonical_arr_record_path(row['path']) == expected_path)
     jellyfin = ScheduledJellyfinGET(base_url=captured.get('JELLYFIN_HOST_URL', ''),
                                   token=captured.get('JELLYFIN_API_TOKEN', ''), maximum_requests=200)
+    tag_names = {name: captured.get(key, default) for name, key, default in (
+        ('keep', 'KEEP_TAG', 'keep'), ('disliked', 'DISLIKE_TAG', 'not-at-all'),
+        ('keep_all', 'KEEP_ALL_SEASONS_TAG', 'keep-all-seasons'),
+        ('protected', 'PROTECT_TAG', 'keep-forever'))}
     result = collect_title_observation(fetch=jellyfin, jellyfin_type='Series', folder=title,
-                                       media_key='TV/' + title, now=datetime.now(),
+                                       media_key='TV/' + title, now=datetime.now(), tag_names=tag_names,
                                        excluded_series_path=str(holding / title) if staged else None)
     if (result['status'] != 'shape_valid_untrusted'
             or result['identity'][1] not in (expected_path, local[stage] + '/' + title)):
@@ -150,7 +154,8 @@ def inspect_show(title, settings, load_state):
                         keep_all_tag=captured.get('KEEP_ALL_SEASONS_TAG', 'keep-all-seasons'))
 
     return {'plan': plan, 'active_parent': active, 'holding_parent': holding / title,
-            'active': seasons, 'staged': staged, 'series_id': series_id, 'sonarr_path': expected_path}
+            'active': seasons, 'staged': staged, 'series_id': series_id, 'sonarr_path': expected_path,
+            'tags': tags, 'signals': result['signals']}
 
 
 def review_show(title, settings, load_state):

@@ -120,7 +120,8 @@ def test_storage_failure_keeps_verified_movie_result_and_leaves_tv_outcome_unkno
     assert sum(method=='PUT' for method,_ in server.calls)==1
 
 
-def test_opt_in_live_scan_stages_and_restores_season(cycle_case, monkeypatch):
+@pytest.mark.parametrize('followup', ['restore', 'delete', 'grace', 'favorite', 'interrupted', 'disabled', 'legacy'])
+def test_opt_in_live_scan_handles_staged_season(cycle_case, monkeypatch, followup):
     from app import json_worker_service, tv_season_review
     from app.tv_season_policy import ARCHIVE
 
@@ -137,6 +138,7 @@ def test_opt_in_live_scan_stages_and_restores_season(cycle_case, monkeypatch):
     series = server.records['/api/v3/series/2']
     series['seasons'] = [{'seasonNumber': 1, 'monitored': True}, {'seasonNumber': 2, 'monitored': True}]
     tags = ['one-season']
+    favorite = False
     handler = server.RequestHandlerClass
     original_get = handler.do_GET
 
@@ -153,7 +155,7 @@ def test_opt_in_live_scan_stages_and_restores_season(cycle_case, monkeypatch):
         if path == '/Users':
             return [{'Id': 'viewer'}]
         return {'TotalRecordCount': 1, 'Items': [{'Id': 'show', 'Type': 'Series',
-                'Path': str(show), 'Tags': tags, 'UserData': {'Played': False, 'PlayCount': 0, 'IsFavorite': False}}]}
+                'Path': str(show), 'Tags': tags, 'UserData': {'Played': False, 'PlayCount': 0, 'IsFavorite': favorite}}]}
 
     monkeypatch.setattr(tv_season_review, 'ScheduledJellyfinGET', lambda **kwargs: jf_get)
     monkeypatch.setattr(json_worker_service, 'settings_snapshot', lambda: values)
@@ -172,11 +174,50 @@ def test_opt_in_live_scan_stages_and_restores_season(cycle_case, monkeypatch):
     assert json.loads(store.path.read_bytes())[ARCHIVE]['TV/Show/1']['previous_monitoring'] is True
     assert server.records['/api/v3/series/2']['seasons'][0]['monitored'] is False
 
-    tags.append('keep-all')
+    from app.tv_season_deletion_policy import CONSENT_KEY, CONSENT_VERSION
+    if followup != 'disabled':
+        values.update(ALLOW_TV_SEASON_DELETE='true', HOLDING_DAYS='7')
+        values[CONSENT_KEY] = CONSENT_VERSION
+    favorite = followup == 'favorite'
+    with store.session() as session:
+        age = 6 if followup == 'grace' else 8
+        season_record = session.state[ARCHIVE]['TV/Show/1']
+        season_record['staged_at'] = (now - timedelta(days=age)).isoformat()
+        if followup == 'legacy':
+            del season_record['media_fingerprint']
+        session.checkpoint()
+    if followup == 'restore':
+        tags.append('keep-all')
+    if followup == 'interrupted':
+        from app import tv_season_delete
+        def interrupted(*args, **kwargs):
+            raise OSError('fixture interruption after isolation')
+        interrupted.avoids_symlink_attacks = True
+        monkeypatch.setattr(tv_season_delete.shutil, 'rmtree', interrupted)
+
     result = run_cycle(store, trigger='scheduled', now=now + timedelta(hours=2), **options)
-    assert result['result'] == 'completed'
-    assert result['completed_season_moves'] == ({'title': 'Show', 'season': 1, 'restored': True},)
-    assert (show / 'Season 1' / 'episode.mkv').is_file()
-    assert not json.loads(store.path.read_bytes())[ARCHIVE]
-    assert server.records['/api/v3/series/2']['seasons'][0]['monitored'] is True
-    assert sum(method == 'PUT' for method, _ in server.calls) == 2
+    state_after = json.loads(store.path.read_bytes())
+    if followup == 'restore':
+        assert result['result'] == 'completed'
+        assert result['completed_season_moves'] == ({'title': 'Show', 'season': 1, 'restored': True},)
+        assert (show / 'Season 1' / 'episode.mkv').is_file()
+        assert not state_after[ARCHIVE]
+        assert server.records['/api/v3/series/2']['seasons'][0]['monitored'] is True
+        assert sum(method == 'PUT' for method, _ in server.calls) == 2
+    elif followup == 'delete':
+        assert result['result'] == 'completed'
+        assert result['completed_season_deletions'] == ({'title': 'Show', 'season': 1},)
+        assert not state_after[ARCHIVE]
+        assert not (holding / 'Show' / 'Season 1').exists()
+    elif followup == 'interrupted':
+        assert result['result'] == 'failed' and result['pending_operation_present']
+        assert state_after[KEY]['journal']['kind'] == 'tv_season_delete'
+        assert list((holding / 'Show').glob('.season-delete-*/Season 1/episode.mkv'))
+        with pytest.raises(ScanAdmissionBlocked):
+            run_cycle(store, trigger='manual', now=now + timedelta(hours=4), **options)
+    else:
+        assert result['result'] == 'completed' and not result['completed_season_deletions']
+        assert (holding / 'Show' / 'Season 1' / 'episode.mkv').is_file()
+        assert 'TV/Show/1' in state_after[ARCHIVE]
+    assert (show / 'Season 2' / 'episode.mkv').is_file()
+    assert not any(method == 'DELETE' for method, _ in server.calls)

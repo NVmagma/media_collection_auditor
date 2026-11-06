@@ -96,7 +96,9 @@ def recover_season(store, *, settings, expected=None, monitoring_factory=SonarrS
         if restore:
             del archive[key]
         else:
-            session.state.setdefault(ARCHIVE, {})[key] = {**record, 'staged_at': details['staged_at']}
+            session.state.setdefault(ARCHIVE, {})[key] = {**record, 'staged_at': details['staged_at'],
+                                                       'media_fingerprint': details['fingerprint'],
+                                                       'media_files': details['file_count']}
         control['journal'] = None
         session.checkpoint()
         return {'status': 'season_move_reconciled', 'season': season, 'restored': restore}
