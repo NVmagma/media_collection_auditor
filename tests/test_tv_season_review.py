@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -24,8 +25,13 @@ def season_case(api, tmp_path, monkeypatch):
     def jellyfin(path, params):
         if path == '/Users':
             return [{'Id': 'viewer'}]
-        return {'TotalRecordCount': 1, 'Items': [{'Id': 'show', 'Type': 'Series', 'Path': str(show),
-                'Tags': tags, 'UserData': {'Played': False, 'PlayCount': 0, 'IsFavorite': True}}]}
+        row = {'Id': 'show', 'Type': 'Series', 'Path': str(show),
+               'Tags': tags, 'UserData': {'Played': False, 'PlayCount': 0, 'IsFavorite': True}}
+        items = [row]
+        staged = tmp_path / 'TV_seasons_leaving_soon' / 'Example'
+        if staged.exists():
+            items.append({**row, 'Id': 'staged', 'Path': str(staged), 'Tags': []})
+        return {'TotalRecordCount': len(items), 'Items': items}
 
     rows = [{'id': 1, 'monitored': True, 'path': str(show)}]
     monkeypatch.setattr(tv_season_review, 'ArrCatalogGET', lambda **kwargs: lambda: rows)
@@ -64,4 +70,38 @@ def test_conflicting_sonarr_path_and_ambiguous_season_block(season_case, monkeyp
     assert post().status_code == 409
     rows[0]['path'] = str(show)
     (show / 'Season 1').mkdir()
+    assert post().status_code == 409
+
+
+
+def test_keep_all_previews_restoring_only_verified_staged_seasons(season_case, monkeypatch):
+    client, state_file, show, tags, _ = season_case
+    holding = show.parents[1] / 'TV_seasons_leaving_soon' / 'Example'
+    holding.mkdir(parents=True)
+    moved = holding / 'Season 01'
+    (show / 'Season 01').rename(moved)
+    stat = moved.stat()
+    record = {'name': moved.name, 'identity': [stat.st_dev, stat.st_ino],
+              'active_parent': str(show), 'holding_parent': str(holding)}
+    state = {'tv_leaving_soon_seasons': {'TV/Example/1': record}}
+    state_file.write_text(json.dumps(state))
+    before = state_file.read_bytes()
+    tags.append('keep-all')
+    monkeypatch.setattr(web, 'current_user', lambda: {'name': 'Admin', 'admin': True})
+
+    def post():
+        return client.post('/tracking-review/tv-seasons', data={'title': 'Example'},
+                           headers={'Origin': 'http://localhost'})
+
+    result = post()
+    assert result.status_code == 200
+    assert 'Would restore these seasons from TV Leaving Soon: 1.' in result.text
+    assert state_file.read_bytes() == before
+    assert (moved / 'episode.mkv').is_file()
+
+    (show / 'Season 1').mkdir()
+    assert post().status_code == 409
+    (show / 'Season 1').rmdir()
+    record['identity'] = [0, 0]
+    state_file.write_text(json.dumps(state))
     assert post().status_code == 409

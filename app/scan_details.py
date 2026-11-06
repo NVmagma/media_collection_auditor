@@ -29,6 +29,7 @@ REASONS = {
     'holding_period': 'Still inside the Holding period.',
     'no_transition': 'No move is proposed for this stage.',
     'action_cap': 'Excluded by the action limits for this run.',
+    'staged_tv_seasons': 'Whole-show actions wait while this show has seasons in Leaving Soon.',
     'missing_or_conflicting_clock': 'The saved lifecycle date is missing or conflicts with another stage.',
     'future_content_timestamp': 'TV content has a future modification date; this show was skipped and its clock was preserved.',
     'future_observation': 'The saved lifecycle date is in the future.',

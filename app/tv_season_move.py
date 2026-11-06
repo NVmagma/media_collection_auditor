@@ -13,7 +13,7 @@ from app.json_scan_control import KEY
 from app.mount_identity import assert_rename_mount_binding, capture_rename_mount_binding
 from app.title_identity import validate_title_folder
 
-ARCHIVE = 'tv_leaving_soon_seasons'
+from app.tv_season_policy import ARCHIVE
 SEASON_FOLDER = re.compile(r'Season ([0-9]{1,4})', re.IGNORECASE)
 
 

@@ -120,3 +120,11 @@ def test_incomplete_library_never_uses_its_apparently_valid_title():
 
 def test_duplicate_media_identity_never_returns_a_partial_plan():
     with pytest.raises(ValueError): plan(libraries=[library('Movies',title(),title())])
+
+
+def test_staged_seasons_prevent_whole_show_actions_without_blocking_movies():
+    snapshot = state()
+    snapshot['tv_leaving_soon_seasons'] = {'TV/Show/1': {}}
+    result = plan(snapshot, [library('Movies', title()), library('TV', title('TV/Show'))])
+    assert [row.media_key for row in result['moves']] == ['Movie']
+    assert result['decisions'][1].reason == 'staged_tv_seasons'

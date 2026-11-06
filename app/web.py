@@ -1180,7 +1180,7 @@ def tv_season_review():
             return Response('Invalid review request.', 403)
         title = request.form.get('title', '')
         try:
-            plan = review_show(title, settings_snapshot)
+            plan = review_show(title, settings_snapshot, load_state)
         except (OSError, RuntimeError, ValueError):
             blocked = True
     return (render_template('tv_season_review.html', title=title, plan=plan, blocked=blocked),

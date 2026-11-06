@@ -16,6 +16,7 @@
 <p role="status">{% if plan.latest is not none %}Latest regular season with video files: {{ plan.latest }}.{% else %}No regular seasons with video files were observed.{% endif %}</p>
 {% if plan.stage %}<p>Would stage these seasons in TV Leaving Soon: {{ plan.stage | join(', ') }}.</p>
 {% else %}<p>No seasons selected for staging.</p>{% endif %}
+{% if plan.restore %}<p>Would restore these seasons from TV Leaving Soon: {{ plan.restore | join(', ') }}.</p>{% endif %}
 {% endif %}
 <p class="muted">This preview checks active show folders named Season N. Season 0 and Specials stay in place. The preview makes no changes to media or services.</p>
 <p><a href="{{ url_for('tracking_review') }}">Return to Tracking Review</a></p>

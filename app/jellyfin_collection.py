@@ -31,7 +31,7 @@ def validated_tag_names(tag_names=None):
 
 
 def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
-                              page_size=PAGE_SIZE, tag_names=None):
+                              page_size=PAGE_SIZE, tag_names=None, excluded_series_path=None):
     if (jellyfin_type not in ("Movie", "Series") or not isinstance(folder, str)
             or not folder or folder in (".", "..") or "/" in folder or chr(92) in folder):
         raise ValueError("Movie/Series and single folder name required")
@@ -40,6 +40,11 @@ def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
     if not isinstance(now, datetime) or now.tzinfo is not None:
         raise ValueError("Naive observation clock required")
     tag_names = validated_tag_names(tag_names)
+    if excluded_series_path is not None and (jellyfin_type != 'Series'
+            or not isinstance(excluded_series_path, str)
+            or not excluded_series_path.startswith('/')
+            or PurePosixPath(excluded_series_path).name != folder):
+        raise ValueError('Exact staged series path required')
     blockers = []
     matched = []
     near_match = False
@@ -109,7 +114,7 @@ def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
                     import unicodedata
                     if name!=folder and unicodedata.normalize('NFC',name).casefold()==unicodedata.normalize('NFC',folder).casefold():
                         near_match=True
-                    if name == folder:
+                    if name == folder and path != excluded_series_path:
                         matched.append((uid, item_id, path, tags, user_data))
                 start += len(items)
                 if start == total:

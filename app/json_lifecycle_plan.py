@@ -15,6 +15,7 @@ from app.scan_details import reason_code
 from app.tracking_schema import validate_snapshot
 from app.title_identity import validate_title_folder
 from app.json_scan_control import KEY, _control
+from app.tv_season_policy import ARCHIVE
 
 SIGNALS = {'played', 'favorite', 'disliked', 'keep', 'keep_all', 'protected'}
 BLOCKERS = {'future_content_timestamp', 'content_unavailable', 'content_reset_required', 'discovery_required','no_video','no_video_unknown_files'}
@@ -95,13 +96,19 @@ def plan_scan(*, snapshot, libraries, now, favorites_trigger_keep=True, maximum_
                     or not SIGNALS <= title.signals.keys()
                     or any(type(value) is not bool for value in title.signals.values())):
                 raise ValueError('Incomplete protection signals')
+    season_archive = state.get(ARCHIVE, {})
+    if not isinstance(season_archive, dict):
+        raise RuntimeError('TV season archive requires review')
+    staged_shows = {key.rsplit('/', 1)[0] for key in season_archive}
     decisions, moves, deletions, orphans = [], [], [], []
     deletion_used = {name:0 for name in names}
     used = {name:0 for name in names}
     for library in captured:
         for title in library.titles:
             destination = None
-            if title.blocker == 'no_video':
+            if library.library == 'TV' and title.media_key in staged_shows:
+                reason = 'staged_tv_seasons'
+            elif title.blocker == 'no_video':
                 if title.stage=='Keep': reason='orphan_keep_preserved'
                 elif not library.arr_complete: reason='orphan_arr_unverified'
                 elif title.arr_status!='missing_record': reason='no_video_arr_managed'

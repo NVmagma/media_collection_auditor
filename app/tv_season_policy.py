@@ -1,6 +1,8 @@
 """Plan TV season staging and restoration from a verified inventory."""
 from dataclasses import dataclass
 
+ARCHIVE = 'tv_leaving_soon_seasons'
+
 
 @dataclass(frozen=True)
 class SeasonPlan:

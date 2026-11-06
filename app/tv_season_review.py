@@ -2,16 +2,16 @@
 from datetime import datetime
 import os
 from pathlib import Path
-import re
 import stat
 
 from app.arr_catalog import ArrCatalogGET, catalog_paths_by_folder
-from app.filesystem_paths import _open_directory, scan_held_directory
+from app.filesystem_paths import _canonical, _open_directory, scan_held_directory
 from app.jellyfin_collection import collect_title_observation
 from app.jellyfin_transport import ScheduledJellyfinGET
 from app.json_worker_cycle import stage_paths
 from app.orphan_inventory import VIDEO_SUFFIXES, inspect_title
 from app.title_identity import validate_title_folder
+from app.tv_season_move import ARCHIVE, SEASON_FOLDER
 from app.tv_season_policy import plan_seasons
 
 
@@ -32,11 +32,15 @@ def _inventory(roots, title):
     if len(locations) != 1 or locations[0][0] not in ('Waiting', 'Keep'):
         raise RuntimeError('An exact, active show folder is required')
     stage, device, inode = locations[0]
-    show = Path(roots[stage]) / title
+    return stage, _show_seasons(Path(roots[stage]) / title, expected=(device, inode))
+
+
+def _show_seasons(show, *, expected=None):
     fd = _open_directory(str(show))
     try:
         opened = os.fstat(fd)
-        if (opened.st_dev, opened.st_ino) != (device, inode):
+        identity = (opened.st_dev, opened.st_ino)
+        if expected is not None and identity != expected:
             raise RuntimeError('Show folder changed')
         seasons = {}
         with scan_held_directory(fd) as entries:
@@ -51,20 +55,55 @@ def _inventory(roots, title):
                     continue
                 if entry.name.casefold() == 'specials':
                     continue
-                match = re.fullmatch(r'Season ([0-9]{1,4})', entry.name, re.IGNORECASE)
+                match = SEASON_FOLDER.fullmatch(entry.name)
                 if not match or int(match[1]) in seasons:
                     raise RuntimeError('Season folders could not be identified uniquely')
-                seasons[int(match[1])] = inspect_title(str(show / entry.name))
+                seasons[int(match[1])] = {'name': entry.name, **inspect_title(str(show / entry.name))}
         if os.fstat(fd).st_ctime_ns != opened.st_ctime_ns:
             raise RuntimeError('Show changed during review')
         if any(item['status'] == 'unknown_files' for item in seasons.values()):
             raise RuntimeError('Season contains unclassified files')
-        return stage, (device, inode), seasons
+        return identity, seasons
     finally:
         os.close(fd)
 
 
-def review_show(title, settings):
+
+def season_holding_root(settings):
+    base = _canonical(settings.get('MEDIA_PATH', '/media'))
+    holding = Path(_canonical(settings.get('TV_SEASON_HOLDING_PATH') or base + '/TV_seasons_leaving_soon'))
+    for library in ('TV', 'Movies'):
+        for value in stage_paths(settings, library)[0].values():
+            root = Path(value)
+            if root == holding or root in holding.parents or holding in root.parents:
+                raise ValueError('Season Holding must be separate from whole-title stages')
+    return holding
+
+
+def _staged_inventory(holding, title, active, state):
+    archive = state.get(ARCHIVE, {})
+    if not isinstance(archive, dict):
+        raise RuntimeError('Season tracking unavailable')
+    prefix = f'TV/{title}/'
+    records = {key[len(prefix):]: item for key, item in archive.items() if key.startswith(prefix)}
+    show = holding / title
+    try:
+        identity, seasons = _show_seasons(show)
+    except FileNotFoundError:
+        if not records:
+            return None, {}
+        raise RuntimeError('Tracked staged seasons are missing') from None
+    if set(records) != {str(number) for number in seasons}:
+        raise RuntimeError('Untracked or missing staged seasons')
+    for number, season in seasons.items():
+        record = records[str(number)]
+        if (not isinstance(record, dict) or number < 1 or season['status'] != 'video_present'
+                or record.get('name') != season['name'] or record.get('identity') != season['identity']
+                or record.get('active_parent') != str(active) or record.get('holding_parent') != str(show)):
+            raise RuntimeError('Tracked staged season identity changed')
+    return identity, seasons
+
+def review_show(title, settings, load_state):
     validate_title_folder(title)
     if title.startswith('.') or len(title) > 255:
         raise ValueError('Invalid TV show folder')
@@ -75,7 +114,14 @@ def review_show(title, settings):
     if len(set(local.values())) != 4 or len(set(remote.values())) != 4:
         raise RuntimeError('Distinct TV stage paths required')
     inventory = _inventory(local, title)
-    stage, _, seasons = inventory
+    stage, (_, seasons) = inventory
+    state = load_state()
+    holding = season_holding_root(captured)
+    active = Path(local[stage]) / title
+    staged_inventory = _staged_inventory(holding, title, active, state)
+    staged = staged_inventory[1]
+    if seasons.keys() & staged.keys():
+        raise RuntimeError('Season is present in both active and Holding folders')
     expected_path = remote[stage] + '/' + title
     sonarr = ArrCatalogGET(service='sonarr', base_url=captured.get('SONARR_URL', ''),
                            token=captured.get('SONARR_API_KEY', ''))
@@ -84,16 +130,19 @@ def review_show(title, settings):
     jellyfin = ScheduledJellyfinGET(base_url=captured.get('JELLYFIN_HOST_URL', ''),
                                   token=captured.get('JELLYFIN_API_TOKEN', ''), maximum_requests=200)
     result = collect_title_observation(fetch=jellyfin, jellyfin_type='Series', folder=title,
-                                       media_key='TV/' + title, now=datetime.now())
+                                       media_key='TV/' + title, now=datetime.now(),
+                                       excluded_series_path=str(holding / title) if staged else None)
     if (result['status'] != 'shape_valid_untrusted'
             or result['identity'][1] not in (expected_path, local[stage] + '/' + title)):
         raise RuntimeError('Jellyfin show or tag coverage could not be verified')
-    if settings() != captured or _inventory(local, title) != inventory:
+    if (settings() != captured or load_state().get(ARCHIVE, {}) != state.get(ARCHIVE, {})
+            or _inventory(local, title) != inventory
+            or _staged_inventory(holding, title, active, state) != staged_inventory):
         raise RuntimeError('Season review inputs changed')
     tags = set(result['observed_tags'])
     if captured.get('PROTECT_TAG', 'keep-forever').casefold() in tags:
         tags.add('keep-forever')
     return plan_seasons(tags=tags,
                         active=[number for number, item in seasons.items() if item['status'] == 'video_present'],
-                        leaving_soon=[], verified=True,
+                        leaving_soon=staged.keys(), verified=True,
                         keep_all_tag=captured.get('KEEP_ALL_SEASONS_TAG', 'keep-all-seasons'))
