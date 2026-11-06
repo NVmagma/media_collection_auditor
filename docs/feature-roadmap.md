@@ -24,6 +24,6 @@
 2. Add separately reviewed reconciliation for stale tracking records; complete fresh Arr management coverage remains future work.
 3. Consider lifting move caps only after a separate reviewed rollout.
 
-Removal deletion is opt-in with an explicit warning; season pruning remains unavailable. Neither source cleanup nor
-successful moves enable destructive options. Season pruning will require its own
-protection checks, previews, disposable testing and explicit approval.
+Removal deletion and staged TV season deletion default to off and have separate
+warning acknowledgments. Season retention is opt-in. Staged season deletion
+requires an expired Holding window and fresh Jellyfin and Sonarr checks.
