@@ -17,6 +17,7 @@ if (!file) throw Error('Pass the synthetic page rendered by tests/dashboard_work
     await page.route('**/*', route => {
       const request = route.request(), url = new URL(request.url());
       if (url.pathname === '/api/run-status') return route.fulfill({contentType:'application/json',body:JSON.stringify({ok:true,running:scanRunning,queued:false,blocked:scanBlocked,progress:scanRunning?{phase:'jellyfin',checked:128,total:541,library:'Movies',elapsed_seconds:83}:null})});
+      if (url.pathname === '/api/poster') return route.fulfill({contentType:'image/png',body:fs.readFileSync(path.join(root,'unraid/assets/Media_Collection_Auditor_Badge.png'))});
       if (request.method() !== 'GET') {
         posts.push(request.method());
         if (url.hostname==='fixture.invalid' && url.pathname==='/api/run-now') {
@@ -130,10 +131,16 @@ if (!file) throw Error('Pass the synthetic page rendered by tests/dashboard_work
     await section('TV Shows');
     await page.locator('[data-stage-tab="TV:Holding"]').click();
     assert.equal(await page.locator('[data-stage-panel="TV:Holding"]').isVisible(), true);
-    const staged = page.getByRole('region', {name: 'TV seasons leaving soon'});
+    const fullShows = page.getByRole('region', {name: /Full Shows Leaving Soon/});
+    const staged = page.getByRole('region', {name: /Seasons Leaving Soon/});
+    assert.match(await fullShows.locator('tbody').innerText(), /Harbor Nights/);
     assert.match(await staged.locator('tbody').innerText(), /Lantern House/);
     await page.locator('[data-view="posters"]').click();
-    assert.equal(await staged.getByRole('table').isVisible(), true);
+    assert.equal(await staged.locator('table').isVisible(), false);
+    const seasonCard = staged.locator('.media-poster-row');
+    assert.match(await seasonCard.innerText(), /Lantern House.*Season 1/s);
+    assert.match(await seasonCard.locator('img').getAttribute('src'), /\/api\/poster\?library=TV/);
+    assert.match(await fullShows.locator('.media-poster-row').innerText(), /Harbor Nights/);
     await page.locator('[data-stage-tab="TV:Waiting"]').click();
     const waiting = page.locator('[data-stage-panel="TV:Waiting"]');
     assert.equal(await waiting.locator('.media-poster-list').isVisible(), true);

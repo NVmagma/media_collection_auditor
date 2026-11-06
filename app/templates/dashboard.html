@@ -149,24 +149,11 @@
       {% for stage in ['Waiting','Holding','Removal','Keep'] %}
       {% set items = stages[stage]|selectattr('library','equalto',library)|list %}
       <div class="lifecycle-panel{% if not loop.first %} hidden-section{% endif %}" data-stage-panel="{{ library }}:{{ stage }}">
-        <h3>{{ stage }} <span class="stage-count">({{ items|length }})</span></h3>
-        {% if library == 'TV' and stage == 'Holding' and season_holding is defined %}
-        {% if season_holding.rows or season_holding.incomplete %}
-        <section aria-label="TV seasons leaving soon">
-          <h4>TV seasons leaving soon</h4>
-          {% if season_holding.incomplete %}<p class="notice warning" role="status">Some saved season records could not be displayed.</p>{% endif %}
-          {% if season_holding.rows %}
-          <p class="muted">These dates use the current Holding Days setting. A grace period ending does not authorize season deletion.</p>
-          <div class="table-wrap"><table>
-            <thead><tr><th>Show</th><th>Season</th><th>Staged since</th><th>Grace period ends</th></tr></thead>
-            <tbody>{% for season in season_holding.rows %}
-            <tr><td>{{ season.title }}</td><td>{{ season.season }}</td><td>{{ season.staged_display }}</td>
-              <td>{{ season.grace_ends_display or 'Unavailable' }}{% if season.grace_ended %} · Ended{% endif %}</td></tr>
-            {% endfor %}</tbody>
-          </table></div>
-          {% endif %}
-        </section>
-        {% endif %}
+        {% set split_holding = library == 'TV' and stage == 'Holding' %}
+        <h3>{{ stage }}{% if not split_holding %} <span class="stage-count">({{ items|length }})</span>{% endif %}</h3>
+        {% if split_holding %}
+        <section class="tv-holding-group" aria-labelledby="full-shows-leaving">
+          <h4 id="full-shows-leaving">Full Shows Leaving Soon <span class="stage-count">({{ items|length }})</span></h4>
         {% endif %}
         {% if stage == 'Removal' and viewer.admin %}<p class="muted">Choose an action to rescue a title. Dry Run previews the move.</p>{% endif %}
         {% if items %}
@@ -197,6 +184,39 @@
           {% endfor %}
         </div>
         {% else %}<p class="empty">No {{ 'whole TV shows' if library == 'TV' and stage == 'Holding' else label|lower }} tracked in {{ stage|lower }}.</p>{% endif %}
+        {% if split_holding %}
+        </section>
+        {% set season_rows = season_holding.rows if season_holding is defined else [] %}
+        <section class="tv-holding-group" aria-labelledby="seasons-leaving">
+          <h4 id="seasons-leaving">Seasons Leaving Soon <span class="stage-count">({{ season_rows|length }})</span></h4>
+          {% if season_holding is defined and season_holding.incomplete %}
+          <p class="notice warning" role="status">Some saved season records could not be displayed.</p>
+          {% endif %}
+          {% if season_rows %}
+          <p class="muted">Grace periods follow the current Holding Days setting.</p>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Show</th><th>Season</th><th>Staged since</th><th>Grace period ends</th></tr></thead>
+            <tbody>{% for season in season_rows %}
+            <tr data-media-title="{{ season.title }}"><td>{{ season.title }}</td><td>{{ season.season }}</td><td>{{ season.staged_display }}</td>
+              <td>{{ season.grace_ends_display or 'Unavailable' }}{% if season.grace_ended %} · Ended{% endif %}</td></tr>
+            {% endfor %}</tbody>
+          </table></div>
+          <div class="media-poster-list hidden-section" aria-label="Seasons Leaving Soon poster view">
+            {% for season in season_rows %}
+            <article class="media-poster-row" data-media-title="{{ season.title }}">
+              <div class="media-poster-placeholder"><span>TV</span><img loading="lazy" alt="" src="{{ url_for('poster', library='TV', title=season.title) }}" onerror="this.remove()"></div>
+              <div class="media-poster-info">
+                <h5 class="season-card-title">{{ season.title }}</h5>
+                <span class="media-stage-label">Season {{ season.season }}</span>
+                <p>Staged since {{ season.staged_display }}</p>
+                <p>Grace period ends {{ season.grace_ends_display or '—' }}{% if season.grace_ended %} · Ended{% endif %}</p>
+              </div>
+            </article>
+            {% endfor %}
+          </div>
+          {% else %}<p class="empty">No seasons staged in Leaving Soon.</p>{% endif %}
+        </section>
+        {% endif %}
       </div>
       {% endfor %}
     </section>

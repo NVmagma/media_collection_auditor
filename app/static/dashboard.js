@@ -2,7 +2,7 @@
 const mediaViewButtons = document.querySelectorAll('[data-view]');
 function setMediaView(view) {
   const selectedView = view === 'posters' ? 'posters' : 'table';
-  document.querySelectorAll('.lifecycle-panel > .table-wrap').forEach(table =>
+  document.querySelectorAll('.lifecycle-panel .table-wrap').forEach(table =>
     table.classList.toggle('hidden-section', selectedView !== 'table'));
   document.querySelectorAll('.media-poster-list').forEach(list =>
     list.classList.toggle('hidden-section', selectedView !== 'posters'));
@@ -101,7 +101,8 @@ function filterLibrary() {
   const stage = section.querySelector('.lifecycle-panel:not(.hidden-section)');
   const rows = stage ? Array.from(stage.querySelectorAll('tbody [data-media-title]')) : [];
   const matched = rows.filter(row => !row.classList.contains('library-filtered-out')).length;
-  document.getElementById('library-results').textContent = 'Showing ' + matched + ' of ' + rows.length + ' folders in this stage · ' + section.dataset.panel;
+  const itemLabel = stage?.dataset.stagePanel === 'TV:Holding' ? 'shows and seasons' : 'folders';
+  document.getElementById('library-results').textContent = 'Showing ' + matched + ' of ' + rows.length + ' ' + itemLabel + ' in this stage · ' + section.dataset.panel;
   document.getElementById('library-no-matches').classList.toggle('hidden-section', matched > 0 || !query || rows.length === 0);
 }
 document.getElementById('library-search').addEventListener('input', () => {closeInspector(false); filterLibrary();});
