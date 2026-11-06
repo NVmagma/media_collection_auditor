@@ -118,3 +118,106 @@ def test_storage_failure_keeps_verified_movie_result_and_leaves_tv_outcome_unkno
     state=json.loads(store.path.read_bytes())
     assert state[KEY]['journal']['kind']=='move' and state[KEY]['journal']['library']=='TV'
     assert sum(method=='PUT' for method,_ in server.calls)==1
+
+
+@pytest.mark.parametrize('followup', ['restore', 'delete', 'grace', 'favorite', 'interrupted', 'disabled', 'legacy'])
+def test_opt_in_live_scan_handles_staged_season(cycle_case, monkeypatch, followup):
+    from app import json_worker_service, tv_season_review
+    from app.tv_season_policy import ARCHIVE
+
+    store, values, requests, server, _ = cycle_case
+    show = Path(requests['TV'].source_root) / 'Show'
+    for season in (1, 2):
+        folder = show / f'Season {season}'
+        folder.mkdir()
+        (folder / 'episode.mkv').write_bytes(b'disposable video')
+    (show / 'video.mkv').unlink()
+    holding = show.parents[1] / 'TV_seasons_leaving_soon'
+    holding.mkdir()
+    values.update(ENABLE_TV_SEASON_RETENTION='true', TV_SEASON_HOLDING_PATH=str(holding))
+    series = server.records['/api/v3/series/2']
+    series['seasons'] = [{'seasonNumber': 1, 'monitored': True}, {'seasonNumber': 2, 'monitored': True}]
+    tags = ['one-season']
+    favorite = False
+    handler = server.RequestHandlerClass
+    original_get = handler.do_GET
+
+    def get_with_episode_monitoring(request):
+        if request.path == '/api/v3/episode?seriesId=2':
+            current = server.records['/api/v3/series/2']['seasons']
+            return request.respond([{'id': index, 'seriesId': 2, **season}
+                                    for index, season in enumerate(current, 1)])
+        return original_get(request)
+
+    monkeypatch.setattr(handler, 'do_GET', get_with_episode_monitoring)
+
+    def jf_get(path, params):
+        if path == '/Users':
+            return [{'Id': 'viewer'}]
+        return {'TotalRecordCount': 1, 'Items': [{'Id': 'show', 'Type': 'Series',
+                'Path': str(show), 'Tags': tags, 'UserData': {'Played': False, 'PlayCount': 0, 'IsFavorite': favorite}}]}
+
+    monkeypatch.setattr(tv_season_review, 'ScheduledJellyfinGET', lambda **kwargs: jf_get)
+    monkeypatch.setattr(json_worker_service, 'settings_snapshot', lambda: values)
+
+    def collect_seasons(session, **kwargs):
+        return {'scanned_titles': 1, 'moves': (), 'clock_changes_applied': 0, 'decisions': (),
+                'season_titles': ('Show',)}
+
+    now = NOW.replace(tzinfo=timezone.utc)
+    options = dict(settings=values, collect=collect_seasons)
+    result = run_cycle(store, trigger='manual', now=now, **options)
+    assert result['result'] == 'completed'
+    assert result['completed_season_moves'] == ({'title': 'Show', 'season': 1, 'restored': False},)
+    assert (holding / 'Show' / 'Season 1' / 'episode.mkv').is_file()
+    assert (show / 'Season 2' / 'episode.mkv').is_file()
+    assert json.loads(store.path.read_bytes())[ARCHIVE]['TV/Show/1']['previous_monitoring'] is True
+    assert server.records['/api/v3/series/2']['seasons'][0]['monitored'] is False
+
+    from app.tv_season_deletion_policy import CONSENT_KEY, CONSENT_VERSION
+    if followup != 'disabled':
+        values.update(ALLOW_TV_SEASON_DELETE='true', HOLDING_DAYS='7')
+        values[CONSENT_KEY] = CONSENT_VERSION
+    favorite = followup == 'favorite'
+    with store.session() as session:
+        age = 6 if followup == 'grace' else 8
+        season_record = session.state[ARCHIVE]['TV/Show/1']
+        season_record['staged_at'] = (now - timedelta(days=age)).isoformat()
+        if followup == 'legacy':
+            del season_record['media_fingerprint']
+        session.checkpoint()
+    if followup == 'restore':
+        tags.append('keep-all')
+    if followup == 'interrupted':
+        from app import tv_season_delete
+        def interrupted(*args, **kwargs):
+            raise OSError('fixture interruption after isolation')
+        interrupted.avoids_symlink_attacks = True
+        monkeypatch.setattr(tv_season_delete.shutil, 'rmtree', interrupted)
+
+    result = run_cycle(store, trigger='scheduled', now=now + timedelta(hours=2), **options)
+    state_after = json.loads(store.path.read_bytes())
+    if followup == 'restore':
+        assert result['result'] == 'completed'
+        assert result['completed_season_moves'] == ({'title': 'Show', 'season': 1, 'restored': True},)
+        assert (show / 'Season 1' / 'episode.mkv').is_file()
+        assert not state_after[ARCHIVE]
+        assert server.records['/api/v3/series/2']['seasons'][0]['monitored'] is True
+        assert sum(method == 'PUT' for method, _ in server.calls) == 2
+    elif followup == 'delete':
+        assert result['result'] == 'completed'
+        assert result['completed_season_deletions'] == ({'title': 'Show', 'season': 1},)
+        assert not state_after[ARCHIVE]
+        assert not (holding / 'Show' / 'Season 1').exists()
+    elif followup == 'interrupted':
+        assert result['result'] == 'failed' and result['pending_operation_present']
+        assert state_after[KEY]['journal']['kind'] == 'tv_season_delete'
+        assert list((holding / 'Show').glob('.season-delete-*/Season 1/episode.mkv'))
+        with pytest.raises(ScanAdmissionBlocked):
+            run_cycle(store, trigger='manual', now=now + timedelta(hours=4), **options)
+    else:
+        assert result['result'] == 'completed' and not result['completed_season_deletions']
+        assert (holding / 'Show' / 'Season 1' / 'episode.mkv').is_file()
+        assert 'TV/Show/1' in state_after[ARCHIVE]
+    assert (show / 'Season 2' / 'episode.mkv').is_file()
+    assert not any(method == 'DELETE' for method, _ in server.calls)

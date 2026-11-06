@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Container version="2">
   <Name>media_collection_auditor</Name>
-  <Repository>ghcr.io/nvmagma/media_collection_auditor@sha256:56d8773d462c52ac7d54cbb995969fa8cf0b72b076965a1e765b95168d012751</Repository>
+  <Repository>ghcr.io/nvmagma/media_collection_auditor@sha256:1568310d370581900285e3ddf5dfd53b8db25b00f26395a553d4046fc92744bc</Repository>
   <Registry>https://ghcr.io/</Registry>
   <Project>https://github.com/NVmagma/media_collection_auditor</Project>
   <Overview>Media Collection Auditor moves unneeded movies and TV shows through a Waiting -&gt; Holding -&gt; Removal (or Keep) lifecycle using Jellyfin favorites/tags and optional Radarr/Sonarr integration. The web dashboard provides a visual view of activity and logs.</Overview>
@@ -42,7 +42,7 @@
 
   <!-- Safety -->
   <Config Name="Dry Run" Target="DRY_RUN" Default="true" Mode="" Description="Safety switch. true reports planned actions without moving or deleting media." Type="Variable" Display="always" Required="true" Mask="false">true</Config>
-  <Config Name="Allow Permanent Delete" Target="ALLOW_PERMANENT_DELETE" Default="false" Mode="" Description="Default off. Enable only in web Settings after acknowledging the Removal deletion warning. Season pruning and direct filesystem deletion remain unavailable." Type="Variable" Display="advanced" Required="true" Mask="false">false</Config>
+  <Config Name="Allow Permanent Delete" Target="ALLOW_PERMANENT_DELETE" Default="false" Mode="" Description="Default off. Enable only in web Settings after acknowledging the Removal deletion warning. Season deletion has a separate opt-in. Direct filesystem deletion of whole titles remains unavailable." Type="Variable" Display="advanced" Required="true" Mask="false">false</Config>
   <Config Name="Allow Filesystem Delete" Target="ALLOW_FILESYSTEM_DELETE" Default="false" Mode="" Description="Allow direct filesystem deletion when a title is not known to Radarr/Sonarr. Keep false: direct filesystem deletion is not approved for this release." Type="Variable" Display="advanced" Required="true" Mask="false">false</Config>
   <Config Name="Allow Cross Filesystem Moves" Target="ALLOW_CROSS_FILESYSTEM_MOVES" Default="false" Mode="" Description="Allow copy-then-delete moves across filesystems. Prefer keeping this false and placing each library's lifecycle folders on one filesystem." Type="Variable" Display="advanced" Required="true" Mask="false">false</Config>
   <Config Name="Maximum Actions Per Run" Target="MAX_ACTIONS_PER_RUN" Default="10" Mode="" Description="Maximum successful hold/delete/season-prune actions allowed per run." Type="Variable" Display="advanced" Required="true" Mask="false">10</Config>

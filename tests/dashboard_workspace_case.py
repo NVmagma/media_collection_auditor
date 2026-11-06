@@ -11,14 +11,19 @@ def render_workspace(*, admin=False, tracking_available=True, run_updates=None, 
     state = {'first_seen': {'The Quiet Orbit (2026)': '2026-10-01T11:30:00',
                             'TV/Lantern House (2026)': '2026-10-02T11:30:00',
                             'A & B <Moon> (2026)': '2026-10-03T11:30:00'},
-             'queued': {'Summer Frontier (2026)': '2026-10-20T11:30:00'},
-             'keep_seen': {}, 'in_removal': {}}
+             'queued': {'Summer Frontier (2026)': '2026-10-20T11:30:00',
+                        'TV/Harbor Nights (2026)': '2026-10-20T11:30:00'},
+             'keep_seen': {}, 'in_removal': {},
+             'tv_leaving_soon_seasons': {'TV/Lantern House (2026)/1': {
+                 'name': 'Season 01', 'staged_at': '2026-10-20T11:30:00+00:00'}}}
     stages = {name: [] for name in ('Waiting', 'Holding', 'Keep', 'Removal')}
     stages['Waiting'] = [{'library': 'Movies', 'title': 'The Quiet Orbit (2026)', 'since': state['first_seen']['The Quiet Orbit (2026)']},
                          {'library': 'TV', 'title': 'Lantern House (2026)', 'since': state['first_seen']['TV/Lantern House (2026)']}]
     stages['Waiting'].append({'library': 'Movies', 'title': 'A & B <Moon> (2026)', 'since': state['first_seen']['A & B <Moon> (2026)']})
     stages['Holding'] = [{'library': 'Movies', 'title': 'Summer Frontier (2026)', 'since': state['queued']['Summer Frontier (2026)']}]
     stages['Waiting'].append({'library': 'TV', 'title': 'Untracked Series (2026)', 'since': None})
+    stages['Holding'].append({'library': 'TV', 'title': 'Harbor Nights (2026)',
+                              'since': state['queued']['TV/Harbor Nights (2026)']})
     state['first_seen']['TV/Retained unmatched (2026)'] = '2026-10-01T11:30:00'
     config = {'ENABLE_MOVIES': 'true', 'ENABLE_TV': 'true', 'DRY_RUN': 'true',
               'ALLOW_PERMANENT_DELETE': 'false'}

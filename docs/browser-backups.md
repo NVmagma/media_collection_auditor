@@ -46,7 +46,9 @@ rebind relocated snapshots or start a worker from them.
 The JSON worker acceptance workflow creates a backup and a test copy through
 the administrator interface using synthetic settings and media. It starts the
 packaged service against that disposable copy and checks authenticated tracking
-counts, restored settings and the saved scan cooldown. A separate history path
+counts, restored settings and the saved scan cooldown. It also archives a
+synthetic stale clock through the administrator interface and verifies the
+original date is visible in the restored archive. A separate history path
 reflects the scope of the backup. The fixture compares the original and copied
 files after shutdown and checks the mock services for any additional requests.
 

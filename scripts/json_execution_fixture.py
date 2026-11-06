@@ -263,6 +263,15 @@ with scan_attempt(JsonTrackingStore(sys.argv[1]),now=datetime(2026,1,20,12,tzinf
                 headers={'Origin':base},allow_redirects=False,timeout=10)
             self.assertEqual(response.status_code,302)
         headers={'Authorization':'Bearer '+token}
+        stale_title = 'Missing Fixture Movie'
+        stale_clock = '2026-01-03T03:04:05'
+        with self.store.session() as tracking:
+            tracking.state['first_seen'][stale_title] = stale_clock
+            tracking.checkpoint()
+        archive_url = base + '/tracking-review/archive'
+        archive_history_url = archive_url + '/history'
+        archive_selection = {'library': 'Movies', 'title': stale_title}
+        origin = {'Origin': base}
         try:
             start()
             from app.runtime_readiness import health_contract
@@ -276,7 +285,25 @@ with scan_attempt(JsonTrackingStore(sys.argv[1]),now=datetime(2026,1,20,12,tzinf
             initial_state=json.loads(self.store.path.read_bytes())
             health_contract(session.get(base+'/api/v1/summary',headers=headers,timeout=5).json(),initial_audit,
                 {key:len(initial_state.get(key,{})) for key in ('first_seen','queued','in_removal','keep_seen','arr_sync_pending')})
-            login(); original=self.store.path.read_bytes()
+            login()
+            before_archive = self.store.path.read_bytes()
+            calls_before_archive = list(self.server.calls)
+            reviewed = session.post(archive_url, params=archive_selection,
+                                    data={'action': 'review'}, headers=origin, timeout=5)
+            self.assertEqual(reviewed.status_code, 200)
+            fingerprint = re.search(r'name="fingerprint" value="([0-9a-f]{64})"', reviewed.text)
+            self.assertIsNotNone(fingerprint)
+            self.assertEqual(self.store.path.read_bytes(), before_archive)
+            archived = session.post(archive_url, params=archive_selection,
+                                    data={'action': 'archive', 'fingerprint': fingerprint.group(1)},
+                                    headers=origin, timeout=5)
+            self.assertEqual(archived.status_code, 200)
+            self.assertIn('Archived the Waiting clock', archived.text)
+            original = self.store.path.read_bytes()
+            archived_state = json.loads(original)
+            self.assertNotIn(stale_title, archived_state['first_seen'])
+            self.assertEqual(archived_state['archived_tracking_clocks'][stale_title]['timestamp'], stale_clock)
+            self.assertEqual(self.server.calls, calls_before_archive)
             page=session.get(base+'/settings',timeout=10)
             self.assertEqual(page.status_code,200); self.assertIn('Apply Requested Settings',page.text)
             self.assertNotIn('Type I UNDERSTAND',page.text)
@@ -342,7 +369,6 @@ with scan_attempt(JsonTrackingStore(sys.argv[1]),now=datetime(2026,1,20,12,tzinf
             csrf = re.search(r'name="csrf" value="([A-Za-z0-9_-]+)"', backup_page.text)
             self.assertIsNotNone(csrf)
             form = {'csrf': csrf.group(1)}
-            origin = {'Origin': base}
             created = session.post(base + '/backups', data={**form, 'action': 'create'},
                                    headers=origin, timeout=10)
             self.assertEqual(created.status_code, 200)
@@ -375,6 +401,12 @@ with scan_attempt(JsonTrackingStore(sys.argv[1]),now=datetime(2026,1,20,12,tzinf
             health_contract(summary.json(), audit, {key: len(state[key]) for key in
                             ('first_seen', 'queued', 'in_removal', 'keep_seen', 'arr_sync_pending')})
             self.assertIsNone(audit.get('last_result'))
+            history_page = session.get(archive_history_url, params={'q': stale_title}, timeout=5)
+            self.assertEqual(history_page.status_code, 200)
+            self.assertIn('1 matching clocks', history_page.text)
+            self.assertIn(stale_title, history_page.text)
+            self.assertIn(stale_clock, history_page.text)
+            self.assertNotIn(stale_title, json.loads(restored_state.read_bytes())['first_seen'])
             settings_page = session.get(base + '/settings', timeout=5)
             self.assertEqual(settings_page.status_code, 200)
             self.assertRegex(settings_page.text, r'name="HOLDING_DAYS"[^>]*value="8"')
@@ -573,7 +605,7 @@ def main():
         'fixture_only':True,'production_services_changed':False,'production_media_mounted':False,
         'external_requests_sent':False,'production_deletion_performed':False,'disposable_deletion_verified':True,
         'sigkill_delete_recovery_verified':True,'orphan_quarantine_and_sigkill_verified':True,
-        'lost_ack_get_only_recovery_verified':True,'sigkill_move_recovery_verified':True,'actual_json_service_verified':True,'backup_recovery_boot_verified':True,'five_moves_per_library_verified':True,'packaged_entrypoint_verified':os.environ.get('JSON_FIXTURE_PACKAGED_APP') == 'true','movie_and_tv_moves_verified':True}))
+        'lost_ack_get_only_recovery_verified':True,'sigkill_move_recovery_verified':True,'actual_json_service_verified':True,'backup_recovery_boot_verified':True,'archived_clock_recovery_verified':True,'five_moves_per_library_verified':True,'packaged_entrypoint_verified':os.environ.get('JSON_FIXTURE_PACKAGED_APP') == 'true','movie_and_tv_moves_verified':True}))
     return 0
 
 

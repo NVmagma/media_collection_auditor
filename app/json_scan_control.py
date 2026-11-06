@@ -13,6 +13,7 @@ import re
 import secrets
 
 KEY = 'json_worker_control'
+OPERATION_KINDS = frozenset(('move', 'arr_sync', 'arr_import', 'arr_delete', 'orphan_quarantine', 'tv_season_move', 'tv_season_delete'))
 INTERVAL_SECONDS = 3600
 
 
@@ -42,7 +43,7 @@ def _control(state):
     if journal is not None and (not isinstance(journal, dict) or set(journal) !=
             {'id', 'kind', 'library', 'title', 'details', 'phase'}
             or not isinstance(journal['id'], str) or re.fullmatch('[0-9a-f]{32}', journal['id']) is None
-            or journal['kind'] not in ('move', 'arr_sync', 'arr_import', 'arr_delete', 'orphan_quarantine')
+            or journal['kind'] not in OPERATION_KINDS
             or journal['library'] not in ('Movies', 'TV')
             or not isinstance(journal['title'], str) or not journal['title']
             or not isinstance(journal['details'], dict) or not journal['details']
@@ -94,7 +95,7 @@ class ScanAttempt:
         value = self._active()
         if value['journal'] is not None:
             raise ScanAdmissionBlocked('operation_requires_review')
-        if (kind not in ('move', 'arr_sync', 'arr_import', 'arr_delete', 'orphan_quarantine') or library not in ('Movies','TV')
+        if (kind not in OPERATION_KINDS or library not in ('Movies','TV')
                 or not isinstance(title, str) or not title or len(title) > 250
                 or any(ord(c) < 32 or c in '/\\' for c in title)
                 or not isinstance(details, dict) or not details):

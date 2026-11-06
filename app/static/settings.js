@@ -102,3 +102,18 @@ if (editor && orphanSwitch && orphanWarning && orphanAck) {
   }, true);
   updateOrphanWarning();
 }
+
+const seasonDeleteSwitch = document.getElementById('field-ALLOW_TV_SEASON_DELETE');
+const seasonDeleteWarning = document.getElementById('season-deletion-warning');
+const seasonDeleteAck = document.getElementById('acknowledge-season-deletion');
+if (seasonDeleteSwitch && seasonDeleteWarning && seasonDeleteAck) {
+  function updateSeasonDeleteWarning() {
+    const enabled = seasonDeleteSwitch.value === 'true';
+    seasonDeleteWarning.hidden = !enabled;
+    seasonDeleteAck.required = enabled;
+    if (!enabled) seasonDeleteAck.checked = false;
+  }
+  seasonDeleteSwitch.addEventListener('change', updateSeasonDeleteWarning);
+  seasonDeleteAck.addEventListener('invalid', () => showTab('Safety'));
+  updateSeasonDeleteWarning();
+}

@@ -54,7 +54,7 @@ def require_login():
     if g.user is None:
         if request.path.startswith('/api/'): return {'ok':False,'message':'Please sign in.'},401
         return redirect(url_for('login'))
-    if request.endpoint in ('settings','test_connection','test_notification','run_now','rescue','integration_setup','cleanup_review','tracking_review') and not g.user['admin']:
+    if request.endpoint in ('settings','test_connection','test_notification','run_now','rescue','integration_setup','cleanup_review','tracking_review','arr_coverage_review','tracking_archive','tracking_archive_history','tv_season_review') and not g.user['admin']:
         if request.path.startswith('/api/'): return {'ok':False,'message':'Administrator access required.'},403
         return Response('Administrator access required.',403)
 
@@ -559,6 +559,8 @@ def collection_health(state, stages, warnings, config=None):
 
 @app.get("/")
 def dashboard(initial_workspace="Overview"):
+    from app.tv_season_holding import holding_seasons
+
     actions = load_actions()
     state_error = None
     try:
@@ -624,10 +626,11 @@ def dashboard(initial_workspace="Overview"):
                                     "stage": stage, "action": action})
     preview.sort(key=lambda item: (item["library"], item["stage"], item["title"].casefold()))
     display_zone=config.get('DAILY_RUN_TIMEZONE') or os.environ.get('DAILY_RUN_TIMEZONE') or os.environ.get('TZ')
+    season_holding = holding_seasons(state, holding_days=deadlines["Holding"]["TV"], display_zone=display_zone)
     run = selected_run_snapshot(snapshot)
     history = selected_run_history(read_history, 100)
     return render_template("dashboard.html", scan_view=build_scan_view(run, history, timezone_name=display_zone), initial_workspace=initial_workspace, overview=dashboard_overview(stages, clock_coverage, libraries=enabled_libraries, tracking_available=state_error is None, limit=3), dashboard_timezone=display_zone, clock_coverage=clock_coverage, actions=actions, state=state, state_error=state_error, stages=stages, inventory_warnings=inventory_warnings, health_issues=health_issues, run=run, history=history,
-                           preview=preview, dry_run=load_config().get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "true")
+                           preview=preview, season_holding=season_holding, dry_run=load_config().get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "true")
 
 
 @app.get("/review")
@@ -813,7 +816,7 @@ def export_diagnostics():
     }
     config = load_config()
     safe_keys = ("DRY_RUN", "ALLOW_PERMANENT_DELETE", "ALLOW_FILESYSTEM_DELETE",
-                 "ENABLE_SEASON_PRUNING", "MAX_ACTIONS_PER_RUN", "ENABLE_MOVIES", "ENABLE_TV")
+                 "ENABLE_SEASON_PRUNING", "ALLOW_TV_SEASON_DELETE", "MAX_ACTIONS_PER_RUN", "ENABLE_MOVIES", "ENABLE_TV")
     report["safety_settings"] = {
         key: config.get(key, os.environ.get(key, DEFAULTS.get(key, "unset")))
         for key in safe_keys
@@ -933,6 +936,13 @@ def settings():
                     raise ValueError('Acknowledge the orphan metadata quarantine warning to enable cleanup.')
                 updated[ORPHAN_CONSENT]=ORPHAN_VERSION
             else: updated[ORPHAN_CONSENT]=None
+            from app.tv_season_deletion_policy import FLAG, CONSENT_KEY as SEASON_CONSENT, CONSENT_VERSION as SEASON_VERSION
+            if updated.get(FLAG, 'false') == 'true':
+                if request.form.get('acknowledge_season_deletion') != 'yes':
+                    raise ValueError('Acknowledge the season deletion warning before enabling it.')
+                updated[SEASON_CONSENT] = SEASON_VERSION
+            else:
+                updated[SEASON_CONSENT] = None
             validate_policy({**DEFAULTS,**initial_environment(),**updated})
             if request.form.get('settings_action')!='apply':
                 raise ValueError('Use Apply Requested Settings to apply your changes.')
@@ -950,7 +960,8 @@ def settings():
     groups={name:[key for key in keys if key!='RUN_INTERVAL_HOURS'] for name,keys in FIELDS.items()}
     from app.deletion_policy import WARNING
     from app.orphan_cleanup import WARNING as ORPHAN_WARNING
-    return render_template('settings.html',deletion_warning=WARNING,orphan_warning=ORPHAN_WARNING,groups=groups,values=values,secrets=SECRETS,bools=BOOLS,sources=sources,
+    from app.tv_season_deletion_policy import WARNING as SEASON_WARNING
+    return render_template('settings.html',season_deletion_warning=SEASON_WARNING,deletion_warning=WARNING,orphan_warning=ORPHAN_WARNING,groups=groups,values=values,secrets=SECRETS,bools=BOOLS,sources=sources,
         help_text=FIELD_HELP,error=error,success=request.args.get('saved')=='1',json_mode=True,
         preview_mode=False,live_mode=False,requested=False,unchanged=False,pending_settings={'status':'none'},
         settings_application={'status':'none'},locked_settings=(),settings_applied=False,
@@ -1157,6 +1168,166 @@ def tracking_review():
     return Response(render_template('tracking_review.html',result=result,unavailable=unavailable,
         labels=LABELS,page_url=page_url,
         display_time=lambda value:observation_datetime(value,config.get('DAILY_RUN_TIMEZONE') or os.environ.get('TZ'))),status=503 if unavailable else 200),{'Cache-Control':'no-store'}
+
+
+@app.route('/tracking-review/tv-seasons', methods=['GET', 'POST'])
+def tv_season_review():
+    from app.json_worker_service import settings_snapshot
+    from app.tv_season_review import review_show
+
+    title = ''
+    plan = None
+    blocked = False
+    if request.method == 'POST':
+        try:
+            origin = urlsplit(request.headers.get('Origin', ''))
+            same_origin = origin.scheme in ('http', 'https') and origin.netloc == request.host
+        except ValueError:
+            same_origin = False
+        if not same_origin:
+            return Response('Invalid review request.', 403)
+        title = request.form.get('title', '')
+        try:
+            plan = review_show(title, settings_snapshot, load_state)
+        except (OSError, RuntimeError, ValueError):
+            blocked = True
+    return (render_template('tv_season_review.html', title=title, plan=plan, blocked=blocked),
+            409 if blocked else 200, {'Cache-Control': 'no-store'})
+
+
+@app.get('/tracking-review/archive/history')
+def tracking_archive_history():
+    from app.tracking_archive import archive_history
+
+    if any(key not in ('library', 'q', 'page') or len(request.args.getlist(key)) != 1
+           for key in request.args):
+        return Response('Invalid archive filters.', 400)
+    library = request.args.get('library', 'all')
+    query = request.args.get('q', '').strip()
+    page_text = request.args.get('page', '1')
+    if (library not in ('all', 'Movies', 'TV') or len(query) > 255
+            or not re.fullmatch('[1-9][0-9]{0,5}', page_text)):
+        return Response('Invalid archive filters.', 400)
+    try:
+        result = archive_history(load_state(), library, query, int(page_text))
+    except (OSError, RuntimeError, ValueError, OverflowError):
+        result = None
+
+    def page_url(page):
+        return url_for('tracking_archive_history', library=library, q=query, page=page)
+
+    return (render_template('tracking_archive_history.html', result=result, library=library,
+                            query=query, page_url=page_url),
+            503 if result is None else 200, {'Cache-Control': 'no-store'})
+
+
+@app.route('/tracking-review/archive', methods=['GET', 'POST'])
+def tracking_archive():
+    from app.json_worker_service import settings_snapshot
+    from app.tracking_archive import review_clock
+    from app.tracking_review import _title
+
+    library = request.args.get('library', '')
+    title = request.args.get('title', '')
+    try:
+        if library not in ('Movies', 'TV') or _title(title).startswith('.'):
+            raise ValueError()
+    except ValueError:
+        return Response('Invalid tracking selection.', 400)
+    preview = None
+    archived = False
+    blocked = False
+    if request.method == 'POST':
+        try:
+            origin = urlsplit(request.headers.get('Origin', ''))
+            same_origin = origin.scheme in ('http', 'https') and origin.netloc == request.host
+        except ValueError:
+            same_origin = False
+        if not same_origin:
+            return Response('Invalid review request.', 403)
+        action = request.form.get('action')
+        expected = request.form.get('fingerprint', '') if action == 'archive' else None
+        if action not in ('review', 'archive') or (expected is not None and not re.fullmatch('[0-9a-f]{64}', expected)):
+            return Response('Invalid archive request.', 400)
+        signing_key = app.secret_key
+        if isinstance(signing_key, str):
+            signing_key = signing_key.encode()
+        try:
+            preview = review_clock(library=library, title=title, settings=settings_snapshot,
+                                   signing_key=signing_key, expected=expected)
+            archived = action == 'archive'
+        except (OSError, RuntimeError, ValueError):
+            blocked = True
+    return (render_template('tracking_archive.html', library=library, title=title, preview=preview,
+                            archived=archived, blocked=blocked), 409 if blocked else 200,
+            {'Cache-Control': 'no-store'})
+
+
+@app.route('/tracking-review/arr', methods=['GET', 'POST'])
+def arr_coverage_review():
+    """Fetch a saved Arr destination only when an administrator requests a comparison."""
+    from app.arr_catalog import ArrCatalogGET, catalog_paths_by_folder
+    from app.arr_coverage_review import LABELS, compare_folders
+    from app.json_worker_cycle import stage_paths
+    from app.json_worker_service import settings_snapshot
+
+    library, status, query, page = 'Movies', 'all', '', 1
+    results = None
+    error = None
+    response_status = 200
+    if request.method == 'POST':
+        try:
+            origin = urlsplit(request.headers.get('Origin', ''))
+            same_origin = origin.scheme in ('http', 'https') and origin.netloc == request.host
+        except ValueError:
+            same_origin = False
+        if not same_origin:
+            return Response('Invalid review request.', 403)
+        library = request.form.get('library', '')
+        status = request.form.get('status', 'all')
+        query = request.form.get('q', '').strip()
+        page_text = request.form.get('page', '1')
+        if (library not in ('Movies', 'TV') or status not in ('all', *LABELS)
+                or len(query) > 255 or not re.fullmatch('[1-9][0-9]{0,3}', page_text)):
+            return Response('Invalid review filters.', 400)
+        page = int(page_text)
+        prefix, service, enabled = ('RADARR', 'radarr', 'ENABLE_MOVIES') if library == 'Movies' else ('SONARR', 'sonarr', 'ENABLE_TV')
+        try:
+            settings = settings_snapshot()
+            if settings.get(enabled, 'true' if library == 'Movies' else 'false') != 'true':
+                raise ValueError('Library disabled')
+            local_roots, remote_roots = stage_paths(settings, library)
+            if len(set(local_roots.values())) != 4 or len(set(remote_roots.values())) != 4:
+                raise ValueError('Stage roots must be distinct')
+            inventory_settings = {
+                **settings,
+                'ENABLE_MOVIES': str(library == 'Movies').lower(),
+                'ENABLE_TV': str(library == 'TV').lower(),
+                **{prefix + '_' + ('TRANSIENT' if stage == 'Waiting' else stage.upper()) + '_PATH': path
+                   for stage, path in local_roots.items()},
+            }
+            stages, warnings = filesystem_stages({}, inventory_settings, max_entries=10000)
+            if warnings:
+                raise RuntimeError('Inventory unavailable')
+            fetch = ArrCatalogGET(service=service, base_url=settings.get(prefix + '_URL', ''),
+                                  token=settings.get(prefix + '_API_KEY', ''))
+            rows, counts = compare_folders(stages, remote_roots, catalog_paths_by_folder(fetch))
+            if (filesystem_stages({}, inventory_settings, max_entries=10000) != (stages, warnings)
+                    or settings_snapshot() != settings):
+                raise RuntimeError('Comparison sources changed')
+            matching = [row for row in rows if (status == 'all' or row['status'] == status)
+                        and query.casefold() in row['title'].casefold()]
+            pages = max(1, (len(matching) + 24) // 25)
+            page = min(page, pages)
+            results = {'total': len(rows), 'counts': counts, 'matched': len(matching), 'pages': pages,
+                       'rows': matching[(page - 1) * 25:page * 25]}
+        except (OSError, RuntimeError, ValueError):
+            error = 'Coverage is unknown. Check that the library is enabled, all four stage folders are readable, and the saved Arr connection works. If a scan was active, try again after it finishes.'
+            response_status = 503
+
+    return (render_template('arr_coverage_review.html', results=results, error=error,
+                            labels=LABELS, library=library, status=status, query=query, page=page),
+            response_status, {'Cache-Control': 'no-store'})
 
 
 if __name__ == "__main__":

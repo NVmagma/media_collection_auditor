@@ -92,6 +92,21 @@ class ArrCatalogGET:
             raise ArrCatalogError('Arr catalog unavailable or invalid') from None
 
 
+def catalog_paths_by_folder(fetch):
+    """Validate identities and group the returned paths by folder name."""
+    rows = fetch()
+    if not isinstance(rows, list) or len(rows) > 100000: raise ValueError('Invalid Arr catalog')
+    folders, ids = {}, set()
+    for row in rows:
+        if (not isinstance(row, dict) or type(row.get('id')) is not int or row['id'] <= 0
+                or row['id'] in ids or type(row.get('monitored')) is not bool):
+            raise ValueError('Invalid Arr identity')
+        path = canonical_arr_record_path(row.get('path'))
+        ids.add(row['id'])
+        folders.setdefault(PurePosixPath(path).name, []).append(path)
+    return folders
+
+
 def configured_arr_queue_resolver(*, settings, config):
     """Detach active service configuration; returned callback performs reads once.
 

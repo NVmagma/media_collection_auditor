@@ -6,16 +6,16 @@ filesystem inventory or grant move permission. No claims or state saves.
 from copy import deepcopy
 from app.scan_progress import emit
 from dataclasses import dataclass
-from pathlib import PurePosixPath
 from time import monotonic
 import math
 
 from app.json_lifecycle_plan import LibraryObservation, TitleObservation, plan_scan
-from app.arr_catalog import ArrCatalogGET, canonical_arr_record_path
+from app.arr_catalog import ArrCatalogGET, catalog_paths_by_folder
 from app.jellyfin_collection import collect_title_observation, validated_tag_names
 from app.jellyfin_scan_cache import _ScanCatalog
 from app.filesystem_paths import _canonical
 from app.jellyfin_transport import ScheduledJellyfinGET
+from app.tv_season_policy import ARCHIVE
 
 
 @dataclass(frozen=True)
@@ -32,20 +32,6 @@ class LibraryInventory:
     roots: tuple  # Explicit Arr-visible stage paths, with configured aliases applied.
     titles: tuple
     complete: bool
-
-
-def _catalog(fetch):
-    rows = fetch()
-    if not isinstance(rows, list) or len(rows) > 100000: raise ValueError('Invalid Arr catalog')
-    folders, ids = {}, set()
-    for row in rows:
-        if (not isinstance(row, dict) or type(row.get('id')) is not int or row['id'] <= 0
-                or row['id'] in ids or type(row.get('monitored')) is not bool):
-            raise ValueError('Invalid Arr identity')
-        path = canonical_arr_record_path(row.get('path'))
-        ids.add(row['id'])
-        folders.setdefault(PurePosixPath(path).name, []).append(path)
-    return folders
 
 
 def collect_readonly_plan(*, snapshot, inventories, settings, now,
@@ -94,6 +80,8 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
     total_titles=sum(len(inventory.titles) for inventory in inventories)
     checked=0
     observations, collection_status = [], []
+    season_titles, season_policy_titles = set(), set()
+    season_enabled = settings.get('ENABLE_TV_SEASON_RETENTION', 'false') == 'true'
     for inventory, preliminary in zip(inventories,prelim,strict=True):
         check_deadline()
         jf_complete = arr_complete = False
@@ -116,9 +104,20 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
                         emit('jellyfin',checked=checked,total=total_titles,library=inventory.library)
                         continue
                     jf_checked = True
+                    season_args = {}
+                    if inventory.library == 'TV' and season_enabled:
+                        from app.tv_season_review import season_holding_root
+                        if any(key.startswith(initial.media_key + '/') for key in snapshot.get(ARCHIVE, {})):
+                            season_args['excluded_series_path'] = str(season_holding_root(settings) / title.folder)
                     result = collect_title_observation(fetch=cached,
                         jellyfin_type='Series' if inventory.library == 'TV' else 'Movie',
-                        folder=title.folder,media_key=initial.media_key,now=now,tag_names=tags)
+                        folder=title.folder,media_key=initial.media_key,now=now,tag_names=tags,**season_args)
+                    if (inventory.library == 'TV' and season_enabled
+                            and result['status'] == 'shape_valid_untrusted'
+                            and (season_args or 'one-season' in (result.get('observed_tags') or ()))):
+                        season_policy_titles.add(title.folder)
+                        if title.stage in ('Waiting', 'Keep'):
+                            season_titles.add(title.folder)
                     if 'jellyfin_collection_incomplete' in result['blockers']:
                         jf_complete = False
                         break
@@ -133,7 +132,7 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
             emit('arr',checked=checked,total=total_titles,library=inventory.library)
             try:
                 prefix, service = ('SONARR','sonarr') if inventory.library == 'TV' else ('RADARR','radarr')
-                catalog = _catalog(arr_factory(service=service,
+                catalog = catalog_paths_by_folder(arr_factory(service=service,
                     base_url=settings.get(prefix+'_URL',''),token=settings.get(prefix+'_API_KEY','')))
                 arr_complete = True
             except Exception:
@@ -147,7 +146,9 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
                 else 'exact_source_match' if matches[0] == roots[inventory.library][title.stage]+'/'+title.folder
                 else 'path_conflict')
             titles.append(TitleObservation(initial.media_key,title.stage,title.threshold_days,
-                signals.get(initial.media_key),status,title.blocker,absence.get(initial.media_key,False)))
+                signals.get(initial.media_key),status,
+                'tv_season_policy' if inventory.library == 'TV' and title.folder in season_policy_titles else title.blocker,
+                absence.get(initial.media_key,False)))
         observations.append(LibraryObservation(inventory.library,jf_complete,arr_complete,tuple(titles)))
         collection_status.append({'library':inventory.library,'inventory_complete':inventory.complete,
             'jellyfin_complete':jf_complete,'arr_complete':arr_complete,'titles':len(titles) if inventory.complete else None})
@@ -159,4 +160,5 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
         deletion_enabled=settings.get('ALLOW_PERMANENT_DELETE','false') == 'true' and
             settings.get('REMOVAL_DELETION_CONSENT') == 'arr-removal-v1')
     return {**result,'library_status':tuple(collection_status),
-        'inventory_independently_verified':False,'freshness_verified':False}
+        'inventory_independently_verified':False,'freshness_verified':False,
+        'season_titles':tuple(sorted(season_titles, key=lambda title: (title.casefold(), title)))}

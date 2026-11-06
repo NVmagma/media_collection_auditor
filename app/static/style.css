@@ -50,6 +50,9 @@
 .dashboard-view-switch .muted{font-size:13px;margin-right:8px}
 .view-switch-button{background:#162538;border:1px solid #2b415a;color:#b5c9dc;border-radius:8px;padding:9px 16px;font-size:13px}
 .view-switch-button.selected{background:#214568;border-color:#70acff;color:#fff}
+.tv-holding-group h4{margin:0 0 12px;font-size:16px}
+.tv-holding-group + .tv-holding-group{margin-top:24px;padding-top:20px;border-top:1px solid #30415b}
+.season-card-title{font-size:18px;margin:2px 0 10px;overflow-wrap:anywhere}
 .media-poster-list{display:flex;flex-direction:column;gap:14px}
 .media-poster-list.hidden-section{display:none}
 .media-poster-row{display:flex;gap:20px;align-items:flex-start;padding:15px;background:#142235;border:1px solid #2c4058;border-radius:12px}

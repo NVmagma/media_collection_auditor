@@ -54,6 +54,17 @@ def create_blueprint(is_admin,load_settings=settings_snapshot):
                 if not pending: raise RuntimeError('No selected operation')
                 read,send=adapters(values)
                 action=request.form.get('action')
+                if pending['kind']=='tv_season_delete':
+                    raise RuntimeError('Interrupted season deletion requires manual review')
+                if pending['kind']=='tv_season_move':
+                    from app.tv_season_recovery import recover_season
+                    if action == 'review':
+                        review = recover_season(store, settings=values)
+                    elif action == 'acknowledge_season_move':
+                        result = recover_season(store, settings=values, expected=request.form.get('fingerprint', ''))
+                    else:
+                        raise ValueError('Season recovery only acknowledges verified outcomes')
+                    return render_template('json_recovery.html',pending=pending,review=review,result=result,error=None),200,{'Cache-Control':'no-store'}
                 if pending['kind']=='orphan_quarantine':
                     from app.json_orphan_quarantine import review_pending_quarantine,reconcile_pending_quarantine
                     if action=='review':review=review_pending_quarantine(store,settings=values)

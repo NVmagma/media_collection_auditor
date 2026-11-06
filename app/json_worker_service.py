@@ -46,7 +46,9 @@ def settings_snapshot():
         raise ValueError('Stored settings are invalid; scans remain paused.') from None
     from app.deletion_policy import CONSENT_KEY
     from app.orphan_cleanup import CONSENT_KEY as ORPHAN_CONSENT
-    return {**DEFAULTS,**initial_environment(),**selected,CONSENT_KEY:saved.get(CONSENT_KEY),ORPHAN_CONSENT:saved.get(ORPHAN_CONSENT)}
+    from app.tv_season_deletion_policy import CONSENT_KEY as SEASON_CONSENT
+    return {**DEFAULTS,**initial_environment(),**selected,CONSENT_KEY:saved.get(CONSENT_KEY),
+            ORPHAN_CONSENT:saved.get(ORPHAN_CONSENT),SEASON_CONSENT:saved.get(SEASON_CONSENT)}
 
 
 def next_daily(settings,now):
@@ -181,8 +183,11 @@ class JSONWorkerService:
             decisions=[row if isinstance(row,dict) else asdict(row) for row in decisions]
             completed=result.get('completed_moves',())
             deleted=result.get('completed_deletions',())
+            season_moves=result.get('completed_season_moves',())
             quarantined=result.get('completed_quarantines',())
             record.update(moves_completed=len(completed),deletions_completed=len(deleted),
+                season_moves_completed=len(season_moves),
+                season_deletions_completed=len(result.get('completed_season_deletions', ())),
                 metadata_quarantines_completed=len(quarantined),quarantine_receipts=quarantined,
                 deletions_proposed=sum(row['outcome']=='delete_proposed' for row in decisions),arr_completed=len(completed)+len(deleted),
                 moves_proposed=sum(row['outcome']=='proposed' for row in decisions),

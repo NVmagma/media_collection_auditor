@@ -22,3 +22,20 @@ folders. Missing history is labelled unknown. Opening or filtering this page sen
 no Arr/Jellyfin requests, edits no timestamps, and performs no import or recovery.
 Links lead to the existing import and recovery flows, which require their own fresh
 checks and explicit actions. No dates are reset, records pruned or media moved.
+
+Use **Check current Arr coverage** to compare a library’s four local lifecycle
+stages against its saved Radarr or Sonarr catalog. Each submission reads one
+catalog. Results distinguish exact paths, similar folder names at different
+paths, multiple matches and unmatched folder names. Review provider identity
+through the separate import flow.
+
+For a record without an exact folder, **Review clock for archival** checks all
+four stages for the selected library. An administrator can then archive a single
+clock after a fresh check under the scan lock. The original date and stage stay
+in the JSON state archive. A returning folder starts a new active clock.
+Existing archived entries, conflicting clocks, unreadable directories, name
+variants and pending operations require separate review. Archival makes no
+media changes or Arr requests.
+
+**Archived tracking clocks** lists preserved records by title and library.
+It shows the original saved lifecycle date and the time of archival in UTC.

@@ -13,8 +13,7 @@ from zoneinfo import ZoneInfo
 from app.json_move_execution import MoveRequest, execute_move
 from app.json_readonly_scan import collect_worker_scan, rehearse_scan, _bool, _days
 from app.json_scan_control import KEY, scan_attempt, ScanAdmissionBlocked
-from app.json_scan_collection import _catalog
-from app.arr_catalog import ArrCatalogGET, canonical_arr_record_path
+from app.arr_catalog import ArrCatalogGET, canonical_arr_record_path, catalog_paths_by_folder
 from app.arr_title_transport import ArrTitleUpdate
 from app.jellyfin_collection import collect_title_observation, validated_tag_names
 from app.lifecycle_stages import CLOCKS
@@ -27,6 +26,8 @@ def validate_policy(settings):
     if not isinstance(values,dict): raise ValueError('Explicit settings required')
     from app.deletion_policy import validate_consent
     validate_consent(values)
+    from app.tv_season_deletion_policy import validate_season_deletion
+    validate_season_deletion(values)
     from app.orphan_cleanup import validate_consent as validate_orphan_consent
     validate_orphan_consent(values)
     for flag in ('ALLOW_FILESYSTEM_DELETE',
@@ -61,7 +62,7 @@ class JSONMoveServices:
         local,remote=stage_paths(values,library)
         rows=ArrCatalogGET(service=service,base_url=values.get(prefix+'_URL',''),
             token=values.get(prefix+'_API_KEY',''))()
-        _catalog(lambda:rows)  # Reject malformed/duplicate identities before selection.
+        catalog_paths_by_folder(lambda: rows)  # Reject malformed/duplicate identities before selection.
         matches=[row for row in rows if PurePosixPath(canonical_arr_record_path(row['path'])).name == title]
         if len(matches) != 1 or canonical_arr_record_path(matches[0]['path']) != remote[decision.stage]+'/'+title:
             raise RuntimeError('Selected Arr source changed')
@@ -93,7 +94,7 @@ class JSONMoveServices:
         local,remote=stage_paths(self.values,library)
         rows=ArrCatalogGET(service=service,base_url=self.values.get(prefix+'_URL',''),
             token=self.values.get(prefix+'_API_KEY',''))()
-        _catalog(lambda:rows)
+        catalog_paths_by_folder(lambda: rows)
         matches=[row for row in rows if PurePosixPath(canonical_arr_record_path(row['path'])).name==title]
         if len(matches)!=1 or canonical_arr_record_path(matches[0]['path'])!=remote['Removal']+'/'+title: raise RuntimeError('Exact Removal Arr record required')
         req=DeleteRequest(library,title,session.state['in_removal'][decision.media_key],
@@ -128,7 +129,7 @@ class JSONMoveServices:
         try:
             def absent():
                 rows=ArrCatalogGET(service=service,base_url=values.get(prefix+'_URL',''),token=values.get(prefix+'_API_KEY',''))()
-                _catalog(lambda:rows)
+                catalog_paths_by_folder(lambda: rows)
                 for row in rows:
                     path=canonical_arr_record_path(row['path'])
                     if fold(PurePosixPath(path).name)==fold(title) or any(path==p or path.startswith(p+'/') or p.startswith(path+'/') for p in expected):return False
@@ -174,6 +175,8 @@ def run_cycle(store, *, settings, trigger, now=None, services=None, collect=coll
             'completed_moves':tuple(evidence['completed_moves']),
             'completed_deletions':tuple(evidence.get('completed_deletions',())),
             'completed_quarantines':tuple(evidence.get('completed_quarantines',())),
+            'completed_season_moves':tuple(evidence.get('completed_season_moves',())),
+            'completed_season_deletions':tuple(evidence.get('completed_season_deletions',())),
             'permanent_deletion_authorized':False}
 
 
@@ -191,7 +194,7 @@ def _run_cycle(store, *, settings, trigger, now, services, collect, preview, evi
     with scan_attempt(store,now=now,trigger=trigger) as attempt:
         report=evidence
         report.update(execution_mode='live',scanned_titles=None,decisions=(),
-                completed_moves=[],completed_deletions=[],completed_quarantines=[],discovery_changes=None,failure_stage=None)
+                completed_moves=[],completed_deletions=[],completed_quarantines=[],completed_season_moves=[],completed_season_deletions=[],discovery_changes=None,failure_stage=None)
         phase='collection'
         try:
             plan=collect(attempt.session,settings=values,now=local_now)
@@ -255,6 +258,17 @@ def _run_cycle(store, *, settings, trigger, now, services, collect, preview, evi
                     update_orphan('orphan_recheck_blocked','skipped');continue
                 report['completed_quarantines'].append({**{key:folder[key] for key in ('library','media_key','stage')},
                     'quarantine_id':outcome['quarantine_id']})
+            if _bool(values, 'ENABLE_TV_SEASON_RETENTION', 'false') and plan.get('season_titles'):
+                from app.json_worker_service import settings_snapshot
+                from app.tv_season_worker import apply_season_plans
+                phase = 'tv_season_retention'
+                completed_actions = (report['completed_moves'] + report['completed_deletions']
+                                     + report['completed_quarantines'])
+                tv_used = sum(action['library'] == 'TV' for action in completed_actions)
+                apply_season_plans(attempt, titles=plan['season_titles'],
+                    slots=min(limit - len(completed_actions), 5 - tv_used), settings=values,
+                    read_settings=lambda: validate_policy(settings_snapshot())[0],
+                    completed=report['completed_season_moves'], deleted=report['completed_season_deletions'], now=now)
             attempt.finish(result='completed')
             report['result']='completed'
         except Exception as error:
@@ -269,8 +283,10 @@ def _run_cycle(store, *, settings, trigger, now, services, collect, preview, evi
         report['completed_moves']=tuple(report['completed_moves'])
         report['completed_deletions']=tuple(report['completed_deletions'])
         report['completed_quarantines']=tuple(report['completed_quarantines'])
+        report['completed_season_moves']=tuple(report['completed_season_moves'])
+        report['completed_season_deletions']=tuple(report['completed_season_deletions'])
         report['permanent_deletion_authorized']=_bool(values,'ALLOW_PERMANENT_DELETE','false')
         from app.jellyfin_refresh import refresh_after_moves
         report['jellyfin_refresh']=refresh_after_moves(settings=values,
-            completed=report['result']=='completed' and bool(report['completed_moves'] or report['completed_deletions']))
+            completed=report['result']=='completed' and bool(report['completed_moves'] or report['completed_deletions'] or report['completed_season_moves'] or report['completed_season_deletions']))
         return report
