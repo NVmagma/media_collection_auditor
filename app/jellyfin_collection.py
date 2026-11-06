@@ -129,9 +129,11 @@ def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
         if len(identities) != 1:
             blockers.append("jellyfin_title_ambiguous")
     signals = {name: False for name in FIELDS}
+    observed_tags = set()
     if not blockers:
         for _, _, _, tags, data in matched:
             normalized = {tag.lower() for tag in tags}
+            observed_tags.update(normalized)
             signals["played"] |= data["Played"] or data["PlayCount"] > 0
             signals["favorite"] |= data["IsFavorite"]
             signals["keep"] |= tag_names["keep"] in normalized
@@ -152,6 +154,7 @@ def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
         "status": "blocked" if blockers or contract["blockers"] else "shape_valid_untrusted",
         "blockers": blockers + contract["blockers"],
         "signals": contract["signals"] if not blockers else None,
+        "observed_tags": tuple(sorted(observed_tags)) if not blockers else None,
         "identity": (matched[0][1], matched[0][2]) if not blockers else None,
         "absence_verified": absence_verified,
         "authorization": "not_authorized",

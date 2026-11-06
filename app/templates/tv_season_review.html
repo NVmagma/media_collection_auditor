@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TV season retention preview · Media Collection Auditor</title><link rel="stylesheet" href="/static/style.css"></head>
+<body class="app-shell logs-app">
+{% set sidebar_page = 'tracking' %}{% include '_sidebar.html' %}
+<div class="app-content">
+<header class="settings-header"><div><h1>TV season retention preview</h1><p>Check one show against its Jellyfin tags, Sonarr record and local season folders.</p></div></header>
+<main id="main-content"><section class="panel">
+<form method="post" class="history-controls">
+<label>Exact TV show folder name<input name="title" required maxlength="255" value="{{ title }}"></label>
+<button type="submit">Preview seasons</button>
+</form>
+{% if blocked %}
+<p class="notice warning" role="alert">Season inventory could not be verified. Check the exact show folder name, TV stage paths, and saved Jellyfin and Sonarr connections.</p>
+{% elif plan %}
+<p role="status">{% if plan.latest is not none %}Latest regular season with video files: {{ plan.latest }}.{% else %}No regular seasons with video files were observed.{% endif %}</p>
+{% if plan.stage %}<p>Would stage these seasons in TV Leaving Soon: {{ plan.stage | join(', ') }}.</p>
+{% else %}<p>No seasons selected for staging.</p>{% endif %}
+{% endif %}
+<p class="muted">This preview checks active show folders named Season N. Season 0 and Specials stay in place. The preview makes no changes to media or services.</p>
+<p><a href="{{ url_for('tracking_review') }}">Return to Tracking Review</a></p>
+</section></main></div></body></html>

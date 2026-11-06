@@ -54,7 +54,7 @@ def require_login():
     if g.user is None:
         if request.path.startswith('/api/'): return {'ok':False,'message':'Please sign in.'},401
         return redirect(url_for('login'))
-    if request.endpoint in ('settings','test_connection','test_notification','run_now','rescue','integration_setup','cleanup_review','tracking_review','arr_coverage_review','tracking_archive','tracking_archive_history') and not g.user['admin']:
+    if request.endpoint in ('settings','test_connection','test_notification','run_now','rescue','integration_setup','cleanup_review','tracking_review','arr_coverage_review','tracking_archive','tracking_archive_history','tv_season_review') and not g.user['admin']:
         if request.path.startswith('/api/'): return {'ok':False,'message':'Administrator access required.'},403
         return Response('Administrator access required.',403)
 
@@ -1157,6 +1157,31 @@ def tracking_review():
     return Response(render_template('tracking_review.html',result=result,unavailable=unavailable,
         labels=LABELS,page_url=page_url,
         display_time=lambda value:observation_datetime(value,config.get('DAILY_RUN_TIMEZONE') or os.environ.get('TZ'))),status=503 if unavailable else 200),{'Cache-Control':'no-store'}
+
+
+@app.route('/tracking-review/tv-seasons', methods=['GET', 'POST'])
+def tv_season_review():
+    from app.json_worker_service import settings_snapshot
+    from app.tv_season_review import review_show
+
+    title = ''
+    plan = None
+    blocked = False
+    if request.method == 'POST':
+        try:
+            origin = urlsplit(request.headers.get('Origin', ''))
+            same_origin = origin.scheme in ('http', 'https') and origin.netloc == request.host
+        except ValueError:
+            same_origin = False
+        if not same_origin:
+            return Response('Invalid review request.', 403)
+        title = request.form.get('title', '')
+        try:
+            plan = review_show(title, settings_snapshot)
+        except (OSError, RuntimeError, ValueError):
+            blocked = True
+    return (render_template('tv_season_review.html', title=title, plan=plan, blocked=blocked),
+            409 if blocked else 200, {'Cache-Control': 'no-store'})
 
 
 @app.get('/tracking-review/archive/history')

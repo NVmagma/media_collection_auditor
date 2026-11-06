@@ -3,7 +3,7 @@
 {% set sidebar_page = 'tracking' %}{% include '_sidebar.html' %}
 <div class="app-content"><header class="settings-header"><div><h1>Tracking Review</h1><p>Compare local lifecycle folders and saved records without changing either.</p></div></header>
 <main id="main-content"><section class="panel">
-<p><a href="{{ url_for('arr_coverage_review') }}">Check current Arr coverage</a> · <a href="{{ url_for('tracking_archive_history') }}">Archived tracking clocks</a></p>
+<p><a href="{{ url_for('arr_coverage_review') }}">Check current Arr coverage</a> · <a href="{{ url_for('tracking_archive_history') }}">Archived tracking clocks</a> · <a href="{{ url_for('tv_season_review') }}">Preview TV season retention</a></p>
 {% if unavailable %}<p class="notice warning" role="alert">Comparison unavailable: sources changed, tracking is invalid, or inventory could not be verified. No saved dates or folders were changed. Refresh after the active scan finishes.</p>
 {% else %}
 <p class="muted">Local listings are read twice for consistency. This does not exclude concurrent writers or verify Arr/Jellyfin freshness. Name variants are suggestions, not matching identities.</p>
