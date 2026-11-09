@@ -1,12 +1,13 @@
 # JSON runtime. Build and verify before selecting a published image.
 ARG BASE_IMAGE=python@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704
 FROM ${BASE_IMAGE}
-# Debian DSA-6607-1. Use HTTPS to fetch the fix for the APT HTTP transport.
+# Debian DSA-6607-1 (APT) and DSA-6613-1 (zlib). Fetch security fixes over HTTPS.
 RUN sed -i 's|http://|https://|g' /etc/apt/sources.list.d/debian.sources \
     && apt-get -o Acquire::Retries=0 update \
-    && apt-get -o Acquire::Retries=0 install -y --no-install-recommends --only-upgrade apt libapt-pkg7.0 \
+    && apt-get -o Acquire::Retries=0 install -y --no-install-recommends --only-upgrade apt libapt-pkg7.0 zlib1g \
     && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' apt)" ge 3.0.4 \
     && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libapt-pkg7.0)" ge 3.0.4 \
+    && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' zlib1g)" ge 1:1.3.dfsg+really1.3.1-1+deb13u1 \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ENV PYTHONPATH=/app/app:/app PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
