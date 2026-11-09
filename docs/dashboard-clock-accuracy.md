@@ -10,3 +10,7 @@ changes. Future-dated TV content blocks the affected show, preserving its clock.
 Read-only observations cannot establish that external writers were excluded.
 Tracking records without folders may reflect external moves, renames or deletions;
 resolve them explicitly rather than automatically discarding their history.
+
+[Tracking Review](tracking-review.md) provides explicit archival of a stale clock
+after checking all four stage folders. The original date remains in archived
+tracking history. A returning folder gets a new active clock.

@@ -3,7 +3,7 @@
 This is the offline reader and response format reused by the
 [authenticated summary endpoint](integration-api.md). The CLI itself adds no
 listener, network collector or action endpoint.
-JSON remains authoritative; Unsupported backend flags cannot redirect this reader.
+JSON remains authoritative. Unsupported backend flags cannot redirect this reader.
 Dedicated bearer authentication is documented with the endpoint.
 
 Run from a checkout with project dependencies installed:
@@ -35,7 +35,6 @@ Use this CLI only with a trusted local state path. Network endpoints must
 supply the configured authoritative path themselves and authenticate before
 returning detailed status; they must not expose a caller-controlled file reader.
 
-Local validation on October 22, 2026: 24 focused snapshot/summary tests passed;
-the maintained integration suite passed 659 tests and 19 subtests on the local
-macOS development host. This is not Unraid filesystem or kernel acceptance.
-No GitHub Actions workflow, Docker build or production service change was run.
+The reader is exercised in the integration and tracking tests maintained under
+[tests/](../tests/). GitHub's safety workflow runs the current suite. A successful
+status read does not verify filesystem rename support or external service state.

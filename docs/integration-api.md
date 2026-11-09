@@ -17,6 +17,9 @@ have `Cache-Control: no-store` and describe observations, not action authority.
 | `/api/v1/proposals` | Latest recorded proposal counts, separate from active work |
 | `/api/v1/backup-status` | Integrity of an explicitly selected JSON backup packet |
 
+Title lists contain whole-title lifecycle records. Individual staged TV seasons
+are currently available in the auditor dashboard rather than these lists.
+
 Title routes require `INTEGRATION_API_TITLE_DETAILS=true` and accept
 `library=Movies` or `library=TV`. Optional media enrichment requires
 `INTEGRATION_API_MEDIA=true`. Do not infer current disk presence or deletion
@@ -33,3 +36,5 @@ Backup status requires all of `INTEGRATION_API_BACKUP_DIRECTORY`,
 `INTEGRATION_API_BACKUP_FINGERPRINT`. No request parameter can choose a file.
 The reader validates the receipt and both tracking/settings payload hashes. It
 returns no packet contents, private paths, credentials or restore permission.
+
+For a disposable HTTP check, see [integration fixture labs](integration-widget-lab.md).

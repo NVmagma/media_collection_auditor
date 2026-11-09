@@ -39,3 +39,9 @@ media changes or Arr requests.
 
 **Archived tracking clocks** lists preserved records by title and library.
 It shows the original saved lifecycle date and the time of archival in UTC.
+
+**Preview TV season retention** checks one exact active show folder against
+Jellyfin tags, Sonarr identity, local seasons, and any staged-season records. It
+displays staging/restoration candidates without performing them. See
+[TV season retention](tv-season-retention.md) for the opt-in live worker and
+separate deletion controls.

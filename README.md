@@ -1,112 +1,120 @@
 # Media Collection Auditor
 
-Manage Movie and TV lifecycles using Jellyfin tags, Radarr and Sonarr. The
-serialized JSON worker keeps persistent tracking, clocks and scan history in
-appdata. The dashboard, settings, APIs and operation recovery share that state.
+Media Collection Auditor manages the lifecycle of movies and TV shows using
+Jellyfin tags, Radarr, and Sonarr. It runs in Docker on Unraid and provides a web
+interface for reviewing your collection, previewing decisions, and running scans.
+Persistent JSON tracking preserves lifecycle dates, operation state, and scan
+history across container updates.
 
-## Current safety policy
+## What it does
 
-- **Waiting:** new titles and their saved lifecycle dates.
-- **Holding:** titles leaving soon.
-- **Keep:** titles selected for retention.
-- **Removal:** titles eligible for later review; moving here does not delete them.
+- Moves titles through **Waiting**, **Holding**, **Keep**, and **Removal** stages.
+- Uses Jellyfin tags and favorites to select retention or early Leaving Soon.
+- Stages older TV seasons with `one-season` and restores them with `keep-all`.
+- Shows full shows and individual seasons separately in TV Holding, with posters.
+- Provides daily and manual scans, live progress, searchable results, and history.
+- Reviews unmanaged folders, stale tracking clocks, and metadata-only leftovers.
+- Integrates with Homarr and Homepage through authenticated, read-only APIs.
+- Offers private appdata backups and explicit recovery of interrupted operations.
 
-`keep` selects retention; `keep-forever` protects the entire title and all seasons.
-`not-at-all` selects early Holding. Jellyfin favorites are supported through
-`FAVORITES_TRIGGER_KEEP`. `keep-all-seasons` is retained for TV protection policy.
-Unknown Jellyfin protection blocks the affected title.
+## Safety defaults
 
-Removal deletion is disabled by default and requires explicit warning acknowledgement. Season pruning and cross-filesystem copy fallback remain unavailable.
-Each live scan permits up to five Movie actions and five TV actions, with a total cap
-of ten. Live scans start at least one hour apart, and overlapping scans are blocked.
-Unlimited actions require a separate reviewed change.
+**New installations start in Dry Run.** Whole-title deletion, TV season deletion,
+season retention, and metadata quarantine are separate options that default to
+off. Each deletion option requires its own warning acknowledgment in Settings.
+Existing installations retain their saved settings when the image is updated.
 
-## Dashboard and integrations
+Live scans share a one-hour cooldown and run one at a time. Each scan allows up
+to five actions per library and ten overall, with a configurable lower total.
+Whole-title deletions are limited to one per library per scan. TV season deletion
+is limited to one season per scan within the same action budget.
 
-Left navigation provides the dashboard, separate collection Review, Activity Logs,
-Settings, Integrations, existing-media Arr imports and operation recovery. Table
-and poster views include current Jellyfin links. Activity and History distinguish
-verified moves from proposals and uncertain outcomes. History persists across
-restarts; the bounded display does not limit how many titles are scanned.
+Unknown or conflicting protection information blocks the affected action.
+Interrupted operations retain a journal and can pause further scans. Filesystem
+moves require atomic, no-overwrite renames on the same native filesystem mount.
+Backups of tracking and settings do not back up your media files.
 
-Daily scans use `DAILY_RUN_TIME` and `DAILY_RUN_TIMEZONE` (or `TZ`). Administrators
-can confirm **Run Live Scan Now** or request a read-only preview. Apply Requested
-Settings validates the current policy. Missing or corrupt settings/tracking pause
-scans without initializing empty state.
+## Lifecycle and tags
 
-Use `/api/v1/readiness`, `/summary`, `/audit-status`, title lists, coverage,
-scan history, proposals and backup status with a dedicated Bearer token. API tokens
-cannot start scans or change settings. See [API contract](docs/integration-api.md),
-[setup](docs/integration-api-setup.md) and [Homarr examples](docs/integration-widgets.md).
-
-## Unraid and Docker
-
-Build with `docker/runtime.Dockerfile`. GitHub's JSON acceptance workflow tests the
-exact image before optional publication to `ghcr.io/nvmagma/media_collection_auditor`.
-Select its immutable published digest in the Unraid template's Repository field.
-Keep the saved template consistent with the actual container to prevent updates
-from recreating obsolete settings. The WebUI URL is `http://[IP]:[PORT:8080]/`.
-
-Use two persistent binds:
-
-| Container path | Purpose |
+| Stage | Purpose |
 | --- | --- |
-| `/app/logs` | JSON state, saved settings, history and pending-operation journal |
-| `/media` | Native filesystem media root containing the four stages per library |
+| Waiting | Incoming titles with saved lifecycle dates. |
+| Holding | Leaving Soon, with a grace period before the next transition. |
+| Keep | Titles selected for retention. |
+| Removal | Whole titles eligible for deletion after a separate waiting period and safety checks. |
 
-For Unraid, live atomic renames require a native filesystem path such as the
-reviewed pool path, with all stage roots on one filesystem. Use port `8089:8080`
-when preserving the existing installation. The root filesystem stays read-only;
-the current reviewed runtime uses user `0:0`, drops all capabilities and adds
-only `DAC_OVERRIDE`, with no-new-privileges enabled. No ownership changes are needed.
+Apply tags to the individual movie or TV show in Jellyfin.
 
-**Existing installation:** keep its current logs and media binds when updating the
-image. Never initialize an existing directory or run two writers against it.
+| Tag | Behavior |
+| --- | --- |
+| `keep` | Select the whole title for Keep. |
+| `keep-forever` | Protect the title and all its seasons. |
+| `not-at-all` | Select a title for early Holding. |
+| `one-season` | With season retention enabled, retain the latest regular TV season and stage older seasons in Leaving Soon. |
+| `keep-all` | Keep the TV show and restore its staged seasons. Overrides `one-season`. |
+| `keep-all-seasons` | Existing all-season protection tag, also honored by season retention. |
 
-**New installation:** explicitly initialize an empty writable logs directory using
-`python -B -m app.json_initialize` in the selected image, with no media mount or
-network. The normal entrypoint refuses missing tracking rather than creating it.
-Start in preview mode (`DRY_RUN=true`) and verify settings, stage paths, API access
-and collected decisions before enabling live moves. Provide a strong
-`WEB_SESSION_SECRET`, administrator credentials and private integration tokens.
-Do not expose the administrative interface publicly without appropriate controls.
+Favorites can select whole titles for Keep through `FAVORITES_TRIGGER_KEEP`.
+Favorites alone do not trigger season staging. Season 0 and Specials are preserved.
+The latest season is the highest-numbered regular season with video files on disk.
 
-## Recovery and backups
+## Install on Unraid
 
-A durable JSON intent is saved before a move, Arr update or import. Uncertain
-operations pause scans and are never automatically replayed. Use Operation
-recovery or Arr imports to collect fresh GET-only evidence and apply the reviewed
-resolution. Preserve current clocks even when a remote acknowledgement was lost.
+Use the published release image:
 
-[JSON operations](docs/json-worker.md) covers state, backups, updates and recovery.
-[Arr imports](docs/arr-existing-import.md) register existing folders unmonitored,
-without download searches. [Recovery](docs/arr-intent-recovery.md) explains retained
-move/sync outcomes. Repository cleanup does not delete retained host data or containers.
-
-## Development
-
-Releases land on `main`. Use `feature/unraid` for default development work.
-Do not change `main` without explicit approval. Preserve
-unknown tracking fields, protection checks and disabled deletion safeguards.
-
-```bash
-python -m pip install -r requirements.txt pytest
-PYTHONPATH=.:app:tests WEB_SESSION_SECRET=synthetic-test-secret python -B -m pytest -q tests
-docker build -f docker/runtime.Dockerfile --build-arg SOURCE_REVISION="$(git rev-parse HEAD)" .
+```text
+ghcr.io/nvmagma/media_collection_auditor:stable
 ```
 
-GitHub also checks Chromium navigation/settings, JSX widget rendering, real
-loopback integration transports and disposable process-death recovery. The
-optional Tower lab uses only new test directories and a disposable container:
-`scripts/json_worker_lab.sh IMAGE_ID STATE_TEST_PARENT NATIVE_MEDIA_TEST_PARENT`.
-Do not mount production data for disposable tests.
+The web interface listens on container port **8080**. The installation example
+maps it to host port **8089**. Two persistent mounts provide appdata and media:
 
-See the [roadmap](docs/feature-roadmap.md) and [branch workflow](docs/branch-workflow.md).
+| Container path | Contents |
+| --- | --- |
+| `/app/logs` | Tracking, saved settings, scan history, session key, backups, and operation journal. |
+| `/media` | Native filesystem media root containing the lifecycle directories. |
+
+[Installation and updates](docs/installation.md) includes initialization, a Docker
+run example, directory layout, Unraid mount guidance, and existing-install updates.
+Use a native pool path for live moves. An Unraid `/mnt/user` share or an extra bind
+over one stage can prevent the required atomic rename even when files live on the
+same physical disk.
+
+Configure Jellyfin, Radarr, and Sonarr under **Settings → Connections**, then test
+the saved connections. Inspect a preview before enabling live scans. Use a local
+administrator or a Jellyfin administrator account for configuration and scan controls.
+
+## Documentation
+
+| Guide | Covers |
+| --- | --- |
+| [Installation and updates](docs/installation.md) | Fresh appdata, Docker, mounts, credentials, and `:stable`. |
+| [Worker operations](docs/json-worker.md) | Scans, limits, tracking, progress, and history. |
+| [TV season retention](docs/tv-season-retention.md) | Staging, restoration, grace periods, and optional deletion. |
+| [Whole-title deletion](docs/removal-deletion.md) | Arr-managed deletion of expired Removal titles. |
+| [Tracking Review](docs/tracking-review.md) | Clock mismatches, current Arr coverage, and clock archival. |
+| [Metadata quarantine](docs/orphan-metadata-quarantine.md) | Recoverable cleanup of verified sidecar-only folders. |
+| [Backups](docs/browser-backups.md) | Private snapshots, restore-copy testing, and limitations. |
+| [Operation recovery](docs/arr-intent-recovery.md) | Interrupted moves, updates, imports, and deletions. |
+| [Existing-folder imports](docs/arr-existing-import.md) | Register media unmonitored without download searches. |
+| [Integration setup](docs/integration-api-setup.md) | API token, API setup page, and widget troubleshooting. |
+| [API reference](docs/integration-api.md) | Routes, opt-ins, filters, and response semantics. |
+| [Dashboard widgets](docs/integration-widgets.md) | Homarr and Homepage examples. |
+| [Notifications](docs/operational-notifications.md) | Failure alerts and saved-destination tests. |
+| [Dashboard](docs/dashboard-redesign.md) | Navigation, full-show/season views, and browser checks. |
+| [Roadmap](docs/feature-roadmap.md) | Shipped work and remaining priorities. |
+
+## Development and contributions
+
+The release source is on `main`. See [CONTRIBUTING.md](CONTRIBUTING.md) for local
+setup, testing, and pull request guidance, and [SECURITY.md](SECURITY.md) for
+vulnerability reporting. Changes involving media operations need disposable-file
+tests and must preserve tracking and protection safeguards.
+
+The current runtime is built from `docker/runtime.Dockerfile`. The root Dockerfile
+and Compose file are legacy development entry points; use the documented runtime
+image for current deployments.
 
 ## License
 
-See [LICENSE](LICENSE).
-
-Removal-stage whole-title deletion is an opt-in feature described in [Removal deletion](docs/removal-deletion.md). It stays off until explicitly acknowledged in Settings.
-
-The scanner detects metadata-only orphan folders. Optional [recoverable metadata quarantine](docs/orphan-metadata-quarantine.md) requires complete Arr/Jellyfin absence checks and 24 hours of unchanged observations. It is off by default and never deletes files.
+[GNU General Public License v3](LICENSE).

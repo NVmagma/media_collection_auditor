@@ -1,7 +1,8 @@
 # Whole-title Removal deletion
 
-Removal deletion is an explicit opt-in, disabled by default. TV season pruning,
-direct filesystem deletion and cross-filesystem moves remain unavailable.
+Whole-title Removal deletion is an explicit opt-in, disabled by default.
+[Staged TV season deletion](tv-season-retention.md#optional-season-deletion) has
+a separate setting and grace period. Cross-filesystem copy fallback remains unavailable.
 
 ## Enable deliberately
 
@@ -27,8 +28,9 @@ stop deletion instead of using old captured consent.
 Only a whole title already in Removal with its complete waiting period elapsed
 is eligible. The minimum Removal period is one day. The auditor asks Radarr or
 Sonarr to delete that exact unmonitored title with `deleteFiles=true` and an
-import-list exclusion. All episodes of a TV series are included. The auditor
-never falls back to `unlink` or `rmtree` on production media.
+import-list exclusion. All episodes of a TV series are included. Whole-title deletion
+never falls back to filesystem removal. Staged-season deletion uses its own
+explicitly authorized filesystem operation.
 
 Treat this as irreversible. The auditor cannot restore files. Arr recycling-bin
 settings can retain deleted files; the auditor does not claim that disk space
@@ -66,6 +68,6 @@ for investigation. No automatic retry or clearance is performed, and old scan
 history is not rewritten as a successful attempt.
 
 The protocol follows the official [Radarr v3 schema](https://github.com/Radarr/Radarr/blob/develop/src/Radarr.Api.V3/openapi.json)
-and [Sonarr v3/v4 schema](https://github.com/Sonarr/Sonarr/blob/develop/src/Sonarr.Api.V3/openapi.json).
+and [Sonarr v4 schema](https://github.com/Sonarr/Sonarr/blob/v4.0.20.3014/src/Sonarr.Api.V3/openapi.json).
 Disposable loopback tests validate request parameters, lost acknowledgements,
 changed protections and actual controller death after the delete response.
