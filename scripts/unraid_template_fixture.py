@@ -42,6 +42,15 @@ try:
     post('/login',dict(username='fixture-admin',password='a-fixture-password'),opener)
     response=opener.open(BASE+'/settings')
     assert response.status==200 and b'Apply Requested Settings' in response.read()
+    post('/settings',dict(settings_action='apply', INTEGRATION_API_TOKEN='synthetic-'+'X'*40,
+                          INTEGRATION_API_TITLE_DETAILS='true'),opener)
+    request=urllib.request.Request(BASE+'/api/v1/readiness',headers={'Authorization':'Bearer synthetic-'+'X'*40})
+    readiness=json.load(opener.open(request))
+    assert readiness['title_details_enabled'] is True
+    post('/settings',dict(settings_action='apply',disable_integration_api='yes'),opener)
+    try: opener.open(request)
+    except urllib.error.HTTPError as error: assert error.code==404
+    else: raise AssertionError('Revoked integration token still accepted')
     saved=json.loads((root/'auditor_config.json').read_text())
     assert saved['DRY_RUN']=='true' and saved['ALLOW_PERMANENT_DELETE']=='false'
     assert not (root/'setup-token').exists()

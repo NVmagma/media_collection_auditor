@@ -23,6 +23,7 @@ def test_empty_appdata_setup_is_one_time_hashed_and_safe(installation, capsys):
     assert token in capsys.readouterr().out
     original = (installation/'auditor_state.json').read_bytes()
     with pytest.raises(ValueError): setup.complete_setup('wrong', 'admin', 'a-long-test-password')
+    with pytest.raises(ValueError): setup.complete_setup('☃', 'admin', 'a-long-test-password')
     with pytest.raises(ValueError): setup.complete_setup(token, 'admin', 'short')
     setup.complete_setup(token, 'admin', 'a-long-test-password')
     assert setup.authenticate('admin','a-long-test-password')
@@ -97,3 +98,18 @@ def test_unraid_template_has_only_deployment_controls():
     assert {f.get('Target') for f in fields}=={'/app/logs','/media','8080'}
     assert '--read-only' in root.findtext('ExtraParams')
     assert '--cap-drop=ALL' in root.findtext('ExtraParams')
+
+
+def test_applying_settings_migrates_inherited_secrets_without_rendering_them(installation, monkeypatch):
+    setup.prepare_installation()
+    monkeypatch.setattr(config_store, '_INITIAL_ENVIRONMENT', {'JELLYFIN_API_TOKEN':'private-legacy-key', 'INTEGRATION_API_TOKEN':'L'*40})
+    monkeypatch.setattr(web, 'current_user', lambda:{'name':'Tester','admin':True})
+    client=web.app.test_client()
+    before=(installation/'auditor_state.json').read_bytes()
+    response=client.post('/settings',data={'settings_action':'apply','JELLYFIN_API_TOKEN':'','INTEGRATION_API_TOKEN':''},headers={'Origin':'http://localhost'})
+    assert response.status_code==302
+    saved=json.loads(config_store.CONFIG_FILE.read_text())
+    assert saved['JELLYFIN_API_TOKEN']=='private-legacy-key' and saved['INTEGRATION_API_TOKEN']=='L'*40
+    page=client.get('/settings').text
+    assert 'private-legacy-key' not in page and 'L'*40 not in page
+    assert (installation/'auditor_state.json').read_bytes()==before

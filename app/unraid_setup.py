@@ -13,6 +13,10 @@ _LOCK = threading.Lock()
 ACCOUNT = '_local_admin'
 
 
+def _equal(left, right):
+    return isinstance(left, str) and isinstance(right, str) and hmac.compare_digest(left.encode(), right.encode())
+
+
 def _document():
     from app.json_worker_service import read_saved_settings
     return read_saved_settings()
@@ -77,7 +81,7 @@ def _validated_account(username, password):
 def complete_setup(code, username, password):
     with _LOCK:
         saved = _document()
-        if ACCOUNT in saved or not hmac.compare_digest(code, _token()):
+        if ACCOUNT in saved or not _equal(code, _token()):
             raise ValueError('Invalid or already used setup code')
         saved[ACCOUNT] = _validated_account(username, password)
         # Fresh installs always remain in preview until explicitly configured.
@@ -96,13 +100,13 @@ def authenticate(username, password):
         account = saved[ACCOUNT]
         try:
             return (isinstance(account, dict) and isinstance(account.get('password_hash'), str)
-                    and hmac.compare_digest(username, account.get('username', ''))
+                    and _equal(username, account.get('username', ''))
                     and check_password_hash(account['password_hash'], password))
         except (ValueError, TypeError): return False
     # Existing installations can sign in once using their original template login.
     return bool(os.environ.get('WEB_ADMIN_PASSWORD') and
-                hmac.compare_digest(username, os.environ.get('WEB_ADMIN_USER', 'admin')) and
-                hmac.compare_digest(password, os.environ['WEB_ADMIN_PASSWORD']))
+                _equal(username, os.environ.get('WEB_ADMIN_USER', 'admin')) and
+                _equal(password, os.environ['WEB_ADMIN_PASSWORD']))
 
 
 def account_version():

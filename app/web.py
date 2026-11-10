@@ -86,7 +86,8 @@ def login():
     password = request.form.get("password", "")
     if not username or not password:
         return render_template("login.html", error="Enter a username and password."), 400
-    user, login_error = jellyfin_login(username, password)
+    local_login = authenticate(username, password)
+    user, login_error = (None, None) if local_login else jellyfin_login(username, password)
     if user and not verify_user(user["token"], user["id"]):
         user = None
         login_error = "Jellyfin authenticated you, but the account could not be verified. Check Jellyfin permissions and the server URL."
@@ -94,7 +95,7 @@ def login():
     session.clear()
     if user:
         session.update(provider="jellyfin", jf_handle=store_token(user["token"], user["id"]))
-    elif authenticate(username, password):
+    elif local_login:
         from app.unraid_setup import account_version
         session.update(provider="local", account_version=account_version())
     else:
@@ -960,7 +961,10 @@ def settings():
             for key in KEYS:
                 if key not in request.form: continue
                 raw=request.form.get(key,'').strip()
-                if key in SECRETS and not raw: continue
+                if key in SECRETS and not raw:
+                    if key not in updated and initial_environment().get(key):
+                        updated[key]=validate(key,initial_environment()[key])
+                    continue
                 if not raw and key not in BOOLS: updated.pop(key,None)
                 else: updated[key]=validate(key,raw)
             from app.deletion_policy import CONSENT_KEY,CONSENT_VERSION

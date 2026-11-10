@@ -1,8 +1,8 @@
-from config_store import setting
-from app.tracking_schema import has_pending_extension
 """Offline, redacted status contract; no network endpoint or action authority."""
+from app.tracking_schema import has_pending_extension
 from datetime import datetime, timezone, timedelta
 import os
+from config_store import setting
 if __package__:
     from .dashboard_tracking_snapshot import read_json_dashboard_snapshot
 else:
@@ -377,7 +377,6 @@ def project_scan_capture(capture):
             'rows':view['rows']}
 
 
-from config_store import setting
 
 
 def selected_backup_status():
