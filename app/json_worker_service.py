@@ -3,6 +3,7 @@ from copy import deepcopy
 from dataclasses import asdict
 from datetime import datetime,timedelta,timezone
 import os
+import json
 import re
 from threading import Event,Lock
 from uuid import uuid4
@@ -14,6 +15,7 @@ from app.json_readonly_scan import _bool
 from app.json_scan_control import admission_status
 from app.json_tracking_store import JsonTrackingStore
 from app.json_worker_cycle import run_cycle,validate_policy
+from app.failure_diagnostics import failure_details,clean_failure_details
 
 
 def enabled():
@@ -178,6 +180,7 @@ class JSONWorkerService:
                     settings=values,trigger=trigger,now=self.clock())
                 emit('saving')
             record['result']=result['result']
+            if result['result']=='failed': record.update(clean_failure_details(result))
             record['result_basis']='worker_return' if result['result']=='completed' else 'blocked_or_uncertain'
             decisions=result.get('decisions',())
             decisions=[row if isinstance(row,dict) else asdict(row) for row in decisions]
@@ -197,10 +200,12 @@ class JSONWorkerService:
             record['title_detail_pages']=[_title_details(decisions,completed,result.get('result'),result.get('uncertain_media_key'),deleted,quarantined,offset=offset) for offset in range(0,len(decisions),100)]
             with self.lock: self.execution_blocked=result.get('pending_operation_present') is True
         except Exception as error:
-            record.update(result='failed',result_basis='blocked_or_uncertain',error_type=type(error).__name__)
+            record.update(result='failed',result_basis='blocked_or_uncertain',**failure_details(error,'worker'))
             with self.lock: self.execution_blocked=True
         finally:
             record['finished_at']=self.clock().isoformat()
+            if record.get('result')=='failed':
+                print('[JSON WORKER] Scan failure: '+json.dumps(clean_failure_details(record)),flush=True)
             try:
                 if self.record: self.record(deepcopy(record))
             except Exception:

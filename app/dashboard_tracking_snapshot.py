@@ -259,6 +259,19 @@ def _scan_entry(record, zone, *, title_details=True):
     reason = _SCAN_REASON.get(basis, 'No detailed outcome reason was recorded.') if isinstance(basis, str) else 'No detailed outcome reason was recorded.'
     if result == 'completed' and duration is None:
         reason = 'A completed result was recorded, but valid start/finish timing is unavailable. Completion cannot be confirmed from these observations.'
+    if result == 'failed':
+        stage_label = {
+            'worker':'starting or admitting the worker',
+            'collection':'checking folders, clocks, and service data',
+            'candidate_preparation':'preparing a selected move',
+            'move_and_sync':'moving a title or verifying its Arr update',
+            'deletion_preparation':'preparing a Removal deletion',
+            'arr_deletion':'verifying an Arr deletion',
+            'metadata_quarantine':'quarantining metadata',
+            'tv_season_retention':'processing TV seasons',
+            'storage_revalidation':'rechecking saved tracking',
+        }.get(record.get('failure_stage')) if isinstance(record.get('failure_stage'),str) else None
+        if stage_label: reason += ' The failure was recorded while '+stage_label+'.'
     trigger_label = {'scheduled': 'Daily schedule', 'manual': 'Manual preview' if preview is True else 'Manual request',
                      'startup': 'Startup', 'rescue': 'Manual rescue'}.get(trigger, 'Not reported') if isinstance(trigger, str) else 'Not reported'
     duration_display = 'Not recorded'
