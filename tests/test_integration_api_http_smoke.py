@@ -1,4 +1,4 @@
-"""Real HTTP fixture plus deterministic cleanup when startup evidence fails."""
+"""Test real HTTP responses and clean up even when startup checks fail."""
 import json
 from pathlib import Path
 import subprocess

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Synthetic Flask client smoke test; no listener, network or real state reads."""
+"""Test the API with a Flask client, without opening a server or reading real state."""
 import json
 import os
 from pathlib import Path

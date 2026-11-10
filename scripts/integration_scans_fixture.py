@@ -1,4 +1,4 @@
-"""Private-loopback scan API acceptance with a disposable in-process coordinator."""
+"""Test scan API responses using a local server and a temporary coordinator."""
 from datetime import datetime, timezone, timedelta
 import json
 import os

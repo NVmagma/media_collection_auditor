@@ -1,4 +1,4 @@
-"""Private-loopback selected-backup API tests; only new fixture packets."""
+"""Test the backup API locally using newly created test packets."""
 from copy import deepcopy
 import hashlib
 import json

@@ -1,4 +1,4 @@
-"""Render synthetic dashboard inputs without reading production state or services."""
+"""Render the dashboard with test data, without reading production state or services."""
 from contextlib import ExitStack
 from copy import deepcopy
 from unittest.mock import patch

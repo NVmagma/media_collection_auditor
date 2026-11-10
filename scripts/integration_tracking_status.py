@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Print offline redacted tracking status; no collectors or service controls."""
+"""Print tracking status without private details, service requests, or service controls."""
 import argparse
 import json
 

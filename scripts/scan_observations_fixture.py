@@ -1,7 +1,8 @@
-"""Ephemeral scheduled-run observations; no tracking authority or durable history.
+"""Keep temporary scan observations separate from saved tracking and history.
 
-No JSON history fallback, credential/free-text capture, network or state writes.
-Durable attempt claims and operation intents remain the replay authority.
+Do not read fallback history, capture credentials or free text, contact services,
+or write tracking. Saved scan claims and pending intents still determine whether
+an action can run again.
 """
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -25,10 +26,10 @@ class ScheduledRunObservations:
         self._execution_blocked = False
 
     def observe_execution_gate(self, *, blocked):
-        """Current process gate observation, separate from completed attempts.
+        """Record whether this process is blocked, separately from completed attempts.
 
-        Never reconstruct history or clear a durable intent. Only the service
-        sets this after its real authority check succeeds or raises.
+        Do not rebuild history or clear saved intents. Only the service sets
+        this after its actual readiness check succeeds or fails.
         """
         if type(blocked) is not bool:
             raise ValueError('Explicit gate observation required')
@@ -180,7 +181,7 @@ class ScheduledRunObservations:
             return self._report_locked()
 
     def capture(self):
-        """One detached process observation and history under the same lock."""
+        """Copy the process status and history while holding the same lock."""
         with self._lock:
             return {'run': self._report_locked(),
                     'history': deepcopy(list(reversed(self._history)))}

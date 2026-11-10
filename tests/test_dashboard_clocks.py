@@ -1,4 +1,4 @@
-"""Clock display never fabricates lifecycle dates or rewrites stored state."""
+"""Show saved dates without guessing or changing tracking."""
 from datetime import datetime,timezone
 from copy import deepcopy
 from app.dashboard_tracking_snapshot import lifecycle_clock,observation_datetime

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cached Python/Flask runtime; current committed source; only disposable mounts.
+# Use the cached runtime and committed source with temporary test mounts only.
 set -euo pipefail
 umask 077
 [ "$#" = 1 ] || { echo 'Usage: bash SCRIPT EXISTING_LAB_PARENT' >&2; exit 2; }

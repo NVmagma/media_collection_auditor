@@ -1,4 +1,4 @@
-"""Recovery at rename/checkpoint boundaries never repeats a filesystem move."""
+"""Recover around rename/save interruptions without moving a folder twice."""
 from copy import deepcopy
 from datetime import timedelta, timezone
 import json

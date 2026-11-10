@@ -1,4 +1,4 @@
-# JSON runtime. Build and verify before selecting a published image.
+# Build and test this JSON runtime before publishing an image.
 ARG BASE_IMAGE=python@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704
 FROM ${BASE_IMAGE}
 # Debian DSA-6607-1 (APT) and DSA-6613-1 (zlib). Fetch security fixes over HTTPS.

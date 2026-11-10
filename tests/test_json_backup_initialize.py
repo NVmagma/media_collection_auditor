@@ -1,4 +1,4 @@
-"""Explicit new installation and JSON backup preserve existing state."""
+"""Initialize new installs and back up JSON without overwriting existing state."""
 from copy import deepcopy
 import json
 import pytest

@@ -1,4 +1,4 @@
-"""Activity and exports share redacted persistent JSON scan observations."""
+"""Build Activity and exports from the same saved scan history without private fields."""
 from copy import deepcopy
 import io,json,zipfile
 import pytest

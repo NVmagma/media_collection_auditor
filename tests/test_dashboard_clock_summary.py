@@ -1,4 +1,4 @@
-"""Inventory gaps remain explicit and never become new lifecycle clocks."""
+"""Keep missing dates visible without creating new lifecycle clocks."""
 from copy import deepcopy
 from app.dashboard_tracking_snapshot import summarize_dashboard_clocks
 

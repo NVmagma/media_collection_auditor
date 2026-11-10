@@ -1,4 +1,4 @@
-"""Aggregate coverage is read-only and never turns missing input into zero gaps."""
+"""Keep coverage read-only. Missing data must not look like zero gaps."""
 import json
 import pytest
 from tests.test_integration_api import api, AUTH, TOKEN

@@ -1,4 +1,4 @@
-# Merge into services.yaml only after deploying an image containing the API.
+# Add this to services.yaml after configuring the auditor API.
 # Replace auditor.example.invalid with a URL reachable from Homepage's container.
 # Set HOMEPAGE_VAR_AUDITOR_TOKEN privately in Homepage's environment.
 - Media:

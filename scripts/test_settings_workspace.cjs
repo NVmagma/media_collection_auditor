@@ -1,4 +1,4 @@
-/* Synthetic Settings browser checks; no actual settings application or service access. */
+/* Test the Settings page without applying real settings or contacting services. */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');

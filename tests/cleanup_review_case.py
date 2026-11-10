@@ -1,4 +1,4 @@
-"""Render recorded-only synthetic cleanup pages; no production inputs or requests."""
+"""Render cleanup pages from test results without using production data or services."""
 import os
 from pathlib import Path
 from unittest.mock import patch

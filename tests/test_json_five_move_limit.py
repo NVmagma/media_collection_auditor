@@ -1,4 +1,4 @@
-"""Five independent slots per library; a sixth move cannot reach the filesystem."""
+"""Allow five actions per library. The sixth must not change files."""
 from dataclasses import replace
 from datetime import timezone
 import json

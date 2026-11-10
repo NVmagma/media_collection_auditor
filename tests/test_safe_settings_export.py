@@ -1,4 +1,4 @@
-"""Safe configuration export must never disclose secrets or infrastructure endpoints."""
+"""Keep secrets and private service addresses out of settings exports."""
 import os
 import sys
 import unittest

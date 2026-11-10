@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Synthetic, expiring UI server only; never starts the auditor worker.
+# Run a temporary UI preview with test data, without starting the audit worker.
 set -euo pipefail
 umask 077
 [ "$(uname -s)" = Linux ] || { echo 'Run on Tower / the Linux Docker host.' >&2; exit 2; }

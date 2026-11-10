@@ -1,4 +1,4 @@
-"""Existing-media registration uses JSON only and never retries a lost POST."""
+"""Register existing media through JSON tracking without repeating a POST after a lost response."""
 from copy import deepcopy
 from datetime import datetime,timedelta,timezone
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer

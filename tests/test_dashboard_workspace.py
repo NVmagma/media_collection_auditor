@@ -1,4 +1,4 @@
-"""Workspace structure preserves authority, escaping and administrator boundaries."""
+"""Check navigation, escaped content, and administrator-only controls."""
 from html.parser import HTMLParser
 from dashboard_workspace_case import render_workspace
 

@@ -1,4 +1,4 @@
-"""Serialization, rolling cooldown, daily DST handling and retained activity."""
+"""Test one-at-a-time scans, hourly cooldowns, daylight-saving schedules, and saved activity."""
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime,timedelta,timezone
 import json

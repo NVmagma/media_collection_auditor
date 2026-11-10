@@ -1,4 +1,4 @@
-"""Read-only date coverage counts; never output titles, paths or settings values."""
+"""Count missing tracking dates without printing titles, paths, or settings."""
 from datetime import datetime
 import json
 import os

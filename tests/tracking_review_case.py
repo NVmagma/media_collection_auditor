@@ -1,4 +1,4 @@
-"""Synthetic local-tracking comparison browser fixture; no production sources."""
+"""Render tracking comparisons for browser tests without using production data."""
 import os
 from pathlib import Path
 from unittest.mock import patch

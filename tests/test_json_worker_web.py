@@ -1,4 +1,4 @@
-"""Current dashboard routes dispatch only the explicitly selected JSON worker."""
+"""Send dashboard scan requests only to the selected JSON worker."""
 from unittest.mock import Mock
 import pytest
 from test_integration_api import api,AUTH

@@ -1,4 +1,4 @@
-"""Disposable JSON execution acceptance. Only explicit new lab roots are used."""
+"""Test the JSON worker using only new, temporary test folders."""
 from copy import deepcopy
 from dataclasses import asdict, replace
 from datetime import datetime, timedelta, timezone

@@ -1,4 +1,4 @@
-"""Recovery consent is admin/origin checked and bound to fresh evidence."""
+"""Require an administrator, the correct origin, and fresh checks for recovery."""
 from flask import Flask
 from app.json_recovery_web import create_blueprint
 from app.json_scan_control import KEY

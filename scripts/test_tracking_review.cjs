@@ -1,4 +1,4 @@
-/* Local synthetic comparison only; no service requests or changes. */
+/* Compare local test data without contacting or changing services. */
 const assert=require('node:assert/strict');
 const fs=require('fs');const path=require('path');
 const {chromium}=require('../tests/dashboard-browser/node_modules/playwright');

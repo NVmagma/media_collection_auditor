@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Disposable loopback HTTP fixture; no production state or external requests."""
+"""Test the HTTP API locally without real tracking or external requests."""
 import http.client
 import json
 import multiprocessing

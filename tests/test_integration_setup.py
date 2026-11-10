@@ -1,4 +1,4 @@
-"""Readiness and browser setup never confer write or credential authority."""
+"""Show readiness and setup information without granting extra permissions."""
 from tests.test_integration_api import api, AUTH, TOKEN
 import web
 import pytest

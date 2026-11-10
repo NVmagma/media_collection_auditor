@@ -1,4 +1,4 @@
-"""Generate opt-in compact title templates using Homarr's reviewed JSX subset."""
+"""Generate compact Homarr templates using the JSX features we have checked."""
 import argparse
 import json
 from pathlib import Path

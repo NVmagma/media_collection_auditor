@@ -1,4 +1,4 @@
-"""Linux no-replace primitive tests against disposable directories."""
+"""Test Linux no-overwrite renames using temporary folders."""
 
 import errno
 import sys

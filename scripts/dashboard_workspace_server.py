@@ -1,4 +1,4 @@
-"""Expiring synthetic dashboard preview; no auditor worker or production configuration."""
+"""Run a temporary dashboard preview with test data and no audit worker."""
 import argparse
 from pathlib import Path
 import threading

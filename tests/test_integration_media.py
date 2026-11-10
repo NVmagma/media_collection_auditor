@@ -1,4 +1,4 @@
-"""Exact presentation matching never conveys lifecycle or credential authority."""
+"""Match artwork for display without exposing credentials or approving media actions."""
 import json
 import pytest
 from app.integration_status import collect_widget_media_index, widget_media_urls

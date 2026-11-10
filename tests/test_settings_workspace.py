@@ -1,4 +1,4 @@
-"""Direct JSON settings retain Apply and secret redaction without staging forms."""
+"""Keep Apply and secret masking in Settings without the old staging forms."""
 from settings_workspace_case import render_settings_workspace
 
 def test_settings_show_only_apply_and_no_staged_recovery_controls():

@@ -1,4 +1,4 @@
-"""Process-local scan APIs expose bounded projections, never worker authority."""
+"""Expose only the allowed scan status fields, without permission to run the worker."""
 from datetime import datetime, timezone, timedelta
 import pytest
 from tests.test_integration_api import api,AUTH,TOKEN

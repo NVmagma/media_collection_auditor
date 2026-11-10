@@ -1,4 +1,4 @@
-"""Disposable local filesystem + JSON rehearsal; no production roots or writes."""
+"""Preview temporary folders and JSON without production paths or state writes."""
 from dataclasses import replace
 from datetime import datetime
 import json

@@ -1,4 +1,4 @@
-"""Selected packet integrity is not a current-state backup or restore claim."""
+"""Checking a saved packet does not prove it is current or that a restore will work."""
 import hashlib
 import json
 import os

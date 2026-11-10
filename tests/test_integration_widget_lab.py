@@ -1,4 +1,4 @@
-"""Launcher policy through inert Docker stubs; no real container or network."""
+"""Test the launcher with fake Docker commands, without real containers or network calls."""
 import json
 import os
 from pathlib import Path

@@ -1,4 +1,4 @@
-"""Verified clock checkpoints preserve every unrelated field and scan budget."""
+"""Save verified date changes without altering other fields or scan limits."""
 from copy import deepcopy
 from dataclasses import replace
 from datetime import datetime

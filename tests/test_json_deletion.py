@@ -1,4 +1,4 @@
-"""Actual disposable files plus loopback Arr deletion; never production services."""
+"""Test Arr deletion with temporary files and a local server, never production services."""
 from copy import deepcopy
 from dataclasses import replace
 from datetime import timedelta,timezone
