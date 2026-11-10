@@ -132,6 +132,7 @@
     {% endif %}
     <div class="library-layout hidden-section" id="library-layout">
     <div class="library-browser">
+      {% if hidden_metadata_folders %}<p class="muted">{{ hidden_metadata_folders }} verified metadata-only folders hidden from Library. Review them under Cleanup Review after a scan; no files were removed.</p>{% endif %}
       <div class="library-search-tools">
         <label>Search titles<input id="library-search" type="search" placeholder="Search this library…" autocomplete="off"></label>
         <label>Sort titles<select id="library-sort"><option value="asc">Title A–Z</option><option value="desc">Title Z–A</option></select></label>

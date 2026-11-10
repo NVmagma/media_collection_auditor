@@ -128,3 +128,41 @@ def test_staged_seasons_prevent_whole_show_actions_without_blocking_movies():
     result = plan(snapshot, [library('Movies', title()), library('TV', title('TV/Show'))])
     assert [row.media_key for row in result['moves']] == ['Movie']
     assert result['decisions'][1].reason == 'staged_tv_seasons'
+
+
+@pytest.mark.parametrize('field', ['protected','keep','favorite'])
+def test_verified_retention_can_keep_tv_with_a_future_content_date(field):
+    signals = {**SIGNALS, field:True}
+    result = plan(libraries=[library('TV',title('TV/Show',signals=signals,blocker='future_content_timestamp'))])
+    row, = result['moves']
+    assert row.destination == 'Keep'
+
+
+@pytest.mark.parametrize('changes', [{}, {'signals':None}, {'arr_status':'missing_record'}])
+def test_future_content_date_still_blocks_aging_or_unverified_moves(changes):
+    row, = plan(libraries=[library('TV',title('TV/Show',blocker='future_content_timestamp',**changes))])['decisions']
+    assert row.destination is None
+
+
+def test_future_date_does_not_override_disabled_favorite_support():
+    row, = plan(libraries=[library('TV',title('TV/Show',signals={**SIGNALS,'favorite':True},blocker='future_content_timestamp'))],favorites_trigger_keep=False)['decisions']
+    assert row.destination is None and row.reason == 'future_content_timestamp'
+
+
+@pytest.mark.parametrize('blocker', ['content_unavailable','no_video_unknown_files','content_reset_required'])
+def test_keep_does_not_bypass_other_content_failures(blocker):
+    row, = plan(libraries=[library('TV',title('TV/Show',signals={**SIGNALS,'keep':True},blocker=blocker))])['decisions']
+    assert row.destination is None and row.reason == blocker
+
+
+@pytest.mark.parametrize('arr_status', ['missing_record','path_conflict','ambiguous_record','unavailable'])
+def test_future_dated_keep_still_requires_an_exact_arr_source(arr_status):
+    row, = plan(libraries=[library('TV',title('TV/Show',signals={**SIGNALS,'keep':True},blocker='future_content_timestamp',arr_status=arr_status))])['decisions']
+    assert row.destination is None
+    assert row.reason.startswith('arr_')
+
+
+def test_future_saved_lifecycle_clock_is_not_trusted_for_keep():
+    snapshot = state(); snapshot['first_seen']['TV/Show'] = '2026-01-21T12:00:00'
+    row, = plan(snapshot,libraries=[library('TV',title('TV/Show',signals={**SIGNALS,'keep':True},blocker='future_content_timestamp'))])['decisions']
+    assert row.destination is None and row.reason == 'future_observation'

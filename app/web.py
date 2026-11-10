@@ -16,6 +16,7 @@ from pathlib import Path
 from flask import Flask, render_template, request, Response, redirect, url_for, session, g, send_file
 
 from app.unraid_setup import authenticate
+from app.stage_entries import is_housekeeping
 from lifecycle_decisions import decide
 from dashboard_tracking_snapshot import lifecycle_clock, observation_datetime, summarize_dashboard_clocks, dashboard_overview, build_scan_view
 from connection_tests import check_connection, SERVICES
@@ -512,6 +513,8 @@ def filesystem_stages(state, config, *, max_entries=None):
                     for count, entry in enumerate(entries, 1):
                         if max_entries is not None and count > max_entries:
                             raise OSError('Inventory observation bound exceeded')
+                        info = entry.stat(follow_symlinks=False)
+                        if is_housekeeping(entry.name, info.st_mode): continue
                         if entry.is_dir(follow_symlinks=False):
                             names.append(entry.name)
                     names.sort(key=str.casefold)
@@ -525,6 +528,28 @@ def filesystem_stages(state, config, *, max_entries=None):
                     "since": state.get(sections[label], {}).get(key),
                 })
     return stages, warnings
+
+
+def visible_library_stages(stages, config):
+    """Hide verified metadata-only folders without changing files or review inventory."""
+    from app.json_worker_cycle import stage_paths
+    from app.orphan_inventory import inspect_title
+    visible = {stage: [] for stage in stages}
+    hidden = 0
+    started = time.monotonic()
+    settings = {**os.environ, **config}
+    for stage, items in stages.items():
+        for item in items:
+            metadata_only = False
+            try:
+                if time.monotonic() - started < 2:
+                    paths, _ = stage_paths(settings, item['library'])
+                    metadata_only = inspect_title(paths[stage] + '/' + item['title'])['status'] == 'metadata_only'
+            except (OSError, RuntimeError, ValueError):
+                pass  # An unreadable or uncertain folder stays visible for review.
+            if metadata_only: hidden += 1
+            else: visible[stage].append(item)
+    return visible, hidden
 
 
 def collection_health(state, stages, warnings, config=None):
@@ -614,6 +639,7 @@ def dashboard(initial_workspace="Overview"):
         if str(config.get(key,os.environ.get(key,fallback))).lower()=='true']
     clock_coverage=summarize_dashboard_clocks(state,stages,inventory_warnings,libraries=enabled_libraries,
         tracking_available=state_error is None)
+    stages, hidden_metadata_folders = visible_library_stages(stages, config)
     def setting_days(key, fallback):
         try:
             value=int(config.get(key, os.environ.get(key, str(fallback))))
@@ -668,7 +694,7 @@ def dashboard(initial_workspace="Overview"):
     season_holding = holding_seasons(state, holding_days=deadlines["Holding"]["TV"], display_zone=display_zone)
     run = selected_run_snapshot(snapshot)
     history = selected_run_history(read_history, 100)
-    return render_template("dashboard.html", scan_view=build_scan_view(run, history, timezone_name=display_zone), initial_workspace=initial_workspace, overview=dashboard_overview(stages, clock_coverage, libraries=enabled_libraries, tracking_available=state_error is None, limit=3), dashboard_timezone=display_zone, clock_coverage=clock_coverage, actions=actions, state=state, state_error=state_error, stages=stages, inventory_warnings=inventory_warnings, health_issues=health_issues, run=run, history=history,
+    return render_template("dashboard.html", scan_view=build_scan_view(run, history, timezone_name=display_zone), initial_workspace=initial_workspace, hidden_metadata_folders=hidden_metadata_folders, overview=dashboard_overview(stages, clock_coverage, libraries=enabled_libraries, tracking_available=state_error is None, limit=3), dashboard_timezone=display_zone, clock_coverage=clock_coverage, actions=actions, state=state, state_error=state_error, stages=stages, inventory_warnings=inventory_warnings, health_issues=health_issues, run=run, history=history,
                            preview=preview, season_holding=season_holding, dry_run=load_config().get("DRY_RUN", os.environ.get("DRY_RUN", "true")).lower() == "true")
 
 

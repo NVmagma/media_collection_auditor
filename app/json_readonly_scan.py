@@ -22,6 +22,7 @@ from app.lifecycle_stages import CLOCKS
 from app.content_observation import observe_scheduled_content, ScheduledContentBlocked
 from app.filesystem_paths import _canonical, _open_directory, scan_held_directory
 from app.title_identity import validate_title_folder
+from app.stage_entries import is_housekeeping
 
 
 def _bool(values,key,default):
@@ -122,8 +123,7 @@ def _scan(*, state_file, settings, now=None, maximum_titles=100000,
                 for entry in entries:
                     remaining()
                     info = entry.stat(follow_symlinks=False)
-                    if ((entry.name == '.DS_Store' and stat.S_ISREG(info.st_mode))
-                            or (entry.name == '.deletedByTMM' and stat.S_ISDIR(info.st_mode))):
+                    if is_housekeeping(entry.name, info.st_mode):
                         excluded += 1; continue
                     validate_title_folder(entry.name)
                     if entry.name.startswith('.') or not stat.S_ISDIR(info.st_mode):

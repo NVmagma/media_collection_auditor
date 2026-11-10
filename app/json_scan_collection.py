@@ -16,6 +16,7 @@ from app.jellyfin_scan_cache import _ScanCatalog
 from app.filesystem_paths import _canonical
 from app.jellyfin_transport import ScheduledJellyfinGET
 from app.tv_season_policy import ARCHIVE
+from app.lifecycle_decisions import decide
 
 
 @dataclass(frozen=True)
@@ -99,7 +100,7 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
                 for title, initial in zip(inventory.titles,preliminary.titles,strict=True):
                     check_deadline()
                     emit('jellyfin',checked=checked,total=total_titles,library=inventory.library)
-                    if title.blocker is not None and title.blocker!='no_video':
+                    if title.blocker is not None and title.blocker not in ('no_video','future_content_timestamp'):
                         checked+=1
                         emit('jellyfin',checked=checked,total=total_titles,library=inventory.library)
                         continue
@@ -115,9 +116,14 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
                     if (inventory.library == 'TV' and season_enabled
                             and result['status'] == 'shape_valid_untrusted'
                             and (season_args or 'one-season' in (result.get('observed_tags') or ()))):
-                        season_policy_titles.add(title.folder)
-                        if title.stage in ('Waiting', 'Keep'):
-                            season_titles.add(title.folder)
+                        # Restore staged seasons first, but do not let one-season hide a Keep rescue.
+                        action, _ = decide(title.stage, None, title.threshold_days,
+                                           result['signals'], favorites == 'true')
+                        if title.blocker != 'future_content_timestamp' or season_args and result['signals']['keep_all']:
+                            if season_args or title.stage in ('Waiting', 'Keep') and action not in ('keep', 'rescue'):
+                                season_policy_titles.add(title.folder)
+                            if season_args or title.stage in ('Waiting', 'Keep'):
+                                season_titles.add(title.folder)
                     if 'jellyfin_collection_incomplete' in result['blockers']:
                         jf_complete = False
                         break
