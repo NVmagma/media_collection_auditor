@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <Container version="2">
   <Name>media_collection_auditor</Name>
-  <Repository>ghcr.io/nvmagma/media_collection_auditor@sha256:8becbeb213f528e03adf87a4e13bfb7d70840b87dd10467d953269065752db7b</Repository>
+  <Repository>ghcr.io/nvmagma/media_collection_auditor@sha256:2d77f741a0c8d694daefb642ec696916a7a5425fca7eb75ea3b88b1bb3dcb22f</Repository>
   <Registry>https://ghcr.io/</Registry>
   <Project>https://github.com/NVmagma/media_collection_auditor</Project>
   <Overview>Configure Media Collection Auditor in its WebUI. On first start with empty appdata, enter the one-time setup code from the container logs and create a local administrator. Preview and all deletion safeguards default on. Choose a native pool media path for atomic lifecycle moves. No environment file or service credentials are required in this template.</Overview>
