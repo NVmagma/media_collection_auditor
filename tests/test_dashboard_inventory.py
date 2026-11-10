@@ -54,3 +54,45 @@ class DashboardInventoryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_tmm_trash_is_not_a_title_in_either_library(tmp_path):
+    for library in ('Movies','TV'):
+        for suffix in ('','_hold','_keep','_removal'):
+            root = tmp_path/(library+suffix); root.mkdir()
+            trash = root/'.deletedByTMM'; trash.mkdir()
+            (trash/'deleted-episode.mkv').write_bytes(b'retained trash, not an active title')
+        show = tmp_path/library/'Real title'; show.mkdir()
+        (show/'video.mkv').write_bytes(b'video')
+    stages, warnings = web.filesystem_stages({},dict(MEDIA_PATH=str(tmp_path), ENABLE_MOVIES='true',ENABLE_TV='true'))
+    assert not warnings
+    assert [(row['library'],row['title']) for row in stages['Waiting']] == [('Movies','Real title'),('TV','Real title')]
+    assert all(row['title'] != '.deletedByTMM' for rows in stages.values() for row in rows)
+    assert (tmp_path/'TV'/'.deletedByTMM'/'deleted-episode.mkv').exists()
+
+
+def test_metadata_only_library_filter_keeps_unknown_and_unreadable_folders(monkeypatch):
+    from copy import deepcopy
+    import app.orphan_inventory
+    items = [{'title':title,'library':'TV','since':None} for title in ('Empty','Metadata','Video','Unknown','Unreadable')]
+    stages = dict(Waiting=items,Holding=[],Keep=[],Removal=[])
+    before = deepcopy(stages)
+    def inspect(path):
+        title = Path(path).name
+        if title == 'Unreadable': raise OSError('cannot read')
+        return {'status':{'Empty':'metadata_only','Metadata':'metadata_only','Video':'video_present','Unknown':'unknown_files'}[title]}
+    monkeypatch.setattr(app.orphan_inventory,'inspect_title',inspect)
+    visible, hidden = web.visible_library_stages(stages, {'MEDIA_PATH':'/media'})
+    assert hidden == 2
+    assert [row['title'] for row in visible['Waiting']] == ['Video','Unknown','Unreadable']
+    assert stages == before
+
+
+def test_housekeeping_type_must_match():
+    import stat
+    from app.stage_entries import is_housekeeping
+    assert is_housekeeping('.deletedByTMM',stat.S_IFDIR)
+    assert is_housekeeping('.DS_Store',stat.S_IFREG)
+    assert not is_housekeeping('.deletedByTMM',stat.S_IFLNK)
+    assert not is_housekeeping('.DS_Store',stat.S_IFDIR)
+    assert not is_housekeeping('.unknown',stat.S_IFDIR)

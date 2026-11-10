@@ -81,3 +81,16 @@ For image updates, retain current appdata/media mounts and review saved schedule
 mode, and deletion consent. Never initialize an existing appdata directory or run
 two writers against it. [Installation and updates](installation.md) covers the
 `:stable` tag and the native-filesystem requirements.
+
+## TV retention and content dates
+
+A verified `keep`, `keep-forever`, or enabled favorite can select a TV show for
+Keep even when its files have future modification dates. The move still needs
+fresh protection, an exact Sonarr source, unchanged contents, and a valid saved
+clock. It does not rewrite file dates. Future content dates continue to block
+aging moves toward Holding and do not approve deletion.
+
+The Library view omits `.deletedByTMM` housekeeping folders and folders verified
+to contain only metadata. This does not remove files or change tracking. Unknown
+or unreadable contents stay visible; Cleanup Review and tracking coverage remain
+separate from the filtered Library view.
