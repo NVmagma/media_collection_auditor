@@ -88,3 +88,11 @@ def test_missed_slot_is_not_a_completed_or_skipped_title_scan():
     assert result['current_state'] == 'Slot missed'
     assert result['latest'] is None and result['skipped_title_count'] is None
     assert 'does not represent a completed scan' in result['current_detail']
+
+
+def test_failed_scan_displays_only_known_failure_stage_labels():
+    row=view([record(result='failed',result_basis='blocked_or_uncertain',failure_stage='collection',error='private secret')])['latest']
+    assert 'checking folders, clocks, and service data' in row['reason']
+    assert 'private secret' not in str(row)
+    row=view([record(result='failed',failure_stage='private secret')])['latest']
+    assert 'private secret' not in str(row)

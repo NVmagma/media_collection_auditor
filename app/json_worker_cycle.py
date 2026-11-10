@@ -17,6 +17,7 @@ from app.arr_catalog import ArrCatalogGET, canonical_arr_record_path, catalog_pa
 from app.arr_title_transport import ArrTitleUpdate
 from app.jellyfin_collection import collect_title_observation, validated_tag_names
 from app.lifecycle_stages import CLOCKS
+from app.failure_diagnostics import failure_details
 from app.filesystem_paths import _canonical
 from app.jellyfin_transport import ScheduledJellyfinGET
 
@@ -171,7 +172,7 @@ def run_cycle(store, *, settings, trigger, now=None, services=None, collect=coll
         # If the final state check fails, keep the earlier work that was already verified.
         # An unreadable journal must not be reported as "no pending work".
         return {**deepcopy(evidence),'result':'failed','failure_stage':'storage_revalidation',
-            'error_type':type(error).__name__,'pending_operation_present':None,
+            **failure_details(error,'storage_revalidation'),'pending_operation_present':None,
             'completed_moves':tuple(evidence['completed_moves']),
             'completed_deletions':tuple(evidence.get('completed_deletions',())),
             'completed_quarantines':tuple(evidence.get('completed_quarantines',())),
@@ -273,7 +274,7 @@ def _run_cycle(store, *, settings, trigger, now, services, collect, preview, evi
             report['result']='completed'
         except Exception as error:
             # Keep completed moves in the result, and leave missing counts unknown.
-            report.update(result='failed',failure_stage=phase,error_type=type(error).__name__)
+            report.update(result='failed',**failure_details(error,phase))
             journal=attempt.session.state[KEY]['journal']
             if journal:
                 report['uncertain_media_key']=('TV/' if journal['library']=='TV' else '')+journal['title']
