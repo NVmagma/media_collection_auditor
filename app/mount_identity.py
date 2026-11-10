@@ -1,6 +1,7 @@
-"""In-process Linux mount binding for held disposable rename descriptors.
+"""Check Linux mount identities while the directory handles are open.
 
-These IDs are namespace-local observations, not persisted recovery authority.
+These IDs only apply to this process's mount namespace. Do not save them as proof
+that an interrupted operation is safe to recover later.
 """
 import os
 from pathlib import Path

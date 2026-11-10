@@ -1,6 +1,7 @@
-"""Atomic recoverable quarantine of verified metadata-only orphan folders.
+"""Move verified metadata-only leftovers into a recoverable quarantine.
 
-No unlink, rmtree, Arr updates, overwrite, copy fallback, or automatic recovery.
+Do not delete files, update Arr, overwrite a destination, copy across filesystems,
+or recover an interrupted move automatically.
 """
 from contextlib import contextmanager,ExitStack
 from copy import deepcopy
@@ -39,7 +40,7 @@ def _marker(fd):
 def ensure_quarantine(media):
     try:fd=os.open(LEAF,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=media)
     except FileNotFoundError:
-        # Publish only a complete new root. Interrupted preparations are retained.
+        # Make the new root available only when it is complete. Keep interrupted work for review.
         temporary='.auditor-orphans-prepare-'+secrets.token_hex(16)
         os.mkdir(temporary,0o700,dir_fd=media)
         fd=os.open(temporary,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=media)
@@ -208,7 +209,7 @@ def reconcile_pending_quarantine(store,*,settings,expected_fingerprint,restore_s
 
 
 def main():
-    """List bounded recorded recovery receipts without raw settings or clocks."""
+    """List saved recovery receipts within the limit, without raw settings or clock data."""
     import argparse
     from app.json_worker_service import settings_snapshot
     from app.json_tracking_store import JsonTrackingStore

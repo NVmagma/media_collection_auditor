@@ -1,4 +1,4 @@
-"""Execute opt-in season retention under the existing JSON scan session."""
+"""Run enabled season retention while holding the JSON scan session."""
 import os
 from time import monotonic
 

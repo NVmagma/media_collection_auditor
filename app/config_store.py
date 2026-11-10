@@ -1,4 +1,4 @@
-"""Persisted web settings. Legacy container variables remain a migration fallback; new installs use the UI."""
+"""Save application settings. Old container variables still work while an existing install is being updated."""
 import json
 import os
 from pathlib import Path
@@ -22,7 +22,7 @@ FIELDS['Integrations'] = ['INTEGRATION_API_TOKEN','INTEGRATION_API_TITLE_DETAILS
     'INTEGRATION_API_BACKUP_FINGERPRINT']
 FIELDS['Web'] = ['WEB_SECURE_COOKIE']
 KEYS = set(sum(FIELDS.values(), []))
-# Presentation and application share one fixed initial-live policy field list.
+# Use the same canary settings list in the UI and the worker.
 LIVE_CANARY_LOCKED_KEYS = frozenset(('DRY_RUN','MAX_ACTIONS_PER_RUN','MEDIA_PATH','DAILY_RUN_TIMEZONE',
     'ALLOW_PERMANENT_DELETE','ALLOW_FILESYSTEM_DELETE','ALLOW_CROSS_FILESYSTEM_MOVES','ENABLE_SEASON_PRUNING'))
 SECRETS = {"JELLYFIN_API_TOKEN", "RADARR_API_KEY", "SONARR_API_KEY", "NOTIFY_DISCORD_WEBHOOK_URL", "NOTIFY_NTFY_TOKEN", "NOTIFY_WEBHOOK_URL"}
@@ -36,8 +36,8 @@ SECRETS.add('INTEGRATION_API_TOKEN')
 BOOLS.update(('INTEGRATION_API_TITLE_DETAILS','INTEGRATION_API_MEDIA','INTEGRATION_API_COVERAGE','WEB_SECURE_COOKIE'))
 DEFAULTS.update({key:'false' for key in ('INTEGRATION_API_TITLE_DETAILS','INTEGRATION_API_MEDIA','INTEGRATION_API_COVERAGE','WEB_SECURE_COOKIE')})
 
-# Captured before the worker overlays saved settings onto os.environ. A settings
-# request that removes an override must fall back to Docker's original value.
+# Save Docker's original values before the worker applies saved settings. If an
+# override is removed, fall back to these original values.
 _INITIAL_ENVIRONMENT = dict(os.environ)
 
 
@@ -263,7 +263,7 @@ def setting(key, default=''):
 
 
 def redacted_config(config):
-    """Return a shareable allowlisted settings snapshot; never export credentials or URLs."""
+    """Export only the settings we allow sharing. Leave out credentials and URLs."""
     safe = ("ORPHAN_CLEANUP_ENABLED", "DRY_RUN", "ALLOW_PERMANENT_DELETE", "ALLOW_FILESYSTEM_DELETE",
             "ALLOW_CROSS_FILESYSTEM_MOVES", "ENABLE_MOVIES", "ENABLE_TV",
             "ENABLE_SEASON_PRUNING", "FAVORITES_TRIGGER_KEEP",

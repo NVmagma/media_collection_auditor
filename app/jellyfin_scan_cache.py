@@ -1,9 +1,9 @@
-"""One-scan detached Jellyfin GET cache; never reused for move protection."""
+"""Cache Jellyfin GET results for one scan. Do not use this cache for final move checks."""
 from copy import deepcopy
 import json
 
 class _ScanCatalog:
-    """Bounded detached GET responses for one inventory pass, never move checks."""
+    """Keep separate copies of GET results within the limits for one scan, never for final move checks."""
     def __init__(self, fetch, maximum_bytes=64 * 1024 * 1024):
         self.fetch = fetch
         self.maximum_bytes = maximum_bytes

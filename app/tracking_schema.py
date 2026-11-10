@@ -6,10 +6,10 @@ from typing import Any
 SECTIONS = ("first_seen", "queued", "in_removal", "keep_seen", "arr_sync_pending")
 
 def validate_snapshot(state: dict[str, dict[str, Any]]) -> None:
-    """Apply the auditor's existing lifecycle and Arr retry invariants.
+    """Check the required clock sections, dates, and pending Arr updates.
 
-    This is intentionally independent of the production JSON loader; the
-    auditor continues to use that loader until migration is explicitly enabled.
+    This validates the supplied snapshot without reading or changing the state
+    file. The caller is responsible for loading and saving it safely.
     """
     if not isinstance(state, dict) or any(
         section not in state or not isinstance(state[section], dict)

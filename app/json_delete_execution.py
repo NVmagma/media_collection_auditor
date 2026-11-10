@@ -1,6 +1,7 @@
-"""Removal-only Arr deletion, durable intent, and GET-only lost-ack recovery.
+"""Delete expired Removal titles through Arr and save the intent first.
 
-No unlink/rmtree, retries, automatic reconciliation or direct filesystem fallback.
+If the response is lost, recovery only reads the result. Never retry DELETE,
+clear the intent automatically, or fall back to unlink/rmtree.
 """
 from contextlib import ExitStack
 from dataclasses import dataclass, asdict
@@ -64,7 +65,7 @@ def _record_matches(req,record):
 
 
 def deletion_fingerprint(fd):
-    # Include metadata/sidecars as well as video, reject nested mounts and hardlinks.
+    # Check sidecars as well as videos. Reject nested mounts and hardlinks.
     media_fingerprint(fd)
     root=os.fstat(fd); mount=read_fd_mount_id(fd); rows=[]; started=monotonic()
     for base,dirs,files,directory in os.fwalk('.',dir_fd=fd,follow_symlinks=False):
@@ -159,7 +160,7 @@ def execute_delete(attempt,*,request,now,fetch_protection,read_record,send_delet
             media_fingerprint=list(fingerprint),dispatch_attempts=0,
             stage_identities={stage:list(row[2]) for stage,row in held.roots.items()})
         identifier=attempt.record_intent(kind='arr_delete',library=request.library,title=request.title,details=details)
-        # Any interruption beyond here retains the intent, including before dispatch.
+        # Keep the intent if anything stops after this point, even before sending the request.
         authorize(); held.verify(identity=identity,fingerprint=fingerprint)
         if protected(fetch_protection(request)): raise RuntimeError('Jellyfin protection changed before deletion')
         if not _record_matches(request,read_record(request)): raise RuntimeError('Arr record changed before deletion')
@@ -171,8 +172,8 @@ def execute_delete(attempt,*,request,now,fetch_protection,read_record,send_delet
         attempt._delete_counts=getattr(attempt,'_delete_counts',{})
         attempt._delete_counts[request.library]=attempt._delete_counts.get(request.library,0)+1
         send_delete(request)
-        # Arr processes folder removal asynchronously. Poll only GET/observations,
-        # never repeat DELETE, and require two complete absence observations.
+        # Arr removes folders in the background. Only read while waiting for the result;
+        # never repeat DELETE. Confirm twice that the title and folder are gone.
         deadline=monotonic()+30; confirmed=0
         while confirmed<2:
             remote_absent=read_absence(request) is True
@@ -184,7 +185,7 @@ def execute_delete(attempt,*,request,now,fetch_protection,read_record,send_delet
             if confirmed==2: break
             if monotonic()>=deadline: raise RuntimeError('Deletion outcome remains pending; review required')
             sleep(0.1)
-        # One atomic save removes only the selected clock and clears its intent.
+        # Save the selected clock removal and its cleared intent together.
         session.state['in_removal'].pop(key)
         attempt.finish_operation(identifier=identifier,verify_outcome=lambda journal:
             journal['kind']=='arr_delete' and held.verify(absent=True) is None)

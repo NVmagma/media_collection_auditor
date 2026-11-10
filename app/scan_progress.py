@@ -1,4 +1,4 @@
-"""Best-effort process-local observations; never scan or replay authority."""
+"""Report progress for this process. Progress updates never approve actions or retries."""
 from contextlib import contextmanager
 from contextvars import ContextVar
 
@@ -37,4 +37,4 @@ def emit(phase, *, checked=None, total=None, library=None):
         try:
             callback(dict(phase=phase, label=PHASES[phase], checked=checked, total=total, library=library))
         except Exception:
-            pass  # Display instrumentation must never change a worker outcome.
+            pass  # Progress reporting must not change the scan result.

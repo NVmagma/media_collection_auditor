@@ -1,4 +1,4 @@
-"""Guarded manual moves out of Removal."""
+"""Check safety before manually moving a title out of Removal."""
 import datetime
 import importlib
 import os
@@ -81,7 +81,7 @@ def _rescue_title_locked(auditor, library, title, destination, verify_lock, stat
         state["keep_seen"].pop(key, None)
     else:
         state["keep_seen"][key] = now
-    # Save state atomically and surface failures rather than swallowing them.
+    # Save state in one atomic step and report any failure.
     tmp_file = state_file + ".rescue.tmp"
     os.makedirs(os.path.dirname(state_file), exist_ok=True)
     with open(tmp_file, "w", encoding="utf-8") as handle:

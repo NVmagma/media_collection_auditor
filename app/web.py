@@ -162,7 +162,7 @@ def integration_response_headers(response):
 
 
 def _integration_readiness():
-    """Selected tracking readiness; no remote collection or credential projection."""
+    """Check the selected tracking source without fetching services or exposing credentials."""
     binding='not_required'
     report=read_tracking_status(STATE_FILE)
     selected=selected_run_snapshot(snapshot) if not read_only_service_enabled() else {}
@@ -194,7 +194,7 @@ def integration_readiness():
 
 @app.get('/integrations')
 def integration_setup():
-    # Browser administrator only; integration credentials do not grant access.
+    # Require a browser administrator. The read-only API token cannot open this page.
     configured = authorize_summary(None)
     token_ready = configured is not None and configured[1] == 401
     return render_template('integrations.html', readiness=_integration_readiness(), token_ready=token_ready)
@@ -275,7 +275,7 @@ def integration_coverage():
         def build(state):
             stages, warnings = filesystem_stages(state, inventory_config, max_entries=10000)
             result = summarize_dashboard_clocks(state, stages, warnings, libraries=enabled)
-            # Incomplete aggregates are unknown; do not present partial totals as full coverage.
+            # If coverage is incomplete, leave totals unknown instead of showing partial counts as complete.
             if not result['complete']:
                 for key in ('missing_dates','invalid_dates','future_dates','records_without_stage_folder'):
                     result[key] = None
@@ -300,7 +300,7 @@ _WIDGET_MEDIA_LOCK = threading.Lock()
 
 
 def _widget_media_index(base, token, media_type):
-    """Five-minute presentation cache; never used for lifecycle decisions."""
+    """Cache display data for five minutes. Do not use it to decide media actions."""
     if not widget_media_base(base) or not token:
         raise ValueError("Invalid media transport")
     key = (base, token, media_type)
@@ -338,8 +338,8 @@ def _integration_title_media(report):
     report["media_lookup_status"] = "disabled" if not enabled else "available"
     config = load_config() if enabled else {}
     base = config.get("JELLYFIN_HOST_URL", os.environ.get("JELLYFIN_HOST_URL", "")).rstrip("/")
-    # Saved Settings wins for both transport and browser navigation by default.
-    # An explicit override supports internal-only Docker names/reverse proxies.
+    # Use the saved Jellyfin URL for service calls and browser links by default.
+    # A separate browser URL supports internal Docker names and reverse proxies.
     public = widget_media_base(setting("JELLYFIN_PUBLIC_URL", base))
     if enabled and not public:
         report["media_lookup_status"] = "unavailable"
@@ -416,7 +416,7 @@ def load_state():
 
 
 def _live_jellyfin_signals(config):
-    """Read-only, short-lived tag/favorite snapshot; never authorizes filesystem actions."""
+    """Keep a short-lived copy of tags and favorites for display, never for approving file changes."""
     base = config.get("JELLYFIN_HOST_URL", os.environ.get("JELLYFIN_HOST_URL", "")).rstrip("/")
     token = config.get("JELLYFIN_API_TOKEN", os.environ.get("JELLYFIN_API_TOKEN", "")).strip()
     if not base.startswith(("http://", "https://")) or not token:
@@ -806,7 +806,7 @@ def poster():
     try:
         index = _poster_index(base, token, media_type)
         normalized = title.casefold()
-        # Folder is authoritative; only fall back to a display-title match.
+        # Match the folder first. Only use the display title as a fallback.
         display_name = re.sub(r"\s*\(\d{4}\)\s*$", "", title).strip().casefold()
         item_id = (index.get(normalized) or index.get("name:" + normalized)
                    or index.get("name:" + display_name))
@@ -827,7 +827,7 @@ def poster():
 
 @app.get("/settings/export-safe")
 def export_safe_settings():
-    """Download only allowlisted non-secret settings; never expose raw configuration."""
+    """Download only approved non-secret settings, never the full configuration."""
     if not getattr(g, "user", None) or not g.user["admin"]:
         return Response("Administrator access required.", 403)
     response = Response(json.dumps({
@@ -841,11 +841,11 @@ def export_safe_settings():
 
 @app.get("/logs/diagnostics")
 def export_diagnostics():
-    """Download a bounded, read-only diagnostic ZIP without tokens or configuration secrets."""
+    """Download a size-limited diagnostic ZIP without tokens or private settings."""
     if not getattr(g, "user", None) or not g.user["admin"]:
         return Response("Administrator access required.", 403)
 
-    # Deliberately exclude raw settings, state, cookies, and container environment.
+    # Leave raw settings, state, cookies, and container variables out of the export.
     # Folder names in activity logs can still be personal; share the ZIP selectively.
     report = {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
@@ -890,7 +890,7 @@ def export_diagnostics():
 
 @app.get("/logs/export")
 def export_logs():
-    """Download persisted structured activity only; never expose arbitrary server paths."""
+    """Download saved activity records only. Do not accept arbitrary server paths."""
     if not getattr(g, "user", None) or not g.user["admin"]:
         return Response("Administrator access required.", 403)
     if os.environ.get('AUDITOR_WORKER_MODE') == 'json_serialized':
@@ -1120,7 +1120,7 @@ def health():
 
 @app.get('/scan-results')
 def scan_results():
-    """Session-authenticated history browsing; never requests a scan or service call."""
+    """Browse history after sign-in without starting a scan or contacting services."""
     from app.scan_results import browse
     from app.scan_details import OUTCOMES
     allowed={'attempt','q','library','outcome','page'}
@@ -1156,7 +1156,7 @@ def scan_results():
 
 @app.get('/cleanup-review')
 def cleanup_review():
-    """Admin-only recorded observations; no scan, filesystem inventory or Arr calls."""
+    """Show saved results to administrators without scanning folders or calling Arr."""
     from app.cleanup_review import review
     allowed={'view','q','library','page'}
     if any(key not in allowed or len(request.args.getlist(key))!=1 for key in request.args):
@@ -1166,7 +1166,7 @@ def cleanup_review():
         if not re.fullmatch('[1-9][0-9]{0,3}',page_text):raise ValueError()
         args=dict(view=request.args.get('view','observing'),query=request.args.get('q',''),
                   library=request.args.get('library','all'),page=int(page_text))
-        # Reject invalid filters independently of stored-state availability.
+        # Reject invalid filters even if stored state is unavailable.
         review({},[],**args)
     except ValueError:return Response('Invalid review filters.',400)
     config=load_config()

@@ -1,7 +1,8 @@
-"""Linux-only atomic no-replace rename for isolated tracking rehearsals.
+"""Move a folder on Linux without overwriting an existing destination.
 
-Never fall back to os.rename: preflight absence is vulnerable to races.
-Unsupported kernels/filesystems fail closed with the intent still persisted.
+Do not fall back to os.rename. Another process could create the destination
+after the initial check. If the filesystem cannot do this safely, stop and leave
+the pending intent in place.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ _RENAME_NOREPLACE = 1
 
 
 def rename_directory_noreplace(source: str | Path, destination: str | Path) -> None:
-    """Atomically rename without overwriting an unexpectedly created target."""
+    """Rename in one step without overwriting a destination that appeared after our check."""
     if sys.platform != "linux":
         raise RuntimeError("Atomic no-replace rename requires Linux")
     source, destination = os.fspath(source), os.fspath(destination)
@@ -47,10 +48,10 @@ def _renameat2(source_fd, source, destination_fd, destination):
 
 def rename_directory_noreplace_at(source_parent_fd, source_name,
                                   destination_parent_fd, destination_name):
-    """Rename single entries relative to held directories, without overwrite.
+    """Rename one entry using open parent directories, without overwriting anything.
 
-    Parent path substitution cannot redirect this syscall. A concurrent writer
-    can still replace a source entry; this is not inode-conditional rename.
+    Changing a parent path cannot redirect this call. Another program can still
+    replace the source entry; the rename does not require a particular inode.
     """
     if sys.platform != "linux":
         raise RuntimeError("Atomic no-replace rename requires Linux")

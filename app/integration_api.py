@@ -1,4 +1,4 @@
-"""Dedicated read-only integration credentials; never dashboard privileges."""
+"""Use separate read-only API credentials. They never grant dashboard administrator access."""
 import hmac
 import os
 import re
@@ -13,7 +13,7 @@ def read_only_service_enabled():
 
 
 def authorize_summary(authorization):
-    """Return an HTTP error or None; absence/invalid configuration disables API."""
+    """Return an HTTP error, or None when authorized. A missing or invalid token disables the API."""
     token = setting("INTEGRATION_API_TOKEN")
     if not re.fullmatch(r"[A-Za-z0-9_-]{32,256}", token):
         return {"status": "disabled"}, 404

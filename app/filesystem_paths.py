@@ -1,8 +1,8 @@
-"""Read-only held-path review for configured scheduled lifecycle roots.
+"""Check lifecycle folders without changing files or allowing a move.
 
-No marker requirement and no filesystem mutation or move permit. The caller
-supplies stage paths explicitly; neither filesystem names nor pool/share names
-are used as an allowlist. Held descriptors do not exclude external writers.
+The caller supplies the stage paths. Do not trust a folder just because of its
+name or pool location. Keep directory handles open while checking, but remember
+that other programs can still write to these folders.
 """
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
@@ -26,7 +26,7 @@ def _canonical(value):
 
 
 def _open_directory(path):
-    """Resolve every component relative to a no-follow held directory."""
+    """Open each path component without following symlinks."""
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK
     fd = os.open('/', flags)
     try:
@@ -121,11 +121,11 @@ def review_scheduled_paths(**kwargs):
 
 @contextmanager
 def scan_held_directory(fd):
-    """Use an independent directory stream without moving the held FD cursor.
+    """Read the directory without changing the position of the existing handle.
 
-    scandir(fd) duplicates a descriptor, which shares its open-file-description
-    position. Opening '.' relative to the held directory gives each verification
-    pass its own stream, including filesystem-specific iteration state.
+    scandir(fd) duplicates the handle but shares its read position. Opening '.'
+    from the directory gives each check a fresh stream, including any iteration
+    state maintained by the filesystem.
     """
     scan_fd = os.open('.', os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK,
                       dir_fd=fd)

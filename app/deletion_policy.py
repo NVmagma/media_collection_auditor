@@ -1,4 +1,4 @@
-"""Explicit consent for Arr-managed Removal deletion; never filesystem fallback."""
+"""Require saved consent before Arr can delete a title from Removal. No filesystem fallback."""
 
 CONSENT_KEY = 'REMOVAL_DELETION_CONSENT'
 CONSENT_VERSION = 'arr-removal-v1'

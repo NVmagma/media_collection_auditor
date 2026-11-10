@@ -1,14 +1,14 @@
-"""Best-effort library refresh after a completed live batch; never replay moves."""
+"""Request a Jellyfin refresh after successful live actions. Never repeat a move."""
 from urllib.request import Request
 from urllib.error import HTTPError
 from app.jellyfin_transport import ScheduledJellyfinGET
 
 
 def refresh_after_moves(*, settings, completed, maximum_seconds=10):
-    """Honor the existing opt-in setting; acknowledgment is not scan completion.
+    """Refresh only when enabled. An accepted request does not mean the scan finished.
 
-    Called once by the locked live worker after move and Arr completion. No
-    retries, redirects, response payload logging or persistent state changes.
+    Call once after the locked worker completes its moves and Arr updates. Do
+    not retry, follow redirects, log response contents, or change saved state.
     """
     status = 'not_requested'
     if (settings.get('JELLYFIN_REFRESH_AFTER_AUDIT', 'false').strip().lower() != 'true'

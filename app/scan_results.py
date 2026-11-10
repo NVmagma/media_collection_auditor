@@ -1,9 +1,9 @@
-"""Read-only, allowlisted browsing of persisted title decisions."""
+"""Browse saved title decisions without changing them or exposing private fields."""
 from app.scan_details import project_details, OUTCOMES
 
 
 def recorded_details(record):
-    """Never reconstruct completed actions from proposals or summary counts."""
+    """Do not turn a proposal or summary count into a completed action."""
     pages = record.get('title_detail_pages')
     if pages is None:
         detail = project_details(record.get('title_details'))

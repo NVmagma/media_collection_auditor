@@ -1,8 +1,8 @@
-"""Validate Jellyfin observation shape for tracking advisory planning.
+"""Check the Jellyfin data passed into the planner.
 
-An observation is caller-provided and NEVER proves that Jellyfin was queried,
-that all users/libraries were covered, or that protection is current.
-Production execution must independently establish those properties.
+Valid data does not prove that Jellyfin was contacted, every user and library was
+checked, or protection is still current. The live worker must verify those checks
+separately.
 """
 
 from __future__ import annotations

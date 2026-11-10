@@ -1,7 +1,7 @@
-"""Allowlisted activity projection from recorded JSON scan history.
+"""Build activity rows from saved scan history using only approved fields.
 
-No collection, execution, raw request payloads or exception text. Proposals stay
-proposals; only the worker's verified completion observations say completed.
+Do not contact services or include raw requests and errors. A proposal stays a
+proposal until the worker has verified that the action completed.
 """
 from datetime import datetime
 import json
@@ -59,7 +59,7 @@ def project_activity(records,limit=1000):
 
 
 def export_activity(records):
-    """Keep whole recent records within the diagnostic's existing two-MiB limit."""
+    """Keep complete recent records within the existing 2 MiB diagnostic limit."""
     rows=[];total=0
     for event in project_activity(records):
         raw=(json.dumps(event,ensure_ascii=False)+'\n').encode()

@@ -1,7 +1,7 @@
-"""One serialized JSON lifecycle cycle; activation belongs to the service layer.
+"""Run one JSON lifecycle scan at a time with its captured settings.
 
-Settings are detached per attempt. Preview never saves state. Live work records
-admission before collection and keeps partial outcomes distinct from proposals.
+Preview does not save tracking. A live scan records its start before collecting
+data. Keep completed work separate from proposals when an attempt stops early.
 """
 from copy import deepcopy
 from dataclasses import asdict
@@ -52,7 +52,7 @@ def stage_paths(values,library):
 
 
 class JSONMoveServices:
-    """Fresh per-candidate reads; never reuse scan-time protection as move proof."""
+    """Get fresh service data for each move instead of reusing scan-time protection."""
     def __init__(self,values): self.values,_=validate_policy(values)
 
     def prepare(self,decision,session):
@@ -62,7 +62,7 @@ class JSONMoveServices:
         local,remote=stage_paths(values,library)
         rows=ArrCatalogGET(service=service,base_url=values.get(prefix+'_URL',''),
             token=values.get(prefix+'_API_KEY',''))()
-        catalog_paths_by_folder(lambda: rows)  # Reject malformed/duplicate identities before selection.
+        catalog_paths_by_folder(lambda: rows)  # Reject invalid or duplicate IDs before choosing a title.
         matches=[row for row in rows if PurePosixPath(canonical_arr_record_path(row['path'])).name == title]
         if len(matches) != 1 or canonical_arr_record_path(matches[0]['path']) != remote[decision.stage]+'/'+title:
             raise RuntimeError('Selected Arr source changed')
@@ -106,7 +106,7 @@ class JSONMoveServices:
 
     def authorize_delete(self):
         from app.json_worker_service import settings_snapshot
-        # No stale queued settings may retain destructive authority after a change.
+        # A queued scan must not use old destructive settings after they change.
         current,_=validate_policy(settings_snapshot())
         if _bool(current,'DRY_RUN','true') or not _bool(current,'ALLOW_PERMANENT_DELETE','false'):
             raise RuntimeError('Live deletion consent was revoked')
@@ -149,7 +149,7 @@ class JSONMoveServices:
         tags=validated_tag_names({name:values.get(key,default) for name,key,default in (
             ('keep','KEEP_TAG','keep'),('disliked','DISLIKE_TAG','not-at-all'),
             ('keep_all','KEEP_ALL_SEASONS_TAG','keep-all-seasons'),('protected','PROTECT_TAG','keep-forever'))})
-        # A new transport and uncached complete observation for every move.
+        # Use a new transport and a complete, uncached result for every move.
         fetch=ScheduledJellyfinGET(base_url=values.get('JELLYFIN_HOST_URL',''),
             token=values.get('JELLYFIN_API_TOKEN',''))
         result=collect_title_observation(fetch=fetch,jellyfin_type='Series' if request.library == 'TV' else 'Movie',
@@ -168,8 +168,8 @@ def run_cycle(store, *, settings, trigger, now=None, services=None, collect=coll
         raise
     except Exception as error:
         if not evidence: raise
-        # A failed final state verification must not erase independently verified
-        # earlier completions, or turn an unreadable journal into "no pending work".
+        # If the final state check fails, keep the earlier work that was already verified.
+        # An unreadable journal must not be reported as "no pending work".
         return {**deepcopy(evidence),'result':'failed','failure_stage':'storage_revalidation',
             'error_type':type(error).__name__,'pending_operation_present':None,
             'completed_moves':tuple(evidence['completed_moves']),
@@ -208,7 +208,7 @@ def _run_cycle(store, *, settings, trigger, now, services, collect, preview, evi
             for decision in plan['moves'][:limit]:
                 phase='candidate_preparation'
                 request,preflight,complete=adapter.prepare(decision,attempt.session)
-                # The adapter cannot substitute a different title or transition.
+                # The adapter must not switch to a different title or stage change.
                 key=('TV/' if request.library == 'TV' else '')+request.title
                 if (request.library, key, request.source_stage,request.destination_stage) != (
                     decision.library,decision.media_key,decision.stage,decision.destination):
@@ -272,7 +272,7 @@ def _run_cycle(store, *, settings, trigger, now, services, collect, preview, evi
             attempt.finish(result='completed')
             report['result']='completed'
         except Exception as error:
-            # Never invent missing counts or discard a move that already completed.
+            # Keep completed moves in the result, and leave missing counts unknown.
             report.update(result='failed',failure_stage=phase,error_type=type(error).__name__)
             journal=attempt.session.state[KEY]['journal']
             if journal:

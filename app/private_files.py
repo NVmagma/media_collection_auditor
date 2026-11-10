@@ -1,4 +1,4 @@
-"""Coherent bounded reads of private regular files."""
+"""Read private regular files within size limits and check that they did not change."""
 import json,os,stat
 LIMIT=64*1024*1024
 

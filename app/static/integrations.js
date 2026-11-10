@@ -1,5 +1,5 @@
 'use strict';
-// Copy only public connection coordinates; no credentials are rendered or stored.
+// Copy the connection address only. Do not display or store credentials here.
 const base = document.getElementById('integration-base');
 if (base) base.value = window.location.origin;
 document.querySelectorAll('[data-copy]').forEach(button => {

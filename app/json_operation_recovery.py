@@ -1,7 +1,7 @@
-"""Explicit recovery of a journaled move or Arr synchronization.
+"""Review interrupted moves and Arr updates before clearing them.
 
-Reviews use GET only. Reconciliation never repeats a folder move; a remote PUT
-requires a separate fresh review and a persisted, single-use dispatch attempt.
+Reviews only read data. Recording an already completed move never repeats it.
+Sending a PUT requires a separate fresh review and a saved, single-use attempt.
 """
 from contextlib import ExitStack
 from copy import deepcopy
@@ -173,7 +173,7 @@ def reconcile_pending_move(store, *, read_record, expected_fingerprint):
 
 
 def finish_pending_sync(store, *, read_record, send_update, expected_fingerprint):
-    """One explicitly reviewed PUT attempt; never selected automatically on restart."""
+    """Send one reviewed PUT attempt. Restarting the app must not send it again."""
     if (not isinstance(expected_fingerprint,str) or re.fullmatch('[0-9a-f]{64}',expected_fingerprint) is None
             or not callable(send_update)):
         raise ValueError('Exact reviewed sync and trusted update adapter required')
@@ -185,7 +185,7 @@ def finish_pending_sync(store, *, read_record, send_update, expected_fingerprint
         attempts=details.get('dispatch_attempts',0)
         if attempts >= 1000: raise RuntimeError('Dispatch limit requires review')
         details['dispatch_attempts']=attempts+1
-        session.checkpoint()  # An old review cannot authorize another PUT after failure.
+        session.checkpoint()  # Do not reuse an old review to send another PUT after a failure.
         before=deepcopy(session.state)
         if send_update(request) is not True: raise RuntimeError('Arr outcome remains uncertain')
         session.verify()

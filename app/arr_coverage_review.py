@@ -1,4 +1,4 @@
-"""Advisory comparison of local title directories with one Arr catalog."""
+"""Compare local title folders with the Arr catalog without changing either one."""
 
 from collections import Counter
 import unicodedata

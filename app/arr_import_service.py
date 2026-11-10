@@ -90,7 +90,7 @@ def profiles(client):
 
 
 def checked_catalog(client):
-    """Require complete stable identities before inferring that a title is absent."""
+    """Check the complete catalog and stable IDs before treating a title as missing."""
     provider = 'tmdbId' if client.service == 'radarr' else 'tvdbId'
     rows = client.get(client.resource)
     if not isinstance(rows, list) or len(rows) > 100000:

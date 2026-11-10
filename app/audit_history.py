@@ -1,4 +1,4 @@
-"""Append-only audit summaries stored alongside persistent action logs."""
+"""Append audit summaries alongside the saved action logs."""
 import json
 import os
 from collections import Counter
@@ -57,7 +57,7 @@ def summarize_actions(path, offset):
                 lib, folder = event.get("library"), event.get("folder")
                 if lib in titles and isinstance(folder, str) and folder and folder != "-":
                     titles[lib].add(folder)
-                # Avoid retaining potentially sensitive free-text detail in the history.
+                # Leave free-text details out of history because they may contain private data.
                 actions.append({"time": event.get("time", ""), "library": lib,
                                 "folder": folder, "action": action, "status": status})
     except (OSError, UnicodeError):

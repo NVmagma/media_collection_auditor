@@ -1,7 +1,7 @@
 :root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#e9eef7;background:#0b111b}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top right,#13263b,#0b111b 48%);min-height:100vh}.topbar{display:flex;justify-content:space-between;align-items:center;gap:24px;padding:28px 5%;border-bottom:1px solid #203044;background:#0d1622dd}.topbar h1{margin:0;font-size:28px}.topbar p{margin:6px 0 0;color:#8fa3ba}.topbar nav{display:flex;gap:18px}.topbar a,.panel-heading a{color:#57d9ff;text-decoration:none}main{width:min(1400px,90%);margin:32px auto}.hero,.panel,.cards article{background:#101b29;border:1px solid #203044;border-radius:14px;box-shadow:0 12px 40px #0003}.hero{padding:22px 26px;margin-bottom:20px}.hero div{color:#dffcff;margin-bottom:8px}.status-dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#39d98a;box-shadow:0 0 12px #39d98a;margin-right:8px}.hero strong{font-size:14px;color:#8fa3ba}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px}.cards article{padding:20px}.cards span{display:block;color:#8fa3ba;font-size:13px}.cards strong{display:block;font-size:32px;margin-top:8px}.panel{padding:22px}.panel-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}.panel-heading h2{margin:0;font-size:20px}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:11px 10px;border-bottom:1px solid #203044;white-space:nowrap}th{color:#8fa3ba;font-weight:600}td:last-child{white-space:normal;min-width:280px}.badge{display:inline-block;padding:3px 8px;border-radius:999px;background:#253447;color:#dce8f5}.badge.planned{background:#263f55;color:#67d9ff}.badge.done{background:#173e35;color:#66e0a6}.badge.failed{background:#4a252b;color:#ff9ba6}.badge.skipped{background:#493b20;color:#ffd27a}.empty{color:#8fa3ba}@media(max-width:800px){.cards{grid-template-columns:repeat(2,1fr)}.topbar{align-items:flex-start;flex-direction:column}}
 .brand-icon{width:52px;height:52px;object-fit:contain;vertical-align:middle;margin-right:12px}.brand{display:flex;align-items:center;gap:12px}.settings-panel{margin-bottom:18px}.settings-panel h2{margin-top:0}.settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.setting{display:flex;flex-direction:column;gap:7px;font-size:14px;color:#cbd7e5}.setting small,.muted{color:#8fa3ba}.setting input,.setting select{width:100%;background:#0b1420;color:#e9eef7;border:1px solid #36506a;border-radius:8px;padding:11px}.setting input:focus,.setting select:focus{outline:2px solid #57d9ff}button{background:#287ca0;border:0;border-radius:8px;color:white;padding:12px 24px;cursor:pointer}.alert{padding:14px;margin-bottom:18px;border:1px solid #28604b;border-radius:10px}.alert.error{border-color:#a43c46;color:#ffb0b0}@media(max-width:800px){.settings-grid{grid-template-columns:1fr}}
 
-/* Compact logo: explicit constraints prevent oversized intrinsic PNG dimensions. */
+/* Keep the logo small even if the original PNG is much larger. */
 .brand-icon{display:inline-block!important;width:42px!important;height:42px!important;max-width:42px!important;max-height:42px!important;flex:0 0 42px;object-fit:contain;margin:0 10px 0 0;vertical-align:middle}
 .topbar h1{display:flex;align-items:center;gap:8px}.topbar{min-height:88px;padding-top:16px;padding-bottom:16px}
 .app-shell{display:flex;background:#0b111b;min-height:100vh}
@@ -24,13 +24,13 @@
 
 .history-actions{max-height:220px;overflow:auto;padding:8px 12px;border:1px solid #30415b;border-radius:6px;font-size:12px;line-height:1.8}.history-error{color:#ff9ca7}.dashboard-section details{min-width:100px}.dashboard-section summary{cursor:pointer;color:#89bfff}.dashboard-section details p{font-size:12px;line-height:1.5}.dashboard-section .table-wrap{overflow-x:auto}
 
-/* Signed-in account indicator shared by dashboard, logs, and settings. */
+/* Show the signed-in account the same way on Dashboard, Logs, and Settings. */
 .viewer-indicator{display:inline-flex;align-items:center;gap:8px;color:#dce9f8;font-size:13px;max-width:280px;overflow-wrap:anywhere}
 .viewer-role{display:inline-block;padding:3px 7px;border:1px solid #35526c;border-radius:999px;color:#9fb9d1;font-size:11px;white-space:nowrap}
 .topbar nav{align-items:center;flex-wrap:wrap}
 .sidebar-footer .viewer-indicator{display:flex;margin-bottom:12px;flex-wrap:wrap}
 
-/* Independent movie and TV lifecycle navigation. */
+/* Keep movie and TV stage navigation separate. */
 .library-overview{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:20px}
 .library-overview-card{display:flex;flex-direction:column;align-items:flex-start;gap:12px;text-align:left;background:#172438;border:1px solid #334c68;border-radius:12px;padding:24px;min-height:160px}
 .library-overview-card:hover{background:#203450;border-color:#70acff}
@@ -45,7 +45,7 @@
 @media(max-width:650px){.library-overview{grid-template-columns:1fr}}
 
 
-/* Dashboard-wide table/poster switch; poster artwork is aligned on the left. */
+/* Switch between tables and posters, with artwork on the left. */
 .dashboard-view-switch{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin:4px 0 14px}
 .dashboard-view-switch .muted{font-size:13px;margin-right:8px}
 .view-switch-button{background:#162538;border:1px solid #2b415a;color:#b5c9dc;border-radius:8px;padding:9px 16px;font-size:13px}
@@ -69,13 +69,13 @@
 
 .media-poster-link{text-decoration:none;cursor:pointer}.media-poster-link:hover,.media-poster-link:focus-visible{outline:2px solid #70acff;outline-offset:2px}
 
-/* Jellyfin navigation stays legible before and after visiting a title. */
+/* Keep Jellyfin links readable, including titles already visited. */
 .media-title-link,.media-title-link:visited{color:#9bc8ff;text-decoration:none;text-underline-offset:3px;overflow-wrap:anywhere}
 .media-title-link:hover{color:#d0e5ff;text-decoration:underline}
 .media-title-link:focus-visible{outline:2px solid #70acff;outline-offset:4px;border-radius:2px;text-decoration:underline}
 @media(max-width:600px){.lifecycle-panel .table-wrap td:first-child{white-space:normal;min-width:180px}.topbar nav{flex-wrap:wrap}.dashboard-view-switch{flex-wrap:wrap}}
 
-/* Dashboard workspace: local navigation, with library-only presentation controls. */
+/* Keep the view controls with Library and use local dashboard navigation. */
 .dashboard-app{background:#0c1420}
 .dashboard-app .topbar{background:#101a28;padding:18px max(5%,calc((100% - 1400px)/2));gap:20px}
 .dashboard-app .topbar h1{font-size:22px}
@@ -108,7 +108,7 @@
 .dashboard-app .hidden-section{display:none}
 @media(max-width:600px){.dashboard-app .topbar h1{font-size:19px}.dashboard-app .workspace-nav{gap:4px}.dashboard-app .workspace-nav button{padding:10px 12px}.dashboard-app .panel{padding:16px}.dashboard-app .library-toolbar{align-items:flex-start;flex-direction:column}.dashboard-app .library-overview-card{padding:18px;min-height:130px}.dashboard-app .topbar nav{gap:12px}}
 
-/* Library exploration is local to the rendered inventory and never mutates tracking. */
+/* Search and filter the library already on screen without changing tracking. */
 .dashboard-app .library-layout{display:block}
 .dashboard-app .library-layout.has-selection{display:grid;grid-template-columns:minmax(0,1fr) minmax(250px,310px);align-items:start;gap:18px}
 .dashboard-app .library-browser{min-width:0}
@@ -128,7 +128,7 @@
 .dashboard-app .hidden-section{display:none}
 @media(max-width:850px){.dashboard-app .library-layout.has-selection{grid-template-columns:1fr}.dashboard-app .title-inspector{grid-row:1}.dashboard-app .library-search-tools{align-items:stretch}}
 
-/* Operations Overview: bounded media lists and explicit, actionable observations. */
+/* Keep Overview lists short and make items needing review easy to find. */
 .dashboard-app .overview-workspace{display:grid;gap:18px}
 .dashboard-app .overview-workspace.hidden-section{display:none}
 .dashboard-app .overview-totals .tracking-cards{margin-bottom:0}
@@ -162,7 +162,7 @@
 .dashboard-app .overview-attempt-metrics dd{font-size:23px;font-weight:600;margin:5px 0}
 .dashboard-app .overview-review-findings{background:#203450;color:#b9d8ff;border:1px solid #3c5676;padding:7px 10px;font-size:12px}
 
-/* Keep Overview short; detailed evidence lives on its own /review page. */
+/* Keep Overview short. Put the detailed results on the Review page. */
 .dashboard-app .workspace-nav a{display:inline-block;text-decoration:none;color:#a6b5c9;padding:10px 16px;border:1px solid transparent;border-radius:8px}
 .dashboard-app .workspace-nav a[aria-current=page]{color:#dceaff;background:#233751;border-color:#3c5676}
 .dashboard-app .workspace-nav a:hover{background:#1a2a40;color:#e7edf7}
@@ -209,7 +209,7 @@
 @media(min-width:801px){.dashboard-app.viewing-overview .topbar{padding-top:12px;padding-bottom:12px;min-height:76px}.dashboard-app.viewing-overview .workspace-nav{padding-top:6px;padding-bottom:6px}.dashboard-app.viewing-overview .tracking-cards{margin-top:6px}.dashboard-app.viewing-overview .overview-media-row{padding-top:6px;padding-bottom:6px;min-height:66px}.dashboard-app.viewing-overview main{margin-bottom:8px}}
 @media(min-width:801px){.dashboard-app.viewing-overview .run-controls{margin-top:8px;gap:10px}.dashboard-app.viewing-overview .run-controls button{white-space:nowrap;padding:8px 12px;font-size:13px}.dashboard-app.viewing-overview .run-controls span{font-size:12px}.dashboard-app.viewing-overview main{margin-top:10px}.dashboard-app.viewing-overview .overview-grid .panel-heading{margin-bottom:4px}.dashboard-app.viewing-overview .overview-browse-links button{padding-top:4px;padding-bottom:4px}}
 
-/* Recorded scan outcomes: proposals, completed work and unknown values stay separate. */
+/* Keep proposed actions, completed work, and unknown results separate. */
 .dashboard-app .scan-summary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:18px 0}
 .dashboard-app .scan-summary{padding:16px;background:#142235;border:1px solid #30435a;border-radius:10px;min-width:0}
 .dashboard-app .scan-summary h3{font-size:16px;margin:0 0 12px}
@@ -243,7 +243,7 @@
 @media(max-width:700px){.dashboard-app .history-entry-time{flex-basis:100%;margin-left:0}.dashboard-app .history-entry .scan-metrics>div{flex-basis:calc(50% - 12px);flex-wrap:wrap}}
 .dashboard-app.viewing-history .dashboard-status{display:none}
 
-/* Settings lifecycle: displayed values, private request metadata, explicit application. */
+/* Style saved settings, pending changes, and the Apply controls. */
 .settings-app .settings-status-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:24px;margin-bottom:20px}
 .settings-app .settings-status-card{padding:16px;background:#131f30;border:1px solid #30435a;border-radius:10px;min-width:0;overflow-wrap:anywhere}
 .settings-app .settings-step{color:#a6b5c9;font-size:11px;letter-spacing:.08em}
@@ -266,7 +266,7 @@
 .settings-app fieldset:disabled .save-button{opacity:.5;cursor:not-allowed}
 .settings-app fieldset:disabled input,.settings-app fieldset:disabled select{opacity:.65;cursor:not-allowed}
 
-/* Existing-media imports share the settings shell and a compact review column. */
+/* Use the Settings layout and a compact review column for existing-media imports. */
 .arr-import-app .import-workspace{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(280px,1fr);gap:18px;align-items:start}
 .arr-import-app label{display:block;margin:14px 0 6px;font-size:13px;font-weight:600;color:#afc0d4}
 .arr-import-app input,.arr-import-app select{display:block;width:100%;min-width:0;margin-bottom:10px;padding:10px;border:1px solid #34465c;border-radius:8px;background:#0c1725;color:#e9eef7;font:inherit}
@@ -281,7 +281,7 @@
 .arr-import-app details>summary{cursor:pointer;font-weight:600}
 @media(max-width:1050px){.arr-import-app .import-workspace{grid-template-columns:minmax(0,1fr)}}
 
-/* Public connection coordinates wrap without pushing narrow screens sideways. */
+/* Wrap connection addresses so they do not stretch the page on small screens. */
 .integrations-app .panel { margin-bottom: 20px; padding: 20px; min-width: 0; }
 .integrations-app input { max-width: 100%; min-width: 0; box-sizing: border-box; }
 .integrations-app code, .integrations-app p, .integrations-app li { overflow-wrap: anywhere; }
@@ -297,7 +297,7 @@
 /* Keep desktop overview panels within one screen across system fonts. */
 @media(min-width:801px){.dashboard-app.viewing-overview .overview-workspace .panel{padding-top:10px;padding-bottom:10px}}
 
-/* One persistent left navigation across every signed-in workspace. */
+/* Keep the same left navigation on every signed-in page. */
 .app-shell .sidebar{flex-basis:224px;flex-shrink:0;overflow:hidden;padding:18px 12px}
 .app-shell .sidebar-brand{padding-bottom:16px;font-size:21px}
 .sidebar-scroll{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;flex:1}
@@ -336,7 +336,7 @@
 
 .run-controls button:disabled{background:#435064;color:#aeb8c5;opacity:.65;cursor:not-allowed;box-shadow:none}
 
-/* Recorded scan browsing uses the same sidebar and field styling as Settings. */
+/* Use the Settings sidebar and field styles for browsing saved scans. */
 .scan-results-app .history-controls{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin-bottom:20px}
 .scan-results-app .history-controls label{display:flex;flex:1 1 180px;min-width:0;flex-direction:column;gap:6px}
 .scan-results-app .history-controls select,.scan-results-app .history-controls input{width:100%;min-width:0;max-width:100%;padding:9px 12px;background:#162538;color:#e9eef7;border:1px solid #405875;border-radius:7px;font:inherit}

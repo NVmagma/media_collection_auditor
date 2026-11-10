@@ -1,4 +1,4 @@
-"""Journal one reversible season rename, using trusted protection and Sonarr adapters."""
+"""Save the intent for a reversible season move after protection and Sonarr checks."""
 from contextlib import ExitStack
 from datetime import datetime, timezone
 import os

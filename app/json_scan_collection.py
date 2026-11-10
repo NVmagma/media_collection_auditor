@@ -1,7 +1,7 @@
-"""GET-only service adapters for the isolated JSON advisory planner.
+"""Read service data for the JSON scan planner without changing tracking or media.
 
-Inventory is supplied by a trusted local adapter; this module does not verify
-filesystem inventory or grant move permission. No claims or state saves.
+The caller supplies the local inventory and is responsible for checking it.
+Nothing here approves a move, reserves a scan slot, or saves state.
 """
 from copy import deepcopy
 from app.scan_progress import emit
@@ -29,7 +29,7 @@ class InventoryTitle:
 @dataclass(frozen=True)
 class LibraryInventory:
     library: str
-    roots: tuple  # Explicit Arr-visible stage paths, with configured aliases applied.
+    roots: tuple  # Use the stage paths Arr sees, including any configured aliases.
     titles: tuple
     complete: bool
 
@@ -51,7 +51,7 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
         elapsed = timer()-start
         if not math.isfinite(elapsed) or not 0 <= elapsed < maximum_seconds:
             raise RuntimeError('Read-only collection deadline exceeded')
-    # Validate identities and snapshot before any remote request.
+    # Check the IDs and captured state before contacting a service.
     prelim, roots = [], {}
     for inventory in inventories:
         if (not isinstance(inventory, LibraryInventory) or type(inventory.complete) is not bool
@@ -127,7 +127,7 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
                     signals[initial.media_key] = result['signals'] if result['status'] == 'shape_valid_untrusted' else None
                 jf_complete = jf_complete and jf_checked
             except Exception:
-                jf_complete = False  # Fixed status only; no remote exception/payload retained.
+                jf_complete = False  # Keep only the fixed status, not the service response or raw error.
             check_deadline()
             emit('arr',checked=checked,total=total_titles,library=inventory.library)
             try:

@@ -1,4 +1,4 @@
-"""Read-only JSON runtime readiness contract; no activation or media actions."""
+"""Report JSON worker readiness without enabling actions or changing media."""
 def health_contract(summary, audit, counts):
     expected={name:counts[section] for name,section in
         (('waiting','first_seen'),('holding','queued'),('keep','keep_seen'),('removal','in_removal'),('arr_sync_pending','arr_sync_pending'))}

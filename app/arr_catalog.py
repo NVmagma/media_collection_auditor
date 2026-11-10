@@ -1,7 +1,8 @@
-"""Bounded GET-only Arr catalogs and configured queue preparation.
+"""Read the Arr catalogs and prepare updates before moving any media.
 
-No PUT/POST/DELETE, retries, request delivery or intent clearance. Every planned
-request is resolved before the first media move. Credentials never enter state.
+This only reads data. It does not send updates, retry requests, or clear pending
+operations. Keep credentials out of tracking, and resolve every planned request
+before the first move.
 """
 from copy import deepcopy
 from http.client import HTTPException
@@ -18,10 +19,10 @@ from app.title_identity import validate_title_folder
 
 
 def canonical_arr_record_path(value):
-    """Accept one optional trailing slash on an otherwise canonical remote path.
+    """Allow one trailing slash on an otherwise valid Arr path.
 
-    Do not normalize dot segments, duplicate separators, roots or aliases.
-    Filesystem stage configuration continues to use the strict validator.
+    Do not clean up dot segments, duplicate slashes, roots, or aliases here.
+    Local stage paths still use the stricter validator.
     """
     if isinstance(value, str) and value.endswith('/'):
         value = value[:-1]
@@ -108,13 +109,12 @@ def catalog_paths_by_folder(fetch):
 
 
 def configured_arr_queue_resolver(*, settings, config):
-    """Detach active service configuration; returned callback performs reads once.
+    """Capture service settings and return a callback that reads the catalog once.
 
-    Both URL/key blank disables that library's Arr queue integration. A partial
-    configuration fails closed. Source paths must match the configured Arr view;
-    destination APP_* aliases are kept separate from filesystem stage paths.
-    Waiting-to-Keep preserves current monitoring; Holding-to-Keep enables it,
-    matching existing JSON policy. Holding/Removal requests are unmonitored.
+    A blank URL and key disable this library's queue integration. If only one is
+    set, stop. Source paths must match Arr's view; APP_* destination aliases stay
+    separate from local stage paths. Waiting-to-Keep keeps monitoring as it was.
+    Holding-to-Keep enables it, while Holding and Removal disable it.
     """
     values = dict(settings)
     services = {}

@@ -1,4 +1,4 @@
-"""Jellyfin login and durable Flask session signing key."""
+"""Handle Jellyfin login and keep the Flask signing key across restarts."""
 import os
 import secrets
 import threading

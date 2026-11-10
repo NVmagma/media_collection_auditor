@@ -13,10 +13,10 @@ class SeasonPlan:
 
 
 def plan_seasons(*, tags, active, leaving_soon, verified, keep_all_tag='keep-all-seasons'):
-    """Use season numbers with verified episode files in either location.
+    """Use season numbers that have verified episodes in either location.
 
-    Callers must verify show identity, tag coverage, and both inventories.
-    The result is advisory and contains no deletion decision.
+    The caller must check the show identity, tags, and both folder inventories.
+    This only proposes staging or restoration; it never approves deletion.
     """
     if verified is not True or tags is None:
         return SeasonPlan(blocked=True)

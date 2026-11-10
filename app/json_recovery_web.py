@@ -1,4 +1,4 @@
-"""Admin-only explicit JSON operation review. No automatic recovery or move replay."""
+"""Let administrators review pending operations. Never recover or repeat moves automatically."""
 from copy import deepcopy
 from time import monotonic
 from urllib.parse import urlsplit

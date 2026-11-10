@@ -1,4 +1,4 @@
-"""Run dashboard and serialized audits with persistent web settings."""
+"""Run the dashboard and one audit at a time using saved application settings."""
 import importlib
 import json
 import os

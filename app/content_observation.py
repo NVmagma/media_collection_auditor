@@ -1,8 +1,8 @@
-"""Bounded, descriptor-held TV content observation; no clocks or files written.
+"""Check TV content dates without changing files or saved clocks.
 
-Match the existing newest-content policy (files and nested directories), while
-rejecting incomplete reads, symlinks and observed changes instead of ignoring
-errors. This detects changes, not writer exclusion or a stable future snapshot.
+Check files and nested folders, and stop on incomplete reads, symlinks, or content
+changes. These checks can catch a change, but they cannot stop another program
+from writing to the folder afterward.
 """
 from datetime import datetime
 import math
@@ -24,11 +24,11 @@ def _identity(info):
 
 def observe_scheduled_content(*, title_path, now, maximum_entries=100000,
                               maximum_depth=64, maximum_seconds=30, timer=monotonic, timezone_info=None):
-    """Return newest naive local descendant mtime, or None for an empty title.
+    """Return the newest local content date, or None if the title is empty.
 
-    A failure returns no timestamp. Callers must block that title's reset/move,
-    never treat unreadable content as absent or fall back to its old clock.
-    No follow-up stat resolves a stored path after releasing the descriptors.
+    If a read fails, block the clock reset or move. Do not treat unreadable files
+    as missing or reuse the old date. Keep using the open directory handles until
+    all checks finish instead of resolving a saved path afterward.
     """
     _canonical(title_path)
     if (not isinstance(now, datetime) or now.tzinfo is not None

@@ -207,7 +207,7 @@ async function refreshRunButton() {
     else if (button.dataset.wasBusy === 'true') document.getElementById('run-result').textContent = runDefaultHint;
     button.dataset.wasBusy = String(state.running || state.queued || blocked);
   } catch (error) {
-    // Preserve the existing disabled state until a successful observation.
+    // Keep the button disabled until a successful status check says it can change.
     if (button.dataset.wasBusy === 'true') document.getElementById('run-result').textContent =
       'Scan status could not be refreshed. The last observed busy state is retained; completion is unverified.';
   } finally { runStatusPending = false; }
@@ -235,7 +235,7 @@ button?.addEventListener('click', async () => {
   finally { runRequestPending = false; await refreshRunButton(); }
 });
 
-// Overview navigation reuses the Library's existing stage and Details controls.
+// Reuse the Library stage and Details controls when navigating from Overview.
 document.querySelectorAll('[data-open-workspace]').forEach(button =>
   button.addEventListener('click', () => openSection(button.dataset.openWorkspace)));
 document.querySelectorAll('[data-open-title]').forEach(button => button.addEventListener('click', () => {
@@ -250,7 +250,7 @@ document.querySelectorAll('[data-open-title]').forEach(button => button.addEvent
   row?.querySelector('.inspect-title').click();
 }));
 
-// Paginate only the already-rendered process history; no polling or replay requests.
+// Page through the history already on screen. Do not poll or rerun requests.
 const historyEntries = Array.from(document.querySelectorAll('[data-history-result]'));
 if (historyEntries.length) {
   const resultFilter = document.getElementById('history-filter');

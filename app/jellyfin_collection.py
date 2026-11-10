@@ -1,7 +1,8 @@
-"""Experimental Jellyfin collection boundary; read-only, non-authorizing.
+"""Read Jellyfin data and check that the required information is complete.
 
-fetch(path, params) must be a trusted transport supplied by the caller.
-No production execution uses this module. Missing/partial data fails closed.
+The caller supplies the trusted fetch(path, params) transport. Missing or partial
+data blocks the affected action. Collection results still need fresh protection
+checks before a move.
 """
 
 from __future__ import annotations
@@ -103,8 +104,8 @@ def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
                         raise ValueError("Missing or inconsistent Jellyfin item fields")
                     seen_ids.add(item_id)
                     # Jellyfin can return BoxSet collections despite type filters.
-                    # Never match these as media titles; all fields above must
-                    # still be valid or the entire observation fails closed.
+                    # Do not match collections as movies or shows. The fields above must
+                    # still be valid; otherwise stop using this result.
                     if item.get("Type") == "BoxSet":
                         continue
                     if item.get("Type") is not None and item["Type"] != jellyfin_type:
@@ -120,7 +121,7 @@ def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
                 if start == total:
                     break
     except (Exception) as exc:
-        # Fail closed on transport errors and malformed responses.
+        # Block the action if the request fails or the response is invalid.
         blockers.append("jellyfin_collection_incomplete")
         blockers.append(type(exc).__name__)
     if not matched:
@@ -128,8 +129,8 @@ def collect_title_observation(*, fetch, jellyfin_type, folder, media_key, now,
     if matched:
         if {uid for uid, *_ in matched} != set(ids):
             blockers.append("jellyfin_title_user_coverage_incomplete")
-        # One logical Jellyfin item may appear for multiple users. Distinct
-        # item IDs or paths are ambiguous, even if folder names match.
+        # The same Jellyfin item may appear for several users. Different
+        # item IDs or paths are ambiguous, even when the folder names match.
         identities = {(item_id, path) for _, item_id, path, _, _ in matched}
         if len(identities) != 1:
             blockers.append("jellyfin_title_ambiguous")

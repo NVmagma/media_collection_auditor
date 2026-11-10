@@ -53,10 +53,10 @@ def _control(state):
 
 
 def initialize_control(session, *, previous_started_at):
-    """Offline initialization from a separately verified latest scan time.
+    """Initialize scan control using a separately verified last scan time.
 
-    Never infer a fresh installation from absent metadata or drop archived claims.
-    Migration is responsible for proving previous_started_at from the old claims.
+    Missing metadata does not mean this is a new install. Keep archived scan
+    claims, and have the migration check previous_started_at against them.
     """
     session.verify()
     if KEY in session.state or has_pending_extension(session.state) or session.state.get('arr_sync_pending'):
@@ -107,7 +107,7 @@ class ScanAttempt:
         return identifier
 
     def finish_operation(self, *, identifier, verify_outcome):
-        """Trusted executor supplies fresh outcome verification, never browser input."""
+        """Use a fresh result from the trusted worker, not a result supplied by the browser."""
         value = self._active()
         journal = deepcopy(value['journal'])
         if journal is None or journal['id'] != identifier or not callable(verify_outcome):
@@ -143,4 +143,4 @@ def scan_attempt(store, *, now, trigger):
         value.update(last_started_at=now.isoformat(), last_result='running', trigger=trigger)
         session.checkpoint()  # Cooldown survives restart and failed scans.
         yield ScanAttempt(session)
-        # No implicit completion, journal clearance or save on exit/exception.
+        # Exiting or raising an error must not mark work complete, clear the journal, or save it.

@@ -1,4 +1,4 @@
-"""Explicit private browser backups and inert restore-copy tests. No active restore."""
+"""Create private backups and test a separate restore copy without activating it."""
 from contextlib import contextmanager
 from datetime import datetime,timezone
 import hashlib,os,re,secrets,stat
@@ -123,7 +123,7 @@ def inventory(*,config_file,page=1):
             verify()
             return dict(items=rows,page=page,pages=pages,total=len(ids))
     except FileNotFoundError:
-        # Only absence of the managed root means no browser backups yet.
+        # Only a missing backup root means no browser backups have been created.
         if not os.path.lexists(Path(config_file).parent/LEAF):
             parent=_open_directory(str(Path(config_file).parent));os.close(parent)
             return dict(items=[],page=1,pages=1,total=0)
@@ -137,7 +137,7 @@ def verify_backup(*,config_file,identifier):
 
 
 def test_restore(*,config_file,identifier):
-    """Copy to a new inert destination. Never load, activate or overwrite live files."""
+    """Restore into a new test location. Never load or overwrite active files."""
     with root(config_file) as (path,fd,verify):
         _,payloads,arguments=_packet(path,fd,identifier)
         try:os.mkdir('.restore-tests',0o700,dir_fd=fd);os.fsync(fd)
