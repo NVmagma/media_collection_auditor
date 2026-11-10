@@ -145,7 +145,9 @@ class WebSecurityTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as root:
                 for folder in ("Movies", "Movies_hold", "Movies_keep", "Movies_removal"):
                     (Path(root) / folder).mkdir()
-                (Path(root) / "Movies" / "Example (2020)").mkdir()
+                title = Path(root) / "Movies" / "Example (2020)"
+                title.mkdir()
+                (title / "video.mkv").write_bytes(b"disposable dashboard video")
                 with patch.dict("os.environ", {"MEDIA_PATH": root,
                                                "ENABLE_MOVIES": "true",
                                                "ENABLE_TV": "false"}):
