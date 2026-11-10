@@ -248,3 +248,36 @@ def test_failed_post_move_checkpoint_never_sends_arr_put(move_case,monkeypatch):
     assert not any(method == 'PUT' for method,_ in server.calls)
     current=json.loads(store.path.read_bytes())
     assert current[KEY]['journal']['kind'] == 'move' and current['first_seen']['Movie'] == request.source_since
+
+
+def test_tv_keep_move_does_not_depend_on_future_file_dates(move_case):
+    store, roots, requests, server = move_case
+    request = requests['TV']
+    keep = roots['TV'][0].with_name('TV_keep'); keep.mkdir()
+    request = replace(request,destination_stage='Keep',destination_root=str(keep),arr_destination_root=str(keep),monitored=True)
+    media = roots['TV'][0]/request.title/'video.mkv'
+    future = datetime(2098,1,1).timestamp(); os.utime(media,(future,future))
+    before = media.stat().st_mtime_ns
+    with scan_attempt(store,now=NOW.replace(tzinfo=timezone.utc),trigger='manual') as attempt:
+        preflight,complete = transports(attempt,request,server)
+        result = execute_move(attempt,request=request,now=NOW,
+            fetch_protection=lambda _:{**SIG,'protected':True,'keep_all':True},arr_preflight=preflight,arr_complete=complete)
+        assert result['status']=='move_and_arr_verified'
+        attempt.finish(result='completed')
+    assert (keep/request.title/'video.mkv').stat().st_mtime_ns == before
+    assert server.records['/api/v3/series/2']['path']==str(keep/request.title)
+    assert json.loads(store.path.read_text())['keep_seen']['TV/Show']==NOW.isoformat()
+
+
+def test_future_file_date_still_blocks_tv_move_to_holding_before_intent(move_case):
+    from app.content_observation import ScheduledContentBlocked
+    store,roots,requests,server = move_case
+    request = requests['TV']; media=roots['TV'][0]/request.title/'video.mkv'
+    future=datetime(2098,1,1).timestamp(); os.utime(media,(future,future))
+    with scan_attempt(store,now=NOW.replace(tzinfo=timezone.utc),trigger='manual') as attempt:
+        preflight,complete=transports(attempt,request,server)
+        with pytest.raises(ScheduledContentBlocked):
+            execute_move(attempt,request=request,now=NOW,fetch_protection=lambda _:dict(SIG),arr_preflight=preflight,arr_complete=complete)
+        assert attempt.session.state[KEY]['journal'] is None
+    assert media.exists() and not (roots['TV'][1]/request.title).exists()
+    assert not server.calls

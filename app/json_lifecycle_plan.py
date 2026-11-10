@@ -106,6 +106,13 @@ def plan_scan(*, snapshot, libraries, now, favorites_trigger_keep=True, maximum_
     for library in captured:
         for title in library.titles:
             destination = None
+            retain_despite_future_date = (
+                library.library == 'TV' and title.stage == 'Waiting'
+                and title.blocker == 'future_content_timestamp'
+                and library.jellyfin_complete and library.arr_complete
+                and title.signals is not None
+                and decide(title.stage, None, title.threshold_days,
+                           title.signals, favorites_trigger_keep)[0] == 'keep')
             if library.library == 'TV' and title.media_key in staged_shows:
                 reason = 'staged_tv_seasons'
             elif title.blocker == 'no_video':
@@ -114,7 +121,7 @@ def plan_scan(*, snapshot, libraries, now, favorites_trigger_keep=True, maximum_
                 elif title.arr_status!='missing_record': reason='no_video_arr_managed'
                 elif not library.jellyfin_complete or not title.jellyfin_absent: reason='orphan_jellyfin_unverified'
                 else: reason='orphan_metadata'
-            elif title.blocker is not None: reason = title.blocker
+            elif title.blocker is not None and not retain_despite_future_date: reason = title.blocker
             elif not library.jellyfin_complete: reason = 'jellyfin_collection_incomplete'
             elif not library.arr_complete: reason = 'arr_catalog_unavailable'
             elif title.signals is None: reason = 'jellyfin_unavailable'

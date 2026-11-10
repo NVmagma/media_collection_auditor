@@ -41,7 +41,10 @@ you want the auditor to request a library refresh after successful media actions
 
 Each live scan can move one season per show, within the shared five-TV/ten-total
 action limit and one-hour scan cooldown. A show with three old seasons may need
-three scans. Whole-show actions pause while its seasons are staged.
+three scans. Whole-show actions pause while its seasons are staged. Protected shows in Holding
+can restore their verified staged seasons first, then move to Keep on a later scan.
+Without staged seasons, a whole-show Keep selection takes priority over the
+`one-season` staging rule.
 
 The worker verifies current Jellyfin tags, exact Sonarr identity/path, local
 folders, and saved settings. It unmonitors the selected season in Sonarr before

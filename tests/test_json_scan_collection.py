@@ -190,3 +190,82 @@ def test_progress_counts_collection_without_private_title_data(services):
     assert rows[-1]['checked']==rows[-1]['total']==131
     assert {row['library'] for row in rows} >= {'Movies','TV'}
     assert all(set(row)=={'phase','label','checked','total','library'} for row in rows)
+
+
+def holding_show(services, tags, *, staged=False):
+    server, snapshot, inventory, settings = services
+    settings['ENABLE_TV_SEASON_RETENTION'] = 'true'
+    rows = list(inventory)
+    tv = rows[1]
+    rows[1] = LibraryInventory('TV', tv.roots, (InventoryTitle('Show A', 'Holding', 7),), True)
+    inventory[:] = rows
+    snapshot['first_seen'].pop('TV/Show A')
+    snapshot['queued']['TV/Show A'] = '2026-01-19T01:02:03'
+    server.items['Series'][0].update(Path='/media/TV_hold/Show A', Tags=tags)
+    server.catalogs['series'][0]['path'] = '/media/TV_hold/Show A'
+    if staged:
+        snapshot['tv_leaving_soon_seasons'] = {'TV/Show A/1': {}}
+
+
+@pytest.mark.parametrize('stage', ['Waiting','Holding'])
+def test_whole_show_keep_protection_overrides_one_season(services, stage):
+    server, snapshot, inventory, settings = services
+    settings['ENABLE_TV_SEASON_RETENTION'] = 'true'
+    tags = ['one-season', 'keep-all-seasons', 'keep-forever']
+    if stage == 'Holding': holding_show(services, tags)
+    else: server.items['Series'][0]['Tags'] = tags
+    before = deepcopy(snapshot)
+    result = collect(services)
+    row = next(row for row in result['decisions'] if row.media_key == 'TV/Show A')
+    assert (row.destination, row.reason, row.outcome) == ('Keep', 'protected', 'proposed')
+    assert snapshot == before
+    assert all(method == 'GET' for method, _ in server.calls)
+
+
+def test_favorite_rescues_holding_show_with_one_season_tag(services):
+    holding_show(services, ['one-season'])
+    result = collect(services)
+    row = next(row for row in result['decisions'] if row.media_key == 'TV/Show A')
+    assert (row.destination, row.reason) == ('Keep', 'favorite')
+
+
+def test_disabled_favorite_support_does_not_create_a_keep_rescue(services):
+    holding_show(services, ['one-season'])
+    services[3]['FAVORITES_TRIGGER_KEEP'] = 'false'
+    row = next(row for row in collect(services)['decisions'] if row.media_key == 'TV/Show A')
+    assert row.destination is None and row.reason == 'holding_period'
+
+
+def test_staged_seasons_in_holding_are_restored_before_whole_show_rescue(services):
+    holding_show(services, ['keep-forever', 'keep-all-seasons'], staged=True)
+    result = collect(services)
+    row = next(row for row in result['decisions'] if row.media_key == 'TV/Show A')
+    assert row.destination is None and row.reason == 'staged_tv_seasons'
+    assert 'Show A' in result['season_titles']
+
+
+@pytest.mark.parametrize('mode,reason', [('tv_jf_failure','jellyfin_collection_incomplete'),('sonarr_failure','arr_catalog_unavailable')])
+def test_protected_show_still_requires_complete_service_checks(services, mode, reason):
+    holding_show(services, ['one-season','keep-forever'])
+    services[0].mode = mode
+    row = next(row for row in collect(services)['decisions'] if row.media_key == 'TV/Show A')
+    assert row.destination is None and row.reason == reason
+
+
+def test_future_content_is_checked_for_keep_without_starting_season_staging(services):
+    from dataclasses import replace
+    server, snapshot, inventory, settings = services
+    settings['ENABLE_TV_SEASON_RETENTION']='true'
+    server.items['Series'][0]['Tags']=['keep-forever','one-season']
+    tv=inventory[1]
+    inventory[1]=replace(tv,titles=(replace(tv.titles[0],blocker='future_content_timestamp'),))
+    result=collect(services)
+    row=next(row for row in result['decisions'] if row.media_key=='TV/Show A')
+    assert row.destination=='Keep' and row.reason=='protected'
+    assert 'Show A' not in result['season_titles']
+    server.favorite=False
+    server.items['Series'][0]['Tags']=['one-season','not-at-all']
+    result=collect(services)
+    row=next(row for row in result['decisions'] if row.media_key=='TV/Show A')
+    assert row.destination is None and row.reason=='future_content_timestamp'
+    assert 'Show A' not in result['season_titles']

@@ -121,7 +121,8 @@ def execute_move(attempt, *, request, now, fetch_protection, arr_preflight, arr_
             signal,favorites_trigger_keep)
         if ACTIONS.get((request.source_stage,action)) != request.destination_stage:
             raise RuntimeError('Fresh protection changed decision')
-        if request.library == 'TV' and request.source_stage == 'Waiting' and tv_reset:
+        # Content dates delay aging moves, not a verified move into Keep.
+        if request.library == 'TV' and request.source_stage == 'Waiting' and request.destination_stage != 'Keep' and tv_reset:
             latest = observe_scheduled_content(title_path=request.source_root+'/'+request.title,
                 now=now,timezone_info=timezone_info)
             if latest is not None and latest > since: raise RuntimeError('TV clock reset required')
