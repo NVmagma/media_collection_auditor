@@ -48,7 +48,7 @@ settings pause scanning. A durable operation journal is saved before media or
 remote mutations; uncertain operations remain pending and are never replayed
 automatically. See [Operation recovery](arr-intent-recovery.md).
 
-Valid saved settings override the original container environment. Settings apply
+Saved settings are configured through the WebUI; old template variables remain a migration fallback. Settings apply
 atomically for the next scan. Deletion consent is stored separately from the
 boolean setting, so an environment flag alone cannot authorize deletion.
 
@@ -75,7 +75,7 @@ counts remain unknown, and a historical result does not certify current disk sta
 
 Create a [private backup](browser-backups.md) before maintenance. It preserves
 tracking and saved settings, including pending intents and unknown fields; media,
-scan-history files, and environment-only settings need their own backup strategy.
+scan-history files, and any legacy template-only settings need their own backup strategy.
 
 For image updates, retain current appdata/media mounts and review saved schedule,
 mode, and deletion consent. Never initialize an existing appdata directory or run

@@ -47,9 +47,11 @@ def audit_counts(path, offset):
 
 
 if __name__ == "__main__":
+    from app.unraid_setup import prepare_installation
     from backend_selection import require_json_backend
     require_json_backend(os.environ.get('AUDITOR_STATE_BACKEND','json'))
     os.environ.setdefault('AUDITOR_WORKER_MODE','json_serialized')
+    if not read_only_service_enabled(): prepare_installation()
     if read_only_service_enabled():
         start_web()
     else:

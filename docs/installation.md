@@ -1,25 +1,56 @@
-# Installation and updates
+# Install and update on Unraid
 
-The supported deployment is Docker on Unraid with Jellyfin, Radarr for Movies,
-and Sonarr for TV. Configure at least the services used by your enabled libraries.
-The integration has been exercised with Radarr 6 and Sonarr 4. Python 3.12 is used
-by the runtime and automated checks.
+Media Collection Auditor is deployed using its Unraid Docker template. Configure
+service connections, lifecycle rules, safety controls, paths, notifications and
+read-only API access in the application's Settings. No environment file is used.
 
-## Select the image
+## Add the template
 
-```text
-ghcr.io/nvmagma/media_collection_auditor:stable
-```
+Use the maintained [Unraid template](../unraid/template/media_archiver.xml) with
+Unraid Docker → Add Container. The template pins the accepted image; use
+`ghcr.io/nvmagma/media_collection_auditor:stable` in Repository if you prefer the
+promoted stable tag. Candidate images are for testing.
 
-`:stable` is promoted explicitly to an accepted release. Versioned
-`json-candidate-<revision>` tags are testing images. A digest reference can pin an
-exact image for reproducibility. The maintained Unraid template at
-[`unraid/template/media_archiver.xml`](../unraid/template/media_archiver.xml)
-pins the accepted release digest; its Repository field can instead use `:stable`.
+Set only the deployment details in Unraid:
 
-## Directory layout
+| Template field | Purpose |
+| --- | --- |
+| Web UI Port | Host port mapped to container port 8080. Choose a free port. |
+| Auditor Logs | Persistent private appdata mounted at `/app/logs`. Use a new empty directory for a fresh install. |
+| Media Library Root | Native filesystem root mounted at `/media`, for example `/mnt/POOL/media_storage`. Select your actual pool path. |
 
-Use one native filesystem root for media. With the default paths it contains:
+The template uses a read-only container root, no-new-privileges, and drops all
+capabilities except DAC_OVERRIDE so the worker can manage host-owned media.
+Keep these settings and both persistent mounts when recreating the container.
+Do not expose the administration service directly to the public internet.
+
+## First start
+
+1. Start the container. A **new empty appdata directory** initializes JSON state.
+2. Click the container icon → WebUI. Open Unraid's container logs and copy the
+   one-time setup code into the setup page. This code authorizes creating the
+   administrator; keep the logs private while setup is pending.
+3. Create a local administrator with a password of at least 12 characters. Only
+   its password hash is saved. The setup code becomes unusable after completion.
+4. Sign in and open **Settings → Connections**. Enter Jellyfin, Radarr and Sonarr
+   addresses and API keys, Apply Requested Settings, then test saved connections.
+5. Configure enabled libraries, paths, schedule/time zone and retention settings.
+   New installs stay in Dry Run, with permanent deletion, season retention and
+   metadata quarantine disabled. Review preview results before enabling live work.
+
+Session signing keys are generated automatically and retained in appdata. Change
+the local account under **Settings → Account**. Jellyfin users can sign in after
+its connection is configured; only administrators can change settings or run scans.
+Enable **Settings → Web → HTTPS-only Login Cookie** when using an HTTPS reverse
+proxy. It prevents subsequent login through plain HTTP.
+
+Initialization never repairs or replaces existing appdata. Missing/corrupt state
+in a nonempty directory pauses scans for review. A partial first initialization
+requires investigation; do not delete existing tracking to make setup appear.
+
+## Media folders
+
+Create all stages of each enabled library under the native root:
 
 ```text
 media_storage/
@@ -34,99 +65,34 @@ media_storage/
 └── TV_seasons_leaving_soon/   # Optional season retention
 ```
 
-All four stages of an enabled library must exist and be readable. Keep appdata
-outside the media tree. `/app/logs` needs persistent writable storage.
+The worker does not create missing lifecycle roots. Under **Settings → Paths**,
+optional absolute container paths override this layout. Paths must stay on the
+same native mount/device for atomic moves. Do not bind Unraid's `/mnt/user` FUSE
+view or add a child mount over a stage; they can prevent the required no-overwrite
+rename. Keep appdata separate from media.
 
-On Unraid, bind the native path, for example `/mnt/<pool>/media_storage`, to
-`/media`. Discover your own pool path rather than copying a pool name from another
-installation. Unraid's `/mnt/user` FUSE view can reject the atomic no-overwrite
-rename required for live actions. Paths on the same underlying disk can still
-have different mount identities inside a container. Use the single `/media`
-bind rather than adding a separate bind over a stage or season Holding folder.
+Jellyfin and Arr must see the corresponding folders. Optional Arr aliases for
+non-Waiting stages are also configured under Paths. Whole-title Removal deletion
+currently requires identical local and Arr Removal paths. Configure Jellyfin
+Leaving Soon libraries separately if the family should browse Holding media.
+See [season retention](tv-season-retention.md) for individual seasons.
 
-Radarr, Sonarr, and Jellyfin need access to the corresponding folders. Arr-visible
-path aliases can be configured through the `RADARR_APP_*_PATH` and
-`SONARR_APP_*_PATH` environment settings for non-Waiting stages; whole-title
-Removal deletion currently requires identical local and Arr Removal paths.
-See [TV seasons](tv-season-retention.md) for the separate season staging folder.
+## Upgrade an existing installation
 
-## Initialize a new installation
+Create a private backup under **Backups**, wait for active work to finish, and
+review pending operations. Pull the updated image in Unraid and apply it with the
+same mounts and port. Verify the WebUI, settings, tracking and a recorded scan.
+Never initialize or replace existing appdata during an update.
 
-Pull the image and create a new empty appdata directory. Substitute your own host
-paths below. Keep `.env` outside the appdata directory until initialization finishes.
+Existing saved settings remain authoritative. Old template variables are accepted
+as a migration fallback. While those variables still exist, open Settings and
+apply each reviewed value so it is saved in appdata. Under Account, establish the
+local administrator account before removing its old template password. Then
+remove obsolete application variables from the saved Unraid template, retaining
+the port, mounts and security parameters. The app no longer loads environment files.
 
-```bash
-docker pull ghcr.io/nvmagma/media_collection_auditor:stable
-mkdir -p /path/to/new/auditor_logs
-
-docker run --rm --network none --read-only --cap-drop ALL \
-  --security-opt no-new-privileges:true \
-  --mount type=bind,src=/path/to/new/auditor_logs,dst=/app/logs \
-  --entrypoint python ghcr.io/nvmagma/media_collection_auditor:stable \
-  -B -m app.json_initialize
-```
-
-Initialization creates empty JSON tracking, settings, and scan-control metadata.
-It refuses nonempty directories, including a partial initialization. Run this
-only for a new installation. Starting the normal container with missing or invalid
-state pauses the worker instead of creating an empty replacement.
-
-## Configure and start
-
-Copy [`env.example`](../env.example) to `.env` in your deployment directory and
-fill in the service addresses and credentials. Restrict its permissions:
-
-```bash
-cp env.example .env
-chmod 600 .env
-```
-
-Use a strong `WEB_SESSION_SECRET` and local `WEB_ADMIN_PASSWORD`. Configure
-`JELLYFIN_HOST_URL` and `JELLYFIN_API_TOKEN` before using Jellyfin login. Set
-`ENABLE_TV=true` for TV scanning. Start with `DRY_RUN=true`.
-
-The following example uses the runtime image, a read-only container root,
-no-new-privileges, and the minimum additional capability used for media owned by
-another host UID. Match these settings in Unraid's container editor when using
-the template.
-
-```bash
-docker run -d --name media_collection_auditor \
-  --restart unless-stopped --read-only --user 0:0 \
-  --cap-drop ALL --cap-add DAC_OVERRIDE --security-opt no-new-privileges:true \
-  --env-file .env --publish 8089:8080 \
-  --mount type=bind,src=/path/to/native/media_storage,dst=/media \
-  --mount type=bind,src=/path/to/new/auditor_logs,dst=/app/logs \
-  ghcr.io/nvmagma/media_collection_auditor:stable
-```
-
-Open `http://SERVER:8089/`. The Unraid WebUI template URL is
-`http://[IP]:[PORT:8080]/`. The icon is available at
-`/static/auditor-icon.png` through the static asset route.
-Use Settings to test the saved Jellyfin, Radarr, and Sonarr connections, choose a
-daily schedule and time zone, and review preview decisions. Saved settings override
-the container environment. A preview does not persist new discovery clocks.
-A live scan records discovery dates and performs only eligible enabled actions.
-
-The web app uses Flask's built-in server. Treat it as a private administration
-service. Use controlled network access and an HTTPS reverse proxy for remote
-access. Set `WEB_SECURE_COOKIE=true` when browsers connect through HTTPS.
-
-## Update an existing installation
-
-1. Create a private backup under **Backups** and wait for any active scan to finish.
-2. Review pending operations before replacing the container.
-3. In Unraid, set Repository to `ghcr.io/nvmagma/media_collection_auditor:stable`,
-   pull the image, and Apply with the existing media/appdata mounts and port.
-4. Confirm the web interface, saved settings, daily schedule, tracking counts,
-   and a recorded scan result.
-
-Never reinitialize existing appdata. Run only one writer against a tracking file.
-Saved live/deletion settings persist through updates, so a new image's safe
-defaults do not reset an operator's previously saved choices. Keep the saved
-Unraid template consistent with the container, including its Repository and mounts.
-A duplicate old template for the same container can recreate obsolete settings.
-
-A rollback to old tracking after live moves requires review of current media and
-Arr state. Backups preserve dates and settings; they do not undo moves or restore
-deleted media. See [backups](browser-backups.md) and [operation recovery](arr-intent-recovery.md).
+Use only one worker against an appdata directory. Saved live/deletion settings
+survive updates; image defaults do not reset prior choices. Keep one current
+saved template for the container so an old duplicate cannot restore obsolete mounts.
+Backups do not undo moves or restore deleted media. See [backups](browser-backups.md)
+and [operation recovery](arr-intent-recovery.md).

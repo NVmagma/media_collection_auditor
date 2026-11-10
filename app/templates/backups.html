@@ -4,7 +4,7 @@
 <div class="app-content"><header class="settings-header"><div><h1>Backups</h1><p>Private tracking/settings snapshots and disposable restore-copy tests.</p></div></header>
 <main id="main-content"><section class="panel">
 {% if message %}<p class="notice" role="status">{{ message }}</p>{% endif %}{% if error %}<p class="notice warning" role="alert">{{ error }}</p>{% endif %}
-<p>Backups include lifecycle clocks, worker claims, pending intents, unknown tracking fields, and saved settings—including credentials. Media files, scan-history logs, environment-only credentials and container/template settings are not included.</p>
+<p>Backups include lifecycle clocks, worker claims, pending intents, unknown tracking fields, and saved settings—including credentials. Media files, scan-history logs, legacy template-only credentials and container/template settings are not included.</p>
 <p class="muted">Stored privately under <code>.auditor-backups</code> in the existing Auditor Logs mount. This is the same appdata storage, not off-server protection. Copy a verified backup directory to separate protected storage for disk-loss protection. Existing host backup packets and the integration API’s pinned selection are not adopted or changed.</p>
 <form method="post" class="history-controls"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="create"><button type="submit" {% if unavailable %}disabled{% endif %}>Create private backup</button></form>
 {% if unavailable %}<p class="notice warning" role="alert">Backup inventory is unavailable or its private directory is invalid. An empty or verified backup list cannot be confirmed. Existing files were not changed.</p>

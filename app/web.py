@@ -15,6 +15,7 @@ from urllib.parse import urlsplit
 from pathlib import Path
 from flask import Flask, render_template, request, Response, redirect, url_for, session, g, send_file
 
+from app.unraid_setup import authenticate
 from lifecycle_decisions import decide
 from dashboard_tracking_snapshot import lifecycle_clock, observation_datetime, summarize_dashboard_clocks, dashboard_overview, build_scan_view
 from connection_tests import check_connection, SERVICES
@@ -22,7 +23,7 @@ from audit_history import read_history
 from manual_rescue import rescue_title
 from auth import session_key, jellyfin_login, current_user, store_token, discard_token, verify_user
 from run_control import snapshot, request_run
-from config_store import FIELDS, KEYS, SECRETS, BOOLS, DEFAULTS, FIELD_HELP, load_config, save_config, validate, redacted_config
+from config_store import FIELDS, KEYS, SECRETS, BOOLS, DEFAULTS, FIELD_HELP, load_config, save_config, validate, redacted_config, setting
 from integration_api import authorize_summary, read_only_service_enabled
 from integration_status import (selected_backup_status, selected_scan_capture, project_scan_capture, read_selected_coverage, selected_run_snapshot, selected_run_history, selected_audit_status_report, audit_status_report, collect_widget_media_index, widget_media_urls, widget_media_base,
     read_selected_tracking_status as read_tracking_status,
@@ -49,7 +50,8 @@ def require_login():
         if request.endpoint is None and getattr(request.routing_exception,'code',None)==404:
             return {'status':'route_not_found','schema_version':1,'message':'Unknown integration route. See /api/v1/readiness for supported routes.'},404
         return None
-    if request.endpoint in ('login','login_background','health','static'): return None
+    app.config['SESSION_COOKIE_SECURE'] = setting('WEB_SECURE_COOKIE', 'false') == 'true'
+    if request.endpoint in ('setup','login','login_background','health','static'): return None
     g.user=current_user()
     if g.user is None:
         if request.path.startswith('/api/'): return {'ok':False,'message':'Please sign in.'},401
@@ -72,6 +74,8 @@ def login_background():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "GET":
+        from app.unraid_setup import setup_pending
+        if setup_pending(): return redirect(url_for("setup"))
         if current_user():
             return redirect(url_for("dashboard"))
         return render_template("login.html", error=None)
@@ -82,7 +86,8 @@ def login():
     password = request.form.get("password", "")
     if not username or not password:
         return render_template("login.html", error="Enter a username and password."), 400
-    user, login_error = jellyfin_login(username, password)
+    local_login = authenticate(username, password)
+    user, login_error = (None, None) if local_login else jellyfin_login(username, password)
     if user and not verify_user(user["token"], user["id"]):
         user = None
         login_error = "Jellyfin authenticated you, but the account could not be verified. Check Jellyfin permissions and the server URL."
@@ -90,14 +95,48 @@ def login():
     session.clear()
     if user:
         session.update(provider="jellyfin", jf_handle=store_token(user["token"], user["id"]))
-    elif (os.environ.get("WEB_ADMIN_PASSWORD")
-          and hmac.compare_digest(username, os.environ.get("WEB_ADMIN_USER", "admin"))
-          and hmac.compare_digest(password, os.environ["WEB_ADMIN_PASSWORD"])):
-        session["provider"] = "local"
+    elif local_login:
+        from app.unraid_setup import account_version
+        session.update(provider="local", account_version=account_version())
     else:
         return render_template("login.html", error=login_error or "Invalid credentials for the local administrator account."), 401
     session.permanent = True
     return redirect(url_for("dashboard"))
+
+@app.route('/setup', methods=['GET', 'POST'])
+def setup():
+    from app.unraid_setup import setup_pending, complete_setup
+    if not setup_pending(): return redirect(url_for('login'))
+    error = None
+    if request.method == 'POST':
+        if not _same_origin(): return Response('Invalid request origin.', 403)
+        try:
+            complete_setup(request.form.get('code',''), request.form.get('username',''), request.form.get('password',''))
+            session.clear()
+            return redirect(url_for('login'))
+        except (OSError, ValueError): error = 'Setup failed. Check the code and use a password of at least 12 characters.'
+    return render_template('setup.html', error=error), 400 if error else 200
+
+
+def _same_origin():
+    try:
+        origin = urlsplit(request.headers.get('Origin') or request.headers.get('Referer') or '')
+        return origin.scheme in ('http', 'https') and origin.netloc == request.host
+    except ValueError: return False
+
+
+@app.post('/account')
+def update_account():
+    if not admin_authorized(): return Response('Administrator access required.', 403)
+    if not _same_origin(): return Response('Invalid request origin.', 403)
+    from app.unraid_setup import authenticate, change_account
+    if session.get('provider') == 'local' and not authenticate(request.form.get('current_username',''), request.form.get('current_password','')):
+        return Response('Current administrator credentials are required.', 403)
+    try: change_account(request.form.get('username',''), request.form.get('password',''))
+    except (OSError, ValueError): return Response('Account update failed. Use a username and a password of 12–256 characters.', 400)
+    session.clear()
+    return redirect(url_for('login'))
+
 
 @app.post("/logout")
 def logout():
@@ -115,7 +154,7 @@ STATE_FILE = os.environ.get("STATE_FILE", "/app/logs/auditor_state.json")
 
 @app.after_request
 def integration_response_headers(response):
-    if request.path.startswith("/api/v1/") or request.endpoint == "integration_setup":
+    if request.path.startswith("/api/v1/") or request.endpoint in ("integration_setup", "settings", "setup", "login", "update_account"):
         response.headers["Cache-Control"] = "no-store"
         response.headers["Vary"] = "Authorization"
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -136,14 +175,14 @@ def _integration_readiness():
         'freshness_verified': False, 'read_only': True,
         'media_actions_authorized': False,
         'execution_mode': selected.get('execution_mode','read_only_integration'),
-        'title_details_enabled': os.environ.get('INTEGRATION_API_TITLE_DETAILS', 'false').lower() == 'true',
-        'poster_lookup_enabled': os.environ.get('INTEGRATION_API_MEDIA', 'false').lower() == 'true',
+        'title_details_enabled': setting('INTEGRATION_API_TITLE_DETAILS', 'false').lower() == 'true',
+        'poster_lookup_enabled': setting('INTEGRATION_API_MEDIA', 'false').lower() == 'true',
         'coordinator_scope': 'unavailable' if read_only_service_enabled() else 'current_process',
         'routes': ['/api/v1/readiness', '/api/v1/summary', '/api/v1/audit-status',
                    '/api/v1/titles/oldest-waiting', '/api/v1/titles/leaving-soon', '/api/v1/coverage', '/api/v1/scan-history', '/api/v1/proposals', '/api/v1/backup-status'],
         'libraries': ['Movies', 'TV'], 'title_limit': 10,
-        'backup_selection_configured': all(os.environ.get(key) for key in ('INTEGRATION_API_BACKUP_DIRECTORY', 'INTEGRATION_API_BACKUP_IDENTITY', 'INTEGRATION_API_BACKUP_FINGERPRINT')),
-        'coverage_enabled': os.environ.get('INTEGRATION_API_COVERAGE', 'false').lower() == 'true',
+        'backup_selection_configured': all(setting(key) for key in ('INTEGRATION_API_BACKUP_DIRECTORY', 'INTEGRATION_API_BACKUP_IDENTITY', 'INTEGRATION_API_BACKUP_FINGERPRINT')),
+        'coverage_enabled': setting('INTEGRATION_API_COVERAGE', 'false').lower() == 'true',
     }
 
 
@@ -212,7 +251,7 @@ def integration_proposals():
 
 @app.get('/api/v1/coverage')
 def integration_coverage():
-    if os.environ.get('INTEGRATION_API_COVERAGE', 'false').lower() != 'true':
+    if setting('INTEGRATION_API_COVERAGE', 'false').lower() != 'true':
         return {'status':'disabled'}, 404
     library = request.args.get('library')
     if library not in (None, 'Movies', 'TV') or len(request.args.getlist('library')) > 1:
@@ -295,13 +334,13 @@ def _widget_media_index(base, token, media_type):
 def _integration_title_media(report):
     if not isinstance(report.get("items"), list):
         return report
-    enabled = os.environ.get("INTEGRATION_API_MEDIA", "false").lower() == "true"
+    enabled = setting("INTEGRATION_API_MEDIA", "false").lower() == "true"
     report["media_lookup_status"] = "disabled" if not enabled else "available"
     config = load_config() if enabled else {}
     base = config.get("JELLYFIN_HOST_URL", os.environ.get("JELLYFIN_HOST_URL", "")).rstrip("/")
     # Saved Settings wins for both transport and browser navigation by default.
     # An explicit override supports internal-only Docker names/reverse proxies.
-    public = widget_media_base(os.environ.get("JELLYFIN_PUBLIC_URL", base))
+    public = widget_media_base(setting("JELLYFIN_PUBLIC_URL", base))
     if enabled and not public:
         report["media_lookup_status"] = "unavailable"
     report["media_cache_max_age_seconds"] = 300 if enabled else None
@@ -324,7 +363,7 @@ def _integration_title_media(report):
 @app.get("/api/v1/titles/oldest-waiting", defaults={"view": "oldest-waiting"})
 @app.get("/api/v1/titles/leaving-soon", defaults={"view": "leaving-soon"})
 def integration_titles(view):
-    if os.environ.get("INTEGRATION_API_TITLE_DETAILS", "false").lower() != "true":
+    if setting("INTEGRATION_API_TITLE_DETAILS", "false").lower() != "true":
         return {"status": "disabled"}, 404
     library = request.args.get('library')
     if library not in (None, 'Movies', 'TV') or len(request.args.getlist('library')) > 1:
@@ -920,8 +959,12 @@ def settings():
         updated=dict(saved)
         try:
             for key in KEYS:
+                if key not in request.form: continue
                 raw=request.form.get(key,'').strip()
-                if key in SECRETS and not raw: continue
+                if key in SECRETS and not raw:
+                    if key not in updated and initial_environment().get(key):
+                        updated[key]=validate(key,initial_environment()[key])
+                    continue
                 if not raw and key not in BOOLS: updated.pop(key,None)
                 else: updated[key]=validate(key,raw)
             from app.deletion_policy import CONSENT_KEY,CONSENT_VERSION
@@ -943,6 +986,7 @@ def settings():
                 updated[SEASON_CONSENT] = SEASON_VERSION
             else:
                 updated[SEASON_CONSENT] = None
+            if request.form.get('disable_integration_api')=='yes': updated['INTEGRATION_API_TOKEN']=''
             validate_policy({**DEFAULTS,**initial_environment(),**updated})
             if request.form.get('settings_action')!='apply':
                 raise ValueError('Use Apply Requested Settings to apply your changes.')
@@ -955,9 +999,10 @@ def settings():
     except ValueError as exc: error=error or str(exc)
     baseline=initial_environment()
     values={key:saved.get(key,baseline.get(key,DEFAULTS.get(key,''))) for key in KEYS}
-    sources={key:('Web override' if key in saved else 'Unraid' if key in baseline else 'Default') for key in KEYS}
+    sources={key:('Web override' if key in saved else 'Legacy container value' if key in baseline else 'Default') for key in KEYS}
     for key in SECRETS: values[key]=''
     groups={name:[key for key in keys if key!='RUN_INTERVAL_HOURS'] for name,keys in FIELDS.items()}
+    groups['Account']=[]
     from app.deletion_policy import WARNING
     from app.orphan_cleanup import WARNING as ORPHAN_WARNING
     from app.tv_season_deletion_policy import WARNING as SEASON_WARNING

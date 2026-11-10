@@ -1,7 +1,8 @@
-from app.tracking_schema import has_pending_extension
 """Offline, redacted status contract; no network endpoint or action authority."""
+from app.tracking_schema import has_pending_extension
 from datetime import datetime, timezone, timedelta
 import os
+from config_store import setting
 if __package__:
     from .dashboard_tracking_snapshot import read_json_dashboard_snapshot
 else:
@@ -376,6 +377,8 @@ def project_scan_capture(capture):
             'rows':view['rows']}
 
 
+
+
 def selected_backup_status():
     """Inspect one operator-pinned packet; never find, create or adopt a backup."""
     import re
@@ -386,9 +389,9 @@ def selected_backup_status():
             'backup_scope':'explicitly_selected_packet', 'freshness_verified':False,
             'backup_kind':'logical_tracking_and_settings', 'captured_at':None,
             'age_seconds':None, 'verified_at':None, 'capture_time_status':'unknown'}
-    directory = os.environ.get('INTEGRATION_API_BACKUP_DIRECTORY', '')
-    identity = os.environ.get('INTEGRATION_API_BACKUP_IDENTITY', '')
-    fingerprint = os.environ.get('INTEGRATION_API_BACKUP_FINGERPRINT', '')
+    directory = setting('INTEGRATION_API_BACKUP_DIRECTORY')
+    identity = setting('INTEGRATION_API_BACKUP_IDENTITY')
+    fingerprint = setting('INTEGRATION_API_BACKUP_FINGERPRINT')
     if not any((directory, identity, fingerprint)):
         return {**base, 'status':'not_configured', 'packet_verified':False}
     if (not directory or not re.fullmatch(r'[0-9]{1,20}:[0-9]{1,20}', identity)

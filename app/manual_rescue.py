@@ -21,7 +21,7 @@ def rescue_title(library, title, destination):
         return False, "Audit or rescue already in progress.", 409
     try:
         auditor = importlib.import_module("collection_auditor")
-        # Import may load dotenv settings; validate the effective selection too.
+        # Validate the effective worker selection after importing the compatibility helper.
         try:
             require_json_backend(os.environ.get("AUDITOR_STATE_BACKEND", "json"))
         except RuntimeError:

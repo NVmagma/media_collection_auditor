@@ -4,7 +4,7 @@ Administrators can open **Backups** in the sidebar. **Create private backup**
 explicitly captures the current JSON state and saved settings under the shared
 writer lock. A running scan/settings writer blocks capture rather than queuing a
 retry. Saved clocks, worker claims, pending intents and unknown fields are copied
-unchanged. Media, action/history logs and external services are not backed up. Environment-only
+unchanged. Media, action/history logs and external services are not backed up. Legacy template-only
 credentials, container options and Unraid templates are not captured.
 
 Private copies include saved credentials. They live under `.auditor-backups` in

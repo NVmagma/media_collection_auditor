@@ -1,7 +1,6 @@
-# Secrets and personal settings (keep .env.example, which has only placeholders)
+# Legacy private environment files must never be committed
 .env
 .env.*
-!.env.example
 
 # Runtime data written by the script (contains your movie/show names)
 logs/

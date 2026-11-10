@@ -1,6 +1,8 @@
 # Integration API
 
-Use `Authorization: Bearer TOKEN` with `INTEGRATION_API_TOKEN`. Browser sessions
+Use `Authorization: Bearer TOKEN` with the token saved under Settings → Integrations
+(`INTEGRATION_API_TOKEN`). All integration options below are application settings;
+container variables are only an existing-installation migration fallback. Browser sessions
 are not API credentials, and API tokens cannot invoke browser administration or
 scan actions. Credentials belong in headers, never URL query strings. Responses
 have `Cache-Control: no-store` and describe observations, not action authority.

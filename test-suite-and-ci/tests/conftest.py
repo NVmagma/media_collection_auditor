@@ -171,7 +171,6 @@ def make_auditor(tmp_path, monkeypatch):
         env.update({k: str(v) for k, v in overrides.items()})
         for key, value in env.items():
             monkeypatch.setenv(key, value)
-        monkeypatch.setattr("dotenv.load_dotenv", lambda *args, **kwargs: False)
         import collection_auditor
         ca = importlib.reload(collection_auditor)
         return Auditor(ca, tmp_path)

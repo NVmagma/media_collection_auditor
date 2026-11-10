@@ -45,7 +45,7 @@ def test_setup_is_private_read_only_and_explicit(api, monkeypatch):
     assert response.status_code == 200
     assert TOKEN not in response.text and str(state) not in response.text
     assert 'Literal' in response.text and 'Movies' in response.text and 'TV' in response.text
-    assert 'INTEGRATION_API_TOKEN' in response.text
+    assert 'Settings → Integrations' in response.text and 'No container restart' in response.text
     assert response.headers['Cache-Control'] == 'no-store'
     assert client.post('/integrations', headers=AUTH).status_code == 405
     assert state.read_bytes() == before

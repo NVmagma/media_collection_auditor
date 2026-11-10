@@ -105,6 +105,8 @@ def verify_user(token, user_id):
 
 def current_user():
     if session.get("provider") == "local":
+        from app.unraid_setup import account_version
+        if session.get('account_version') != account_version(): return None
         return {"name": "Local administrator", "admin": True}
     if session.get("provider") != "jellyfin":
         return None

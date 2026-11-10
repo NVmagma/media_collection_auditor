@@ -1,14 +1,13 @@
 # Integration setup
 
 Administrators can open **API setup** in the sidebar (`/integrations`) for
-readiness information and copyable URLs. Integration settings are container
-environment values. Configure `INTEGRATION_API_TOKEN` with 32–256 ASCII letters,
+readiness information and copyable URLs. Integration settings are saved under **Settings → Integrations**. Generate or enter a token with 32–256 ASCII letters,
 digits, underscores, or hyphens. A URL-safe random token is suitable. Keep it
 separate from Jellyfin/Arr keys and browser administrator credentials.
 
-For title widgets, enable `INTEGRATION_API_TITLE_DETAILS=true`. Optional
-`INTEGRATION_API_MEDIA=true` enriches supported lists with artwork/navigation
-metadata. `INTEGRATION_API_COVERAGE=true` exposes aggregate folder/date coverage.
+For title widgets, enable **API Title Lists**. Optional **API Artwork Links**
+enriches supported lists with artwork/navigation metadata. **API Coverage** exposes
+aggregate folder/date coverage. Apply changes without restarting the container.
 Each option is independent. Read [the API contract](integration-api.md) before
 exposing data on a shared dashboard.
 
