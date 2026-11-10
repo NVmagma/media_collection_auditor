@@ -1,4 +1,4 @@
-"""Explicit archival of one stale lifecycle clock under the worker lock."""
+"""Archive one reviewed stale clock while holding the worker lock."""
 from datetime import datetime, timezone
 from pathlib import Path
 import hmac

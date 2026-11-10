@@ -1,4 +1,4 @@
-"""Template-only onboarding and saved settings must preserve old state and deny takeover."""
+"""Keep existing state safe during template setup and settings changes, and prevent account takeover."""
 import json
 import xml.etree.ElementTree as ET
 from pathlib import Path

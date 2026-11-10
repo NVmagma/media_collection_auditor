@@ -1,4 +1,4 @@
-"""Tests for cooperating offline migration locks."""
+"""Check that cooperating state writers and offline migration share the lock."""
 
 import pytest
 

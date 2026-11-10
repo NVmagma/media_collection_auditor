@@ -1,4 +1,4 @@
-"""Single-use Arr DELETE with files and import exclusion; no retry or redirect."""
+"""Send one Arr deletion request with file removal and import exclusion enabled. Do not retry or follow redirects."""
 from http.client import HTTPException
 from time import monotonic
 from urllib.error import HTTPError, URLError
@@ -14,8 +14,8 @@ class ArrTitleDelete(ArrTitleUpdate):
         try:
             return self._request('GET', self._url+'/'+str(title_id), monotonic()+10)
         except ArrTitleTransportError:
-            # The ordinary transport intentionally redacts status. Only this exact
-            # GET can turn an authenticated 404 into absence; all other failures block.
+            # The normal transport hides status details. Only this specific
+            # GET can treat an authenticated 404 as missing. Other failures still block.
             raise
 
     def read_absence(self, title_id):

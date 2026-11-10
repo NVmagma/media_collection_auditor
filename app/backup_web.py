@@ -1,4 +1,4 @@
-"""Session-admin backup controls; no endpoint restores active files."""
+"""Administrator backup controls. These routes never restore over active files."""
 import hmac,re,secrets,os
 from urllib.parse import urlsplit
 from flask import Blueprint,request,session,render_template,redirect,url_for

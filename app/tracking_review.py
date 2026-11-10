@@ -1,4 +1,4 @@
-"""Advisory tracking/folder comparisons; no state edits or service requests."""
+"""Compare saved clocks with folders without changing state or contacting services."""
 from datetime import datetime
 import unicodedata
 from app.title_identity import validate_title_folder

@@ -1,4 +1,4 @@
-"""Opt-in metadata quarantine planning. No media deletion or automatic replay."""
+"""Plan metadata quarantine only when enabled. Never delete media or retry automatically."""
 from copy import deepcopy
 from dataclasses import asdict
 from datetime import datetime,timezone,timedelta

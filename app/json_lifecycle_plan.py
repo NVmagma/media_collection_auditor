@@ -1,9 +1,9 @@
 from app.tracking_schema import has_pending_extension
-"""Pure JSON-worker advisory planning; no collectors, writes, HTTP or moves.
+"""Plan JSON worker actions without collecting data or changing files.
 
-Inputs must come from complete verified adapters. A plan never authorizes an
-operation: a future executor must recheck protections/paths and journal intent.
-All title observations are retained up to the explicit total collection bound.
+Use complete, verified input. A plan alone does not approve an action; the
+executor must recheck protection and paths and save its intent first. Keep every
+title result up to the configured collection limit.
 """
 from copy import deepcopy
 from dataclasses import dataclass
@@ -63,7 +63,7 @@ def plan_scan(*, snapshot, libraries, now, favorites_trigger_keep=True, maximum_
     state = deepcopy(snapshot)
     validate_snapshot(state)
     if KEY in state:
-        _control(state)  # Malformed worker metadata is not equivalent to no journal.
+        _control(state)  # Invalid worker metadata does not mean there is no pending operation.
     if (has_pending_extension(state) or state.get('arr_sync_pending')
             or isinstance(state.get(KEY), dict) and state[KEY].get('journal') is not None):
         raise RuntimeError('Pending operation requires review')

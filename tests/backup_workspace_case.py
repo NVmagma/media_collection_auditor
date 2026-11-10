@@ -1,4 +1,4 @@
-"""Render synthetic backup metadata only; no private payloads or file operations."""
+"""Render test backup details without reading private payloads or changing files."""
 import os
 from pathlib import Path
 from unittest.mock import patch

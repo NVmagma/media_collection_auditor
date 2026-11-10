@@ -1,5 +1,5 @@
-/* Compile trusted repository JSX and evaluate synthetic states, without a DOM,
-   network, Homarr credentials, React effects or production application code. */
+/* Compile the repository JSX with test states. Do not use the browser DOM,
+   network, Homarr credentials, React effects, or production application code. */
 const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');

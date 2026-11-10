@@ -1,4 +1,4 @@
-"""One captured source, detached consumers and read-only tracking comparisons."""
+"""Read tracking once and give each display its own copy."""
 import json
 import pytest
 from app.dashboard_tracking_snapshot import read_json_dashboard_snapshot

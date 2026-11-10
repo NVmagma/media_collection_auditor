@@ -1,7 +1,7 @@
-"""Exclusive advisory lock for offline migration coordination.
+"""Keep cooperating JSON writers from changing state at the same time.
 
-Current JSON writers and offline migration share this advisory lock. Older
-instances and external writers may not cooperate: stop them before migration.
+Normal writes and offline migrations use this lock. Older instances and other
+programs may not use it, so stop them before migrating state.
 """
 
 from __future__ import annotations

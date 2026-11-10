@@ -1,4 +1,4 @@
-"""Atomic JSON storage for the isolated worker; production remains untouched."""
+"""Test atomic JSON saves using separate test files."""
 from copy import deepcopy
 import json
 import os

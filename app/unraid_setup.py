@@ -1,4 +1,4 @@
-"""Protected first-run setup for a template with only appdata/media mounts."""
+"""Set up a new Unraid install with just the appdata and media mounts."""
 import hmac
 import os
 from pathlib import Path
@@ -46,7 +46,7 @@ def setup_pending():
 
 
 def prepare_installation():
-    """Initialize only an empty mounted appdata directory; never repair missing state."""
+    """Initialize only empty appdata. Leave missing or damaged state in an existing install for review."""
     root = CONFIG_FILE.parent
     if not root.is_dir() or root.is_symlink():
         raise RuntimeError('Mount a writable appdata directory at /app/logs')
@@ -103,7 +103,7 @@ def authenticate(username, password):
                     and _equal(username, account.get('username', ''))
                     and check_password_hash(account['password_hash'], password))
         except (ValueError, TypeError): return False
-    # Existing installations can sign in once using their original template login.
+    # Keep the old template login working until the user saves an application account.
     return bool(os.environ.get('WEB_ADMIN_PASSWORD') and
                 _equal(username, os.environ.get('WEB_ADMIN_USER', 'admin')) and
                 _equal(password, os.environ['WEB_ADMIN_PASSWORD']))

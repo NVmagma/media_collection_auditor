@@ -1,4 +1,4 @@
-"""Explicit JSON service selection, one active scan, daily schedule and history."""
+"""Run one scan at a time and manage the daily schedule and saved history."""
 from copy import deepcopy
 from dataclasses import asdict
 from datetime import datetime,timedelta,timezone
@@ -21,7 +21,7 @@ def enabled():
 
 
 def read_saved_settings():
-    """A missing/corrupt file pauses this worker; never reactivate live defaults."""
+    """Pause scans if settings are missing or damaged. Never fall back to live defaults."""
     from config_store import CONFIG_FILE
     from app.filesystem_paths import _open_directory
     from app.private_files import _local
@@ -215,7 +215,7 @@ class JSONWorkerService:
                 if record['result']=='completed': NOTIFICATIONS.clear('scan_blocked_or_uncertain')
                 else: NOTIFICATIONS.emit(values,'scan_blocked_or_uncertain')
             except Exception:
-                pass  # Opt-in delivery cannot change tracking or scan results.
+                pass  # Sending an enabled notification must not change tracking or scan results.
         print('[JSON WORKER] Attempt result='+str(record['result'])+
             ' verified_moves='+str(record.get('moves_completed'))+
             ' outcome='+str(record.get('result_basis')),flush=True)
@@ -227,7 +227,7 @@ def _title_details(decisions,completed,result,uncertain=None,deleted=(),quaranti
     finished={(row['library'],row['media_key']) for row in completed}
     quarantine_keys={(row['library'],row['media_key']) for row in quarantined}
     deleted_keys={(row['library'],row['media_key']) for row in deleted}
-    # Keep all decisions in private persistent history; existing display shows a bounded page.
+    # Save every decision in private history. The page only shows a limited set at a time.
     ordered=sorted(decisions,key=lambda row:row['outcome'] not in ('proposed','delete_proposed','quarantine_proposed','capped'))
     items=[]
     for row in ordered[offset:offset+100]:

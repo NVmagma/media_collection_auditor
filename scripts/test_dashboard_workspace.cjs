@@ -1,4 +1,4 @@
-/* Real-browser interaction acceptance; every HTTP response is local synthetic input. */
+/* Test browser interactions with locally supplied responses and test data. */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -38,8 +38,8 @@ if (!file) throw Error('Pass the synthetic page rendered by tests/dashboard_work
     assert.equal(await page.locator('.topbar').count(), 0);
     assert.equal(await page.locator('.sidebar').evaluate(el => el.getBoundingClientRect().left), 0);
     async function section(name) {
-      // Review links navigate to a fresh document; wait for its deferred
-      // workspace initialization rather than inspecting the uninitialized DOM.
+      // Review opens a new page. Wait for its deferred navigation setup
+      // before checking the page.
       await page.waitForFunction(expected => {
         const visible=Array.from(document.querySelectorAll('[data-panel]'))
           .filter(el => getComputedStyle(el).display !== 'none').map(el => el.dataset.panel);

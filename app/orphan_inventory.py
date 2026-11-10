@@ -1,4 +1,4 @@
-"""Conservative, descriptor-held video/metadata inventory; never modifies files."""
+"""Check for videos and metadata using open directory handles. Do not modify files."""
 import hashlib
 import json
 import os
@@ -8,8 +8,8 @@ from time import monotonic
 from app.filesystem_paths import _open_directory
 from app.mount_identity import read_fd_mount_id
 
-# Count zero-byte videos, stream pointers, disc images and incomplete downloads
-# as media/unknown, never as disposable sidecars.
+# Zero-byte videos, stream pointers, disc images, and incomplete downloads still
+# count as media or unknown files, not metadata that can be cleaned up.
 VIDEO_SUFFIXES=frozenset(('.mkv','.mp4','.m4v','.avi','.mov','.ts','.m2ts','.mts','.mpg','.mpeg',
     '.wmv','.iso','.webm','.ogv','.ogg','.flv','.3gp','.mxf','.vob','.ifo','.bup','.bdmv','.m2v','.strm'))
 SIDECAR_SUFFIXES=frozenset(('.nfo','.jpg','.jpeg','.png','.webp','.srt','.ass','.ssa','.vtt','.sub','.idx'))
@@ -18,7 +18,7 @@ MAX_ENTRIES=20000
 
 
 def apple_double(directory,name,expected):
-    """Validate bounded AppleDouble metadata headers (RFC 1740); never a data fork."""
+    """Check AppleDouble headers within the size limits (RFC 1740). Reject any data fork."""
     if not name.startswith('._') or not 26<=expected.st_size<=16*1024*1024:return False
     import struct
     child=os.open(name,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK,dir_fd=directory)
@@ -63,7 +63,7 @@ def inspect_fd(fd):
             if stat.S_ISREG(item.st_mode):
                 resource_fork=apple_double(directory,name,item)
                 if name.startswith('._') and not resource_fork:unknown=True
-                # A validated resource-fork sidecar is metadata, not its .mkv data file.
+                # A verified resource-fork sidecar is metadata; the .mkv data file is separate.
                 if not resource_fork and Path(name).suffix.lower() in VIDEO_SUFFIXES:
                     return {'status':'video_present','identity':[root.st_dev,root.st_ino]}
                 known_sidecar=resource_fork or name.lower() in HOUSEKEEPING or Path(name).suffix.lower() in SIDECAR_SUFFIXES

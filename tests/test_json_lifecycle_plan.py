@@ -1,4 +1,4 @@
-"""Pure JSON planning preserves lifecycle policy while skipping unmanaged titles."""
+"""Apply the lifecycle rules while skipping titles that Arr does not manage."""
 from copy import deepcopy
 from dataclasses import replace
 from datetime import datetime

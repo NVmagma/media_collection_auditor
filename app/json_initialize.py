@@ -1,4 +1,4 @@
-"""Explicit initialization in an empty logs directory; never adopts existing files."""
+"""Initialize an empty appdata directory. Never reuse or replace existing files."""
 from datetime import datetime,timedelta,timezone
 import json,os
 from pathlib import Path

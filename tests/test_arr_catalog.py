@@ -1,4 +1,4 @@
-"""Stable Arr identities and application paths are read-only queue inputs."""
+"""Check Arr IDs and paths before preparing updates. These tests only read catalogs."""
 from copy import deepcopy
 from types import SimpleNamespace as Object
 from unittest.mock import patch

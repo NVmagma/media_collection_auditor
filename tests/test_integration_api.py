@@ -1,4 +1,4 @@
-"""Dedicated API auth cannot confer dashboard or action permissions."""
+"""Keep API authentication separate from dashboard and action permissions."""
 import json
 import os
 from pathlib import Path

@@ -1,4 +1,4 @@
-"""Bounded Arr v3 import transport. No redirects, proxies, searches or retries."""
+"""Import through the Arr v3 API without redirects, proxies, searches, or retries."""
 import json
 from time import monotonic
 from urllib.error import HTTPError
@@ -12,7 +12,7 @@ from app.jellyfin_transport import _object
 
 
 class ArrImportError(RuntimeError):
-    """Fixed public failure code; never retain a remote response or URL."""
+    """Use a fixed error code so responses and private URLs do not end up in errors."""
 
 
 class ArrImportHTTP:
@@ -43,7 +43,7 @@ class ArrImportHTTP:
                 'Content-Type': 'application/json', 'Cache-Control': 'no-cache'})
             with self._opener.open(req, timeout=min(10, remaining)) as response:
                 # v3 schemas document 200; current create controllers also return 201.
-                # Neither acknowledgment replaces the service's independent readbacks.
+                # Check the result with fresh reads, even when the request was accepted.
                 if response.status not in ((200, 201) if method == 'POST' else (200,)):
                     raise ValueError('status')
                 body = bytearray()
@@ -80,7 +80,7 @@ class ArrImportHTTP:
 
     def create(self, payload):
         if self._posted: raise ArrImportError('import_attempt_already_used')
-        self._posted = True  # Even a lost acknowledgment consumes this attempt.
+        self._posted = True  # A lost response still uses this attempt. Do not send it again.
         provider = 'tmdbId' if self.service == 'radarr' else 'tvdbId'
         fields = {'title', 'titleSlug', provider, 'qualityProfileId', 'path',
             'rootFolderPath', 'monitored', 'tags', 'year', 'addOptions'}

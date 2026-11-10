@@ -1,7 +1,7 @@
-"""Isolated JSON worker storage; not selected by the production entrypoint.
+"""Read and save JSON tracking under a shared writer lock.
 
-One existing state file, one shared writer lock, explicit atomic checkpoints.
-No release binding, automatic initialization, backend fallback or media actions.
+Require an existing state file and save changes atomically at explicit checkpoints.
+Do not initialize missing state, switch backends, or perform media actions here.
 """
 from contextlib import contextmanager
 import json
@@ -53,7 +53,7 @@ class JsonTrackingSession:
         self._closed = False
         self._raw, self._identity = _read(parent, path.name)
         self.state = parse_unique_json(self._raw)
-        _encode(self.state)  # Strict schema and finite values, including extensions.
+        _encode(self.state)  # Validate the structure and finite values, including extra fields.
         self.verify()
 
     def verify(self):
@@ -69,8 +69,8 @@ class JsonTrackingSession:
         try:
             self._checkpoint()
         except BaseException:
-            # A failure can follow replacement. Prevent callers from continuing
-            # an uncertain session or treating a failed intent save as authority.
+            # A save can fail after the file is replaced. Do not let the caller continue
+            # with an uncertain session or act on an intent that may not have saved.
             self._closed = True
             raise
 
@@ -85,8 +85,8 @@ class JsonTrackingSession:
                 handle.write(raw); handle.flush(); os.fsync(handle.fileno())
             self.verify()
             os.replace(name, self._path.name, src_dir_fd=self._parent, dst_dir_fd=self._parent)
-            # Capture the committed file before directory fsync: failures are
-            # uncertain, not permission to replay a media/HTTP operation.
+            # Record the replaced file before syncing the directory. A failure here leaves
+            # the result uncertain; it does not make a repeated file action or request safe.
             self._raw, self._identity = _read(self._parent, self._path.name)
             if self._raw != raw: raise RuntimeError('Tracking commit changed')
             os.fsync(self._parent)
@@ -105,14 +105,14 @@ class JsonTrackingStore:
 
     @contextmanager
     def session(self):
-        # Missing state is never interpreted as an empty existing installation.
+        # Missing state does not mean an existing installation is empty.
         parent = os.open(self.path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         session = None
         try:
             with audit_run_lock(self.path) as verify_lock:
                 session = JsonTrackingSession(self.path, parent, verify_lock)
                 yield session
-                session.verify()  # No implicit save on exit, including exceptions.
+                session.verify()  # Do not save automatically when leaving the session, including on an error.
         finally:
             if session is not None: session._closed = True
             os.close(parent)

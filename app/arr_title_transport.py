@@ -1,7 +1,8 @@
-"""One attempt at an Arr title update, with two independent readbacks.
+"""Send one Arr title update, then read the record twice to check the result.
 
-Only a durable-intent caller may invoke this transport. It neither manages nor
-clears tracking intents/queues. No retry, redirects, proxies, delete or moveFiles.
+The caller must save the intent before using this transport. This module does
+not manage or clear pending tracking entries. Do not retry, follow redirects,
+use inherited proxies, delete titles, or ask Arr to move files.
 """
 from copy import deepcopy
 from http.client import HTTPException
@@ -24,10 +25,10 @@ class ArrTitleTransportError(RuntimeError):
 
 
 class ArrTitleUpdate:
-    """Single-use full-resource PUT; receipt and readbacks never clear state.
+    """Send the full record once. The response and readbacks do not clear tracking.
 
-    The expected source path comes from the bound preparation, not remote title
-    search. Other resource fields, including Sonarr seasons, remain unchanged.
+    Use the source path checked during preparation, not a title search. Keep
+    other record fields unchanged, including Sonarr's season settings.
     """
     def __init__(self, *, service, base_url, token, source_path, title_folder, verify_binding=None, deadline_tick=None):
         client = ArrCatalogGET(service=service, base_url=base_url, token=token)
@@ -60,7 +61,7 @@ class ArrTitleUpdate:
                 'Accept': 'application/json', 'Content-Type': 'application/json'})
             with self._opener.open(request, timeout=min(10, remaining)) as response:
                 # Sonarr 4's Accepted(id) returns 202; its v3 schema also
-                # documents 200. Acceptance alone never clears the intent.
+                # documents 200. Neither response is enough to clear the saved intent.
                 expected = ((202,) if self._service == 'radarr' else (200, 202)) if method == 'PUT' else (200,)
                 if response.status not in expected:
                     raise ValueError('status')
@@ -97,7 +98,7 @@ class ArrTitleUpdate:
             raise ArrTitleTransportError('Bound Arr request required')
         destination = _canonical(request['root'] + '/' + self._folder)
         url = self._url + '/' + str(request['title_id'])
-        # One deadline spans the initial read, update and both independent reads.
+        # Use one deadline for the first read, the update, and both result checks.
         deadline = monotonic() + 10
         if self._deadline is not None:
             deadline = min(deadline, self._deadline)
@@ -115,7 +116,7 @@ class ArrTitleUpdate:
         raw = json.dumps(update, allow_nan=False, separators=(',', ':')).encode()
         if len(raw) > 8 * 1024 * 1024:
             raise ArrTitleTransportError('Arr update resource too large')
-        # This response acknowledges transport only. Its content proves nothing.
+        # This only confirms that Arr accepted the request. Verify the result separately.
         self._request('PUT', url + '?moveFiles=false', deadline, raw)
         for _ in range(2):
             observed = self._request('GET', url, deadline)

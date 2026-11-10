@@ -1,4 +1,4 @@
-"""Delete only a verified expired season, after isolating it under a durable intent."""
+"""Save an intent, isolate the season, then delete only the verified expired files."""
 from contextlib import ExitStack
 from datetime import datetime, timedelta
 import os

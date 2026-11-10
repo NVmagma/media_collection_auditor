@@ -1,4 +1,4 @@
-"""JSON failure alerts are opt-in, redacted and deduplicated."""
+"""Send optional JSON failure alerts without private details or duplicate messages."""
 from unittest.mock import Mock
 from app import operational_notifications as alerts
 from test_json_worker_service import service,cycle_case

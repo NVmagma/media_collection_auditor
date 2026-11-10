@@ -1,4 +1,4 @@
-"""Detached tracking reads and read-only dashboard presentation projections."""
+"""Read tracking once and prepare separate copies for the dashboard."""
 from dataclasses import dataclass, field
 from datetime import datetime
 import json
@@ -9,7 +9,7 @@ from typing import Callable
 if __package__:
     from .json_validation import parse_unique_json
     from .tracking_schema import SECTIONS, validate_snapshot
-else:  # Production web.py also runs with app/ as its import root.
+else:  # web.py also imports this module with app/ on the Python path.
     from json_validation import parse_unique_json
     from tracking_schema import SECTIONS, validate_snapshot
 
@@ -23,11 +23,11 @@ class DashboardTrackingSnapshot:
 
     @property
     def state(self):
-        """Each consumer receives its own copy of the same captured snapshot."""
+        """Give each caller its own copy of the same captured tracking data."""
         return parse_unique_json(self._payload)
 
     def verify_current(self):
-        """Verify the captured tracking source when required."""
+        """Recheck the original tracking file when needed."""
         self._verify()
 
     @property
@@ -48,7 +48,7 @@ def _encode(state):
 
 
 def read_json_dashboard_snapshot(path, *, require_existing=False):
-    """Read authoritative JSON once; preserve legacy missing-section shape."""
+    """Read JSON tracking once and keep the old missing-section format supported."""
     path = Path(path)
     try:
         try:
@@ -68,10 +68,10 @@ def read_json_dashboard_snapshot(path, *, require_existing=False):
 
 
 def lifecycle_clock(value, *, limit=None, now=None):
-    """Display a saved clock without guessing from folder dates or other stages.
+    """Show the saved date without guessing from a folder or another stage.
 
-    Naive timestamps retain their original wall-time meaning. Aware timestamps
-    keep their recorded offset, including when computing removal-stage ages.
+    Dates without a time-zone offset keep their original local meaning. Dates
+    with an offset keep that offset, including when calculating age in Removal.
     """
     from datetime import datetime, timedelta
     result={'since_display':'Not yet tracked','since_basis':'No saved clock for this stage',
@@ -103,7 +103,7 @@ def lifecycle_clock(value, *, limit=None, now=None):
 
 
 def observation_datetime(value, timezone_name=None):
-    """Format process observations in a known zone; never reinterpret naive clocks."""
+    """Format progress dates in the selected time zone without changing old local dates."""
     from datetime import datetime
     from zoneinfo import ZoneInfo
     if not value:return 'Not recorded in this process'
@@ -122,10 +122,10 @@ def observation_datetime(value, timezone_name=None):
 
 
 def summarize_dashboard_clocks(state, stages, warnings, *, libraries, tracking_available=True):
-    """Summarize this inventory capture without rescanning or changing dates.
+    """Summarize the captured folders without scanning again or changing dates.
 
-    Unmatched counts refer to the named stage, not proof that media was deleted.
-    Unavailable tracking/directories are unknown coverage, never zero-date claims.
+    A record missing from one stage does not prove that media was deleted.
+    Unreadable tracking or folders mean coverage is unknown, not zero.
     """
     sections={'Waiting':'first_seen','Holding':'queued','Removal':'in_removal','Keep':'keep_seen'}
     rows=[]
@@ -155,11 +155,11 @@ def summarize_dashboard_clocks(state, stages, warnings, *, libraries, tracking_a
 
 
 def dashboard_overview(stages, coverage, *, libraries, tracking_available=True, limit=5):
-    """Project bounded overview lists from the already enriched folder snapshot.
+    """Build the Overview lists from the folder data already collected.
 
-    Waiting uses recorded elapsed days, with title/library ties. Holding uses the
-    existing estimated calendar date. Unknown clocks sort last and never acquire
-    an inferred date. This function performs no collection or state writes.
+    Sort Waiting by recorded elapsed days, then title and library. Holding uses
+    the estimated calendar date. Put unknown dates last without inventing one.
+    Do not collect more data or save tracking here.
     """
     if type(limit) is not int or not 1 <= limit <= 10:
         raise ValueError('Overview limit must be between one and ten')
@@ -207,7 +207,7 @@ def dashboard_overview(stages, coverage, *, libraries, tracking_available=True, 
     return result
 
 
-# Presentation of scheduler records; no new Docker runtime dependency.
+# Prepare scheduler records for display without adding a container dependency.
 _SCAN_REASON = {
     'worker_return': 'The worker returned a recorded result. This does not verify live inventory freshness.',
     'blocked_or_uncertain': 'The attempt stopped with a blocked or uncertain outcome. Review logs and retained operation state; do not assume it is safe to replay.',
@@ -229,7 +229,7 @@ def _scan_time(value):
 
 
 def _scan_entry(record, zone, *, title_details=True):
-    """Project fixed scalar fields and bounded title decisions; never raw errors/payloads."""
+    """Return only known summary fields and limited title results, without raw errors or payloads."""
     if __package__:
         from .scan_details import project_details
     else:
@@ -281,7 +281,7 @@ def _scan_entry(record, zone, *, title_details=True):
 
 
 def build_scan_view(run, history, *, timezone_name=None, title_details=True):
-    """Render passed-in observations only; no filesystem/network/history fallback."""
+    """Render only the supplied results. Do not fall back to reading files, services, or history."""
     run = run if isinstance(run, dict) else {}
     if run.get('status') == 'unavailable':
         state, detail = 'Unavailable', 'No current scheduler observation is available.'

@@ -1,7 +1,8 @@
-"""Isolated journaled move executor; not wired to production or a web route.
+"""Move media and record each step in the JSON journal.
 
-Trusted adapters must provide fresh protection and exact Arr preflight/readback.
-No deletion, copy fallback, implicit retry or recovery is performed here.
+The service adapters must provide fresh protection checks and exact Arr records
+before and after the move. This module does not delete media, copy across
+filesystems, retry automatically, or recover an interrupted operation.
 """
 from contextlib import ExitStack
 from dataclasses import dataclass, asdict
@@ -141,7 +142,7 @@ def execute_move(attempt, *, request, now, fetch_protection, arr_preflight, arr_
         rename_directory_noreplace_at(source,request.title,destination,request.title)
         os.fsync(source); os.fsync(destination)
         verify(moved=True)
-        # One atomic checkpoint records both the moved clock and outstanding sync.
+        # Save the new clock and pending Arr update together.
         session.state[CLOCKS[request.source_stage]].pop(key)
         session.state[CLOCKS[request.destination_stage]][key] = now.isoformat()
         session.state[KEY]['journal']['kind'] = 'arr_sync'
@@ -150,7 +151,7 @@ def execute_move(attempt, *, request, now, fetch_protection, arr_preflight, arr_
         verify(moved=True)
         sent = arr_complete(request)
         if sent is not True: raise RuntimeError('Arr outcome unresolved')
-        # arr_complete must include two fresh independent exact record readbacks.
+        # arr_complete requires two fresh, independent reads of the exact Arr record.
         attempt.finish_operation(identifier=identifier,verify_outcome=lambda journal:
             journal['kind'] == 'arr_sync' and verify(moved=True) is None)
         return {'status':'move_and_arr_verified','library':request.library,'title':request.title,

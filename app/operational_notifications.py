@@ -1,4 +1,4 @@
-"""Opt-in, redacted operational alerts; no media payloads or automatic retries."""
+"""Send optional failure alerts without private media details or automatic retries."""
 from datetime import datetime, timezone
 import hashlib
 from threading import Lock
@@ -46,7 +46,7 @@ def _deliver(kind,url,token,payload):
                              else 'Media Auditor needs review')}
         if token:headers['Authorization']='Bearer '+token
         options={'data':payload['message'].encode('utf-8'),'headers':headers}
-    # No environment proxies, redirects, redirects carrying credentials or retries.
+    # Do not inherit proxies, follow redirects with credentials, or retry requests.
     with requests.Session() as client:
         client.trust_env=False
         with client.post(url,timeout=(2,3),allow_redirects=False,**options) as response:
@@ -54,7 +54,7 @@ def _deliver(kind,url,token,payload):
 
 
 def test_destination(settings, kind):
-    """Send one explicitly requested test, independently of alert policy."""
+    """Send one requested test message, even if automatic alerts are disabled."""
     url = _text(settings.get(dict(_TARGETS)[kind]))
     if not url:
         return False, 'Save a destination for this service before testing.'
@@ -76,10 +76,11 @@ def test_destination(settings, kind):
 
 
 class OperationalNotifications:
-    """At most one attempt per event/destination incident in this process.
+    """Try each event and destination once per incident in this process.
 
-    Mark before sending, including failed/uncertain delivery. A successful relevant
-    recovery explicitly clears that event. Restart resets this ephemeral state.
+    Mark it before sending, even if delivery fails or the response is lost.
+    Clear the event after the matching recovery succeeds. Restarting the app
+    resets these in-memory delivery records.
     """
     def __init__(self,*,deliver=_deliver):
         self._deliver=deliver
@@ -95,7 +96,7 @@ class OperationalNotifications:
         try:
             return self._emit(settings,event)
         except Exception:
-            # Notification failures never change scan/settings outcomes or leak errors.
+            # A failed notification must not change the scan/settings result or expose raw errors.
             return {'status':'delivery_failed','attempted':0,'delivered':0}
 
     def _emit(self,settings,event):

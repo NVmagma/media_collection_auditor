@@ -1,4 +1,4 @@
-"""Actual packaged entrypoint: empty appdata, setup, login, restart; no media mounts."""
+"""Start the packaged app with empty appdata, then test setup, login, and restart without media mounts."""
 import http.cookiejar
 import json
 import os

@@ -1,4 +1,4 @@
-/* Synthetic browser acceptance: no network requests or production state. */
+/* Check API setup in the browser using test data, without real requests or state. */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');

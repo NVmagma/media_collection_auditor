@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Container-only, expiring, synthetic dashboard API; no auditor worker."""
+"""Run a temporary widget API with test data, without starting the audit worker."""
 import argparse
 import json
 import os

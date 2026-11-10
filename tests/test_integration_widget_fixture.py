@@ -1,4 +1,4 @@
-"""Synthetic widget fixture exposes only authenticated, read-only integration views."""
+"""Expose only authenticated, read-only widget responses from test data."""
 import json
 import pytest
 from scripts.integration_widget_fixture import create_fixture_app, read_fixture_token

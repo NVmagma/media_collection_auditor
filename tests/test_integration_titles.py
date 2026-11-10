@@ -1,4 +1,4 @@
-"""Title lists are opt-in tracking projections, never collection or actions."""
+"""Return enabled title lists from saved tracking without scanning or moving media."""
 import json
 import pytest
 from app.integration_status import read_tracking_titles

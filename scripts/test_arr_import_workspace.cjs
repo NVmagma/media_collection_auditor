@@ -1,4 +1,4 @@
-/* Browser-only fixtures: never contact Arr, Docker, production paths or services. */
+/* Test the import page in a browser without contacting Arr, Docker, or production services. */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');

@@ -1,4 +1,4 @@
-"""Actual POST delivery only to a new private-loopback notification receiver."""
+"""Test notification POSTs against a temporary local server only."""
 import json
 from threading import Thread
 import unittest

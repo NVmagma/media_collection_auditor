@@ -1,4 +1,4 @@
-# dependencies.txt
+# Application dependencies
 requests>=2.31.0
 Flask>=3.0,<4
-# Include any other libraries needed for advanced logging/logging filters
+# Keep test-only packages out of the runtime image.

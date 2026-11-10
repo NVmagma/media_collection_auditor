@@ -1,4 +1,4 @@
-"""Real checked inventory feeds clock changes under the worker's existing lock."""
+"""Use checked folder inventory to update clocks under the worker lock."""
 from copy import deepcopy
 from datetime import datetime
 import json

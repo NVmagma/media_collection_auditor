@@ -1,4 +1,4 @@
-"""Real disposable directory moves and loopback Arr updates for the JSON executor."""
+"""Test JSON moves with temporary folders and local Arr updates."""
 from copy import deepcopy
 from dataclasses import asdict, replace
 from datetime import datetime, timedelta, timezone

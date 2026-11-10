@@ -1,4 +1,4 @@
-"""All authenticated pages share destinations, role boundaries and a left sidebar."""
+"""Keep the same left navigation and access rules on every signed-in page."""
 from html.parser import HTMLParser
 from flask import g,render_template
 import web

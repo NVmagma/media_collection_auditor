@@ -1,4 +1,4 @@
-"""Read-only scan display must not invent outcomes or leak error/payload fields."""
+"""Keep scan results accurate and leave raw errors and payloads out of the page."""
 from copy import deepcopy
 import pytest
 from app.dashboard_tracking_snapshot import build_scan_view

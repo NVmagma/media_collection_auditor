@@ -1,7 +1,7 @@
-"""Storage boundary for future state backends; production remains JSON-only.
+"""Keep JSON storage behind a small interface that is easy to test.
 
-This interface provides a small,
-testable contract before changing the auditor's persistence behavior.
+The application uses JSON only. This interface does not change how the existing
+loader, locks, or saves work.
 """
 
 from __future__ import annotations
@@ -21,9 +21,9 @@ class StateStore(Protocol):
 
 
 class JsonStateStore:
-    """Adapter around the existing, safety-checked production JSON routines.
+    """Use the existing JSON loader and save functions.
 
-    No new JSON parsing, locking, or write behavior is introduced here.
+    Keep their parsing, locking, and write behavior unchanged.
     """
 
     def __init__(self, state_path: str | Path):

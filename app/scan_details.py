@@ -1,4 +1,4 @@
-"""Bounded, redacted title observations. Never grant execution or replay authority."""
+"""Prepare limited title details without private payloads or permission to run actions."""
 
 if __package__:
     from .title_identity import validate_title_folder
@@ -70,7 +70,7 @@ def reason_code(decision):
     return _EXPLANATIONS.get(decision.get('explanation'),'policy_review')
 
 def project_details(value, *, titles=True):
-    """Drop unrecognized fields, paths, payloads and reason text at every boundary."""
+    """Keep only known fields. Leave out paths, raw payloads, and free-text reasons."""
     if (not isinstance(value,dict) or type(value.get('schema_version')) is not int or value['schema_version']!=1
             or type(value.get('total_records')) is not int or not 0<=value['total_records']<=100000
             or not isinstance(value.get('items'),(list,tuple)) or len(value['items'])>LIMIT):return None

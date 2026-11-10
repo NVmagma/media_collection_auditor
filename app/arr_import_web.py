@@ -1,4 +1,4 @@
-"""Browser administrator import flow. Integration tokens never grant writes."""
+"""Let administrators review imports. Read-only integration tokens cannot create them."""
 import hmac
 import math
 import re
@@ -103,7 +103,7 @@ def create_blueprint(*, is_admin):
                 or not current_draft(draft, data.get('review_fingerprint'))
                 or not isinstance(draft.get('selection'), dict)):
             return {'ok': False, 'message': 'Prepare a new import review.'}, 409
-        # Consume browser consent for this attempt even if its acknowledgment is lost.
+        # Use this consent only once, even if the response is lost.
         session.pop('arr_import_review', None)
         return respond(lambda: service.apply(selection=draft['selection'],
             expected_fingerprint=draft['fingerprint']), mutation=True)

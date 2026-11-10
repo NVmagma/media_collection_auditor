@@ -1,4 +1,4 @@
-"""Read-only dashboard projection of recorded TV season staging."""
+"""Prepare the dashboard view from saved season-staging records."""
 from datetime import datetime, timedelta, timezone
 
 from app.dashboard_tracking_snapshot import observation_datetime

@@ -1,4 +1,4 @@
-"""Acknowledge completed season moves using filesystem observations and GETs."""
+"""Confirm a completed season move using folder checks and fresh GET requests."""
 from contextlib import ExitStack
 from datetime import datetime
 from hashlib import sha256
@@ -18,7 +18,7 @@ from app.tv_season_move import ARCHIVE, SEASON_FOLDER, _identity, verify_season_
 
 
 def recover_season(store, *, settings, expected=None, monitoring_factory=SonarrSeasonMonitoring):
-    """Review or explicitly acknowledge only the already-completed outcome."""
+    """Review or confirm an action that already completed. Do not repeat it."""
     if expected is not None and (not isinstance(expected, str) or not re.fullmatch('[0-9a-f]{64}', expected)):
         raise ValueError('Fresh season recovery review required')
     with store.session() as session, ExitStack() as stack:

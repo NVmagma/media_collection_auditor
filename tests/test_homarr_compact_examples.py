@@ -1,4 +1,4 @@
-"""Opt-in examples stay synchronized; fixture filters precede the ten-row cap."""
+"""Keep widget examples in sync and apply library filters before the ten-row limit."""
 import json
 from pathlib import Path
 import pytest

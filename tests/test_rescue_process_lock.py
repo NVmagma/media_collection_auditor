@@ -1,4 +1,4 @@
-"""Real process contention around disposable manual rescue; no service calls."""
+"""Test competing rescue processes using temporary folders and no service calls."""
 import json
 import os
 from pathlib import Path

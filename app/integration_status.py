@@ -1,4 +1,4 @@
-"""Offline, redacted status contract; no network endpoint or action authority."""
+"""Prepare safe status responses without contacting services or allowing media actions."""
 from app.tracking_schema import has_pending_extension
 from datetime import datetime, timezone, timedelta
 import os
@@ -14,10 +14,10 @@ def read_tracking_status(path):
 
 
 def _project_tracking_status(capture):
-    """Capture authoritative JSON once; counts are records, not live inventory.
+    """Read JSON tracking once. These counts describe saved records, not live media.
 
-    Missing state is unavailable even though the legacy dashboard permits a
-    fresh installation's missing file. Unknown extension values never escape.
+    Report missing state as unavailable, even though the older dashboard allows
+    a missing file for a fresh install. Do not return unknown extension values.
     """
     report = {
         "schema_version": 1, "status": "unavailable", "read_only": True,
@@ -43,10 +43,10 @@ def _project_tracking_status(capture):
 
 
 def audit_status_report(current):
-    """Project coordinator observations onto a fixed schema, never free text.
+    """Return known coordinator fields without copying free-text details.
 
-    Coordinator history reads are best effort; this is not durable-history or
-    collector-health verification, even when a prior result says completed.
+    History reads can fail. A previous completed result does not prove the
+    history is complete or the service collectors are currently healthy.
     """
     report = {"schema_version": 1, "status": "unavailable", "read_only": True,
               "production_activation": "disabled", "production_authorized": False,
@@ -80,10 +80,10 @@ def read_tracking_titles(path, view, *, holding_days=7, library=None):
 
 
 def _project_tracking_titles(capture, view, *, holding_days=7, library_filter=None):
-    """Bounded opt-in title projection from one JSON read, without collection.
+    """Build the enabled title list from one tracking read without scanning media.
 
-    Legacy timestamps are local wall time without an offset. Preserve that
-    meaning rather than inventing UTC, elapsed seconds or a deletion deadline.
+    Old dates are local time without an offset. Keep that meaning instead of
+    assuming UTC, calculating elapsed seconds, or promising a deletion date.
     """
     report = {"schema_version": 1, "status": "unavailable", "read_only": True,
               "production_activation": "disabled", "production_authorized": False,
@@ -111,7 +111,7 @@ def _project_tracking_titles(capture, view, *, holding_days=7, library_filter=No
             if library_filter is not None and library != library_filter:
                 continue
             title = key[3:] if library == "TV" else key
-            # State extensions or malformed keys must never leak raw paths.
+            # Do not expose raw paths from extra state fields or invalid keys.
             if (not title or len(title) > 250 or title in (".", "..")
                     or any(c in title for c in ("/", "\\"))
                     or any(ord(c) < 32 or ord(c) == 127 for c in title)):
@@ -134,10 +134,11 @@ def _project_tracking_titles(capture, view, *, holding_days=7, library_filter=No
 
 
 def collect_widget_media_index(fetch, media_type):
-    """Bounded, complete per-user catalog for presentation, never protections.
+    """Read the complete per-user catalog for display, within the request limits.
 
-    The caller supplies a deadline-bound GET transport. Folder matches are exact;
-    display-name/year fallbacks and first-match selection are intentionally absent.
+    The caller supplies a GET transport with a deadline. Match exact folders;
+    do not guess from display names or years, or choose the first match. These
+    results are not protection checks for media actions.
     """
     import posixpath
     import re
@@ -212,7 +213,7 @@ def collect_widget_media_index(fetch, media_type):
 
 
 def widget_media_base(value):
-    """Accept an explicit HTTP(S) browser/transport base with no URL credentials."""
+    """Accept an HTTP(S) base URL without embedded credentials."""
     import re
     from urllib.parse import urlsplit
     try:
@@ -233,7 +234,7 @@ def widget_media_base(value):
 
 
 def widget_media_urls(item, index, public_base):
-    """Credential-free URLs only for one exact folder identity in a full catalog."""
+    """Build links without credentials only when the full catalog has one exact folder match."""
     import re
     result = {'match_status': 'unavailable', 'poster_url': None, 'jellyfin_url': None}
     try:
@@ -319,10 +320,10 @@ def selected_run_history(legacy_history,limit=100):
 
 
 def read_selected_coverage(path, build):
-    """Project bounded aggregate inventory while verifying the selected snapshot.
+    """Summarize folder counts while checking the selected tracking file.
 
-    The callback receives detached tracking only. Never return its source payload.
-    JSON reads are checked before and after local inventory.
+    Pass a copy of tracking to the callback without returning its raw contents.
+    Verify the JSON file before and after checking local folders.
     """
     backend = os.environ.get('AUDITOR_STATE_BACKEND', 'json')
     if backend != 'json':
@@ -356,7 +357,7 @@ def selected_scan_capture():
 
 
 def project_scan_capture(capture):
-    """Fixed safe presentation contract shared by history and proposal APIs."""
+    """Use the same safe display fields for history and proposal responses."""
     if __package__:
         from .dashboard_tracking_snapshot import build_scan_view
     else:
@@ -380,7 +381,7 @@ def project_scan_capture(capture):
 
 
 def selected_backup_status():
-    """Inspect one operator-pinned packet; never find, create or adopt a backup."""
+    """Check the selected backup packet. Do not search for or create a different backup."""
     import re
     from datetime import datetime, timezone
     base = {'schema_version':1, 'read_only':True, 'automatic_action':'none',

@@ -1,4 +1,4 @@
-"""Actual loopback GET collection into the JSON plan; no media/Arr mutations."""
+"""Collect real local GET responses for the planner without changing media or Arr."""
 from copy import deepcopy
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer

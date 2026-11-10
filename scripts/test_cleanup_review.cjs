@@ -1,4 +1,4 @@
-/* Synthetic recorded data only; no production services or mutations. */
+/* Use saved test results without contacting or changing production services. */
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');

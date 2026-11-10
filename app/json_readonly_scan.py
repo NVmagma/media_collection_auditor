@@ -1,7 +1,8 @@
-"""Descriptor-checked inventory plus GET-only JSON rehearsal; never checkpoints.
+"""Collect checked inventory for previews and live scans.
 
-Missing/new TV clocks are proposals for review, not inferred old dates or move
-permission. No entrypoint selects this module for a live worker.
+A preview proposes missing or reset clocks without saving them. The live worker
+uses its locked session to save verified discovery and content dates. Moving
+media is handled separately.
 """
 from contextlib import ExitStack, nullcontext
 from copy import deepcopy
@@ -45,17 +46,17 @@ def _identity(info):
 def rehearse_scan(*, state_file, settings, now=None, maximum_titles=100000,
                    collect=collect_readonly_plan, timer=monotonic, maximum_seconds=3600,
                    observer=lambda stage: None):
-    """Read-only public rehearsal; never opens a checkpoint-capable worker mode."""
+    """Run a preview without opening a session that can save tracking."""
     return _scan(state_file=state_file, settings=settings, now=now,
         maximum_titles=maximum_titles, collect=collect, timer=timer,
         maximum_seconds=maximum_seconds, observer=observer)
 
 
 def collect_worker_scan(session, *, settings, **kwargs):
-    """Collect under the worker's existing exclusive session and save fresh clocks.
+    """Collect data and save fresh dates under the worker's existing lock.
 
-    This only updates discovery/content dates; moves remain a separate executor.
-    The caller owns admission and holds the same session throughout collection.
+    Only discovery and content dates change here; moves run separately. The
+    caller reserves the scan slot and keeps the same session open throughout.
     """
     session.verify()
     return _scan(state_file=str(session._path), settings=settings,

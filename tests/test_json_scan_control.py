@@ -1,4 +1,4 @@
-"""Isolated scan admission/journal; never performs media or Arr operations."""
+"""Test scan admission and journaling without media actions or Arr updates."""
 from datetime import datetime, timedelta, timezone
 import json
 import subprocess
@@ -92,7 +92,7 @@ def test_only_exact_verified_operation_can_complete(initialized):
         seen = []
         def verify(journal):
             seen.append(journal['details']['destination'])
-            journal['details'].clear()  # Verifier receives a detached copy.
+            journal['details'].clear()  # The verifier gets its own copy.
             return True
         attempt.finish_operation(identifier=identifier, verify_outcome=verify)
         assert seen == ['/media/Movies_hold/Existing']

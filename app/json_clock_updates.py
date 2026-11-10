@@ -53,7 +53,7 @@ def apply_clock_observations(session, *, changes, now, verify_change):
                 or matches != [section] or before[section][change.media_key] != change.previous
                 or change.observed_at <= datetime.fromisoformat(change.previous)):
             raise RuntimeError('TV reset observation no longer matches tracking')
-    # Finish all independent reads before changing any in-memory tracking dates.
+    # Finish all independent checks before changing tracking dates in memory.
     for change in checked:
         if verify_change(change) is not True:
             raise RuntimeError('Fresh clock evidence unavailable')

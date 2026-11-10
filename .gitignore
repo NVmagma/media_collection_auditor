@@ -2,7 +2,7 @@
 .env
 .env.*
 
-# Runtime data written by the script (contains your movie/show names)
+# Runtime files can contain private movie and show names.
 logs/
 *.jsonl
 auditor_state.json
@@ -17,6 +17,6 @@ __pycache__/
 /tests/homarr-render/node_modules/
 /tests/dashboard-browser/node_modules/
 
-# Local retired recipes may contain existing user edits; builds use docker/runtime.Dockerfile.
+# Leave old local recipes alone. Builds use docker/runtime.Dockerfile.
 /Dockerfile
 /dockerfile

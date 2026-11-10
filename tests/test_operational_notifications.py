@@ -1,4 +1,4 @@
-"""Operational alerts require explicit opt-in and never contain private context."""
+"""Send alerts only when enabled and keep private details out of them."""
 import json
 from unittest.mock import Mock
 import pytest

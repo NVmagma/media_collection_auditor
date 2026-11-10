@@ -35,7 +35,7 @@ document.querySelectorAll('[data-test-service]').forEach(button => {
   });
 });
 
-// Draft indicators remain local; no values are copied to status text or storage.
+// Track unsaved edits in this page only. Keep field values out of status text and storage.
 const editor = document.getElementById('settings-form');
 const draftStatus = document.getElementById('settings-draft-status');
 if (editor && draftStatus) {
@@ -59,7 +59,7 @@ if (editor && draftStatus) {
   updateDraft();
 }
 
-// A visible, unchecked acknowledgement is required for every apply with deletion on.
+// Require a fresh warning acknowledgment every time settings are applied with deletion enabled.
 const deletionSwitch = document.getElementById('field-ALLOW_PERMANENT_DELETE');
 const deletionWarning = document.getElementById('removal-deletion-warning');
 const deletionAck = document.getElementById('acknowledge-removal-deletion');
@@ -118,7 +118,7 @@ if (seasonDeleteSwitch && seasonDeleteWarning && seasonDeleteAck) {
   updateSeasonDeleteWarning();
 }
 
-// Only a newly generated/entered token is shown; saved secrets never enter the DOM.
+// Only show the token just entered or generated. Never load a saved secret into the page.
 const apiTokenField = document.getElementById('field-INTEGRATION_API_TOKEN');
 document.getElementById('generate-api-token')?.addEventListener('click', () => {
   const bytes = crypto.getRandomValues(new Uint8Array(32));

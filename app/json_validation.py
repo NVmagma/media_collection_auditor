@@ -1,4 +1,4 @@
-"""Strict JSON parsing for lossless offline state migration."""
+"""Read JSON without silently dropping duplicate keys or invalid values."""
 
 from __future__ import annotations
 

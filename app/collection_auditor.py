@@ -1,3 +1,4 @@
+# Compatibility helpers and the original audit loop. The Unraid image starts app.main.
 import os
 import sys
 import json

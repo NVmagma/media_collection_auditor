@@ -1,4 +1,4 @@
-"""Disposable Movie/TV leftovers, real bounded GETs and no permanent deletion."""
+"""Test movie and TV leftovers with temporary files and checked GETs, without permanent deletion."""
 from copy import deepcopy
 from datetime import datetime,timedelta,timezone
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer

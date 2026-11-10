@@ -1,4 +1,4 @@
-"""Allowlisted, recorded-only metadata cleanup review. No service or media access."""
+"""Show saved cleanup results without reading media or contacting services."""
 import re
 from app.orphan_cleanup import control, observation, instant, GRACE
 from app.scan_results import recorded_details

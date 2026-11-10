@@ -40,8 +40,8 @@ jobs:
           docker build --pull --file docker/runtime.Dockerfile
           --build-arg SOURCE_REVISION="$GITHUB_SHA"
           --tag media-collection-auditor:security-check .
-      # Scan an exported image without mounting the Docker socket into
-      # the scanner. A finding still fails the job; no bypass or suppression.
+      # Scan the exported image without giving the scanner the Docker socket.
+      # Findings must still fail the job; do not bypass or suppress them.
       - name: Export local image for offline inspection
         run: docker save media-collection-auditor:security-check -o "$RUNNER_TEMP/media-auditor-image.tar"
       - name: Scan OS and Python packages with Trivy

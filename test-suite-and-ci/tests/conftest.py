@@ -19,8 +19,8 @@ import requests
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "app"))
 
-# Every setting the script reads. Cleared before each test so a developer's real environment
-# (or .env file) can never leak in and cause a test to talk to a real server.
+# Clear these settings before each test so real credentials cannot leak in
+# and cause a test to contact a real server.
 SETTINGS = [
     "DRY_RUN", "JELLYFIN_HOST_URL", "JELLYFIN_API_TOKEN", "JELLYFIN_REFRESH_AFTER_AUDIT", "DISLIKE_TAG", "PROTECT_TAG",
     "RADARR_URL", "RADARR_API_KEY", "SONARR_URL", "SONARR_API_KEY",

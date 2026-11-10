@@ -1,4 +1,4 @@
-"""Synthetic Settings renders: no production config, request files or actions."""
+"""Render Settings with test data, without reading production configuration or running actions."""
 import os
 os.environ.setdefault('WEB_SESSION_SECRET', 'synthetic-settings-secret')
 from flask import g, render_template

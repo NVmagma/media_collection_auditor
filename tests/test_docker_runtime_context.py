@@ -1,4 +1,4 @@
-"""Runtime COPY inputs import without checkout modules or retired backends."""
+"""Check that the files copied into the image work without modules from the checkout."""
 import json,os,shutil,subprocess,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]

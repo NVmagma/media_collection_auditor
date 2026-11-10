@@ -1,4 +1,4 @@
-"""End-to-end JSON cycle: admission, real inventory, moves and Arr readbacks."""
+"""Test the full JSON scan: admission, folders, moves, and Arr result checks."""
 from copy import deepcopy
 from datetime import timedelta, timezone
 import json

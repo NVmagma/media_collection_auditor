@@ -1,4 +1,4 @@
-"""Render synthetic import UI for browser acceptance; no Arr or production reads."""
+"""Render the import page with test data, without reading Arr or production files."""
 from pathlib import Path
 import sys
 from flask import Flask, render_template

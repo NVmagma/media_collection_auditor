@@ -1,7 +1,7 @@
-"""Bounded GET-only Jellyfin transport for scheduled read-only collection.
+"""Read Jellyfin with request limits and GET-only routes.
 
-No redirects, proxy inheritance, automatic retries, response cache or mutating
-routes. Never expose token, server URL or raw transport exceptions in errors.
+Do not follow redirects, inherit proxies, retry automatically, or cache responses.
+Keep tokens, server URLs, and raw request errors out of reported failures.
 """
 import json
 from http.client import HTTPException

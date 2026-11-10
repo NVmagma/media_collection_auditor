@@ -1,5 +1,5 @@
 #!/bin/bash
-# Starts only a new, expiring synthetic API container. No production mounts.
+# Start a temporary API test container without production mounts.
 set -eu
 umask 077
 if [ "$#" -gt 1 ]; then
@@ -31,7 +31,7 @@ cleanup_failure() {
   fi
 }
 trap cleanup_failure EXIT
-# Generate a new fixture-only credential, never copy the real API credential.
+# Generate a separate test token. Never copy the real API token.
 docker run --rm --pull=never --network none --read-only --cap-drop ALL \
   --security-opt no-new-privileges:true --entrypoint python "$image_id" \
   -B -c 'import secrets; print(secrets.token_urlsafe(32))' > "$lab_directory/token"
@@ -77,5 +77,5 @@ address=$(docker inspect --type container --format '{{with index .NetworkSetting
 case "$address" in ''|*[!0-9.]*) exit 2 ;; esac
 printf 'widget_fixture_ready=true\nfixture_only=true\nscenario=%s\nfixture_url=http://%s:8080\ncontainer_id=%s\ntoken_file=%s/token\nlifetime_seconds=900\nproduction_authorized=false\n' \
   "$scenario" "$address" "$container_id" "$lab_directory"
-# Successful startup leaves only the new fixture running until its hard deadline.
+# Leave the new test container running until its time limit is reached.
 trap - EXIT

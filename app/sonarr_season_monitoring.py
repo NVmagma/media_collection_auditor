@@ -1,4 +1,4 @@
-"""Bound, single-write monitoring updates for one Sonarr season."""
+"""Update monitoring for one Sonarr season with one checked write."""
 from hashlib import sha256
 import json
 from time import monotonic

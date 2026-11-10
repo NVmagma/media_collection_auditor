@@ -1,4 +1,4 @@
-"""Overview is a bounded projection of the captured inventory, never a collector."""
+"""Build Overview from the captured inventory without collecting more data."""
 from copy import deepcopy
 from datetime import datetime
 import pytest

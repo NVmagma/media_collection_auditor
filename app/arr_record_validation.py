@@ -1,8 +1,8 @@
-"""Fail-closed verification of independently fetched Radarr/Sonarr records.
+"""Check fresh Radarr or Sonarr records before accepting an update result.
 
-This module makes no network requests and never mutates Arr. Callers must
-supply a fresh, authenticated response from the correct Arr service. A match
-is diagnostic only and does not authorize clearing a pending operation.
+The caller must fetch the data from the correct service with authentication.
+Nothing here contacts or changes Arr. A matching record alone is not enough to
+clear a pending operation.
 """
 
 from __future__ import annotations
@@ -12,10 +12,10 @@ from typing import Any
 
 
 def inspect_arr_sync(details: dict[str, Any], record: dict[str, Any] | None) -> str:
-    """Classify one Arr record against a pending sync intent.
+    """Compare one Arr record with the pending update.
 
-    Require exact integer title ID, normalized absolute POSIX root path and
-    strict boolean monitoring status. Never guess from title strings.
+    Require the exact integer ID, a normalized absolute POSIX path, and a real
+    boolean monitoring value. Do not guess from the title text.
     """
     validate_arr_sync_details(details)
     title_id, root, monitored = details["title_id"], details["root"], details["monitored"]
