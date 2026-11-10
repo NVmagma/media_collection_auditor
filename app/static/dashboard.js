@@ -207,7 +207,7 @@ async function refreshRunButton() {
     else if (button.dataset.wasBusy === 'true') document.getElementById('run-result').textContent = runDefaultHint;
     button.dataset.wasBusy = String(state.running || state.queued || blocked);
   } catch (error) {
-    // Keep the button disabled until a successful status check says it can change.
+    // Leave the button's current state alone if the status check fails.
     if (button.dataset.wasBusy === 'true') document.getElementById('run-result').textContent =
       'Scan status could not be refreshed. The last observed busy state is retained; completion is unverified.';
   } finally { runStatusPending = false; }
