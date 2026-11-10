@@ -28,8 +28,7 @@ explicitly promoted `ghcr.io/nvmagma/media_collection_auditor:stable` tag.
 3. Expand interruption recovery for season deletion; it currently requires manual review.
 4. Continue validating backup recovery, notification delivery, and scheduled/manual
    operations across supported deployment layouts.
-5. Review legacy deployment entry points and configuration help for consistency
-   with the runtime image.
+5. Extend first-run and upgrade coverage for the template-only Unraid deployment.
 6. Consider higher action limits only after a separate tested rollout.
 
 Roadmap items are proposals rather than a delivery schedule. Deletion safeguards,

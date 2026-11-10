@@ -23,7 +23,7 @@ numbers, symlinks, unknown contents, or uncertain show identity can block review
 ## Prepare the season Holding directory
 
 The default path is `/media/TV_seasons_leaving_soon`. `TV_SEASON_HOLDING_PATH` can
-override it in the container environment. It must be outside every whole-title
+override it under Settings → Paths. It must be outside every whole-title
 lifecycle root and on the same mount/device as the active TV folder. Create the
 root before enabling retention. The worker creates show subdirectories beneath it.
 

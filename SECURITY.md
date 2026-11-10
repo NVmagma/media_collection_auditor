@@ -21,7 +21,7 @@ removes only an eligible isolated staged season. See [Removal deletion](docs/rem
 and [TV season retention](docs/tv-season-retention.md) for required checks and
 interrupted-operation behavior.
 
-Treat appdata, backups, `.env`, Jellyfin/Arr keys, webhook URLs, and integration
+Treat appdata, backups, first-run setup codes, Jellyfin/Arr keys, webhook URLs, and integration
 tokens as secrets. Backups may contain saved service credentials. Keep the
 administrative interface on controlled networks and use HTTPS for remote access.
 The runtime uses Flask's built-in server. Integration tokens grant read-only API

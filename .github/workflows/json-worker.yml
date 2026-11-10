@@ -8,6 +8,8 @@ on:
       - 'tests/test_orphan_cleanup.py'
       - 'scripts/json_execution_fixture.py'
       - 'scripts/json_worker_lab.sh'
+      - 'scripts/unraid_template_fixture.py'
+      - 'unraid/template/media_archiver.xml'
       - 'docker/runtime.Dockerfile'
       - 'docker/runtime-constraints.txt'
       - 'requirements.txt'
@@ -49,6 +51,14 @@ jobs:
         run: bash -n scripts/json_worker_lab.sh
       - name: Build exact JSON candidate without publishing
         run: docker build -f docker/runtime.Dockerfile --build-arg SOURCE_REVISION="$GITHUB_SHA" --iidfile "$RUNNER_TEMP/json-worker-image.id" .
+      - name: Verify template-only first run and account persistence
+        run: |
+          mkdir "$RUNNER_TEMP/unraid-empty-appdata"
+          docker run --rm -i --network none --read-only --user 0:0 --cap-drop ALL --cap-add DAC_OVERRIDE \
+            --security-opt no-new-privileges:true \
+            --mount "type=bind,src=$RUNNER_TEMP/unraid-empty-appdata,dst=/app/logs" \
+            --entrypoint python "$(cat "$RUNNER_TEMP/json-worker-image.id")" \
+            -B - < scripts/unraid_template_fixture.py
       - name: Verify packaged entrypoint, five moves per library and process recovery
         run: bash scripts/json_worker_lab.sh "$(cat "$RUNNER_TEMP/json-worker-image.id")" "$RUNNER_TEMP" "$RUNNER_TEMP" | tee "$RUNNER_TEMP/json-worker-acceptance.log"
       - name: Authenticate candidate publication

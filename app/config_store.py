@@ -1,4 +1,4 @@
-"""Persisted web settings. Container environment remains the fallback."""
+"""Persisted web settings. Legacy container variables remain a migration fallback; new installs use the UI."""
 import json
 import os
 from pathlib import Path
@@ -11,6 +11,16 @@ FIELDS = {
     "Safety": ["ALLOW_TV_SEASON_DELETE", "ORPHAN_CLEANUP_ENABLED", "ALLOW_PERMANENT_DELETE", "DRY_RUN", "MAX_ACTIONS_PER_RUN", "ALLOW_FILESYSTEM_DELETE", "ALLOW_CROSS_FILESYSTEM_MOVES"],
     "Notifications": ["NOTIFY_DISCORD_WEBHOOK_URL", "NOTIFY_NTFY_URL", "NOTIFY_NTFY_TOKEN", "NOTIFY_WEBHOOK_URL", "NOTIFY_ON_DRY_RUN", "NOTIFY_OPERATIONAL_FAILURES", "NOTIFY_LEAVING_SOON_DIGEST"],
 }
+FIELDS['Paths'] = [prefix+'_'+stage+'_PATH' for prefix in ('RADARR','SONARR')
+                   for stage in ('TRANSIENT','HOLDING','KEEP','REMOVAL')]
+FIELDS['Paths'] += [prefix+'_APP_'+stage+'_PATH' for prefix in ('RADARR','SONARR')
+                    for stage in ('HOLDING','KEEP','REMOVAL')]
+FIELDS['Paths'] += ['TV_SEASON_HOLDING_PATH']
+FIELDS['Integrations'] = ['INTEGRATION_API_TOKEN','INTEGRATION_API_TITLE_DETAILS',
+    'INTEGRATION_API_MEDIA','INTEGRATION_API_COVERAGE','JELLYFIN_PUBLIC_URL',
+    'INTEGRATION_API_BACKUP_DIRECTORY','INTEGRATION_API_BACKUP_IDENTITY',
+    'INTEGRATION_API_BACKUP_FINGERPRINT']
+FIELDS['Web'] = ['WEB_SECURE_COOKIE']
 KEYS = set(sum(FIELDS.values(), []))
 # Presentation and application share one fixed initial-live policy field list.
 LIVE_CANARY_LOCKED_KEYS = frozenset(('DRY_RUN','MAX_ACTIONS_PER_RUN','MEDIA_PATH','DAILY_RUN_TIMEZONE',
@@ -21,6 +31,10 @@ INTS = {"MOVIE_WAIT_DAYS", "TV_WAIT_DAYS", "HOLDING_DAYS", "REMOVAL_DAYS", "MAX_
 FLOATS = {"RUN_INTERVAL_HOURS"}
 MINIMUM_ONE = {"HOLDING_DAYS", "REMOVAL_DAYS"}
 DEFAULTS = {"ALLOW_TV_SEASON_DELETE":"false", "ENABLE_TV_SEASON_RETENTION":"false", "ORPHAN_CLEANUP_ENABLED":"false", "ALLOW_PERMANENT_DELETE":"false","DRY_RUN":"true","ENABLE_MOVIES":"true","ENABLE_TV":"false","MOVIE_WAIT_DAYS":"30","TV_WAIT_DAYS":"60","HOLDING_DAYS":"7","REMOVAL_DAYS":"7","RUN_INTERVAL_HOURS":"0","MAX_ACTIONS_PER_RUN":"10","DISLIKE_TAG":"not-at-all","PROTECT_TAG":"keep-forever","KEEP_TAG":"keep","FAVORITES_TRIGGER_KEEP":"true","JELLYFIN_REFRESH_AFTER_AUDIT":"false","TV_NEW_EPISODES_RESET_CLOCK":"true","ENABLE_SEASON_PRUNING":"false","KEEP_ALL_SEASONS_TAG":"keep-all-seasons","SEASON_PRUNE_GRACE_DAYS":"30","SEASON_PRUNE_AFTER_NEW_SEASON_DAYS":"7","NOTIFY_ON_DRY_RUN":"false","NOTIFY_OPERATIONAL_FAILURES":"false","NOTIFY_LEAVING_SOON_DIGEST":"true","ALLOW_FILESYSTEM_DELETE":"false","ALLOW_CROSS_FILESYSTEM_MOVES":"false","MEDIA_PATH":"/media"}
+
+SECRETS.add('INTEGRATION_API_TOKEN')
+BOOLS.update(('INTEGRATION_API_TITLE_DETAILS','INTEGRATION_API_MEDIA','INTEGRATION_API_COVERAGE','WEB_SECURE_COOKIE'))
+DEFAULTS.update({key:'false' for key in ('INTEGRATION_API_TITLE_DETAILS','INTEGRATION_API_MEDIA','INTEGRATION_API_COVERAGE','WEB_SECURE_COOKIE')})
 
 # Captured before the worker overlays saved settings onto os.environ. A settings
 # request that removes an override must fall back to Docker's original value.
@@ -64,6 +78,14 @@ def validate(key, value):
             raise ValueError(f"{key}: URL must start with http:// or https://")
     if key == "MEDIA_PATH" and not value.startswith("/"):
         raise ValueError("MEDIA_PATH must be an absolute container path")
+    if key == 'INTEGRATION_API_TOKEN' and value:
+        import re
+        if not re.fullmatch(r'[A-Za-z0-9_-]{32,256}', value):
+            raise ValueError('Integration token must contain 32–256 URL-safe characters')
+    if key.endswith('_PATH') and value:
+        from app.filesystem_paths import _canonical
+        try: _canonical(value)
+        except ValueError: raise ValueError(f'{key}: enter an absolute canonical container path') from None
     if len(value) > 2048:
         raise ValueError(f"{key}: value is too long")
     return value.lower() if key in BOOLS else value
@@ -217,6 +239,27 @@ FIELD_HELP = {
     "Include the list of titles currently in Holding in notifications."
   ]
 }
+
+
+for _key in FIELDS['Paths']:
+    FIELD_HELP[_key] = (_key.replace('_',' ').title(),
+        'Optional absolute container path. Leave blank for the standard /media layout. Arr aliases must match the path used by that service.')
+FIELD_HELP.update({
+    'INTEGRATION_API_TOKEN': ('Read-only API Token','Enter a private random URL-safe token, 32–256 characters. Blank keeps the current token; use Disable API below to revoke it.'),
+    'INTEGRATION_API_TITLE_DETAILS': ('API Title Lists','Allow read-only widgets to list tracked titles.'),
+    'INTEGRATION_API_MEDIA': ('API Artwork Links','Allow widgets to include Jellyfin artwork and title links.'),
+    'INTEGRATION_API_COVERAGE': ('API Coverage','Allow aggregate local folder and clock coverage reads.'),
+    'JELLYFIN_PUBLIC_URL': ('Browser Jellyfin URL','Optional Jellyfin URL reachable by family browsers; falls back to the server URL.'),
+    'INTEGRATION_API_BACKUP_DIRECTORY': ('Backup API Packet Path','Optional container path of the explicitly selected private backup packet.'),
+    'INTEGRATION_API_BACKUP_IDENTITY': ('Backup API Packet Identity','Reviewed device:inode identity of the selected packet.'),
+    'INTEGRATION_API_BACKUP_FINGERPRINT': ('Backup API Receipt Fingerprint','Reviewed SHA-256 of the selected completion receipt.'),
+    'WEB_SECURE_COOKIE': ('HTTPS-only Login Cookie','Enable when accessing this app through HTTPS. HTTP login will no longer work until disabled.')
+})
+
+
+def setting(key, default=''):
+    """Read web changes immediately; legacy variables support existing installs."""
+    return load_config().get(key, os.environ.get(key, DEFAULTS.get(key, default)))
 
 
 def redacted_config(config):

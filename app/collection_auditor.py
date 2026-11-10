@@ -11,12 +11,10 @@ from typing import Dict, Any, Optional, List, Tuple
 
 import requests
 from lifecycle_decisions import decide
-from dotenv import load_dotenv
 
 # ==============================================
 # --- CONFIGURATION ---
 # ==============================================
-load_dotenv()
 
 _TRUE = {"true", "1", "yes", "on"}
 _FALSE = {"false", "0", "no", "off"}
@@ -130,7 +128,7 @@ ALLOW_CROSS_FILESYSTEM_MOVES = env_flag("ALLOW_CROSS_FILESYSTEM_MOVES", False)
 # and repeat every N hours, so the container never exits and never restarts.
 RUN_INTERVAL_HOURS = env_float("RUN_INTERVAL_HOURS", 0.0)
 
-# Notifications (all optional; set any of the three). Webhook URLs are secrets: keep them in .env.
+# Notifications (all optional; set any of the three). Webhook URLs are secrets: keep them in private application settings.
 NOTIFY_DISCORD_WEBHOOK_URL = os.environ.get("NOTIFY_DISCORD_WEBHOOK_URL", "").strip()
 NOTIFY_NTFY_URL = os.environ.get("NOTIFY_NTFY_URL", "").strip()          # e.g. https://ntfy.sh/your-topic
 NOTIFY_NTFY_TOKEN = os.environ.get("NOTIFY_NTFY_TOKEN", "").strip()      # only for protected ntfy topics

@@ -74,8 +74,8 @@ maps it to host port **8089**. Two persistent mounts provide appdata and media:
 | `/app/logs` | Tracking, saved settings, scan history, session key, backups, and operation journal. |
 | `/media` | Native filesystem media root containing the lifecycle directories. |
 
-[Installation and updates](docs/installation.md) includes initialization, a Docker
-run example, directory layout, Unraid mount guidance, and existing-install updates.
+[Installation and updates](docs/installation.md) covers template installation, protected first-run account setup, directory layout,
+Unraid mount guidance, and existing-install updates.
 Use a native pool path for live moves. An Unraid `/mnt/user` share or an extra bind
 over one stage can prevent the required atomic rename even when files live on the
 same physical disk.
@@ -111,9 +111,9 @@ setup, testing, and pull request guidance, and [SECURITY.md](SECURITY.md) for
 vulnerability reporting. Changes involving media operations need disposable-file
 tests and must preserve tracking and protection safeguards.
 
-The current runtime is built from `docker/runtime.Dockerfile`. The root Dockerfile
-and Compose file are legacy development entry points; use the documented runtime
-image for current deployments.
+The runtime is built from `docker/runtime.Dockerfile`. Deployment uses the Unraid
+template; configure application options in the WebUI. No environment file, Compose
+configuration, or manual initialization command is required for a new empty appdata mount.
 
 ## License
 

@@ -35,7 +35,7 @@ def render_settings_workspace(scenario='ready'):
         g.user = {'name':'Synthetic administrator', 'admin':True}
         from app.deletion_policy import WARNING
         from app.orphan_cleanup import WARNING as ORPHAN_WARNING
-        return render_template('settings.html', deletion_warning=WARNING, orphan_warning=ORPHAN_WARNING, groups=FIELDS, values=values, sources={key:'Default' for key in KEYS},
+        return render_template('settings.html', deletion_warning=WARNING, orphan_warning=ORPHAN_WARNING, groups={**FIELDS,'Account':[]}, values=values, sources={key:'Default' for key in KEYS},
             secrets=SECRETS, bools=BOOLS, help_text=web.FIELD_HELP, preview_mode=False,json_mode=True,live_mode=False,
             locked_settings=(),
             pending_settings=pending, settings_application=application,

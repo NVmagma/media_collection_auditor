@@ -117,3 +117,14 @@ if (seasonDeleteSwitch && seasonDeleteWarning && seasonDeleteAck) {
   seasonDeleteAck.addEventListener('invalid', () => showTab('Safety'));
   updateSeasonDeleteWarning();
 }
+
+// Only a newly generated/entered token is shown; saved secrets never enter the DOM.
+const apiTokenField = document.getElementById('field-INTEGRATION_API_TOKEN');
+document.getElementById('generate-api-token')?.addEventListener('click', () => {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  apiTokenField.value = Array.from(bytes, byte => byte.toString(16).padStart(2,'0')).join('');
+  apiTokenField.dispatchEvent(new Event('input', {bubbles:true}));
+});
+document.getElementById('reveal-api-token')?.addEventListener('click', () => {
+  apiTokenField.type = apiTokenField.type === 'password' ? 'text' : 'password';
+});

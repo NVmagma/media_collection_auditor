@@ -37,7 +37,7 @@ if (!prefix) throw Error('Pass the synthetic output prefix from tests/settings_w
       return asset ? route.fulfill({contentType:asset[1],body:fs.readFileSync(path.join(root,asset[0]))}) : route.fulfill({status:404});
     });
     await page.goto('http://fixture.invalid/settings');
-    assert.equal(await page.locator('.sidebar [data-tab]').count(),5);
+    assert.equal(await page.locator('.sidebar [data-tab]').count(),9);
     assert.equal(await page.locator('main [data-tab]').count(),0);
     assert.equal(await page.locator('#settings-draft-status').textContent(),'No unsaved field edits');
     assert.equal(await page.locator('form[action="/settings/apply"]').count(),0);
