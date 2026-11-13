@@ -75,7 +75,7 @@ jobs:
           docker tag "$(cat "$RUNNER_TEMP/json-worker-image.id")" "$reference"
           docker push "$reference"
           docker image inspect --format '{{json .RepoDigests}}' "$reference" > "$RUNNER_TEMP/json-worker-digests.json"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: json-worker-evidence
