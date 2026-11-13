@@ -34,6 +34,8 @@ REASONS = {
     'missing_or_conflicting_clock': 'The saved lifecycle date is missing or conflicts with another stage.',
     'future_content_timestamp': 'TV content has a future modification date; this show was skipped and its clock was preserved.',
     'future_observation': 'The saved lifecycle date is in the future.',
+    'active_playback': 'Jellyfin reports active or paused playback of this media. The action was deferred.',
+    'playback_unavailable': 'Jellyfin playback could not be verified. The action was deferred.',
     'jellyfin_unavailable': 'Jellyfin protection information is unavailable.',
     'removal_content_changed': 'Removal contents are newer than the saved date; deletion was skipped.',
     'deletion_protection_unavailable': 'Fresh Jellyfin protection is unavailable; deletion was skipped.',

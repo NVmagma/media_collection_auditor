@@ -49,7 +49,7 @@ def _identity(info): return [info.st_dev,info.st_ino]
 
 
 def execute_move(attempt, *, request, now, fetch_protection, arr_preflight, arr_complete,
-                 favorites_trigger_keep=True, tv_reset=True, timezone_info=None, per_library_limit=1):
+                 favorites_trigger_keep=True, tv_reset=True, timezone_info=None, per_library_limit=1, check_playback=None):
     if (not isinstance(request,MoveRequest) or request.library not in ('Movies','TV')
             or (request.source_stage,request.destination_stage) not in TRANSITIONS
             or request.service != ('radarr' if request.library == 'Movies' else 'sonarr')
@@ -134,6 +134,9 @@ def execute_move(attempt, *, request, now, fetch_protection, arr_preflight, arr_
         wanted = (record['monitored'] if request.source_stage == 'Waiting' else True) if request.destination_stage == 'Keep' else False
         if request.monitored != wanted: raise RuntimeError('Arr monitoring policy changed')
         verify()
+        if check_playback is not None:
+            check_playback(request.title, request.source_root + '/' + request.title)
+            verify()
         details = {'request':asdict(request),'media_key':key,'title_identity':identity,
             'media_fingerprint':fingerprint,'media_files':files,'destination_since':now.isoformat(),
             'dispatch_attempts':0}

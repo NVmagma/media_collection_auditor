@@ -7,6 +7,8 @@ from audit_history import new_record, finish_record
 from run_control import begin_rescue, end_rescue
 from backend_selection import require_json_backend
 from state_lock import audit_run_lock, StateLockBusy
+from app.jellyfin_playback import PlaybackDeferred, check_active_playback
+from app.scan_details import REASONS
 
 def rescue_title(library, title, destination):
     if library not in ("Movies", "TV") or destination not in ("keep", "holding"):
@@ -69,6 +71,14 @@ def _rescue_title_locked(auditor, library, title, destination, verify_lock, stat
                               library, status="planned")
         return True, "Dry Run preview recorded; no media moved.", 200
     verify_lock()
+    from config_store import setting
+    if setting('PROTECT_ACTIVE_PLAYBACK', 'false').lower() == 'true':
+        settings = {key: setting(key) for key in ('JELLYFIN_HOST_URL', 'JELLYFIN_API_TOKEN')}
+        try:
+            check_active_playback(settings, title, src)
+        except PlaybackDeferred as error:
+            return False, REASONS[error.reason], 409
+        verify_lock()
     error = auditor.safe_move_directory(src, dst_root)
     if error:
         return False, "Move failed: " + error, 409

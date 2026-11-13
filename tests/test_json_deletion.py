@@ -220,7 +220,8 @@ def test_content_change_after_review_never_clears_intent(deletion):
     assert store.path.read_bytes()==before
 
 
-def test_full_cycle_preview_and_live_remove_only_expired_unprotected_titles(deletion,monkeypatch):
+@pytest.mark.parametrize('playing', [False, True])
+def test_full_cycle_preview_and_live_remove_only_expired_unprotected_titles(deletion,monkeypatch,playing):
     from app.json_worker_cycle import run_cycle,JSONMoveServices
     from app.json_readonly_scan import collect_worker_scan,rehearse_scan
     store,reqs,server=deletion
@@ -237,6 +238,13 @@ def test_full_cycle_preview_and_live_remove_only_expired_unprotected_titles(dele
             titles=tuple(TitleObservation(('TV/' if inventory.library=='TV' else '')+r.folder,r.stage,r.threshold_days,dict(SIG),'exact_source_match',r.blocker) for r in inventory.titles)
             libs.append(LibraryObservation(inventory.library,True,True,titles))
         return plan_scan(snapshot=kw['snapshot'],libraries=libs,now=kw['now'],per_library_action_limit=5,deletion_enabled=True)
+    if playing:
+        from app import jellyfin_playback
+        movie = reqs['Movies']
+        values['PROTECT_ACTIVE_PLAYBACK'] = 'true'
+        monkeypatch.setattr(jellyfin_playback, 'ScheduledJellyfinGET', lambda **kwargs:
+            lambda path, params: [{'Id': 'session', 'NowPlayingItem': {
+                'Path': movie.arr_source_path + '/video.mkv'}}])
     before=store.path.read_bytes()
     preview=run_cycle(store,settings=values,trigger='manual',now=NOW.replace(tzinfo=timezone.utc),
         preview=lambda **kw:rehearse_scan(collect=collect,**kw))
@@ -247,9 +255,15 @@ def test_full_cycle_preview_and_live_remove_only_expired_unprotected_titles(dele
     monkeypatch.setattr('app.json_worker_service.settings_snapshot',lambda:dict(values))
     result=run_cycle(store,settings=values,trigger='manual',now=NOW.replace(tzinfo=timezone.utc),
         services=Services(values),collect=lambda session,**kw:collect_worker_scan(session,collect=collect,**kw))
-    assert result['result']=='completed' and len(result['completed_deletions'])==2
+    assert result['result']=='completed' and len(result['completed_deletions'])==(1 if playing else 2)
     assert not result['completed_moves'] and not result['pending_operation_present']
-    assert json.loads(store.path.read_bytes())['in_removal']=={}
+    remaining = json.loads(store.path.read_bytes())['in_removal']
+    if playing:
+        assert remaining == {movie.title: movie.source_since}
+        assert Path(movie.arr_source_path).is_dir()
+        assert next(row['reason'] for row in result['decisions'] if row['library'] == 'Movies') == 'active_playback'
+    else:
+        assert remaining == {}
 
 
 def test_current_settings_revocation_blocks_destructive_adapter(deletion,monkeypatch):

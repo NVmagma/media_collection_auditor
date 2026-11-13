@@ -33,7 +33,7 @@ def verify_season_location(present, absent, name, season, identity):
                 raise RuntimeError('Season destination is occupied or could not be verified')
 
 def move_season(attempt, *, title, season, name, active_parent, holding_parent, restore,
-                read_plan, monitoring):
+                read_plan, monitoring, check_playback=None):
     """Stage or restore one directory. A failure after intent requires review."""
     validate_title_folder(title)
     match = SEASON_FOLDER.fullmatch(name)
@@ -109,6 +109,9 @@ def move_season(attempt, *, title, season, name, active_parent, holding_parent, 
                 raise RuntimeError('Staged season identity or monitoring changed')
         wanted = record['previous_monitoring'] if restore else False
         verify()
+        if check_playback is not None:
+            check_playback(title, str(source_path / name), season)
+            verify()
         identifier = attempt.record_intent(kind='tv_season_move', library='TV', title=title,
             details={'key': key, 'record': record, 'restore': restore,
                      'fingerprint': fingerprint, 'file_count': file_count,

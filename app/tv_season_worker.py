@@ -3,6 +3,7 @@ import os
 from time import monotonic
 
 from app.filesystem_paths import _open_directory
+from app.jellyfin_playback import PlaybackDeferred
 from app.json_scan_control import KEY
 from app.sonarr_season_monitoring import SonarrSeasonMonitoring
 from app.tv_season_move import move_season
@@ -12,7 +13,8 @@ from app.tv_season_policy import ARCHIVE
 from app.tv_season_review import inspect_show
 
 
-def apply_season_plans(attempt, *, titles, slots, settings, read_settings, completed, deleted, now):
+def apply_season_plans(attempt, *, titles, slots, settings, read_settings, completed, deleted, now,
+                       check_playback=None, playback_deferred=None):
     session = attempt.session
     archive = session.state.get(ARCHIVE, {})
     staged_titles = {key.split('/')[1] for key in archive if key.count('/') == 2}
@@ -47,6 +49,9 @@ def apply_season_plans(attempt, *, titles, slots, settings, read_settings, compl
             folders = initial['staged' if restore or deleting else 'active']
             holding = initial['holding_parent']
             if not restore and not deleting:
+                if check_playback is not None and not holding.exists():
+                    # The first stage can require creating the show's Holding folder.
+                    check_playback(title, str(initial['active_parent'] / folders[season]['name']), season)
                 root = _open_directory(str(holding.parent))
                 try:
                     try:
@@ -74,13 +79,18 @@ def apply_season_plans(attempt, *, titles, slots, settings, read_settings, compl
             if deleting:
                 delete_season(attempt, title=title, season=season, review=initial, now=now,
                     read_review=lambda: inspect_show(title, read_settings, lambda: session.state),
-                    monitoring=monitor, read_settings=read_settings)
+                    monitoring=monitor, read_settings=read_settings, check_playback=check_playback)
                 deleted.append({'title': title, 'season': season})
                 slots -= 1
                 continue
             move_season(attempt, title=title, season=season, name=folders[season]['name'],
                         active_parent=str(initial['active_parent']), holding_parent=str(holding),
-                        restore=restore, read_plan=read_plan, monitoring=monitor)
+                        restore=restore, read_plan=read_plan, monitoring=monitor,
+                        check_playback=check_playback)
+        except PlaybackDeferred as error:
+            if playback_deferred is not None:
+                playback_deferred(title, error.reason)
+            continue
         except (OSError, ValueError, RuntimeError):
             session.verify()
             if session.state[KEY]['journal'] is not None:

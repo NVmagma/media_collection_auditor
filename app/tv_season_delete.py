@@ -48,7 +48,7 @@ def _tree(fd):
     return sorted(rows)
 
 
-def delete_season(attempt, *, title, season, review, now, read_review, monitoring, read_settings):
+def delete_season(attempt, *, title, season, review, now, read_review, monitoring, read_settings, check_playback=None):
     """Journal and isolate one confirmed season; never replay an interrupted delete."""
     session = attempt.session
     attempt._active()
@@ -82,6 +82,8 @@ def delete_season(attempt, *, title, season, review, now, read_review, monitorin
             raise RuntimeError('Sonarr monitoring changed')
         if read_review() != review or read_settings() != settings:
             raise RuntimeError('Season deletion review changed')
+        if check_playback is not None:
+            check_playback(title, str(holding / name), season)
         session.verify()
         if _tree(witness) != tree:
             raise RuntimeError('Season contents changed')

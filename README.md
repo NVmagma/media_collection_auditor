@@ -29,6 +29,13 @@ to five actions per library and ten overall, with a configurable lower total.
 Whole-title deletions are limited to one per library per scan. TV season deletion
 is limited to one season per scan within the same action budget.
 
+Under **Settings → Safety**, enable **Protect Active Playback** to defer live
+title and season moves or deletions while Jellyfin reports matching playback,
+including paused sessions. It also defers actions when playback cannot be
+verified. The setting starts disabled and a deferral preserves the lifecycle
+clock. Live scan results show the reason, and a later scan evaluates the action
+again. Dry Run previews remain advisory and do not check live playback.
+
 Unknown or conflicting protection information blocks the affected action.
 Interrupted operations retain a journal and can pause further scans. Filesystem
 moves require atomic, no-overwrite renames on the same native filesystem mount.

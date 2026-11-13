@@ -120,7 +120,7 @@ def test_storage_failure_keeps_verified_movie_result_and_leaves_tv_outcome_unkno
     assert sum(method=='PUT' for method,_ in server.calls)==1
 
 
-@pytest.mark.parametrize('followup', ['restore', 'delete', 'grace', 'favorite', 'interrupted', 'disabled', 'legacy'])
+@pytest.mark.parametrize('followup', ['restore', 'delete', 'grace', 'favorite', 'interrupted', 'disabled', 'legacy', 'playing'])
 def test_opt_in_live_scan_handles_staged_season(cycle_case, monkeypatch, followup):
     from app import json_worker_service, tv_season_review
     from app.tv_season_policy import ARCHIVE
@@ -166,6 +166,19 @@ def test_opt_in_live_scan_handles_staged_season(cycle_case, monkeypatch, followu
 
     now = NOW.replace(tzinfo=timezone.utc)
     options = dict(settings=values, collect=collect_seasons)
+    if followup == 'playing':
+        from app import jellyfin_playback
+        values['PROTECT_ACTIVE_PLAYBACK'] = 'true'
+        monkeypatch.setattr(jellyfin_playback, 'ScheduledJellyfinGET', lambda **kwargs:
+            lambda path, params: [{'Id': 'session', 'NowPlayingItem': {
+                'Path': str(show / 'Season 1' / 'episode.mkv')}}])
+        result = run_cycle(store, trigger='manual', now=now, **options)
+        assert result['result'] == 'completed' and not result['pending_operation_present']
+        assert not result['completed_season_moves']
+        assert (show / 'Season 1' / 'episode.mkv').is_file()
+        assert not (holding / 'Show').exists()
+        assert not any(method == 'PUT' for method, _ in server.calls)
+        return
     result = run_cycle(store, trigger='manual', now=now, **options)
     assert result['result'] == 'completed'
     assert result['completed_season_moves'] == ({'title': 'Show', 'season': 1, 'restored': False},)
@@ -221,3 +234,25 @@ def test_opt_in_live_scan_handles_staged_season(cycle_case, monkeypatch, followu
         assert 'TV/Show/1' in state_after[ARCHIVE]
     assert (show / 'Season 2' / 'episode.mkv').is_file()
     assert not any(method == 'DELETE' for method, _ in server.calls)
+
+
+def test_playback_defers_only_the_matching_move(cycle_case, monkeypatch):
+    from app import jellyfin_playback
+
+    store, values, requests, server, _ = cycle_case
+    values['PROTECT_ACTIVE_PLAYBACK'] = 'true'
+    monkeypatch.setattr(jellyfin_playback, 'ScheduledJellyfinGET', lambda **kwargs:
+        lambda path, params: [{'Id': 'session', 'NowPlayingItem': {'Path': '/jellyfin/Movies/Movie/video.mkv'},
+                              'PlayState': {'IsPaused': True}}])
+
+    before = json.loads(store.path.read_bytes())
+    result = run(cycle_case)
+    state = json.loads(store.path.read_bytes())
+
+    assert result['result'] == 'completed' and not result['pending_operation_present']
+    assert [row['library'] for row in result['completed_moves']] == ['TV']
+    movie = next(row for row in result['decisions'] if row['library'] == 'Movies')
+    assert (movie['outcome'], movie['reason']) == ('skipped', 'active_playback')
+    assert state['first_seen']['Movie'] == before['first_seen']['Movie']
+    assert (Path(requests['Movies'].source_root) / 'Movie' / 'video.mkv').is_file()
+    assert sum(method == 'PUT' for method, _ in server.calls) == 1

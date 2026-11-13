@@ -6,6 +6,7 @@ data. Keep completed work separate from proposals when an attempt stops early.
 from copy import deepcopy
 from dataclasses import asdict
 from datetime import datetime, timezone
+from functools import partial
 from pathlib import PurePosixPath
 from time import monotonic
 from zoneinfo import ZoneInfo
@@ -19,6 +20,7 @@ from app.jellyfin_collection import collect_title_observation, validated_tag_nam
 from app.lifecycle_stages import CLOCKS
 from app.failure_diagnostics import failure_details
 from app.filesystem_paths import _canonical
+from app.jellyfin_playback import PlaybackDeferred, check_active_playback
 from app.jellyfin_transport import ScheduledJellyfinGET
 
 
@@ -192,10 +194,22 @@ def _run_cycle(store, *, settings, trigger, now, services, collect, preview, evi
         result=preview(state_file=store.path,settings=values,now=local_now)
         return {**result,'execution_mode':'preview','completed_moves':(), 'result':'completed'}
     adapter=JSONMoveServices(values) if services is None else services
+    check_playback = (partial(check_active_playback, values)
+                      if _bool(values, 'PROTECT_ACTIVE_PLAYBACK', 'false') else None)
     with scan_attempt(store,now=now,trigger=trigger) as attempt:
         report=evidence
         report.update(execution_mode='live',scanned_titles=None,decisions=(),
                 completed_moves=[],completed_deletions=[],completed_quarantines=[],completed_season_moves=[],completed_season_deletions=[],discovery_changes=None,failure_stage=None)
+        def skip_action(library, media_key, reason):
+            attempt.session.verify()
+            if attempt.session.state[KEY]['journal'] is not None:
+                raise RuntimeError('Cannot defer an operation with a pending journal')
+            report['decisions'] = tuple(
+                {**row, 'outcome': 'skipped', 'reason': reason}
+                if (row['library'], row['media_key']) == (library, media_key) else row
+                for row in report['decisions']
+            )
+
         phase='collection'
         try:
             plan=collect(attempt.session,settings=values,now=local_now)
@@ -215,11 +229,16 @@ def _run_cycle(store, *, settings, trigger, now, services, collect, preview, evi
                     decision.library,decision.media_key,decision.stage,decision.destination):
                     raise RuntimeError('Selected request differs from plan')
                 phase='move_and_sync'
-                execute_move(attempt,request=request,now=local_now,
-                    fetch_protection=lambda req:adapter.protection(req,local_now),
-                    arr_preflight=preflight,arr_complete=complete,
-                    favorites_trigger_keep=_bool(values,'FAVORITES_TRIGGER_KEEP','true'),
-                    tv_reset=_bool(values,'TV_NEW_EPISODES_RESET_CLOCK','true'),timezone_info=zone,per_library_limit=5)
+                try:
+                    execute_move(attempt,request=request,now=local_now,
+                        fetch_protection=lambda req:adapter.protection(req,local_now),
+                        arr_preflight=preflight,arr_complete=complete,
+                        favorites_trigger_keep=_bool(values,'FAVORITES_TRIGGER_KEEP','true'),
+                        tv_reset=_bool(values,'TV_NEW_EPISODES_RESET_CLOCK','true'),timezone_info=zone,per_library_limit=5,
+                        check_playback=check_playback)
+                except PlaybackDeferred as error:
+                    skip_action(decision.library, decision.media_key, error.reason)
+                    continue
                 report['completed_moves'].append(asdict(decision))
             for decision in plan.get('deletions',())[:max(0,limit-len(report['completed_moves']))]:
                 from app.json_delete_execution import execute_delete,DeletionPreflightBlocked
@@ -230,13 +249,10 @@ def _run_cycle(store, *, settings, trigger, now, services, collect, preview, evi
                 phase='arr_deletion'
                 try:
                     execute_delete(attempt,request=req,now=local_now,fetch_protection=lambda req:adapter.protection(req,local_now),
-                        read_record=read,send_delete=send,read_absence=absent,authorize=adapter.authorize_delete,timezone_info=zone)
-                except DeletionPreflightBlocked as error:
-                    attempt.session.verify()
-                    if attempt.session.state[KEY]['journal'] is not None: raise
-                    report['decisions']=tuple({**row,'outcome':'skipped','reason':error.reason} if
-                        (row['library'],row['media_key'])==(decision.library,decision.media_key) else row
-                        for row in report['decisions'])
+                        read_record=read,send_delete=send,read_absence=absent,authorize=adapter.authorize_delete,timezone_info=zone,
+                        check_playback=check_playback)
+                except (DeletionPreflightBlocked, PlaybackDeferred) as error:
+                    skip_action(decision.library, decision.media_key, error.reason)
                     continue
                 report['completed_deletions'].append(asdict(decision))
             for folder in cleanup['ready']:
@@ -269,7 +285,9 @@ def _run_cycle(store, *, settings, trigger, now, services, collect, preview, evi
                 apply_season_plans(attempt, titles=plan['season_titles'],
                     slots=min(limit - len(completed_actions), 5 - tv_used), settings=values,
                     read_settings=lambda: validate_policy(settings_snapshot())[0],
-                    completed=report['completed_season_moves'], deleted=report['completed_season_deletions'], now=now)
+                    completed=report['completed_season_moves'], deleted=report['completed_season_deletions'], now=now,
+                    check_playback=check_playback, playback_deferred=lambda title, reason:
+                        skip_action('TV', 'TV/' + title, reason))
             attempt.finish(result='completed')
             report['result']='completed'
         except Exception as error:

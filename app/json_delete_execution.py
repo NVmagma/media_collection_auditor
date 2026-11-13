@@ -133,7 +133,7 @@ class HeldTitle:
             self.identity=[info.st_dev,info.st_ino]; self.fingerprint=observed
 
 
-def execute_delete(attempt,*,request,now,fetch_protection,read_record,send_delete,read_absence,authorize,timezone_info=None):
+def execute_delete(attempt,*,request,now,fetch_protection,read_record,send_delete,read_absence,authorize,timezone_info=None,check_playback=None):
     key=_validate(request); session=attempt.session; attempt._active()
     if not isinstance(now,datetime) or now.tzinfo is not None: raise ValueError('Local deletion time required')
     since=datetime.fromisoformat(request.source_since)
@@ -156,6 +156,9 @@ def execute_delete(attempt,*,request,now,fetch_protection,read_record,send_delet
         if retained: raise DeletionPreflightBlocked('deletion_protected')
         if not _record_matches(request,read_record(request)): raise DeletionPreflightBlocked('deletion_arr_changed')
         authorize(); held.verify(identity=identity,fingerprint=fingerprint)
+        if check_playback is not None:
+            check_playback(request.title, request.arr_source_path)
+            authorize(); held.verify(identity=identity,fingerprint=fingerprint)
         details=dict(request=asdict(request),media_key=key,title_identity=identity,
             media_fingerprint=list(fingerprint),dispatch_attempts=0,
             stage_identities={stage:list(row[2]) for stage,row in held.roots.items()})
