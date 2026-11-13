@@ -63,7 +63,7 @@ jobs:
         run: bash scripts/json_worker_lab.sh "$(cat "$RUNNER_TEMP/json-worker-image.id")" "$RUNNER_TEMP" "$RUNNER_TEMP" | tee "$RUNNER_TEMP/json-worker-acceptance.log"
       - name: Authenticate candidate publication
         if: inputs.publish
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
