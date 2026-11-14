@@ -17,6 +17,7 @@ from app.filesystem_paths import _canonical
 from app.jellyfin_transport import ScheduledJellyfinGET
 from app.tv_season_policy import ARCHIVE
 from app.lifecycle_decisions import decide
+from app.media_libraries import is_tv_library, media_key_for
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,7 @@ class LibraryInventory:
     roots: tuple  # Use the stage paths Arr sees, including any configured aliases.
     titles: tuple
     complete: bool
+    media_type: str | None = None
 
 
 def collect_readonly_plan(*, snapshot, inventories, settings, now,
@@ -68,7 +70,7 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
         titles = []
         for title in inventory.titles:
             if not isinstance(title, InventoryTitle): raise ValueError('Known title binding required')
-            key = ('TV/' if inventory.library == 'TV' else '') + title.folder
+            key = media_key_for(inventory.library, title.folder, inventory.media_type)
             titles.append(TitleObservation(key,title.stage,title.threshold_days,None,'unavailable',title.blocker))
         prelim.append(LibraryObservation(inventory.library,False,False,tuple(titles)))
     plan_scan(snapshot=snapshot,libraries=prelim,now=now,maximum_titles=maximum_titles)
@@ -106,14 +108,14 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
                         continue
                     jf_checked = True
                     season_args = {}
-                    if inventory.library == 'TV' and season_enabled:
+                    if is_tv_library(inventory.library, inventory.media_type) and season_enabled:
                         from app.tv_season_review import season_holding_root
                         if any(key.startswith(initial.media_key + '/') for key in snapshot.get(ARCHIVE, {})):
                             season_args['excluded_series_path'] = str(season_holding_root(settings) / title.folder)
                     result = collect_title_observation(fetch=cached,
                         jellyfin_type='Series' if inventory.library == 'TV' else 'Movie',
                         folder=title.folder,media_key=initial.media_key,now=now,tag_names=tags,**season_args)
-                    if (inventory.library == 'TV' and season_enabled
+                    if (is_tv_library(inventory.library, inventory.media_type) and season_enabled
                             and result['status'] == 'shape_valid_untrusted'
                             and (season_args or 'one-season' in (result.get('observed_tags') or ()))):
                         # Restore staged seasons first, but do not let one-season hide a Keep rescue.
@@ -153,9 +155,9 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
                 else 'path_conflict')
             titles.append(TitleObservation(initial.media_key,title.stage,title.threshold_days,
                 signals.get(initial.media_key),status,
-                'tv_season_policy' if inventory.library == 'TV' and title.folder in season_policy_titles else title.blocker,
+                'tv_season_policy' if is_tv_library(inventory.library, inventory.media_type) and title.folder in season_policy_titles else title.blocker,
                 absence.get(initial.media_key,False)))
-        observations.append(LibraryObservation(inventory.library,jf_complete,arr_complete,tuple(titles)))
+        observations.append(LibraryObservation(inventory.library,jf_complete,arr_complete,tuple(titles),inventory.media_type))
         collection_status.append({'library':inventory.library,'inventory_complete':inventory.complete,
             'jellyfin_complete':jf_complete,'arr_complete':arr_complete,'titles':len(titles) if inventory.complete else None})
     check_deadline()

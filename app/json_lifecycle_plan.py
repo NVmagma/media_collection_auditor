@@ -16,6 +16,7 @@ from app.tracking_schema import validate_snapshot
 from app.title_identity import validate_title_folder
 from app.json_scan_control import KEY, _control
 from app.tv_season_policy import ARCHIVE
+from app.media_libraries import MAX_LIBRARIES, is_tv_library, media_folder_for
 
 SIGNALS = {'played', 'favorite', 'disliked', 'keep', 'keep_all', 'protected'}
 BLOCKERS = {'future_content_timestamp', 'content_unavailable', 'content_reset_required', 'discovery_required','no_video','no_video_unknown_files','tv_season_policy'}
@@ -41,6 +42,7 @@ class LibraryObservation:
     jellyfin_complete: bool
     arr_complete: bool
     titles: tuple
+    media_type: str | None = None
 
 
 @dataclass(frozen=True)
@@ -58,7 +60,7 @@ def plan_scan(*, snapshot, libraries, now, favorites_trigger_keep=True, maximum_
             or type(favorites_trigger_keep) is not bool or type(maximum_titles) is not int
             or not 1 <= maximum_titles <= 100000 or type(per_library_action_limit) is not int
             or type(deletion_enabled) is not bool or not 1 <= per_library_action_limit <= 5 or not isinstance(libraries, (tuple,list))
-            or not 1 <= len(libraries) <= 2):
+            or not 1 <= len(libraries) <= MAX_LIBRARIES):
         raise ValueError('Explicit bounded scan policy required')
     state = deepcopy(snapshot)
     validate_snapshot(state)
@@ -70,9 +72,11 @@ def plan_scan(*, snapshot, libraries, now, favorites_trigger_keep=True, maximum_
     captured = deepcopy(libraries)
     names, seen, total = set(), set(), 0
     for library in captured:
-        if (not isinstance(library, LibraryObservation) or library.library not in ('Movies','TV')
+        if (not isinstance(library, LibraryObservation) or not isinstance(library.library, str)
+                or not library.library
                 or library.library in names or type(library.jellyfin_complete) is not bool
-                or type(library.arr_complete) is not bool or not isinstance(library.titles, tuple)):
+                or type(library.arr_complete) is not bool or not isinstance(library.titles, tuple)
+                or library.media_type not in (None, 'movie', 'tv')):
             raise ValueError('Unique known libraries and complete observations required')
         names.add(library.library)
         for title in library.titles:
@@ -86,10 +90,12 @@ def plan_scan(*, snapshot, libraries, now, favorites_trigger_keep=True, maximum_
                     or title.blocker is not None and title.blocker not in BLOCKERS):
                 raise ValueError('Invalid title observation')
             key = title.media_key
-            prefix = 'TV/' if library.library == 'TV' else ''
-            folder = key[3:] if prefix and key.startswith(prefix) else key
+            try:
+                folder = media_folder_for(library.library, key, library.media_type)
+            except ValueError:
+                raise ValueError('Ambiguous or invalid title identity') from None
             validate_title_folder(folder)
-            if key != prefix + folder or folder.startswith('.') or len(folder) > 255 or key in seen:
+            if folder.startswith('.') or len(folder) > 255 or key in seen:
                 raise ValueError('Ambiguous or invalid title identity')
             seen.add(key)
             if title.signals is not None and (not isinstance(title.signals, dict)
@@ -107,13 +113,13 @@ def plan_scan(*, snapshot, libraries, now, favorites_trigger_keep=True, maximum_
         for title in library.titles:
             destination = None
             retain_despite_future_date = (
-                library.library == 'TV' and title.stage == 'Waiting'
+                is_tv_library(library.library, library.media_type) and title.stage == 'Waiting'
                 and title.blocker == 'future_content_timestamp'
                 and library.jellyfin_complete and library.arr_complete
                 and title.signals is not None
                 and decide(title.stage, None, title.threshold_days,
                            title.signals, favorites_trigger_keep)[0] == 'keep')
-            if library.library == 'TV' and title.media_key in staged_shows:
+            if is_tv_library(library.library, library.media_type) and title.media_key in staged_shows:
                 reason = 'staged_tv_seasons'
             elif title.blocker == 'no_video':
                 if title.stage=='Keep': reason='orphan_keep_preserved'

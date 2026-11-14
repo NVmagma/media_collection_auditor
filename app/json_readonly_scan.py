@@ -23,6 +23,7 @@ from app.content_observation import observe_scheduled_content, ScheduledContentB
 from app.filesystem_paths import _canonical, _open_directory, scan_held_directory
 from app.title_identity import validate_title_folder
 from app.stage_entries import is_housekeeping
+from app.media_libraries import configured_media_libraries, is_tv_library, library_stage_paths, media_key_for
 
 
 def _bool(values,key,default):
@@ -87,35 +88,29 @@ def _scan(*, state_file, settings, now=None, maximum_titles=100000,
             raise RuntimeError('Rehearsal deadline exceeded')
         return maximum_seconds-elapsed
     reset_tv = _bool(values,'TV_NEW_EPISODES_RESET_CLOCK','true')
-    base = _canonical(values.get('MEDIA_PATH','/media').strip())
     holding = _days(values,'HOLDING_DAYS','7')
     removal = _days(values,'REMOVAL_DAYS','7')
     definitions, all_paths = [], []
     private = Path(state_file)
-    for name,prefix,enabled,wait in (('Movies','RADARR','ENABLE_MOVIES','MOVIE_WAIT_DAYS'),
-                                   ('TV','SONARR','ENABLE_TV','TV_WAIT_DAYS')):
-        if not _bool(values,enabled,'true' if name == 'Movies' else 'false'): continue
-        local, remote = {}, {}
-        for stage,field in (('Waiting','TRANSIENT'),('Holding','HOLDING'),('Keep','KEEP'),('Removal','REMOVAL')):
-            explicit = values.get(prefix+'_'+field+'_PATH','')
-            if not isinstance(explicit,str): raise ValueError('String stage path required')
-            suffix = {'Waiting':'','Holding':'_hold','Keep':'_keep','Removal':'_removal'}[stage]
-            path = _canonical(explicit.strip() or posixpath.join(base,name+suffix))
+    for definition in configured_media_libraries(values):
+        name, media_type = definition.name, definition.media_type
+        wait_key = 'TV_WAIT_DAYS' if is_tv_library(name, media_type) else 'MOVIE_WAIT_DAYS'
+        wait_default = '60' if is_tv_library(name, media_type) else '30'
+        _, local, remote = library_stage_paths(values, name)
+        for stage, path in local.items():
             current = Path(path)
             if current == Path('/') or current == private or current in private.parents or private in current.parents:
                 raise ValueError('Disjoint dedicated media roots required')
             if any(current == other or current in other.parents or other in current.parents for other in all_paths):
                 raise ValueError('Distinct nonoverlapping media stages required')
-            all_paths.append(current); local[stage] = path
-            override = values.get(prefix+'_APP_'+stage.upper()+'_PATH','') if stage != 'Waiting' else ''
-            remote[stage] = _canonical(override or path)
-        definitions.append((name,local,remote,_days(values,wait,'30' if name == 'Movies' else '60')))
+            all_paths.append(current)
+        definitions.append((name,media_type,local,remote,_days(values,wait_key,wait_default)))
     if not definitions: raise ValueError('At least one library required')
     observer('tracking_validation')
     with (JsonTrackingStore(state_file).session() if _session is None else nullcontext(_session)) as session, ExitStack() as stack:
         snapshot = deepcopy(session.state)
-        plan_scan(snapshot=snapshot,libraries=[LibraryObservation(name,False,False,())
-            for name,_,_,_ in definitions],now=now,maximum_titles=maximum_titles)
+        plan_scan(snapshot=snapshot,libraries=[LibraryObservation(name,False,False,(),media_type)
+            for name,media_type,_,_,_ in definitions],now=now,maximum_titles=maximum_titles)
         roots, stage_rows, ignored, seen_root, content_times, seen_titles = {}, {}, {}, set(), {}, set()
         def inventory(fd):
             rows, excluded = {}, 0
@@ -134,7 +129,7 @@ def _scan(*, state_file, settings, now=None, maximum_titles=100000,
         observer('local_inventory')
         inventories, clock_proposals, inventory_issues, total = [], [], [], 0
         metadata_observations=[]; negative_inventory={}
-        for name,local,remote,wait in definitions:
+        for name,media_type,local,remote,wait in definitions:
             complete, titles, seen_keys = True, [], set()
             for stage,path in local.items():
                 remaining()
@@ -148,7 +143,7 @@ def _scan(*, state_file, settings, now=None, maximum_titles=100000,
                     rows, excluded = inventory(fd)
                     stage_rows[name,stage] = rows; ignored[name,stage] = excluded
                     for folder,identity in sorted(rows.items()):
-                        key = ('TV/' if name == 'TV' else '')+folder
+                        key = media_key_for(name, folder, media_type)
                         remaining()
                         if key in seen_keys:
                             raise RuntimeError('Ambiguous title stage')
@@ -173,7 +168,7 @@ def _scan(*, state_file, settings, now=None, maximum_titles=100000,
                             blocker = 'discovery_required'
                             clock_proposals.append({'library':name,'title':folder,'stage':stage,
                                 'reason':'discovery_required','previous':None,'proposed':now.isoformat()})
-                        if name == 'TV' and stage == 'Waiting' and reset_tv and blocker not in ('no_video','no_video_unknown_files','content_unavailable'):
+                        if is_tv_library(name, media_type) and stage == 'Waiting' and reset_tv and blocker not in ('no_video','no_video_unknown_files','content_unavailable'):
                             try:
                                 newest = observe_scheduled_content(title_path=path+'/'+folder,now=now,
                                     maximum_seconds=min(30,remaining()),timer=timer,timezone_info=zone)
@@ -194,7 +189,7 @@ def _scan(*, state_file, settings, now=None, maximum_titles=100000,
                         'Inventory limit exceeded':'inventory_limit_exceeded'}.get(
                         str(error),'stage_unavailable_or_changed')
                     inventory_issues.append({'library':name,'stage':stage,'reason':reason})
-            inventories.append(LibraryInventory(name,tuple(remote.items()),tuple(titles),complete))
+            inventories.append(LibraryInventory(name,tuple(remote.items()),tuple(titles),complete,media_type))
         def verify_inventory():
             remaining()
             session.verify()
