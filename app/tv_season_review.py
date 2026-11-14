@@ -13,6 +13,7 @@ from app.orphan_inventory import VIDEO_SUFFIXES, inspect_title
 from app.title_identity import validate_title_folder
 from app.tv_season_move import ARCHIVE, SEASON_FOLDER
 from app.tv_season_policy import plan_seasons
+from app.media_libraries import configured_media_libraries
 
 
 def _inventory(roots, title):
@@ -72,8 +73,8 @@ def _show_seasons(show, *, expected=None):
 def season_holding_root(settings):
     base = _canonical(settings.get('MEDIA_PATH', '/media'))
     holding = Path(_canonical(settings.get('TV_SEASON_HOLDING_PATH') or base + '/TV_seasons_leaving_soon'))
-    for library in ('TV', 'Movies'):
-        for value in stage_paths(settings, library)[0].values():
+    for library in configured_media_libraries(settings):
+        for value in stage_paths(settings, library.name)[0].values():
             root = Path(value)
             if root == holding or root in holding.parents or holding in root.parents:
                 raise ValueError('Season Holding must be separate from whole-title stages')

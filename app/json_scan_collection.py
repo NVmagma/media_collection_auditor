@@ -113,7 +113,7 @@ def collect_readonly_plan(*, snapshot, inventories, settings, now,
                         if any(key.startswith(initial.media_key + '/') for key in snapshot.get(ARCHIVE, {})):
                             season_args['excluded_series_path'] = str(season_holding_root(settings) / title.folder)
                     result = collect_title_observation(fetch=cached,
-                        jellyfin_type='Series' if inventory.library == 'TV' else 'Movie',
+                        jellyfin_type='Series' if is_tv_library(inventory.library, inventory.media_type) else 'Movie',
                         folder=title.folder,media_key=initial.media_key,now=now,tag_names=tags,**season_args)
                     if (is_tv_library(inventory.library, inventory.media_type) and season_enabled
                             and result['status'] == 'shape_valid_untrusted'
