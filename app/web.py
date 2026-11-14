@@ -690,7 +690,12 @@ def dashboard(initial_workspace="Overview"):
                                     "stage": stage, "action": action})
     preview.sort(key=lambda item: (item["library"], item["stage"], item["title"].casefold()))
     display_zone=config.get('DAILY_RUN_TIMEZONE') or os.environ.get('DAILY_RUN_TIMEZONE') or os.environ.get('TZ')
-    season_holding = holding_seasons(state, holding_days=deadlines["Holding"]["TV"], display_zone=display_zone)
+    tv_library = next((definition for definition in library_definitions if definition.is_tv), None)
+    season_holding = holding_seasons(
+        state,
+        holding_days=deadlines["Holding"].get(tv_library.name, 0) if tv_library else 0,
+        display_zone=display_zone,
+    )
     run = selected_run_snapshot(snapshot)
     history = selected_run_history(read_history, 100)
     return render_template("dashboard.html", scan_view=build_scan_view(run, history, timezone_name=display_zone), initial_workspace=initial_workspace, hidden_metadata_folders=hidden_metadata_folders, overview=dashboard_overview(stages, clock_coverage, libraries=enabled_libraries, tracking_available=state_error is None, limit=3), dashboard_timezone=display_zone, clock_coverage=clock_coverage, actions=actions, state=state, state_error=state_error, stages=stages, inventory_warnings=inventory_warnings, health_issues=health_issues, run=run, history=history,
