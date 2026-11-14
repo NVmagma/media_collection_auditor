@@ -19,6 +19,7 @@ from app.arr_catalog import canonical_arr_record_path
 from app.lifecycle_stages import CLOCKS
 from app.filesystem_paths import _canonical, _open_directory
 from app.title_identity import validate_title_folder
+from app.media_libraries import media_key_for
 
 
 def _inspect(session, read_record, *, kind='arr_sync', durable=False):
@@ -32,10 +33,12 @@ def _inspect(session, read_record, *, kind='arr_sync', durable=False):
         raise RuntimeError('Recognized move synchronization journal required')
     request = MoveRequest(**details['request'])
     validate_title_folder(request.title)
-    key = ('TV/' if request.library == 'TV' else '')+request.title
-    if (request.library not in ('Movies','TV') or request.title.startswith('.')
+    key = media_key_for(request.library, request.title, request.media_type)
+    if (not isinstance(request.library,str) or not request.library or request.media_type not in (None,'movie','tv')
+            or request.title.startswith('.')
             or (request.source_stage,request.destination_stage) not in TRANSITIONS
-            or request.service != ('radarr' if request.library == 'Movies' else 'sonarr')
+            or request.service != ('sonarr' if request.media_type == 'tv'
+                                   or request.media_type is None and request.library == 'TV' else 'radarr')
             or type(request.title_id) is not int or request.title_id <= 0 or type(request.monitored) is not bool
             or journal['library'] != request.library or journal['title'] != request.title or details['media_key'] != key
             or not isinstance(details['title_identity'],list) or len(details['title_identity']) != 2

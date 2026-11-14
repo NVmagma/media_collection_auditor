@@ -21,6 +21,7 @@ from app.filesystem_paths import _canonical, _open_directory
 from app.title_identity import validate_title_folder
 from app.mount_identity import read_fd_mount_id
 from app.arr_catalog import canonical_arr_record_path
+from app.media_libraries import media_key_for
 
 TRANSITIONS = {('Waiting','Holding'),('Waiting','Keep'),('Holding','Removal'),('Holding','Keep')}
 ACTIONS = {('Waiting','hold'):'Holding',('Waiting','keep'):'Keep',
@@ -43,6 +44,7 @@ class MoveRequest:
     arr_source_path: str
     arr_destination_root: str
     monitored: bool
+    media_type: str | None = None
 
 
 def _identity(info): return [info.st_dev,info.st_ino]
@@ -50,9 +52,11 @@ def _identity(info): return [info.st_dev,info.st_ino]
 
 def execute_move(attempt, *, request, now, fetch_protection, arr_preflight, arr_complete,
                  favorites_trigger_keep=True, tv_reset=True, timezone_info=None, per_library_limit=1):
-    if (not isinstance(request,MoveRequest) or request.library not in ('Movies','TV')
+    if (not isinstance(request,MoveRequest) or not isinstance(request.library,str) or not request.library
             or (request.source_stage,request.destination_stage) not in TRANSITIONS
-            or request.service != ('radarr' if request.library == 'Movies' else 'sonarr')
+            or request.media_type not in (None,'movie','tv')
+            or request.service != ('sonarr' if request.media_type == 'tv'
+                                   or request.media_type is None and request.library == 'TV' else 'radarr')
             or type(request.title_id) is not int or request.title_id <= 0
             or type(request.monitored) is not bool or type(request.threshold_days) is not int
             or request.threshold_days < 0 or type(favorites_trigger_keep) is not bool
@@ -67,7 +71,7 @@ def execute_move(attempt, *, request, now, fetch_protection, arr_preflight, arr_
     if (request.arr_source_path.rsplit('/',1)[-1] != request.title
             or request.arr_source_path == request.arr_destination_root+'/'+request.title):
         raise ValueError('Arr source title mismatch')
-    key = ('TV/' if request.library == 'TV' else '')+request.title
+    key = media_key_for(request.library, request.title, request.media_type)
     session = attempt.session
     attempt._active()
     if attempt._move_counts.get(request.library,0) >= per_library_limit:
@@ -122,7 +126,9 @@ def execute_move(attempt, *, request, now, fetch_protection, arr_preflight, arr_
         if ACTIONS.get((request.source_stage,action)) != request.destination_stage:
             raise RuntimeError('Fresh protection changed decision')
         # Content dates delay aging moves, not a verified move into Keep.
-        if request.library == 'TV' and request.source_stage == 'Waiting' and request.destination_stage != 'Keep' and tv_reset:
+        if (request.media_type == 'tv'
+                or request.media_type is None and request.library == 'TV') \
+                and request.source_stage == 'Waiting' and request.destination_stage != 'Keep' and tv_reset:
             latest = observe_scheduled_content(title_path=request.source_root+'/'+request.title,
                 now=now,timezone_info=timezone_info)
             if latest is not None and latest > since: raise RuntimeError('TV clock reset required')

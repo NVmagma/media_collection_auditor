@@ -23,6 +23,7 @@ from app.filesystem_paths import _canonical, _open_directory
 from app.json_scan_control import KEY, _control
 from app.lifecycle_stages import CLOCKS
 from app.title_identity import validate_title_folder
+from app.media_libraries import media_key_for
 
 
 @dataclass(frozen=True)
@@ -36,11 +37,14 @@ class DeleteRequest:
     title_id: int
     arr_source_path: str
     arr_base_url: str
+    media_type: str | None = None
 
 
 def _validate(req):
-    if (not isinstance(req,DeleteRequest) or req.library not in ('Movies','TV')
-            or req.service != ('radarr' if req.library=='Movies' else 'sonarr')
+    if (not isinstance(req,DeleteRequest) or not isinstance(req.library,str) or not req.library
+            or req.media_type not in (None,'movie','tv')
+            or req.service != ('sonarr' if req.media_type == 'tv'
+                               or req.media_type is None and req.library == 'TV' else 'radarr')
             or type(req.title_id) is not int or req.title_id <= 0
             or type(req.threshold_days) is not int or req.threshold_days < 1
             or not isinstance(req.roots,dict) or set(req.roots)!=set(CLOCKS)):
@@ -55,7 +59,7 @@ def _validate(req):
     if any(p==Path('/') for p in paths): raise ValueError('Dedicated stage roots required')
     if canonical_arr_record_path(req.arr_source_path)!=req.roots['Removal']+'/'+req.title:
         raise ValueError('Deletion requires identical local and Arr Removal paths; aliases are not approved')
-    return ('TV/' if req.library=='TV' else '')+req.title
+    return media_key_for(req.library, req.title, req.media_type)
 
 
 def _record_matches(req,record):

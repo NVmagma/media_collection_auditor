@@ -152,3 +152,11 @@ def media_folder_for(name, media_key, media_type=None):
     if not folder or "/" in folder:
         raise ValueError("Tracking key must contain one title folder")
     return folder
+
+
+def media_library_for(settings, name):
+    """Return one configured library definition by its exact saved name."""
+    for library in configured_media_libraries(settings):
+        if library.name == name:
+            return library
+    raise ValueError("Unknown media library")

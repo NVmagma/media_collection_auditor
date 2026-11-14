@@ -95,7 +95,7 @@ class ScanAttempt:
         value = self._active()
         if value['journal'] is not None:
             raise ScanAdmissionBlocked('operation_requires_review')
-        if (kind not in OPERATION_KINDS or library not in ('Movies','TV')
+        if (kind not in OPERATION_KINDS or not isinstance(library,str) or not library
                 or not isinstance(title, str) or not title or len(title) > 250
                 or any(ord(c) < 32 or c in '/\\' for c in title)
                 or not isinstance(details, dict) or not details):

@@ -19,7 +19,7 @@ from app.jellyfin_collection import collect_title_observation, validated_tag_nam
 from app.lifecycle_stages import CLOCKS
 from app.failure_diagnostics import failure_details
 from app.jellyfin_transport import ScheduledJellyfinGET
-from app.media_libraries import library_stage_paths
+from app.media_libraries import library_stage_paths, media_folder_for, media_library_for
 
 
 def validate_policy(settings):
@@ -51,8 +51,9 @@ class JSONMoveServices:
 
     def prepare(self,decision,session):
         values=self.values; library=decision.library
-        title=decision.media_key[3:] if library == 'TV' else decision.media_key
-        prefix,service=('SONARR','sonarr') if library == 'TV' else ('RADARR','radarr')
+        definition=media_library_for(values,library)
+        title=media_folder_for(library,decision.media_key,definition.media_type)
+        prefix,service=('SONARR','sonarr') if definition.is_tv else ('RADARR','radarr')
         local,remote=stage_paths(values,library)
         rows=ArrCatalogGET(service=service,base_url=values.get(prefix+'_URL',''),
             token=values.get(prefix+'_API_KEY',''))()
@@ -63,13 +64,14 @@ class JSONMoveServices:
         row=matches[0]
         monitored=((row['monitored'] if decision.stage == 'Waiting' else True)
                    if decision.destination == 'Keep' else False)
-        days=_days(values,('TV_WAIT_DAYS' if library == 'TV' else 'MOVIE_WAIT_DAYS')
+        days=_days(values,('TV_WAIT_DAYS' if definition.is_tv else 'MOVIE_WAIT_DAYS')
             if decision.stage == 'Waiting' else 'HOLDING_DAYS',
-            ('60' if library == 'TV' else '30') if decision.stage == 'Waiting' else '7')
+            ('60' if definition.is_tv else '30') if decision.stage == 'Waiting' else '7')
         request=MoveRequest(library,title,decision.stage,decision.destination,
             session.state[CLOCKS[decision.stage]][decision.media_key],days,
             local[decision.stage],local[decision.destination],service,row['id'],
-            remote[decision.stage]+'/'+title,remote[decision.destination],monitored)
+            remote[decision.stage]+'/'+title,remote[decision.destination],monitored,
+            definition.media_type)
         client=ArrTitleUpdate(service=service,base_url=values.get(prefix+'_URL',''),
             token=values.get(prefix+'_API_KEY',''),source_path=request.arr_source_path,
             title_folder=title,verify_binding=session.verify)
@@ -83,8 +85,9 @@ class JSONMoveServices:
     def prepare_delete(self,decision,session):
         from app.json_delete_execution import DeleteRequest
         from app.arr_delete_transport import ArrTitleDelete
-        library=decision.library; title=decision.media_key[3:] if library=='TV' else decision.media_key
-        prefix,service=('SONARR','sonarr') if library=='TV' else ('RADARR','radarr')
+        library=decision.library; definition=media_library_for(self.values,library)
+        title=media_folder_for(library,decision.media_key,definition.media_type)
+        prefix,service=('SONARR','sonarr') if definition.is_tv else ('RADARR','radarr')
         local,remote=stage_paths(self.values,library)
         rows=ArrCatalogGET(service=service,base_url=self.values.get(prefix+'_URL',''),
             token=self.values.get(prefix+'_API_KEY',''))()
@@ -92,7 +95,7 @@ class JSONMoveServices:
         matches=[row for row in rows if PurePosixPath(canonical_arr_record_path(row['path'])).name==title]
         if len(matches)!=1 or canonical_arr_record_path(matches[0]['path'])!=remote['Removal']+'/'+title: raise RuntimeError('Exact Removal Arr record required')
         req=DeleteRequest(library,title,session.state['in_removal'][decision.media_key],
-            _days(self.values,'REMOVAL_DAYS','7'),local,service,matches[0]['id'],remote['Removal']+'/'+title,self.values.get(prefix+'_URL',''))
+            _days(self.values,'REMOVAL_DAYS','7'),local,service,matches[0]['id'],remote['Removal']+'/'+title,self.values.get(prefix+'_URL',''),definition.media_type)
         client=ArrTitleDelete(service=service,base_url=self.values.get(prefix+'_URL',''),
             token=self.values.get(prefix+'_API_KEY',''),source_path=req.arr_source_path,
             title_folder=title,verify_binding=session.verify)
