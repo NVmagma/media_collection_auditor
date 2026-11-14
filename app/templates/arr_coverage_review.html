@@ -15,7 +15,7 @@
     <p>Each check reads one saved Arr destination and all four lifecycle stages for the selected library. Matches use folder paths and names. Use the separate import review to confirm a title’s provider identity.</p>
     <form method="post" class="history-controls">
       <label>Library<select name="library">
-        {% for name in ['Movies', 'TV'] %}<option {% if name == library %}selected{% endif %}>{{ name }}</option>{% endfor %}
+        {% for name in libraries %}<option {% if name == library %}selected{% endif %}>{{ name }}</option>{% endfor %}
       </select></label>
       <label>Match<select name="status">
         <option value="all">All matches</option>

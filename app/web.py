@@ -488,25 +488,16 @@ _SIGNAL_CACHE = {}
 
 def filesystem_stages(state, config, *, max_entries=None):
     """Read-only lifecycle inventory. Missing mounts are reported, not counted as empty."""
+    from app.media_libraries import configured_media_libraries, library_stage_paths, media_key_for
     stages = {label: [] for label in ("Waiting", "Holding", "Removal", "Keep")}
     warnings = []
-    media_root = config.get("MEDIA_PATH", os.environ.get("MEDIA_PATH", "/media"))
-    layout = (("Movies", "RADARR", "ENABLE_MOVIES",
-               {"Waiting": "Movies", "Holding": "Movies_hold",
-                "Removal": "Movies_removal", "Keep": "Movies_keep"}, ""),
-              ("TV", "SONARR", "ENABLE_TV",
-               {"Waiting": "TV", "Holding": "TV_hold",
-                "Removal": "TV_removal", "Keep": "TV_keep"}, "TV/"))
+    settings = {**os.environ, **config}
     sections = {"Waiting": "first_seen", "Holding": "queued",
                 "Removal": "in_removal", "Keep": "keep_seen"}
-    for library, prefix, enabled_key, defaults, key_prefix in layout:
-        enabled = str(config.get(enabled_key, os.environ.get(enabled_key,
-                      "true" if library == "Movies" else "false"))).lower() == "true"
-        if not enabled:
-            continue
-        for label, dirname in defaults.items():
-            kind = "TRANSIENT" if label == "Waiting" else label.upper()
-            directory = config.get(f"{prefix}_{kind}_PATH") or os.environ.get(f"{prefix}_{kind}_PATH") or os.path.join(media_root, dirname)
+    for definition in configured_media_libraries(settings):
+        library = definition.name
+        local_roots, _ = library_stage_paths(settings, library)[1:]
+        for label, directory in local_roots.items():
             try:
                 with os.scandir(directory) as entries:
                     names = []
@@ -522,7 +513,7 @@ def filesystem_stages(state, config, *, max_entries=None):
                 warnings.append(f"{library} {label}: directory unavailable ({directory})")
                 continue
             for name in names:
-                key = key_prefix + name
+                key = media_key_for(library, name, definition.media_type)
                 stages[label].append({
                     "title": name, "library": library,
                     "since": state.get(sections[label], {}).get(key),
@@ -624,6 +615,7 @@ def collection_health(state, stages, warnings, config=None):
 @app.get("/")
 def dashboard(initial_workspace="Overview"):
     from app.tv_season_holding import holding_seasons
+    from app.media_libraries import configured_media_libraries, is_tv_library
 
     actions = load_actions()
     state_error = None
@@ -635,8 +627,8 @@ def dashboard(initial_workspace="Overview"):
     config = load_config()
     stages, inventory_warnings = filesystem_stages(state, config)
     health_issues = collection_health(state, stages, inventory_warnings, config)
-    enabled_libraries=[library for library,key,fallback in (('Movies','ENABLE_MOVIES','true'),('TV','ENABLE_TV','false'))
-        if str(config.get(key,os.environ.get(key,fallback))).lower()=='true']
+    library_definitions = configured_media_libraries({**os.environ, **config})
+    enabled_libraries = [definition.name for definition in library_definitions]
     clock_coverage=summarize_dashboard_clocks(state,stages,inventory_warnings,libraries=enabled_libraries,
         tracking_available=state_error is None)
     stages, hidden_metadata_folders = visible_library_stages(stages, config)
@@ -649,11 +641,18 @@ def dashboard(initial_workspace="Overview"):
             return None
 
     removal_days=setting_days('REMOVAL_DAYS',7)
-    deadlines = {"Waiting": {"Movies": setting_days("MOVIE_WAIT_DAYS", 30),
-                              "TV": setting_days("TV_WAIT_DAYS", 60)},
-                 "Holding": {"Movies": setting_days("HOLDING_DAYS", 7),
-                             "TV": setting_days("HOLDING_DAYS", 7)},
-                 "Removal": {"Movies": removal_days, "TV": removal_days}}
+    deadlines = {"Waiting": {
+        definition.name: setting_days(
+            "TV_WAIT_DAYS" if is_tv_library(definition.name, definition.media_type) else "MOVIE_WAIT_DAYS",
+            60 if is_tv_library(definition.name, definition.media_type) else 30)
+        for definition in library_definitions
+    }, "Holding": {
+        definition.name: setting_days("HOLDING_DAYS", 7)
+        for definition in library_definitions
+    }, "Removal": {
+        definition.name: removal_days
+        for definition in library_definitions
+    }}
     stage_explanations = {
         "Waiting": "Tracked in the incoming library. Playback, favorites, and protection rules can change what happens next.",
         "Holding": "In the holding period before removal. Jellyfin signals and safety rules may prevent the next move.",
@@ -1341,8 +1340,13 @@ def arr_coverage_review():
     from app.arr_coverage_review import LABELS, compare_folders
     from app.json_worker_cycle import stage_paths
     from app.json_worker_service import settings_snapshot
+    from app.media_libraries import configured_media_libraries, is_tv_library
 
-    library, status, query, page = 'Movies', 'all', '', 1
+    try:
+        available_libraries = [item.name for item in configured_media_libraries(settings_snapshot())]
+    except (OSError, RuntimeError, ValueError):
+        available_libraries = ['Movies', 'TV']
+    library, status, query, page = available_libraries[0], 'all', '', 1
     results = None
     error = None
     response_status = 200
@@ -1358,22 +1362,22 @@ def arr_coverage_review():
         status = request.form.get('status', 'all')
         query = request.form.get('q', '').strip()
         page_text = request.form.get('page', '1')
-        if (library not in ('Movies', 'TV') or status not in ('all', *LABELS)
+        if (library not in available_libraries or status not in ('all', *LABELS)
                 or len(query) > 255 or not re.fullmatch('[1-9][0-9]{0,3}', page_text)):
             return Response('Invalid review filters.', 400)
         page = int(page_text)
-        prefix, service, enabled = ('RADARR', 'radarr', 'ENABLE_MOVIES') if library == 'Movies' else ('SONARR', 'sonarr', 'ENABLE_TV')
         try:
             settings = settings_snapshot()
-            if settings.get(enabled, 'true' if library == 'Movies' else 'false') != 'true':
-                raise ValueError('Library disabled')
+            definition = next(item for item in configured_media_libraries(settings) if item.name == library)
+            is_tv = is_tv_library(definition.name, definition.media_type)
+            prefix, service = ('SONARR', 'sonarr') if is_tv else ('RADARR', 'radarr')
             local_roots, remote_roots = stage_paths(settings, library)
             if len(set(local_roots.values())) != 4 or len(set(remote_roots.values())) != 4:
                 raise ValueError('Stage roots must be distinct')
             inventory_settings = {
                 **settings,
-                'ENABLE_MOVIES': str(library == 'Movies').lower(),
-                'ENABLE_TV': str(library == 'TV').lower(),
+                'ENABLE_MOVIES': str(not is_tv).lower(),
+                'ENABLE_TV': str(is_tv).lower(),
                 **{prefix + '_' + ('TRANSIENT' if stage == 'Waiting' else stage.upper()) + '_PATH': path
                    for stage, path in local_roots.items()},
             }
@@ -1397,7 +1401,8 @@ def arr_coverage_review():
             response_status = 503
 
     return (render_template('arr_coverage_review.html', results=results, error=error,
-                            labels=LABELS, library=library, status=status, query=query, page=page),
+                            labels=LABELS, libraries=available_libraries, library=library,
+                            status=status, query=query, page=page),
             response_status, {'Cache-Control': 'no-store'})
 
 
