@@ -18,8 +18,8 @@ from app.arr_title_transport import ArrTitleUpdate
 from app.jellyfin_collection import collect_title_observation, validated_tag_names
 from app.lifecycle_stages import CLOCKS
 from app.failure_diagnostics import failure_details
-from app.filesystem_paths import _canonical
 from app.jellyfin_transport import ScheduledJellyfinGET
+from app.media_libraries import library_stage_paths
 
 
 def validate_policy(settings):
@@ -41,15 +41,8 @@ def validate_policy(settings):
 
 
 def stage_paths(values,library):
-    prefix='SONARR' if library == 'TV' else 'RADARR'
-    base=_canonical(values.get('MEDIA_PATH','/media').strip())
-    local,remote={},{}
-    for stage,field,suffix in (('Waiting','TRANSIENT',''),('Holding','HOLDING','_hold'),
-                              ('Keep','KEEP','_keep'),('Removal','REMOVAL','_removal')):
-        local[stage]=_canonical(values.get(prefix+'_'+field+'_PATH','').strip() or base+'/'+library+suffix)
-        alias=values.get(prefix+'_APP_'+stage.upper()+'_PATH','') if stage != 'Waiting' else ''
-        remote[stage]=_canonical(alias or local[stage])
-    return local,remote
+    _, local, remote = library_stage_paths(values, library)
+    return local, remote
 
 
 class JSONMoveServices:

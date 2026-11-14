@@ -19,6 +19,7 @@ import stat
 from time import monotonic
 
 from app.arr_import_transport import ArrImportHTTP, ArrImportError
+from app.media_libraries import configured_media_libraries, is_tv_library, library_stage_paths
 
 MEDIA_SUFFIXES = frozenset(('.mkv', '.mp4', '.m4v', '.avi', '.mov', '.ts', '.m2ts', '.mpg', '.mpeg', '.wmv', '.iso'))
 
@@ -50,17 +51,16 @@ def _read_authority(*,settings=None):
 
 def library_config(values,name):
     from types import SimpleNamespace
-    from app.json_worker_cycle import stage_paths
-    from app.json_readonly_scan import _bool
-    if name not in ('Movies','TV'): raise ArrImportError('selection_invalid')
-    if not _bool(values,'ENABLE_TV' if name=='TV' else 'ENABLE_MOVIES','false' if name=='TV' else 'true'):
+    definition = next((item for item in configured_media_libraries(values) if item.name == name), None)
+    if definition is None:
         raise ArrImportError('library_disabled')
-    return SimpleNamespace(name=name,roots=tuple(stage_paths(values,name)[0].items()))
+    local, _ = library_stage_paths(values, name)[1:]
+    return SimpleNamespace(name=name,media_type=definition.media_type,roots=tuple(local.items()))
 
 
 def client_for(values, name, verify=lambda: None):
-    library_config(values, name)
-    prefix, service = ('RADARR', 'radarr') if name == 'Movies' else ('SONARR', 'sonarr')
+    config = library_config(values, name)
+    prefix, service = ('SONARR', 'sonarr') if is_tv_library(name, config.media_type) else ('RADARR', 'radarr')
     return ArrImportHTTP(service=service, base_url=values.get(prefix + '_URL'),
         token=values.get(prefix + '_API_KEY'), verify=verify)
 
